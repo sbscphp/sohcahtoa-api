@@ -1,0 +1,62 @@
+global:
+  namespace: fx-platform
+
+apiGateway:
+  replicaCount: 2
+  image:
+    repository: fx-platform/api-gateway
+    tag: latest
+  service:
+    type: LoadBalancer
+    port: 80
+
+authService:
+  replicaCount: 2
+  image:
+    repository: fx-platform/auth-service
+    tag: latest
+  database:
+    name: auth_db
+
+transactionService:
+  replicaCount: 2
+  image:
+    repository: fx-platform/transaction-service
+    tag: latest
+  database:
+    name: transaction_db
+
+paymentService:
+  replicaCount: 2
+  image:
+    repository: fx-platform/payment-service
+    tag: latest
+  database:
+    name: payment_db
+
+notificationService:
+  replicaCount: 1
+  image:
+    repository: fx-platform/notification-service
+    tag: latest
+
+postgres:
+  image:
+    repository: postgres
+    tag: 15-alpine
+  persistence:
+    enabled: true
+    size: 10Gi
+
+redis:
+  image:
+    repository: redis
+    tag: 7-alpine
+
+kafka:
+  image:
+    repository: bitnami/kafka
+    tag: latest
+  persistence:
+    enabled: true
+    size: 10Gi

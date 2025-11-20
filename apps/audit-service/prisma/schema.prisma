@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventCategory {
+  AUTHENTICATION
+  TRANSACTION
+  PAYMENT
+  COMPLIANCE
+  ADMIN
+  SYSTEM
+}
+
+enum Severity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model AuditEvent {
+  id              String        @id @default(uuid())
+  eventId         String        @unique
+  eventType       String
+  category        EventCategory
+  severity        Severity      @default(INFO)
+  source          String
+  userId          String?
+  resourceType    String?
+  resourceId      String?
+  action          String?
+  previousState   Json?
+  newState        Json?
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  correlationId   String?
+  timestamp       DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+
+  @@index([eventType])
+  @@index([category])
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+  @@index([correlationId])
+  @@map("audit_events")
+}
+
+model LogTrace {
+  id              String    @id @default(uuid())
+  traceId         String
+  spanId          String
+  parentSpanId    String?
+  serviceName     String
+  operation       String
+  startTime       DateTime
+  endTime         DateTime?
+  duration        Int?
+  status          String    @default("SUCCESS")
+  tags            Json?
+  logs            Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([traceId])
+  @@index([serviceName])
+  @@index([startTime])
+  @@map("log_traces")
+}
+
+model SystemMetric {
+  id              String    @id @default(uuid())
+  serviceName     String
+  metricType      String
+  metricName      String
+  value           Decimal   @db.Decimal(18, 6)
+  unit            String?
+  tags            Json?
+  timestamp       DateTime  @default(now())
+
+  @@index([serviceName])
+  @@index([metricType])
+  @@index([timestamp])
+  @@map("system_metrics")
+}
+
+model SecurityEvent {
+  id              String    @id @default(uuid())
+  eventType       String
+  severity        Severity
+  userId          String?
+  ipAddress       String?
+  userAgent       String?
+  description     String
+  details         Json?
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime  @default(now())
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([userId])
+  @@index([resolved])
+  @@map("security_events")
+}

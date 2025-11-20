@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_PROGRESS
+  VERIFIED
+  FAILED
+  REQUIRES_MANUAL_REVIEW
+}
+
+enum VerificationType {
+  PASSPORT
+  VISA
+  BVN
+  TIN
+  TICKET
+  INVOICE
+  MEDICAL_LETTER
+  SCHOOL_ADMISSION
+  PROFESSIONAL_BODY_LETTER
+}
+
+model VerificationRequest {
+  id                String             @id @default(uuid())
+  transactionId     String
+  userId            String
+  documentId        String
+  verificationType  VerificationType
+  documentUrl       String
+  status            VerificationStatus @default(PENDING)
+  priority          Int                @default(1)
+  automatedChecks   Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  completedAt       DateTime?
+
+  results           VerificationResult[]
+  reviews           AdminReview[]
+
+  @@index([transactionId])
+  @@index([status])
+  @@index([priority])
+  @@map("verification_requests")
+}
+
+model VerificationResult {
+  id                  String              @id @default(uuid())
+  requestId           String
+  verificationType    VerificationType
+  status              VerificationStatus
+  provider            String
+  apiResponse         Json?
+  extractedData       Json?
+  confidenceScore     Decimal?            @db.Decimal(5, 2)
+  flags               Json?
+  notes               String?
+  verifiedAt          DateTime            @default(now())
+
+  request             VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("verification_results")
+}
+
+model AdminReview {
+  id            String              @id @default(uuid())
+  requestId     String
+  reviewerId    String
+  status        VerificationStatus
+  decision      String
+  comments      String?
+  reviewedAt    DateTime            @default(now())
+  metadata      Json?
+
+  request       VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([reviewerId])
+  @@map("admin_reviews")
+}
+
+model ExternalApiLog {
+  id            String   @id @default(uuid())
+  provider      String
+  endpoint      String
+  requestData   Json?
+  responseData  Json?
+  statusCode    Int
+  duration      Int
+  success       Boolean
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([provider])
+  @@index([success])
+  @@map("external_api_logs")
+}

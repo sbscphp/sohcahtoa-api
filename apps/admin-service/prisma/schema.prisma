@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  ADMIN
+  COMPLIANCE_OFFICER
+  OPERATIONS
+  SUPER_ADMIN
+}
+
+enum ActionType {
+  TRANSACTION_APPROVE
+  TRANSACTION_REJECT
+  DEPOSIT_CONFIRM
+  DOCUMENT_APPROVE
+  DOCUMENT_REJECT
+  COMPLIANCE_REVIEW
+  USER_SUSPEND
+  USER_ACTIVATE
+  LIMITS_OVERRIDE
+  CASH_PICKUP_ISSUE
+  PREPAID_CARD_ISSUE
+}
+
+model AdminUser {
+  id            String     @id @default(uuid())
+  userId        String     @unique
+  email         String     @unique
+  role          AdminRole
+  permissions   Json
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  actions       AdminAction[]
+  assignments   TaskAssignment[]
+
+  @@index([email])
+  @@index([role])
+  @@map("admin_users")
+}
+
+model AdminAction {
+  id              String     @id @default(uuid())
+  adminId         String
+  actionType      ActionType
+  resourceType    String
+  resourceId      String
+  previousState   Json?
+  newState        Json?
+  reason          String?
+  metadata        Json?
+  performedAt     DateTime   @default(now())
+  ipAddress       String?
+  userAgent       String?
+
+  admin           AdminUser  @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([resourceType, resourceId])
+  @@index([actionType])
+  @@map("admin_actions")
+}
+
+model TaskAssignment {
+  id            String      @id @default(uuid())
+  adminId       String
+  taskType      String
+  taskId        String
+  priority      Int         @default(1)
+  status        String      @default("PENDING")
+  assignedAt    DateTime    @default(now())
+  completedAt   DateTime?
+  notes         String?
+
+  admin         AdminUser   @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([status])
+  @@index([priority])
+  @@map("task_assignments")
+}
+
+model Dashboard {
+  id                    String   @id @default(uuid())
+  date                  DateTime @default(now())
+  totalTransactions     Int      @default(0)
+  pendingApprovals      Int      @default(0)
+  completedTransactions Int      @default(0)
+  rejectedTransactions  Int      @default(0)
+  totalVolume           Decimal  @db.Decimal(18, 2)
+  amlFlags              Int      @default(0)
+  pendingReviews        Int      @default(0)
+  metadata              Json?
+
+  @@index([date])
+  @@map("dashboards")
+}

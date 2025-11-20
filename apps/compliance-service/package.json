@@ -1,0 +1,31 @@
+{
+  "name": "@fx-platform/compliance-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@fx-platform/shared-types": "workspace:*",
+    "@fx-platform/shared-utils": "workspace:*",
+    "@fx-platform/shared-middlewares": "workspace:*",
+    "@prisma/client": "^5.7.0",
+    "express": "^4.18.2",
+    "kafkajs": "^2.2.4",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "prisma": "^5.7.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.2"
+  }
+}
