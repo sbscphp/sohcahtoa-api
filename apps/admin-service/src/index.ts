@@ -1,9 +1,10 @@
-import express from 'express';
+import express, {Express} from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate, authorize } from '@fx-platform/shared-middlewares';
-import { createLogger, ServiceName, successResponse } from '@fx-platform/shared-utils';
+import { createLogger, successResponse } from '@fx-platform/shared-utils';
+import { ServiceName } from '@fx-platform/shared-types';
 import { UserRole } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import adminService from './services/admin.service';
@@ -11,7 +12,7 @@ import prisma from './config/database';
 
 dotenv.config();
 
-const app = express();
+const app: Express = express();
 const PORT = process.env.PORT || 3007;
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -26,14 +27,14 @@ app.use(authenticate);
 app.use(authorize(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.OPERATIONS, UserRole.SUPER_ADMIN));
 
 // Routes
-app.get('/api/admin/dashboard', async (req, res, next) => {
-  try {
-    const result = await adminService.getDashboard();
-    res.json(successResponse(result));
-  } catch (error) {
-    next(error);
-  }
-});
+// app.get('/api/admin/dashboard', async (req, res, next) => {
+//   try {
+//     const result = await adminService.getDashboard();
+//     res.json(successResponse(result));
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 
 app.post('/api/admin/transactions/:id/approve', async (req, res, next) => {
   try {

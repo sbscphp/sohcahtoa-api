@@ -5,11 +5,10 @@ import {
   generateId,
   NotFoundError,
   ForbiddenError,
-  createLogger,
-  ServiceName,
+  createLogger
 } from '@fx-platform/shared-utils';
 import { EventType } from '@fx-platform/shared-types';
-
+import { ServiceName } from '@fx-platform/shared-types';
 const logger = createLogger(ServiceName.ADMIN);
 
 export class AdminService {
@@ -35,17 +34,17 @@ export class AdminService {
       });
 
       // Publish event
-      await publishEvent({
-        eventId: generateId(),
-        eventType: EventType.ADMIN_APPROVED,
-        source: ServiceName.ADMIN,
-        timestamp: new Date().toISOString(),
-        data: {
-          transactionId,
-          approvedBy: adminId,
-          reason,
-        },
-      });
+      // await publishEvent({
+      //   eventId: generateId(),
+      //   eventType: EventType.ADMIN_APPROVED,
+      //   source: ServiceName.ADMIN,
+      //   timestamp: new Date().toISOString(),
+      //   data: {
+      //     transactionId,
+      //     approvedBy: adminId,
+      //     reason,
+      //   },
+      // });
 
       return { message: 'Transaction approved successfully' };
     } catch (error) {
@@ -73,17 +72,17 @@ export class AdminService {
         data: { approved: false, rejectedBy: adminId, rejectionReason: reason },
       });
 
-      await publishEvent({
-        eventId: generateId(),
-        eventType: EventType.ADMIN_REJECTED,
-        source: ServiceName.ADMIN,
-        timestamp: new Date().toISOString(),
-        data: {
-          transactionId,
-          rejectedBy: adminId,
-          reason,
-        },
-      });
+      // await publishEvent({
+      //   eventId: generateId(),
+      //   eventType: EventType.ADMIN_REJECTED,
+      //   source: ServiceName.ADMIN,
+      //   timestamp: new Date().toISOString(),
+      //   data: {
+      //     transactionId,
+      //     rejectedBy: adminId,
+      //     reason,
+      //   },
+      // });
 
       return { message: 'Transaction rejected successfully' };
     } catch (error) {
@@ -119,37 +118,37 @@ export class AdminService {
     }
   }
 
-  async getDashboard() {
-    // This would aggregate data from various services
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // async getDashboard() {
+  //   // This would aggregate data from various services
+  //   const today = new Date();
+  //   today.setHours(0, 0, 0, 0);
 
-    let dashboard = await prisma.dashboard.findFirst({
-      where: {
-        date: { gte: today },
-      },
-    });
+  //   let dashboard = await prisma.dashboard.findFirst({
+  //     where: {
+  //       date: { gte: today },
+  //     },
+  //   });
 
-    if (!dashboard) {
-      // Create new dashboard entry
-      dashboard = await prisma.dashboard.create({
-        data: {
-          date: today,
-        },
-      });
-    }
+  //   if (!dashboard) {
+  //     // Create new dashboard entry
+  //     dashboard = await prisma.dashboard.create({
+  //       data: {
+  //         date: today,
+  //       },
+  //     });
+  //   }
 
-    // In production, fetch real-time data from services
-    return {
-      totalTransactions: dashboard.totalTransactions,
-      pendingApprovals: dashboard.pendingApprovals,
-      completedTransactions: dashboard.completedTransactions,
-      rejectedTransactions: dashboard.rejectedTransactions,
-      totalVolume: Number(dashboard.totalVolume),
-      amlFlags: dashboard.amlFlags,
-      pendingReviews: dashboard.pendingReviews,
-    };
-  }
+  //   // In production, fetch real-time data from services
+  //   return {
+  //     totalTransactions: dashboard.totalTransactions,
+  //     pendingApprovals: dashboard.pendingApprovals,
+  //     completedTransactions: dashboard.completedTransactions,
+  //     rejectedTransactions: dashboard.rejectedTransactions,
+  //     totalVolume: Number(dashboard.totalVolume),
+  //     amlFlags: dashboard.amlFlags,
+  //     pendingReviews: dashboard.pendingReviews,
+  //   };
+  // }
 
   async getPendingApprovals(adminId: string, page: number = 1, limit: number = 20) {
     // Fetch from transaction service
