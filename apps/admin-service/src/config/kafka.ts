@@ -1,6 +1,6 @@
 import { Kafka, Producer } from 'kafkajs';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
-import { DomainEvent } from '@fx-platform/shared-types';
+import { createLogger } from '@fx-platform/shared-utils';
+import { DomainEvent, ServiceName } from '@fx-platform/shared-types';
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -12,9 +12,13 @@ const kafka = new Kafka({
 let producer: Producer;
 
 export const initKafka = async () => {
-  producer = kafka.producer();
+  try{
+    producer = kafka.producer();
   await producer.connect();
   logger.info('Kafka producer connected');
+  }catch(err){
+    logger.error("Failed to connect to kafka", err);
+  }
 };
 
 export const publishEvent = async (event: DomainEvent): Promise<void> => {
