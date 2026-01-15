@@ -1,14 +1,15 @@
-import express from 'express';
+import express, {type Express} from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { apiRateLimiter, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
+import { createLogger } from '@fx-platform/shared-utils';
+import { ServiceName } from '@fx-platform/shared-types'
 
 dotenv.config();
 
-const app = express();
+const app: Express = express();
 const PORT = process.env.PORT || 3000;
 const logger = createLogger(ServiceName.API_GATEWAY);
 

@@ -6,7 +6,6 @@ import {
   generateTransactionReference,
   NotFoundError,
   createLogger,
-  ServiceName,
 } from '@fx-platform/shared-utils';
 import {
   AmlCheckRequest,
@@ -16,6 +15,7 @@ import {
   AmlFlagType,
   ComplianceReviewStatus,
   EventType,
+  ServiceName
 } from '@fx-platform/shared-types';
 
 const logger = createLogger(ServiceName.COMPLIANCE);
@@ -174,7 +174,7 @@ export class ComplianceService {
       transactionId: updated.transactionId,
       status: updated.status as any,
       riskScore: updated.riskScore,
-      flags: updated.flags.map((f) => ({
+      flags: updated.flags.map((f:any) => ({
         id: f.id,
         type: f.type as any,
         severity: f.severity as any,

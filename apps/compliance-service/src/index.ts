@@ -1,17 +1,18 @@
-import express from 'express';
+import express, {type Express} from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, ServiceName, successResponse } from '@fx-platform/shared-utils';
+import { createLogger, successResponse } from '@fx-platform/shared-utils';
 import { initKafka, disconnectKafka, subscribeToEvents } from './config/kafka';
 import complianceService from './services/compliance.service';
 import prisma from './config/database';
-import { EventType } from '@fx-platform/shared-types';
+import { EventType, ServiceName } from '@fx-platform/shared-types';
+
 
 dotenv.config();
 
-const app = express();
+const app :Express= express();
 const PORT = process.env.PORT || 3005;
 const logger = createLogger(ServiceName.COMPLIANCE);
 
