@@ -2,7 +2,7 @@ import { Router } from 'express';
 import transactionController from '../controllers/transaction.controller';
 import { authenticate } from '@fx-platform/shared-middlewares';
 
-const router = Router();
+const router:Router = Router();
 
 // All routes require authentication
 router.use(authenticate);

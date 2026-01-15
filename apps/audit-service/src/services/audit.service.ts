@@ -1,6 +1,7 @@
 import prisma from '../config/database';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
+import { createLogger } from '@fx-platform/shared-utils';
 import { DomainEvent } from '@fx-platform/shared-types';
+import { ServiceName } from '@fx-platform/shared-types'
 
 const logger = createLogger(ServiceName.AUDIT);
 

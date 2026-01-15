@@ -1,211 +1,230 @@
-import prisma from '../config/database';
-import { publishEvent } from '../config/kafka';
-import axios from 'axios';
-import {
-  generateId,
-  NotFoundError,
-  ForbiddenError,
-  createLogger
-} from '@fx-platform/shared-utils';
-import { EventType } from '@fx-platform/shared-types';
-import { ServiceName } from '@fx-platform/shared-types';
+import prisma from "../config/database";
+import axios from "axios";
+import { createLogger, ForbiddenError, NotFoundError } from "@fx-platform/shared-utils";
+import { ServiceName, TransactionStep } from "@fx-platform/shared-types";
+
 const logger = createLogger(ServiceName.ADMIN);
 
+type ReviewPayload = {
+  notes?: string;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH";
+  amlDecision?: "PASS" | "FAIL" | "ESCALATE";
+};
+
+type SettlePayload = {
+  disbursementMethod: string; // ideally DisbursementMethod enum from shared-types
+  settlementReference: string;
+};
+
 export class AdminService {
-  async approveTransaction(transactionId: string, adminId: string, reason?: string) {
-    // Log admin action
-    await prisma.adminAction.create({
+  private transactionServiceUrl = process.env.TRANSACTION_SERVICE_URL || "http://localhost:3003";
+  private paymentServiceUrl = process.env.PAYMENT_SERVICE_URL || "http://localhost:3004";
+
+  private async logAdminAction(params: {
+    adminId: string;
+    actionType: string;
+    resourceType: string;
+    resourceId: string;
+    reason?: string;
+    metadata?: any;
+  }) {
+    return prisma.adminAction.create({
       data: {
-        adminId,
-        actionType: 'TRANSACTION_APPROVE',
-        resourceType: 'TRANSACTION',
-        resourceId: transactionId,
-        reason,
+        adminId: params.adminId,
+        actionType: params.actionType,
+        resourceType: params.resourceType,
+        resourceId: params.resourceId,
+        reason: params.reason,
+        metadata: params.metadata,
       },
     });
+  }
 
-    // Call transaction service to update status
-    const transactionServiceUrl = process.env.TRANSACTION_SERVICE_URL || 'http://localhost:3003';
+  async getDashboard() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let dashboard = await prisma.dashboard.findFirst({
+      where: { date: { gte: today } },
+    });
+
+    if (!dashboard) {
+      dashboard = await prisma.dashboard.create({ data: { date: today } });
+    }
+
+    return {
+      totalTransactions: dashboard.totalTransactions,
+      pendingApprovals: dashboard.pendingApprovals,
+      completedTransactions: dashboard.completedTransactions,
+      rejectedTransactions: dashboard.rejectedTransactions,
+      totalVolume: Number(dashboard.totalVolume),
+      amlFlags: dashboard.amlFlags,
+      pendingReviews: dashboard.pendingReviews,
+    };
+  }
+
+  /**
+   * REVIEW (Requirement)
+   * Calls transaction-service updateTransaction with ADMIN_REVIEW step.
+   */
+  async reviewTransaction(transactionId: string, adminId: string, payload: ReviewPayload) {
+    await this.logAdminAction({
+      adminId,
+      actionType: "TRANSACTION_REVIEW",
+      resourceType: "TRANSACTION",
+      resourceId: transactionId,
+      metadata: payload,
+    });
 
     try {
-      await axios.put(`${transactionServiceUrl}/api/transactions/${transactionId}`, {
-        step: 'ADMIN_REVIEW',
-        data: { approved: true, approvedBy: adminId },
+      await axios.put(`${this.transactionServiceUrl}/api/transactions/${transactionId}`, {
+        step: TransactionStep.ADMIN_REVIEW,
+        data: { reviewedBy: adminId, ...payload },
       });
 
-      // Publish event
-      // await publishEvent({
-      //   eventId: generateId(),
-      //   eventType: EventType.ADMIN_APPROVED,
-      //   source: ServiceName.ADMIN,
-      //   timestamp: new Date().toISOString(),
-      //   data: {
-      //     transactionId,
-      //     approvedBy: adminId,
-      //     reason,
-      //   },
-      // });
-
-      return { message: 'Transaction approved successfully' };
+      return { message: "Transaction reviewed successfully" };
     } catch (error) {
-      logger.error('Failed to approve transaction:', error);
+      logger.error("Failed to review transaction:", error);
       throw error;
     }
   }
 
-  async rejectTransaction(transactionId: string, adminId: string, reason: string) {
-    await prisma.adminAction.create({
-      data: {
-        adminId,
-        actionType: 'TRANSACTION_REJECT',
-        resourceType: 'TRANSACTION',
-        resourceId: transactionId,
-        reason,
-      },
+  /**
+   * APPROVE (Requirement)
+   * Calls transaction-service updateTransaction with ADMIN_REVIEW step.
+   */
+  async approveTransaction(transactionId: string, adminId: string, reason?: string) {
+    await this.logAdminAction({
+      adminId,
+      actionType: "TRANSACTION_APPROVE",
+      resourceType: "TRANSACTION",
+      resourceId: transactionId,
+      reason,
     });
 
-    const transactionServiceUrl = process.env.TRANSACTION_SERVICE_URL || 'http://localhost:3003';
+    try {
+      await axios.put(`${this.transactionServiceUrl}/api/transactions/${transactionId}`, {
+        step: TransactionStep.ADMIN_REVIEW,
+        data: { approved: true, approvedBy: adminId, reason },
+      });
+
+      return { message: "Transaction approved successfully" };
+    } catch (error) {
+      logger.error("Failed to approve transaction:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * REJECT (Requirement)
+   * Calls transaction-service updateTransaction with ADMIN_REVIEW step.
+   */
+  async rejectTransaction(transactionId: string, adminId: string, reason: string) {
+    await this.logAdminAction({
+      adminId,
+      actionType: "TRANSACTION_REJECT",
+      resourceType: "TRANSACTION",
+      resourceId: transactionId,
+      reason,
+    });
 
     try {
-      await axios.put(`${transactionServiceUrl}/api/transactions/${transactionId}`, {
-        step: 'ADMIN_REVIEW',
+      await axios.put(`${this.transactionServiceUrl}/api/transactions/${transactionId}`, {
+        step: TransactionStep.ADMIN_REVIEW,
         data: { approved: false, rejectedBy: adminId, rejectionReason: reason },
       });
 
-      // await publishEvent({
-      //   eventId: generateId(),
-      //   eventType: EventType.ADMIN_REJECTED,
-      //   source: ServiceName.ADMIN,
-      //   timestamp: new Date().toISOString(),
-      //   data: {
-      //     transactionId,
-      //     rejectedBy: adminId,
-      //     reason,
-      //   },
-      // });
-
-      return { message: 'Transaction rejected successfully' };
+      return { message: "Transaction rejected successfully" };
     } catch (error) {
-      logger.error('Failed to reject transaction:', error);
+      logger.error("Failed to reject transaction:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * SETTLE (Requirement)
+   * In your enums, settle maps to DISBURSEMENT.
+   * NOTE: your transaction-service currently only handles DISBURSEMENT by setting disbursementMethod.
+   * You'll likely want transaction-service to also update status to DISBURSEMENT_IN_PROGRESS/COMPLETED
+   * when this step is hit.
+   */
+  async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
+    await this.logAdminAction({
+      adminId,
+      actionType: "TRANSACTION_SETTLE",
+      resourceType: "TRANSACTION",
+      resourceId: transactionId,
+      metadata: payload,
+    });
+
+    try {
+      await axios.put(`${this.transactionServiceUrl}/api/transactions/${transactionId}`, {
+        step: TransactionStep.DISBURSEMENT,
+        data: {
+          disbursementMethod: payload.disbursementMethod,
+          settlementReference: payload.settlementReference,
+          settledBy: adminId,
+          settledAt: new Date().toISOString(),
+        },
+      });
+
+      return { message: "Transaction settled successfully" };
+    } catch (error) {
+      logger.error("Failed to settle transaction:", error);
       throw error;
     }
   }
 
   async confirmDeposit(transactionId: string, adminId: string, paymentReference: string, proofOfPayment?: string) {
-    await prisma.adminAction.create({
-      data: {
-        adminId,
-        actionType: 'DEPOSIT_CONFIRM',
-        resourceType: 'TRANSACTION',
-        resourceId: transactionId,
-        metadata: { paymentReference, proofOfPayment },
-      },
+    await this.logAdminAction({
+      adminId,
+      actionType: "DEPOSIT_CONFIRM",
+      resourceType: "TRANSACTION",
+      resourceId: transactionId,
+      metadata: { paymentReference, proofOfPayment },
     });
 
-    const paymentServiceUrl = process.env.PAYMENT_SERVICE_URL || 'http://localhost:3004';
-
     try {
-      await axios.post(`${paymentServiceUrl}/api/payments/deposit/confirm`, {
+      await axios.post(`${this.paymentServiceUrl}/api/payments/deposit/confirm`, {
         transactionId,
         paymentReference,
         proofOfPayment,
       });
 
-      return { message: 'Deposit confirmed successfully' };
+      // optionally: also tell transaction-service to move to DEPOSIT_CONFIRMATION step if needed
+      // await axios.put(`${this.transactionServiceUrl}/api/transactions/${transactionId}`, {
+      //   step: TransactionStep.DEPOSIT_CONFIRMATION,
+      //   data: { confirmedBy: adminId, paymentReference },
+      // });
+
+      return { message: "Deposit confirmed successfully" };
     } catch (error) {
-      logger.error('Failed to confirm deposit:', error);
+      logger.error("Failed to confirm deposit:", error);
       throw error;
     }
   }
 
-  // async getDashboard() {
-  //   // This would aggregate data from various services
-  //   const today = new Date();
-  //   today.setHours(0, 0, 0, 0);
-
-  //   let dashboard = await prisma.dashboard.findFirst({
-  //     where: {
-  //       date: { gte: today },
-  //     },
-  //   });
-
-  //   if (!dashboard) {
-  //     // Create new dashboard entry
-  //     dashboard = await prisma.dashboard.create({
-  //       data: {
-  //         date: today,
-  //       },
-  //     });
-  //   }
-
-  //   // In production, fetch real-time data from services
-  //   return {
-  //     totalTransactions: dashboard.totalTransactions,
-  //     pendingApprovals: dashboard.pendingApprovals,
-  //     completedTransactions: dashboard.completedTransactions,
-  //     rejectedTransactions: dashboard.rejectedTransactions,
-  //     totalVolume: Number(dashboard.totalVolume),
-  //     amlFlags: dashboard.amlFlags,
-  //     pendingReviews: dashboard.pendingReviews,
-  //   };
-  // }
-
-  async getPendingApprovals(adminId: string, page: number = 1, limit: number = 20) {
-    // Fetch from transaction service
-    const transactionServiceUrl = process.env.TRANSACTION_SERVICE_URL || 'http://localhost:3003';
+  async getPendingApprovals(adminId: string, page = 1, limit = 20) {
+    await this.logAdminAction({
+      adminId,
+      actionType: "PENDING_APPROVALS_VIEW",
+      resourceType: "QUEUE",
+      resourceId: "PENDING_APPROVALS",
+      metadata: { page, limit },
+    });
 
     try {
       const response = await axios.get(
-        `${transactionServiceUrl}/api/transactions/admin/pending?page=${page}&limit=${limit}`
+        `${this.transactionServiceUrl}/api/transactions/admin/pending?page=${page}&limit=${limit}`
       );
-
       return response.data;
     } catch (error) {
-      logger.error('Failed to fetch pending approvals:', error);
+      logger.error("Failed to fetch pending approvals:", error);
       throw error;
     }
   }
 
-  async assignTask(taskType: string, taskId: string, adminId: string, priority: number = 1) {
-    const assignment = await prisma.taskAssignment.create({
-      data: {
-        adminId,
-        taskType,
-        taskId,
-        priority,
-        status: 'PENDING',
-      },
-    });
-
-    return assignment;
-  }
-
-  async completeTask(assignmentId: string, adminId: string, notes?: string) {
-    const assignment = await prisma.taskAssignment.findUnique({
-      where: { id: assignmentId },
-    });
-
-    if (!assignment) {
-      throw new NotFoundError('Task assignment not found');
-    }
-
-    if (assignment.adminId !== adminId) {
-      throw new ForbiddenError('You are not assigned to this task');
-    }
-
-    const updated = await prisma.taskAssignment.update({
-      where: { id: assignmentId },
-      data: {
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        notes,
-      },
-    });
-
-    return updated;
-  }
-
-  async getAdminActions(adminId: string, page: number = 1, limit: number = 50) {
+  async getAdminActions(adminId: string, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
 
     const [actions, total] = await Promise.all([
@@ -213,7 +232,7 @@ export class AdminService {
         where: { adminId },
         skip,
         take: limit,
-        orderBy: { performedAt: 'desc' },
+        orderBy: { performedAt: "desc" },
       }),
       prisma.adminAction.count({ where: { adminId } }),
     ]);
@@ -229,27 +248,17 @@ export class AdminService {
     };
   }
 
-  async getAuditLog(filters: any, page: number = 1, limit: number = 50) {
+  async getAuditLog(filters: any, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
-
     const where: any = {};
 
-    if (filters.actionType) {
-      where.actionType = filters.actionType;
-    }
-
-    if (filters.resourceType) {
-      where.resourceType = filters.resourceType;
-    }
+    if (filters.actionType) where.actionType = filters.actionType;
+    if (filters.resourceType) where.resourceType = filters.resourceType;
 
     if (filters.startDate || filters.endDate) {
       where.performedAt = {};
-      if (filters.startDate) {
-        where.performedAt.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        where.performedAt.lte = new Date(filters.endDate);
-      }
+      if (filters.startDate) where.performedAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.performedAt.lte = new Date(filters.endDate);
     }
 
     const [actions, total] = await Promise.all([
@@ -257,13 +266,10 @@ export class AdminService {
         where,
         skip,
         take: limit,
-        orderBy: { performedAt: 'desc' },
+        orderBy: { performedAt: "desc" },
         include: {
           admin: {
-            select: {
-              email: true,
-              role: true,
-            },
+            select: { email: true, role: true },
           },
         },
       }),
