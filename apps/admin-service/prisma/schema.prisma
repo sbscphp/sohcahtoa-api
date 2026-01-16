@@ -103,3 +103,54 @@ model Dashboard {
   @@index([date])
   @@map("dashboards")
 }
+
+enum AmlFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AmlFlagType {
+  THRESHOLD_EXCEEDED
+  SUSPICIOUS_PATTERN
+  HIGH_RISK_COUNTRY
+  FREQUENT_TRANSACTIONS
+  STRUCTURING
+  POLITICALLY_EXPOSED_PERSON
+  SANCTIONS_LIST
+  ADVERSE_MEDIA
+}
+
+enum CustomerFlagStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+model CustomerFlag {
+  id          String             @id @default(uuid())
+  userId      String             
+  type        AmlFlagType
+  severity    AmlFlagSeverity
+  status      CustomerFlagStatus @default(OPEN)
+
+  title       String?
+  description String
+  details     Json?
+
+  createdBy   String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolutionNotes String?
+
+  @@index([status])
+  @@index([type])
+  @@index([severity])
+  @@index([userId])
+  @@map("customer_flags")
+}
