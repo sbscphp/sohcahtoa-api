@@ -15,6 +15,12 @@ export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
+export enum CustomerType {
+  NIGERIAN_CITIZEN = 'NIGERIAN_CITIZEN',
+  TOURIST = 'TOURIST',
+  AGENT = 'AGENT',
+}
+
 export enum KycStatus {
   NOT_STARTED = 'NOT_STARTED',
   IN_PROGRESS = 'IN_PROGRESS',
@@ -40,6 +46,24 @@ export interface SignupRequest {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+}
+
+export interface NigerianSignupRequest {
+  bvn: string;
+}
+
+export interface TouristSignupRequest {
+  passportDocumentUrl: string;
+}
+
+export interface BvnVerificationResponse {
+  bvnVerified: boolean;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  phoneNumber?: string;
+  address?: string;
+  message: string;
 }
 
 export interface OtpRequest {
@@ -68,6 +92,7 @@ export interface UserProfile {
   lastName: string;
   phoneNumber: string;
   role: UserRole;
+  customerType?: CustomerType;
   kycStatus: KycStatus;
   isActive: boolean;
   createdAt: string;

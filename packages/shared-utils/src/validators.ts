@@ -39,3 +39,11 @@ export const validateRequiredFields = (obj: any, fields: string[]): { valid: boo
     missing,
   };
 };
+
+export const validateDateOfBirth = (dob: string): boolean => {
+  const date = new Date(dob);
+  const now = new Date();
+  const age = now.getFullYear() - date.getFullYear();
+  // Must be at least 18 years old and valid date
+  return !isNaN(date.getTime()) && age >= 18 && age < 150;
+};

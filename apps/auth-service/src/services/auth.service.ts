@@ -23,11 +23,18 @@ import {
   OtpRequest,
   OtpValidationRequest,
   KycVerificationRequest,
+  NigerianSignupRequest,
+  TouristSignupRequest,
+  BvnVerificationResponse,
   UserRole,
+  CustomerType,
   KycStatus,
   EventType,
   ServiceName,
 } from '@fx-platform/shared-types';
+import bvnService from './bvn.service';
+import passportVerificationService from './passport-verification.service';
+import { emailService } from '@fx-platform/shared-utils';
 
 const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '10');
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -210,10 +217,315 @@ export class AuthService {
         lastName: user.profile?.lastName || '',
         phoneNumber: user.phoneNumber,
         role: user.role,
+        customerType: user.customerType || undefined,
         kycStatus: user.kyc?.status || KycStatus.NOT_STARTED,
         isActive: user.isActive,
         createdAt: user.createdAt.toISOString(),
       },
+    };
+  }
+
+  // STEP 1: Verify BVN and return extracted data for user preview
+  async verifyBvnForSignup(bvn: string): Promise<{
+    bvn: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+    dateOfBirth: string;
+    address?: string;
+    gender?: string;
+  }> {
+    // Verify BVN and extract all user data
+    const bvnResult = await bvnService.verifyBvn(bvn);
+
+    if (!bvnResult.success || !bvnResult.data) {
+      throw new ValidationError(bvnResult.message || 'BVN verification failed');
+    }
+
+    // Check if user already exists with this BVN
+    const existingKyc = await prisma.userKyc.findUnique({
+      where: { bvn },
+    });
+
+    if (existingKyc) {
+      throw new DuplicateError('An account with this BVN already exists');
+    }
+
+    // Return extracted data for user to preview and confirm
+    return {
+      bvn,
+      firstName: bvnResult.data.firstName,
+      lastName: bvnResult.data.lastName,
+      email: bvnResult.data.email!,
+      phoneNumber: bvnResult.data.phoneNumber,
+      dateOfBirth: bvnResult.data.dateOfBirth,
+      address: bvnResult.data.address,
+      gender: bvnResult.data.gender,
+    };
+  }
+
+  // STEP 2: Send OTP to user's chosen contact (email or phone)
+  async sendBvnVerificationOtp(data: {
+    bvn: string;
+    verificationType: 'email' | 'phone';
+    email?: string;
+    phoneNumber?: string;
+  }): Promise<{ message: string }> {
+    const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
+
+    // Send OTP
+    await this.sendOtp({
+      email: data.verificationType === 'email' ? contactValue : '',
+      phoneNumber: data.verificationType === 'phone' ? contactValue : '',
+      purpose: 'REGISTRATION',
+    });
+
+    return {
+      message: `OTP sent successfully to your ${data.verificationType}`,
+    };
+  }
+
+  // STEP 4: After OTP verification, create account with user's password
+  async createNigerianAccount(data: {
+    bvn: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+    dateOfBirth: string;
+    address?: string;
+    password: string;
+  }): Promise<{ userId: string; message: string }> {
+    // Validate password
+    const passwordValidation = validatePasswordStrength(data.password);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    // Check for existing user
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
+      },
+    });
+
+    if (existingUser) {
+      throw new DuplicateError('User with this email or phone number already exists');
+    }
+
+    // Hash the user's password
+    const passwordHash = await hashPassword(data.password);
+
+    // Create user with BVN data
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        role: UserRole.CUSTOMER,
+        customerType: CustomerType.NIGERIAN_CITIZEN,
+        emailVerified: true, // Already verified via OTP
+        credentials: {
+          create: {
+            passwordHash,
+          },
+        },
+        profile: {
+          create: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            dateOfBirth: new Date(data.dateOfBirth),
+            address: data.address,
+          },
+        },
+        kyc: {
+          create: {
+            status: KycStatus.VERIFIED,
+            bvn: data.bvn,
+            bvnVerified: true,
+            verifiedAt: new Date(),
+          },
+        },
+      },
+    });
+
+    // Send welcome email
+    if (emailService.isReady()) {
+      await emailService.sendWelcomeEmail(data.email, data.firstName);
+    }
+
+    // Publish event
+    await publishEvent({
+      eventId: generateId(),
+      eventType: EventType.USER_REGISTERED,
+      source: ServiceName.AUTH,
+      timestamp: new Date().toISOString(),
+      userId: user.id,
+      data: {
+        userId: user.id,
+        email: data.email,
+        customerType: CustomerType.NIGERIAN_CITIZEN,
+        firstName: data.firstName,
+        lastName: data.lastName,
+      },
+    });
+
+    return {
+      userId: user.id,
+      message: 'Account created successfully. You can now login with your email and password.',
+    };
+  }
+
+  // STEP 1: Verify passport and return extracted data for user preview
+  async verifyPassportForSignup(passportDocumentUrl: string): Promise<{
+    passportNumber: string;
+    passportDocumentUrl: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+    dateOfBirth: string;
+    nationality: string;
+  }> {
+    // Verify passport document and extract all user data
+    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
+
+    if (!passportResult.success || !passportResult.data) {
+      throw new ValidationError(passportResult.message || 'Passport verification failed');
+    }
+
+    // Check if user already exists with this passport
+    const existingKyc = await prisma.userKyc.findFirst({
+      where: { passportNumber: passportResult.data.passportNumber },
+    });
+
+    if (existingKyc) {
+      throw new DuplicateError('An account with this passport already exists');
+    }
+
+    // Return extracted data for user to preview and confirm
+    return {
+      passportNumber: passportResult.data.passportNumber,
+      passportDocumentUrl: passportDocumentUrl,
+      firstName: passportResult.data.firstName,
+      lastName: passportResult.data.lastName,
+      email: passportResult.data.email!,
+      phoneNumber: passportResult.data.phoneNumber!,
+      dateOfBirth: passportResult.data.dateOfBirth,
+      nationality: passportResult.data.nationality,
+    };
+  }
+
+  // STEP 2: Send OTP to user's chosen contact (email or phone)
+  async sendPassportVerificationOtp(data: {
+    passportNumber: string;
+    verificationType: 'email' | 'phone';
+    email?: string;
+    phoneNumber?: string;
+  }): Promise<{ message: string }> {
+    const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
+
+    // Send OTP
+    await this.sendOtp({
+      email: data.verificationType === 'email' ? contactValue : '',
+      phoneNumber: data.verificationType === 'phone' ? contactValue : '',
+      purpose: 'REGISTRATION',
+    });
+
+    return {
+      message: `OTP sent successfully to your ${data.verificationType}`,
+    };
+  }
+
+  // STEP 4: After OTP verification, create account with user's password
+  async createTouristAccount(data: {
+    passportNumber: string;
+    passportDocumentUrl: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+    dateOfBirth: string;
+    nationality: string;
+    password: string;
+  }): Promise<{ userId: string; message: string }> {
+    // Validate password
+    const passwordValidation = validatePasswordStrength(data.password);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    // Check for existing user
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
+      },
+    });
+
+    if (existingUser) {
+      throw new DuplicateError('User with this email or phone number already exists');
+    }
+
+    // Hash the user's password
+    const passwordHash = await hashPassword(data.password);
+
+    // Create user with passport data
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        role: UserRole.CUSTOMER,
+        customerType: CustomerType.TOURIST,
+        emailVerified: true, // Already verified via OTP
+        credentials: {
+          create: {
+            passwordHash,
+          },
+        },
+        profile: {
+          create: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            dateOfBirth: new Date(data.dateOfBirth),
+            country: data.nationality,
+          },
+        },
+        kyc: {
+          create: {
+            status: KycStatus.VERIFIED,
+            passportNumber: data.passportNumber,
+            passportDocumentUrl: data.passportDocumentUrl,
+            passportVerified: true,
+            verifiedAt: new Date(),
+          },
+        },
+      },
+    });
+
+    // Send welcome email
+    if (emailService.isReady()) {
+      await emailService.sendWelcomeEmail(data.email, data.firstName);
+    }
+
+    // Publish event
+    await publishEvent({
+      eventId: generateId(),
+      eventType: EventType.USER_REGISTERED,
+      source: ServiceName.AUTH,
+      timestamp: new Date().toISOString(),
+      userId: user.id,
+      data: {
+        userId: user.id,
+        email: data.email,
+        customerType: CustomerType.TOURIST,
+        firstName: data.firstName,
+        lastName: data.lastName,
+      },
+    });
+
+    return {
+      userId: user.id,
+      message: 'Account created successfully. You can now login with your email and password.',
     };
   }
 
@@ -236,9 +548,15 @@ export class AuthService {
     const cacheKey = `otp:${data.email || data.phoneNumber}:${data.purpose}`;
     await redis.setex(cacheKey, OTP_EXPIRY_MINUTES * 60, otp);
 
-    // TODO: Send OTP via SMS/Email using external service (Termii, SendGrid, etc.)
-    // For now, we'll just log it
-    console.log(`OTP for ${data.email || data.phoneNumber}: ${otp}`);
+    // Send OTP via email if email service is configured
+    if (emailService.isReady() && data.email) {
+      await emailService.sendOtpEmail(data.email, otp, data.purpose);
+    } else {
+      // Log OTP for development
+      console.log(`OTP for ${data.email || data.phoneNumber}: ${otp}`);
+    }
+
+    // TODO: Send OTP via SMS using Termii or similar service for phone verification
 
     // Publish event
     await publishEvent({
@@ -282,10 +600,16 @@ export class AuthService {
 
       // Update user verification status if needed
       if (data.purpose === 'REGISTRATION') {
-        await prisma.user.update({
+        const user = await prisma.user.update({
           where: { email: data.email },
           data: { emailVerified: true },
+          include: { profile: true },
         });
+
+        // Send welcome email after verification
+        if (emailService.isReady() && user.profile) {
+          await emailService.sendWelcomeEmail(user.email, user.profile.firstName);
+        }
       }
 
       // Publish event

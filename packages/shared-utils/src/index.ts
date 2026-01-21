@@ -5,3 +5,4 @@ export * from './validators';
 export * from './response';
 export * from './errors';
 export * from './id-generator';
+export * from './email';
