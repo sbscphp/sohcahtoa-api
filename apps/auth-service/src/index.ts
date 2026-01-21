@@ -8,6 +8,7 @@ import { createLogger } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import prisma from './config/database';
+import { initializeEmailService } from './config/email';
 
 dotenv.config();
 
@@ -57,8 +58,9 @@ const gracefulShutdown = async (signal: string) => {
 // Start server
 const server = app.listen(PORT, async () => {
   try {
-    // Initialize Kafka
+    // Initialize services
     await initKafka();
+    initializeEmailService();
 
     logger.info(`Auth Service running on port ${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);

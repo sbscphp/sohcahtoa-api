@@ -15,6 +15,12 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum CustomerType {
+  NIGERIAN_CITIZEN
+  TOURIST
+  AGENT
+}
+
 enum KycStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -35,6 +41,7 @@ model User {
   email         String        @unique
   phoneNumber   String        @unique
   role          UserRole      @default(CUSTOMER)
+  customerType  CustomerType?
   isActive      Boolean       @default(true)
   emailVerified Boolean       @default(false)
   phoneVerified Boolean       @default(false)
@@ -49,6 +56,7 @@ model User {
 
   @@index([email])
   @@index([phoneNumber])
+  @@index([customerType])
   @@map("users")
 }
 
@@ -88,24 +96,25 @@ model UserProfile {
 }
 
 model UserKyc {
-  id                String      @id @default(uuid())
-  userId            String      @unique
-  status            KycStatus   @default(NOT_STARTED)
-  bvn               String?     @unique
-  tin               String?
-  passportNumber    String?
-  bvnVerified       Boolean     @default(false)
-  tinVerified       Boolean     @default(false)
-  passportVerified  Boolean     @default(false)
-  verificationNotes String?
-  verifiedAt        DateTime?
-  verifiedBy        String?
-  rejectedAt        DateTime?
-  rejectionReason   String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                  String      @id @default(uuid())
+  userId              String      @unique
+  status              KycStatus   @default(NOT_STARTED)
+  bvn                 String?     @unique
+  tin                 String?
+  passportNumber      String?
+  passportDocumentUrl String?
+  bvnVerified         Boolean     @default(false)
+  tinVerified         Boolean     @default(false)
+  passportVerified    Boolean     @default(false)
+  verificationNotes   String?
+  verifiedAt          DateTime?
+  verifiedBy          String?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([bvn])
   @@map("user_kyc")
