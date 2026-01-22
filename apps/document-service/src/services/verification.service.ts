@@ -246,7 +246,7 @@ export class VerificationService {
         provider: 'VISA_VERIFY',
         apiResponse: response,
         extractedData: response.data,
-        confidenceScore: response.data?.confidenceScore || response.data?.confidence || 0,
+        confidenceScore: response.data?.confidenceScore || response.data?.confidenceScore || 0,
         flags: response.data?.flags || [],
       };
     } catch (error) {
