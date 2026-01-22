@@ -87,6 +87,7 @@ export interface VerificationCompletedEvent extends BaseEvent {
     userId: string;
     documentType: string;
     verificationStatus: string;
+    reviewedBy?: string;
   };
 }
 

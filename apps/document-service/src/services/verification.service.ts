@@ -5,11 +5,11 @@ import {
   generateId,
   NotFoundError,
   createLogger,
-  ServiceName,
 } from '@fx-platform/shared-utils';
 import {
   VerificationStatus,
   EventType,
+  ServiceName,
 } from '@fx-platform/shared-types';
 
 const logger = createLogger(ServiceName.DOCUMENT);
@@ -246,7 +246,7 @@ export class VerificationService {
         provider: 'VISA_VERIFY',
         apiResponse: response,
         extractedData: response.data,
-        confidenceScore: response.data?.confidence || 0,
+        confidenceScore: response.data?.confidenceScore || response.data?.confidence || 0,
         flags: response.data?.flags || [],
       };
     } catch (error) {
