@@ -128,7 +128,9 @@ export interface ComplianceReviewRequiredEvent extends BaseEvent {
     transactionId: string;
     userId: string;
     checkId: string;
-    reason: string;
+    reason?: string;
+    riskScore?: number;
+    status?: string;
   };
 }
 
@@ -136,10 +138,11 @@ export interface ComplianceReviewCompletedEvent extends BaseEvent {
   eventType: EventType.COMPLIANCE_REVIEW_COMPLETED;
   data: {
     transactionId: string;
-    userId: string;
+    userId?: string;
     checkId: string;
     decision: string;
     comments?: string;
+    reviewedBy?: string;
   };
 }
 
