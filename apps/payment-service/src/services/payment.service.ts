@@ -91,9 +91,10 @@ export class PaymentService {
       timestamp: new Date().toISOString(),
       data: {
         transactionId: data.transactionId,
+        userId: '', // Add userId to match required type
+        type: 'deposit',
         amount: data.amount,
         currency: data.currency,
-        type: 'deposit', // Add type to match allowed shape
       },
     });
 
@@ -127,10 +128,10 @@ export class PaymentService {
       timestamp: new Date().toISOString(),
       data: {
         transactionId: data.transactionId,
+        userId: confirmedBy || '', // Add userId to match required type
         amount: Number(updated.amount),
         currency: updated.currency,
         paymentMethod: updated.paymentMethod,
-        type: 'deposit', // Add type to match allowed shape
       },
     });
 
