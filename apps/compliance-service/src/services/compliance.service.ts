@@ -162,6 +162,7 @@ export class ComplianceService {
         userId: data.userId,
         data: {
           transactionId: data.transactionId,
+          userId: data.userId,
           checkId: check.id,
           riskScore,
           status: finalStatus,

@@ -11,7 +11,7 @@ import prisma from './config/database';
 
 dotenv.config();
 
-const app = express();
+const app: express.Application = express();
 const PORT = process.env.PORT || 3003;
 const logger = createLogger(ServiceName.TRANSACTION);
 

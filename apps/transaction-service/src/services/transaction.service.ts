@@ -142,6 +142,7 @@ export class TransactionService {
         transactionId: updated.id,
         userId: transaction.userId,
         step: data.step,
+        status: updated.status,
       },
     });
 
@@ -189,6 +190,7 @@ export class TransactionService {
         userId: transaction.userId,
         documentId: document.id,
         documentType: data.documentType,
+        fileUrl: data.fileUrl || '',
       },
     });
 
@@ -304,7 +306,7 @@ export class TransactionService {
       CASH_REMITTANCE: { quarterly: 5000, yearly: 20000 },
     };
 
-    const limit = defaultLimits[type] || { quarterly: 10000, yearly: 40000 };
+    const limit = (defaultLimits as any)[type] || { quarterly: 10000, yearly: 40000 };
 
     return prisma.transactionLimit.upsert({
       where: {
