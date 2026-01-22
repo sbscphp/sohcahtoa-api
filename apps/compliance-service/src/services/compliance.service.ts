@@ -68,14 +68,14 @@ export class ComplianceService {
 
     // 4. Country risk check
     const countryCheck = await this.checkCountryRisk(data);
-    if (countryCheck.flagged) {
+    if (countryCheck.flagged && countryCheck.flag) {
       flags.push(countryCheck.flag);
       riskScore += countryCheck.riskImpact;
     }
 
     // 5. NFIU check (external API)
     const nfiuCheck = await this.checkNFIU(data);
-    if (nfiuCheck.flagged) {
+    if (nfiuCheck.flagged && nfiuCheck.flag) {
       flags.push(nfiuCheck.flag);
       riskScore += nfiuCheck.riskImpact;
     }
@@ -266,7 +266,11 @@ export class ComplianceService {
 
     // This would typically check the transaction's destination country
     // For now, we'll skip this check
-    return { flagged: false, riskImpact: 0 };
+    return {
+      flagged: false,
+      riskImpact: 0,
+      flag: undefined as any
+    };
   }
 
   private async checkNFIU(data: AmlCheckRequest) {

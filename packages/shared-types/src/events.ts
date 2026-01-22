@@ -122,11 +122,57 @@ export interface AdminApprovalRequiredEvent extends BaseEvent {
   };
 }
 
+export interface ComplianceReviewRequiredEvent extends BaseEvent {
+  eventType: EventType.COMPLIANCE_REVIEW_REQUIRED;
+  data: {
+    transactionId: string;
+    userId: string;
+    checkId: string;
+    reason: string;
+  };
+}
+
+export interface ComplianceReviewCompletedEvent extends BaseEvent {
+  eventType: EventType.COMPLIANCE_REVIEW_COMPLETED;
+  data: {
+    transactionId: string;
+    userId: string;
+    checkId: string;
+    decision: string;
+    comments?: string;
+  };
+}
+
+export interface TransactionUpdatedEvent extends BaseEvent {
+  eventType: EventType.TRANSACTION_UPDATED;
+  data: {
+    transactionId: string;
+    userId: string;
+    step: string;
+    status: string;
+  };
+}
+
+export interface DocumentUploadedEvent extends BaseEvent {
+  eventType: EventType.DOCUMENT_UPLOADED;
+  data: {
+    transactionId: string;
+    userId: string;
+    documentId: string;
+    documentType: string;
+    fileUrl: string;
+  };
+}
+
 export type DomainEvent =
   | UserRegisteredEvent
   | TransactionCreatedEvent
   | TransactionStatusChangedEvent
+  | TransactionUpdatedEvent
+  | DocumentUploadedEvent
   | VerificationCompletedEvent
   | DepositConfirmedEvent
   | AmlFlagRaisedEvent
-  | AdminApprovalRequiredEvent;
+  | AdminApprovalRequiredEvent
+  | ComplianceReviewRequiredEvent
+  | ComplianceReviewCompletedEvent;

@@ -22,7 +22,7 @@ export class AdminService {
 
   private async logAdminAction(params: {
     adminId: string;
-    actionType: string;
+    actionType: any;  // ActionType enum from Prisma
     resourceType: string;
     resourceId: string;
     reason?: string;
@@ -49,7 +49,12 @@ export class AdminService {
     });
 
     if (!dashboard) {
-      dashboard = await prisma.dashboard.create({ data: { date: today } });
+      dashboard = await prisma.dashboard.create({
+        data: {
+          date: today,
+          totalVolume: 0,
+        }
+      });
     }
 
     return {
