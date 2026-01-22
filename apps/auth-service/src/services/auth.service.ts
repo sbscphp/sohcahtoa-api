@@ -113,7 +113,7 @@ export class AuthService {
     await this.sendOtp({
       email: user.email,
       phoneNumber: user.phoneNumber,
-      purpose: 'REGISTRATION',
+      purpose: 'EMAIL_VERIFICATION',
     });
 
     return {
@@ -177,7 +177,7 @@ export class AuthService {
     const tokenPayload = {
       userId: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as UserRole,
       sessionId,
     };
 
@@ -197,16 +197,6 @@ export class AuthService {
       },
     });
 
-    // Publish event
-    await publishEvent({
-      eventId: generateId(),
-      eventType: EventType.USER_LOGIN,
-      source: ServiceName.AUTH,
-      timestamp: new Date().toISOString(),
-      userId: user.id,
-      data: { userId: user.id, email: user.email },
-    });
-
     return {
       accessToken,
       refreshToken,
@@ -216,9 +206,9 @@ export class AuthService {
         firstName: user.profile?.firstName || '',
         lastName: user.profile?.lastName || '',
         phoneNumber: user.phoneNumber,
-        role: user.role,
-        customerType: user.customerType || undefined,
-        kycStatus: user.kyc?.status || KycStatus.NOT_STARTED,
+        role: user.role as UserRole,
+        customerType: user.customerType as CustomerType | undefined,
+        kycStatus: user.kyc?.status as KycStatus || KycStatus.NOT_STARTED,
         isActive: user.isActive,
         createdAt: user.createdAt.toISOString(),
       },
@@ -278,7 +268,7 @@ export class AuthService {
     await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
-      purpose: 'REGISTRATION',
+      purpose: 'EMAIL_VERIFICATION',
     });
 
     return {
@@ -364,7 +354,6 @@ export class AuthService {
       data: {
         userId: user.id,
         email: data.email,
-        customerType: CustomerType.NIGERIAN_CITIZEN,
         firstName: data.firstName,
         lastName: data.lastName,
       },
@@ -429,7 +418,7 @@ export class AuthService {
     await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
-      purpose: 'REGISTRATION',
+      purpose: 'EMAIL_VERIFICATION',
     });
 
     return {
@@ -517,7 +506,6 @@ export class AuthService {
       data: {
         userId: user.id,
         email: data.email,
-        customerType: CustomerType.TOURIST,
         firstName: data.firstName,
         lastName: data.lastName,
       },
@@ -558,19 +546,6 @@ export class AuthService {
 
     // TODO: Send OTP via SMS using Termii or similar service for phone verification
 
-    // Publish event
-    await publishEvent({
-      eventId: generateId(),
-      eventType: EventType.OTP_SENT,
-      source: ServiceName.AUTH,
-      timestamp: new Date().toISOString(),
-      data: {
-        email: data.email,
-        phoneNumber: data.phoneNumber,
-        purpose: data.purpose,
-      },
-    });
-
     return {
       message: 'OTP sent successfully',
     };
@@ -599,7 +574,7 @@ export class AuthService {
       });
 
       // Update user verification status if needed
-      if (data.purpose === 'REGISTRATION') {
+      if (data.purpose === 'EMAIL_VERIFICATION') {
         const user = await prisma.user.update({
           where: { email: data.email },
           data: { emailVerified: true },
@@ -611,15 +586,6 @@ export class AuthService {
           await emailService.sendWelcomeEmail(user.email, user.profile.firstName);
         }
       }
-
-      // Publish event
-      await publishEvent({
-        eventId: generateId(),
-        eventType: EventType.OTP_VERIFIED,
-        source: ServiceName.AUTH,
-        timestamp: new Date().toISOString(),
-        data: { email: data.email, purpose: data.purpose },
-      });
 
       return { valid: true, message: 'OTP validated successfully' };
     }
@@ -685,7 +651,7 @@ export class AuthService {
     const tokenPayload = {
       userId: session.user.id,
       email: session.user.email,
-      role: session.user.role,
+      role: session.user.role as UserRole,
       sessionId: session.id,
     };
 
