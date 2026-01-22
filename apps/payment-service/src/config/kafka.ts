@@ -1,24 +1,42 @@
-import { Kafka } from 'kafkajs';
-import { DomainEvent } from '@fx-platform/shared-types';
+import { Kafka, Producer, Consumer } from 'kafkajs';
 
 const kafka = new Kafka({
   clientId: 'payment-service',
   brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
 });
 
-let producer = kafka.producer();
+let producer: Producer;
+let consumer: Consumer;
 
-export const initKafka = async () => {
+export async function initKafka() {
+  producer = kafka.producer();
+  consumer = kafka.consumer({ groupId: 'payment-service-group' });
   await producer.connect();
-};
+  await consumer.connect();
+}
 
-export const publishEvent = async (event: DomainEvent) => {
+export async function disconnectKafka() {
+  if (producer) await producer.disconnect();
+  if (consumer) await consumer.disconnect();
+}
+
+export async function publishEvent(event: any) {
+  if (!producer) throw new Error('Kafka producer not initialized');
   await producer.send({
-    topic: event.eventType,
-    messages: [{ key: event.eventId, value: JSON.stringify(event) }],
+    topic: 'events',
+    messages: [{ value: JSON.stringify(event) }],
   });
-};
+}
 
-export const disconnectKafka = async () => {
-  await producer.disconnect();
-};
+export async function subscribeToEvents(eventTypes: string[], handler: (event: any) => Promise<void>) {
+  if (!consumer) throw new Error('Kafka consumer not initialized');
+  await consumer.subscribe({ topic: 'events', fromBeginning: true });
+  await consumer.run({
+    eachMessage: async ({ message }) => {
+      const event = JSON.parse(message.value?.toString() || '{}');
+      if (eventTypes.includes(event.eventType)) {
+        await handler(event);
+      }
+    },
+  });
+}
