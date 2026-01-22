@@ -35,7 +35,6 @@ COPY --from=base /app/apps/admin-service/dist ./dist
 COPY --from=base /app/apps/admin-service/package.json ./
 COPY --from=base /app/apps/admin-service/prisma ./prisma
 COPY --from=base /app/apps/admin-service/node_modules ./node_modules
-COPY --from=base /app/node_modules/.prisma ./node_modules/.prisma
 
 # Expose port
 EXPOSE 3007

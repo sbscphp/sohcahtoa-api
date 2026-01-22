@@ -38,7 +38,6 @@ COPY --from=base /app/apps/auth-service/dist ./dist
 COPY --from=base /app/apps/auth-service/package.json ./
 COPY --from=base /app/apps/auth-service/prisma ./prisma
 COPY --from=base /app/apps/auth-service/node_modules ./node_modules
-COPY --from=base /app/node_modules/.prisma ./node_modules/.prisma
 
 # Expose port
 EXPOSE 3001
