@@ -14,6 +14,11 @@ COPY apps/notification-service ./apps/notification-service
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Build shared packages first
+RUN pnpm --filter "@fx-platform/shared-types" build
+RUN pnpm --filter "@fx-platform/shared-utils" build
+RUN pnpm --filter "@fx-platform/shared-middlewares" build
+
 # Build application
 WORKDIR /app/apps/notification-service
 RUN pnpm build

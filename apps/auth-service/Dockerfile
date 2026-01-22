@@ -14,6 +14,11 @@ COPY apps/auth-service ./apps/auth-service
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Build shared packages first
+RUN pnpm --filter "@fx-platform/shared-types" build
+RUN pnpm --filter "@fx-platform/shared-utils" build
+RUN pnpm --filter "@fx-platform/shared-middlewares" build
+
 # Generate Prisma client
 WORKDIR /app/apps/auth-service
 RUN pnpm prisma:generate

@@ -14,6 +14,11 @@ COPY apps/admin-service ./apps/admin-service
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Build shared packages first
+RUN pnpm --filter "@fx-platform/shared-types" build
+RUN pnpm --filter "@fx-platform/shared-utils" build
+RUN pnpm --filter "@fx-platform/shared-middlewares" build
+
 # Generate Prisma client and build
 WORKDIR /app/apps/admin-service
 RUN pnpm prisma:generate && pnpm build
