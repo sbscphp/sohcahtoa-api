@@ -31,6 +31,7 @@ import {
   KycStatus,
   EventType,
   ServiceName,
+  OtpPurpose,
 } from '@fx-platform/shared-types';
 import bvnService from './bvn.service';
 import passportVerificationService from './passport-verification.service';
@@ -113,7 +114,7 @@ export class AuthService {
     await this.sendOtp({
       email: user.email,
       phoneNumber: user.phoneNumber,
-      purpose: 'EMAIL_VERIFICATION',
+      purpose: OtpPurpose.REGISTRATION,
     });
 
     return {
@@ -268,7 +269,7 @@ export class AuthService {
     await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
-      purpose: 'EMAIL_VERIFICATION',
+      purpose: OtpPurpose.REGISTRATION,
     });
 
     return {
@@ -418,7 +419,7 @@ export class AuthService {
     await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
-      purpose: 'EMAIL_VERIFICATION',
+      purpose: OtpPurpose.REGISTRATION,
     });
 
     return {
@@ -574,7 +575,7 @@ export class AuthService {
       });
 
       // Update user verification status if needed
-      if (data.purpose === 'EMAIL_VERIFICATION') {
+      if (data.purpose === OtpPurpose.REGISTRATION) {
         const user = await prisma.user.update({
           where: { email: data.email },
           data: { emailVerified: true },
