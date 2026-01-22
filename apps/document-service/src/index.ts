@@ -3,11 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, ServiceName, successResponse } from '@fx-platform/shared-utils';
+import { createLogger, successResponse } from '@fx-platform/shared-utils';
+import { EventType, ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka, subscribeToEvents } from './config/kafka';
 import verificationService from './services/verification.service';
 import prisma from './config/database';
-import { EventType } from '@fx-platform/shared-types';
 
 dotenv.config();
 
