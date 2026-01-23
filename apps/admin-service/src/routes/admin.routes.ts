@@ -3,7 +3,7 @@ import adminController from "../controllers/admin.controller";
 import { authorize } from "@fx-platform/shared-middlewares";
 import { UserRole } from "@fx-platform/shared-types";
 
-const router:Router = Router();
+const router: Router = Router();
 
 // Dashboard
 router.get("/dashboard", adminController.getDashboard);

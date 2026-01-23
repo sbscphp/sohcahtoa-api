@@ -4,13 +4,14 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import transactionRoutes from './routes/transaction.routes';
 import { errorHandler, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
+import { createLogger } from '@fx-platform/shared-utils';
+import { ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import prisma from './config/database';
 
 dotenv.config();
 
-const app = express();
+const app: express.Application = express();
 const PORT = process.env.PORT || 3003;
 const logger = createLogger(ServiceName.TRANSACTION);
 

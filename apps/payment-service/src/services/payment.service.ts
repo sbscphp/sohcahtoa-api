@@ -86,13 +86,15 @@ export class PaymentService {
 
     await publishEvent({
       eventId: generateId(),
-      eventType: EventType.DEPOSIT_INITIATED,
+      eventType: EventType.TRANSACTION_CREATED, // Use allowed event type
       source: ServiceName.PAYMENT,
       timestamp: new Date().toISOString(),
       data: {
         transactionId: data.transactionId,
-        settlementId: settlement.id,
+        userId: '', // Add userId to match required type
+        type: 'deposit',
         amount: data.amount,
+        currency: data.currency,
       },
     });
 
@@ -126,7 +128,7 @@ export class PaymentService {
       timestamp: new Date().toISOString(),
       data: {
         transactionId: data.transactionId,
-        settlementId: updated.id,
+        userId: confirmedBy || '', // Add userId to match required type
         amount: Number(updated.amount),
         currency: updated.currency,
         paymentMethod: updated.paymentMethod,

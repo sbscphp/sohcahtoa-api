@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import authController from '../controllers/auth.controller';
 import { authenticate, authRateLimiter } from '@fx-platform/shared-middlewares';
 
-const router = Router();
+const router: Router = Router();
 
 // Public routes
 router.post('/signup', authRateLimiter, authController.signup);

@@ -1,8 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { Kafka } from 'kafkajs';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
-import { EventType } from '@fx-platform/shared-types';
+import { createLogger } from '@fx-platform/shared-utils';
+import { EventType, ServiceName } from '@fx-platform/shared-types';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
 
@@ -116,7 +116,7 @@ async function startConsumer() {
   });
 }
 
-app.get('/api/notifications/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'notification-service' });
 });
 

@@ -1,5 +1,6 @@
 import { Kafka, Producer, Consumer } from 'kafkajs';
-import { createLogger, ServiceName } from '@fx-platform/shared-utils';
+import { createLogger } from '@fx-platform/shared-utils';
+import { ServiceName } from '@fx-platform/shared-types';;
 import { DomainEvent, EventType } from '@fx-platform/shared-types';
 
 const logger = createLogger(ServiceName.DOCUMENT);
