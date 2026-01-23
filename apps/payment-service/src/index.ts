@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
 import { createLogger, successResponse } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types';
-import { initKafka, disconnectKafka } from '../config/kafka';
+import { initKafka, disconnectKafka } from './config/kafka';
 import paymentService from './services/payment.service';
 import prisma from './config/database';
 
