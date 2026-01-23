@@ -22,8 +22,8 @@ RUN pnpm --filter "@fx-platform/shared-middlewares" build
 # Generate Prisma client
 WORKDIR /app/apps/auth-service
 
-# Create symlink to root node_modules for proper module resolution
-RUN ln -s ../../node_modules node_modules
+# Set NODE_PATH for build stage
+ENV NODE_PATH=/app/node_modules
 
 RUN pnpm prisma:generate
 
@@ -54,9 +54,8 @@ COPY --from=base /app/apps/auth-service/prisma ./apps/auth-service/prisma
 
 WORKDIR /app/apps/auth-service
 
-# Create symlink to root node_modules for proper module resolution
-RUN ln -s ../../node_modules node_modules
-
+# Set NODE_PATH to resolve modules from root node_modules
+ENV NODE_PATH=/app/node_modules
 
 # Expose port
 EXPOSE 3001
