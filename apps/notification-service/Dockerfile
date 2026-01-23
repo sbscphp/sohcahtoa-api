@@ -21,6 +21,10 @@ RUN pnpm --filter "@fx-platform/shared-middlewares" build
 
 # Build application
 WORKDIR /app/apps/notification-service
+
+# Create symlink to root node_modules for proper module resolution
+RUN ln -s ../../node_modules node_modules
+
 RUN pnpm build
 
 # Production stage
@@ -30,10 +34,25 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
+# Copy workspace configuration
+COPY --from=base /app/package.json ./
+COPY --from=base /app/pnpm-workspace.yaml ./
+
+# Copy shared packages (built)
+COPY --from=base /app/packages ./packages
+
+# Copy node_modules from base (includes all dependencies)
+COPY --from=base /app/node_modules ./node_modules
+
 # Copy built application
-COPY --from=base /app/apps/notification-service/dist ./dist
-COPY --from=base /app/apps/notification-service/package.json ./
-COPY --from=base /app/apps/notification-service/node_modules ./node_modules
+COPY --from=base /app/apps/notification-service/dist ./apps/notification-service/dist
+COPY --from=base /app/apps/notification-service/package.json ./apps/notification-service/
+
+WORKDIR /app/apps/notification-service
+
+# Create symlink to root node_modules for proper module resolution
+RUN ln -s ../../node_modules node_modules
+
 
 # Expose port
 EXPOSE 3006

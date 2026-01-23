@@ -30,11 +30,25 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
+# Copy workspace configuration
+COPY --from=base /app/package.json ./
+COPY --from=base /app/pnpm-workspace.yaml ./
+
+# Copy shared packages (built)
+COPY --from=base /app/packages ./packages
+
+# Copy node_modules from base (includes all dependencies)
+COPY --from=base /app/node_modules ./node_modules
+
 # Copy built application
-COPY --from=base /app/apps/audit-service/dist ./dist
-COPY --from=base /app/apps/audit-service/package.json ./
-COPY --from=base /app/apps/audit-service/prisma ./prisma
-COPY --from=base /app/apps/audit-service/node_modules ./node_modules
+COPY --from=base /app/apps/audit-service/dist ./apps/audit-service/dist
+COPY --from=base /app/apps/audit-service/package.json ./apps/audit-service/
+COPY --from=base /app/apps/audit-service/prisma ./apps/audit-service/prisma
+
+WORKDIR /app/apps/audit-service
+
+# Create symlink to root node_modules for proper module resolution
+RUN ln -s ../../node_modules node_modules
 
 # Expose port
 EXPOSE 3008

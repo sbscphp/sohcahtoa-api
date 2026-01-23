@@ -21,6 +21,10 @@ RUN pnpm --filter "@fx-platform/shared-middlewares" build
 
 # Generate Prisma client and build
 WORKDIR /app/apps/transaction-service
+
+# Create symlink to root node_modules for proper module resolution
+RUN ln -s ../../node_modules node_modules
+
 RUN pnpm prisma:generate && pnpm build
 
 # Production stage
@@ -30,11 +34,26 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
+# Copy workspace configuration
+COPY --from=base /app/package.json ./
+COPY --from=base /app/pnpm-workspace.yaml ./
+
+# Copy shared packages (built)
+COPY --from=base /app/packages ./packages
+
+# Copy node_modules from base (includes all dependencies)
+COPY --from=base /app/node_modules ./node_modules
+
 # Copy built application
-COPY --from=base /app/apps/transaction-service/dist ./dist
-COPY --from=base /app/apps/transaction-service/package.json ./
-COPY --from=base /app/apps/transaction-service/prisma ./prisma
-COPY --from=base /app/apps/transaction-service/node_modules ./node_modules
+COPY --from=base /app/apps/transaction-service/dist ./apps/transaction-service/dist
+COPY --from=base /app/apps/transaction-service/package.json ./apps/transaction-service/
+COPY --from=base /app/apps/transaction-service/prisma ./apps/transaction-service/prisma
+
+WORKDIR /app/apps/transaction-service
+
+# Create symlink to root node_modules for proper module resolution
+RUN ln -s ../../node_modules node_modules
+
 
 # Expose port
 EXPOSE 3003
