@@ -36,11 +36,6 @@ COPY --from=base /app/apps/audit-service/package.json ./
 COPY --from=base /app/apps/audit-service/prisma ./prisma
 COPY --from=base /app/apps/audit-service/node_modules ./node_modules
 
-
-# Install dependencies
-RUN npm install
-
-
 # Expose port
 EXPOSE 3008
 
