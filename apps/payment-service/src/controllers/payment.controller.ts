@@ -78,7 +78,7 @@ class PaymentController {
 
   async health(req: Request, res: Response) {
     res.json({ status: 'healthy', service: 'payment-service' });
-  },
-};
+  }
+}
 
 export default new PaymentController();
