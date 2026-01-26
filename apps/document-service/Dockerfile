@@ -37,17 +37,18 @@ WORKDIR /app
 # Copy workspace configuration
 COPY --from=base /app/package.json ./
 COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/pnpm-lock.yaml ./
 
 # Copy shared packages (built)
 COPY --from=base /app/packages ./packages
-
-# Copy node_modules from base (includes all dependencies)
-COPY --from=base /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=base /app/apps/document-service/dist ./apps/document-service/dist
 COPY --from=base /app/apps/document-service/package.json ./apps/document-service/
 COPY --from=base /app/apps/document-service/prisma ./apps/document-service/prisma
+
+# Install production dependencies only
+RUN pnpm install --prod --frozen-lockfile
 
 WORKDIR /app/apps/document-service
 
