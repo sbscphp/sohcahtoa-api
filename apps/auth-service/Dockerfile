@@ -33,6 +33,9 @@ RUN pnpm build
 # Production stage
 FROM node:18-alpine AS production
 
+# Install OpenSSL 1.1 compatibility for Prisma
+RUN apk add --no-cache openssl1.1-compat
+
 RUN npm install -g pnpm
 
 WORKDIR /app
