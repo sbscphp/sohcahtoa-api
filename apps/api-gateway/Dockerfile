@@ -1,4 +1,4 @@
-FROM node:18-alpine3.19 AS base
+FROM node:18-slim AS base
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -28,10 +28,7 @@ ENV NODE_PATH=/app/node_modules
 RUN pnpm build
 
 # Production stage
-FROM node:18-alpine3.19 AS production
-
-# Install OpenSSL 1.1 compatibility (required by some dependencies)
-RUN apk add --no-cache openssl1.1-compat
+FROM node:18-slim AS production
 
 RUN npm install -g pnpm
 

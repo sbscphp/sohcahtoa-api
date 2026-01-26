@@ -1,4 +1,4 @@
-FROM node:18-alpine3.19 AS base
+FROM node:18-slim AS base
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -31,10 +31,7 @@ RUN pnpm prisma:generate
 RUN pnpm build
 
 # Production stage
-FROM node:18-alpine3.19 AS production
-
-# Install OpenSSL 1.1 compatibility for Prisma
-RUN apk add --no-cache openssl1.1-compat
+FROM node:18-slim AS production
 
 RUN npm install -g pnpm
 
