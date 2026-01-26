@@ -50,7 +50,9 @@ COPY --from=base /app/apps/document-service/prisma ./apps/document-service/prism
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
 
+# Generate Prisma Client for production
 WORKDIR /app/apps/document-service
+RUN pnpm prisma:generate
 
 # Set NODE_PATH to resolve modules from root node_modules
 ENV NODE_PATH=/app/node_modules

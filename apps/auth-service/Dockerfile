@@ -53,7 +53,9 @@ COPY --from=base /app/apps/auth-service/prisma ./apps/auth-service/prisma
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
 
+# Generate Prisma Client for production
 WORKDIR /app/apps/auth-service
+RUN pnpm prisma:generate
 
 # Set NODE_PATH to resolve modules from root node_modules
 ENV NODE_PATH=/app/node_modules
