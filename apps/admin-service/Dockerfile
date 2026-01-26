@@ -52,7 +52,7 @@ RUN pnpm install --prod --frozen-lockfile
 
 # Generate Prisma Client for production
 WORKDIR /app/apps/admin-service
-RUN pnpm prisma:generate
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Set NODE_PATH to resolve modules from root node_modules
 ENV NODE_PATH=/app/node_modules
