@@ -291,6 +291,160 @@ export class AdminService {
       },
     };
   }
+  // --- Role Management ---
+
+  async createRole(data: {
+    name: string;
+    description?: string;
+    permissions?: string[];
+    branches?: string[];
+    departments?: string[];
+    isDefault?: boolean;
+  }) {
+    if (data.isDefault) {
+      // Unset existing default if setting new default
+      await prisma.role.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    return prisma.role.create({
+      data,
+    });
+  }
+
+  async getRoles() {
+    return prisma.role.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { users: true } } },
+    });
+  }
+
+  async getRole(id: string) {
+    const role = await prisma.role.findUnique({
+      where: { id },
+      include: { users: true },
+    });
+
+    if (!role) throw new NotFoundError("Role not found");
+    return role;
+  }
+
+  async updateRole(id: string, data: Partial<{
+    name: string;
+    description: string;
+    permissions: string[];
+    branches: string[];
+    departments: string[];
+    isDefault: boolean;
+  }>) {
+    if (data.isDefault) {
+      await prisma.role.updateMany({
+        where: { isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+
+    return prisma.role.update({
+      where: { id },
+      data,
+    });
+  }
+
+
+  // --- User Management ---
+
+  async createUser(data: {
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string;
+    roleId: string;
+    department?: string;
+    branch?: string;
+    position?: string;
+  }) {
+    const role = await prisma.role.findUnique({ where: { id: data.roleId } });
+    if (!role) throw new NotFoundError("Role not found");
+
+    return prisma.adminUser.create({
+      data: {
+        userId: data.userId,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phoneNumber: data.phoneNumber,
+        roleId: data.roleId,
+        department: data.department,
+        branch: data.branch,
+        position: data.position,
+        isActive: true,
+        // Fallback for legacy fields
+        role: "ADMIN",
+        // permissions: role.permissions,
+      },
+      include: { roleDef: true },
+    });
+  }
+
+  async getUsers(filters: { branch?: string; roleId?: string; status?: string }, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (filters.branch) where.branch = filters.branch;
+    if (filters.roleId) where.roleId = filters.roleId;
+    if (filters.status) where.isActive = filters.status === 'active';
+
+    const [users, total] = await Promise.all([
+      prisma.adminUser.findMany({
+        where,
+        skip,
+        take: limit,
+        include: { roleDef: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.adminUser.count({ where }),
+    ]);
+
+    return {
+      data: users,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getUser(id: string) {
+    const user = await prisma.adminUser.findUnique({
+      where: { id },
+      include: { roleDef: true },
+    });
+
+    if (!user) throw new NotFoundError("User not found");
+    return user;
+  }
+
+  async updateUser(id: string, data: Partial<{
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+    roleId: string;
+    department: string;
+    branch: string;
+    position: string;
+    isActive: boolean;
+  }>) {
+    return prisma.adminUser.update({
+      where: { id },
+      data,
+      include: { roleDef: true },
+    });
+  }
 }
 
 export default new AdminService();

@@ -136,6 +136,89 @@ class AdminController {
   health = async (_req: Request, res: Response) => {
     res.json({ status: "healthy", service: "admin-service" });
   };
+  // --- Role Management ---
+
+  createRole = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.createRole(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getRoles = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.getRoles();
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getRole = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.getRole(req.params.id);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateRole = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.updateRole(req.params.id, req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // --- User Management ---
+
+  createUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.createUser(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getUsers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const filters = {
+        branch: req.query.branch as string,
+        roleId: req.query.roleId as string,
+        status: req.query.status as string,
+      };
+
+      const result = await adminService.getUsers(filters, page, limit);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.getUser(req.params.id);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.updateUser(req.params.id, req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export default new AdminController();

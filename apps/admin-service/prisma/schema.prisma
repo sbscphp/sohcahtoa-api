@@ -29,12 +29,41 @@ enum ActionType {
   PREPAID_CARD_ISSUE
 }
 
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions Json     @default("[]") // Array of permission strings
+  branches    String[] // Array of branch IDs or names
+  departments String[] // Array of department names
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       AdminUser[]
+
+  @@map("roles")
+}
+
 model AdminUser {
   id            String     @id @default(uuid())
   userId        String     @unique
   email         String     @unique
-  role          AdminRole
-  permissions   Json
+  firstName     String?
+  lastName      String?
+  phoneNumber   String?
+  position      String?
+  department    String?
+  branch        String?
+  
+  // Relations
+  roleId        String?
+  roleDef       Role?      @relation(fields: [roleId], references: [id])
+  
+  // Backward compatibility (deprecated)
+  role          AdminRole?
+  permissions   Json?
+
   isActive      Boolean    @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -43,7 +72,7 @@ model AdminUser {
   assignments   TaskAssignment[]
 
   @@index([email])
-  @@index([role])
+  @@index([roleId])
   @@map("admin_users")
 }
 
