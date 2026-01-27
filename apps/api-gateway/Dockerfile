@@ -1,4 +1,4 @@
-FROM node:18-alpine AS base
+FROM node:18-slim AS base
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -21,19 +21,38 @@ RUN pnpm --filter "@fx-platform/shared-middlewares" build
 
 # Build application
 WORKDIR /app/apps/api-gateway
+
+# Set NODE_PATH for build stage
+ENV NODE_PATH=/app/node_modules
+
 RUN pnpm build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:18-slim AS production
 
 RUN npm install -g pnpm
 
 WORKDIR /app
 
+# Copy workspace configuration
+COPY --from=base /app/package.json ./
+COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/pnpm-lock.yaml ./
+
+# Copy shared packages (built)
+COPY --from=base /app/packages ./packages
+
 # Copy built application
-COPY --from=base /app/apps/api-gateway/dist ./dist
-COPY --from=base /app/apps/api-gateway/package.json ./
-COPY --from=base /app/apps/api-gateway/node_modules ./node_modules
+COPY --from=base /app/apps/api-gateway/dist ./apps/api-gateway/dist
+COPY --from=base /app/apps/api-gateway/package.json ./apps/api-gateway/
+
+# Install production dependencies only
+RUN pnpm install --prod --frozen-lockfile
+
+WORKDIR /app/apps/api-gateway
+
+# Set NODE_PATH to resolve modules from root node_modules
+ENV NODE_PATH=/app/node_modules
 
 # Expose port
 EXPOSE 3000
