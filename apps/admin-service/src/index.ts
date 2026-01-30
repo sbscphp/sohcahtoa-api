@@ -11,12 +11,13 @@ import {
   authorize,
 } from "@fx-platform/shared-middlewares";
 
-import { createLogger } from "@fx-platform/shared-utils";
+import { createLogger, setupSwagger } from "@fx-platform/shared-utils";
 import { ServiceName, UserRole } from "@fx-platform/shared-types";
 
 import { initKafka, disconnectKafka } from "./config/kafka";
 import prisma from "./config/database";
 import adminRoutes from "./routes/admin.routes";
+import customerRoutes from "./routes/customer.routes";
 
 dotenv.config();
 
@@ -30,12 +31,23 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Admin Service API',
+  description: 'FX Platform Admin Service - Admin operations for transaction management, customer management, and system oversight',
+  version: '1.0.0',
+  serviceName: 'admin-service',
+  port: Number(PORT),
+  apiBasePath: '/api/admin',
+});
+
 // All routes require admin authentication
 app.use(authenticate);
 app.use(authorize(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.OPERATIONS, UserRole.SUPER_ADMIN));
 
 // Routes
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/customers", customerRoutes);
 
 app.use(errorHandler(logger));
 

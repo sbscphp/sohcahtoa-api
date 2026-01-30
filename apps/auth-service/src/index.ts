@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import { errorHandler, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger } from '@fx-platform/shared-utils';
+import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import prisma from './config/database';
@@ -23,6 +23,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
+
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Authentication Service API',
+  description: 'FX Platform Authentication & Authorization Service - Handles user registration, login, KYC verification, and session management',
+  version: '1.0.0',
+  serviceName: 'auth-service',
+  port: Number(PORT),
+  apiBasePath: '/api/auth',
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
