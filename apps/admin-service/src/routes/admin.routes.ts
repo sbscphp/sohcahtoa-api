@@ -5,6 +5,8 @@ import { UserRole } from "@fx-platform/shared-types";
 
 const router: Router = Router();
 
+//Admin Auth Flow
+
 // Dashboard
 router.get("/dashboard", adminController.getDashboard);
 
@@ -27,11 +29,7 @@ router.get("/users", authorize(UserRole.SUPER_ADMIN), adminController.getUsers);
 router.get("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.getUser);
 router.put("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.updateUser);
 
-// Role Management
-router.post("/roles", authorize(UserRole.SUPER_ADMIN), adminController.createRole);
-router.get("/roles", authorize(UserRole.SUPER_ADMIN), adminController.getRoles);
-router.get("/roles/:id", authorize(UserRole.SUPER_ADMIN), adminController.getRole);
-router.put("/roles/:id", authorize(UserRole.SUPER_ADMIN), adminController.updateRole);
+
 
 // Audit log (Super Admin only)
 router.get("/audit-log", authorize(UserRole.SUPER_ADMIN), adminController.getAuditLog);

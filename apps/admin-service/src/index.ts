@@ -17,10 +17,16 @@ import { ServiceName, UserRole } from "@fx-platform/shared-types";
 import { initKafka, disconnectKafka } from "./config/kafka";
 import prisma from "./config/database";
 import adminRoutes from "./routes/admin.routes";
+import userRoutes from "./routes/user-management.routes";
+import { initializeEmailService } from "./config/email";
 
 dotenv.config();
 
 const app: Express = express();
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`);
+  next();
+});
 const PORT = process.env.PORT || 3007;
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -30,7 +36,7 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// All routes require admin authentication
+app.use("/api/user", userRoutes);
 app.use(authenticate);
 app.use(authorize(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.OPERATIONS, UserRole.SUPER_ADMIN));
 
@@ -40,6 +46,7 @@ app.use("/api/admin", adminRoutes);
 app.use(errorHandler(logger));
 
 const server = app.listen(PORT, async () => {
+  initializeEmailService();
   await initKafka();
   logger.info(`Admin Service running on port ${PORT}`);
 });

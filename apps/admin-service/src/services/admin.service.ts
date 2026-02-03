@@ -295,7 +295,7 @@ export class AdminService {
 
   async createRole(data: {
     name: string;
-    description?: string;
+    description: string;
     permissions?: string[];
     branches?: string[];
     departments?: string[];
@@ -356,14 +356,12 @@ export class AdminService {
   // --- User Management ---
 
   async createUser(data: {
-    userId: string;
     email: string;
-    firstName: string;
-    lastName: string;
-    phoneNumber?: string;
+    fullName: string;
+    phoneNumber: string;
     roleId: string;
-    department?: string;
-    branch?: string;
+    department: string;
+    branch: string;
     position?: string;
   }) {
     const role = await prisma.role.findUnique({ where: { id: data.roleId } });
@@ -371,10 +369,8 @@ export class AdminService {
 
     return prisma.adminUser.create({
       data: {
-        userId: data.userId,
         email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         roleId: data.roleId,
         department: data.department,
