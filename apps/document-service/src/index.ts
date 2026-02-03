@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -11,7 +11,7 @@ import prisma from './config/database';
 
 dotenv.config();
 
-const app: express.Application = express();
+const app: Express = express();
 const PORT = process.env.PORT || 3002;
 const logger = createLogger(ServiceName.DOCUMENT);
 
