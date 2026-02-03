@@ -61,7 +61,8 @@ model AdminUser {
   roleId        String?
   roleDef       Role?      @relation(fields: [roleId], references: [id])
 
-  departmentId    String?  @default(uuid())
+  departmentId    String?
+
   department      Department? @relation(fields: [departmentId], references: [id])
 
   

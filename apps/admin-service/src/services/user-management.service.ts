@@ -3,8 +3,10 @@ import { EventType, ServiceName, UserRole } from "@fx-platform/shared-types";
 import { PrismaClient, AdminUser } from "@prisma/client";
 import { CreateAdminUserDto, CreateRoleDto, UpdateRoleDto, RoleQueryDto, CreateDepartmentDto, DepartmentQueryDto, UpdateDepartmentDto } from "../dto/user-management.dto";
 import prisma from "../config/database";
-import { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, generateId, generateOtp, UnauthorizedError, ValidationError,
-    DuplicateError, NotFoundError, BadRequestError, paginate} from '@fx-platform/shared-utils';
+import {
+    hashPassword, comparePassword, generateAccessToken, generateRefreshToken, generateId, generateOtp, UnauthorizedError, ValidationError,
+    DuplicateError, NotFoundError, BadRequestError, paginate
+} from '@fx-platform/shared-utils';
 import { emailService } from '@fx-platform/shared-utils';
 
 
@@ -16,8 +18,12 @@ class AuthService {
     addUser = async (body: CreateAdminUserDto) => {
         try {
             const result = await this.prisma.$transaction(async tx => {
+                const { department, ...userData } = body;
                 const user = await tx.adminUser.create({
-                    data: body,
+                    data: {
+                        ...userData,
+                        departmentName: department,
+                    },
                 });
 
                 await tx.outboxEvent.create({
@@ -389,13 +395,13 @@ class AuthService {
         try {
             const { page = 1, limit = 10, search, isActive } = query;
 
-               const where: Record<string, any> = {};
+            const where: Record<string, any> = {};
 
             if (search) {
                 where.name = { contains: search, mode: "insensitive" };
             }
 
-                if (isActive !== undefined) {
+            if (isActive !== undefined) {
                 where.isActive =
                     typeof isActive === "string"
                         ? isActive === "true"
@@ -403,23 +409,23 @@ class AuthService {
             }
 
             return await paginate(
-            this.prisma.role,
-            {
-                where,
-                include: {
-                    _count: { select: { users: true } },
+                this.prisma.role,
+                {
+                    where,
+                    include: {
+                        _count: { select: { users: true } },
+                    },
+                    orderBy: { createdAt: "desc" },
                 },
-                orderBy: { createdAt: "desc" },
-            },
-            { page, limit },
-            (roles) =>
-                roles.map((role: any) => ({
-                    ...role,
-                    permissionsCount: Array.isArray(role.permissions)
-                        ? role.permissions.length
-                        : 0,
-                }))
-                );
+                { page, limit },
+                (roles) =>
+                    roles.map((role: any) => ({
+                        ...role,
+                        permissionsCount: Array.isArray(role.permissions)
+                            ? role.permissions.length
+                            : 0,
+                    }))
+            );
         } catch (error) {
             logger.error("Failed to get all roles", { error });
             throw error;

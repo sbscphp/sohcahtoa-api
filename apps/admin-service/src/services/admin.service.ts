@@ -373,7 +373,7 @@ export class AdminService {
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         roleId: data.roleId,
-        department: data.department,
+        departmentName: data.department,
         branch: data.branch,
         position: data.position,
         isActive: true,
@@ -435,9 +435,13 @@ export class AdminService {
     position: string;
     isActive: boolean;
   }>) {
+    const { department, ...updateData } = data;
     return prisma.adminUser.update({
       where: { id },
-      data,
+      data: {
+        ...updateData,
+        departmentName: department,
+      },
       include: { roleDef: true },
     });
   }
