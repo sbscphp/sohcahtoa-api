@@ -13,6 +13,12 @@ export class AppError extends Error {
   }
 }
 
+export class BadRequestError extends AppError {
+  constructor(message: string = 'Bad request', details?: any) {
+    super(ErrorCode.BAD_REQUEST, message, 400, details);
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message: string = 'Unauthorized', details?: any) {
     super(ErrorCode.UNAUTHORIZED, message, 401, details);

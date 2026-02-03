@@ -1,5 +1,5 @@
 import prisma from "../config/database";
-import customerClient from "../clients/customer.client";
+import { customerClient } from "../clients/customer.client";
 import { NotFoundError, ValidationError } from "@fx-platform/shared-utils";
 
 type CreateCustomerFlagPayload = {

@@ -29,23 +29,75 @@ enum ActionType {
   PREPAID_CARD_ISSUE
 }
 
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  permissions Json     @default("[]") // Array of permission strings
+  branch      String? 
+  department  String?  
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       AdminUser[]
+
+  @@map("roles")
+}
+
 model AdminUser {
   id            String     @id @default(uuid())
-  userId        String     @unique
   email         String     @unique
-  role          AdminRole
-  permissions   Json
+  fullName      String
+  phoneNumber   String
+  altPhoneNumber String?
+  position      String?
+  departmentName String?
+  branch        String
+  password      String?
+  
+  // Relations
+  roleId        String?
+  roleDef       Role?      @relation(fields: [roleId], references: [id])
+
+  departmentId    String?
+
+  department      Department? @relation(fields: [departmentId], references: [id])
+
+  
+  // Backward compatibility (deprecated)
+  role          AdminRole?
+  permissions   Json?
+
   isActive      Boolean    @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   actions       AdminAction[]
   assignments   TaskAssignment[]
+  tokens        Token[]
 
   @@index([email])
-  @@index([role])
+  @@index([roleId])
   @@map("admin_users")
 }
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  departmentEmail String?
+  description String?
+  branch      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       AdminUser[]
+  actions     AdminAction[]
+
+  @@map("departments")
+} 
 
 model AdminAction {
   id              String     @id @default(uuid())
@@ -60,6 +112,9 @@ model AdminAction {
   performedAt     DateTime   @default(now())
   ipAddress       String?
   userAgent       String?
+
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
 
   admin           AdminUser  @relation(fields: [adminId], references: [id])
 
@@ -103,6 +158,49 @@ model Dashboard {
   @@index([date])
   @@map("dashboards")
 }
+
+model OutboxEvent {
+  id            String   @id
+  eventType     String
+  source        String
+  aggregateId   String
+  payload       Json
+  status        String   @default("PENDING") // PENDING | PUBLISHED | FAILED
+  retryCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  publishedAt   DateTime?
+}
+
+enum TokenType {
+  OTP
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+  MAGIC_LINK
+  REFRESH
+}
+
+model Token {
+  id          String    @id @default(uuid())
+  userId      String
+  type        TokenType
+  token       String    @unique
+  expiresAt   DateTime
+  isUsed      Boolean   @default(false)
+  usedAt      DateTime?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  user        AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([type])
+  @@index([expiresAt])
+  @@map("tokens")
+}
+
 
 enum AmlFlagSeverity {
   LOW
