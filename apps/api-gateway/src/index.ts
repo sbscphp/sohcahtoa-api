@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { apiRateLimiter, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger } from '@fx-platform/shared-utils';
+import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types'
 
 dotenv.config();
@@ -19,6 +19,16 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 app.use(apiRateLimiter);
+
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'FX Platform API Gateway',
+  description: 'API Gateway for FX Platform - Single entry point for all microservices. Routes requests to Auth, Transaction, Payment, Compliance, Document, Admin, and Audit services.',
+  version: '1.0.0',
+  serviceName: 'api-gateway',
+  port: Number(PORT),
+  apiBasePath: '',
+});
 
 // Service routes
 const services = {
@@ -117,6 +127,37 @@ app.use(
   })
 );
 
+/**
+ * @swagger
+ * tags:
+ *   name: Gateway
+ *   description: API Gateway health and routing
+ */
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Gateway]
+ *     responses:
+ *       200:
+ *         description: API Gateway is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 service:
+ *                   type: string
+ *                   example: api-gateway
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',

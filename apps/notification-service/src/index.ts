@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { Kafka } from 'kafkajs';
-import { createLogger } from '@fx-platform/shared-utils';
+import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
 import { EventType, ServiceName } from '@fx-platform/shared-types';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
@@ -13,6 +13,16 @@ const PORT = process.env.PORT || 3006;
 const logger = createLogger(ServiceName.NOTIFICATION);
 
 app.use(express.json());
+
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Notification Service API',
+  description: 'FX Platform Notification Service - Email and SMS notification delivery (Event-driven)',
+  version: '1.0.0',
+  serviceName: 'notification-service',
+  port: Number(PORT),
+  apiBasePath: '',
+});
 
 // Email transporter
 const emailTransporter = nodemailer.createTransport({
@@ -116,6 +126,34 @@ async function startConsumer() {
   });
 }
 
+/**
+ * @swagger
+ * tags:
+ *   name: Notification
+ *   description: Notification service health check
+ */
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Notification]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 service:
+ *                   type: string
+ *                   example: notification-service
+ */
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'notification-service' });
 });

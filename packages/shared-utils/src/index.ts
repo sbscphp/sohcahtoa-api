@@ -7,3 +7,4 @@ export * from './errors';
 export * from './id-generator';
 export * from './email';
 export * from './pagination';
+export * from './swagger';

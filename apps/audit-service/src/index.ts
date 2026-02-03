@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types'
 import { initKafka, disconnectKafka, subscribeToAllEvents } from './config/kafka';
 import auditService from './services/audit.service';
@@ -21,6 +21,60 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Audit Service API',
+  description: 'FX Platform Audit Service - Audit logging, event tracking, and distributed tracing',
+  version: '1.0.0',
+  serviceName: 'audit-service',
+  port: Number(PORT),
+  apiBasePath: '/api/audit',
+});
+
+/**
+ * @swagger
+ * tags:
+ *   name: Audit
+ *   description: Audit logging and event tracking endpoints
+ */
+
+/**
+ * @swagger
+ * /api/audit/events:
+ *   get:
+ *     summary: Get audit events with filtering
+ *     tags: [Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *       - in: query
+ *         name: eventType
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: serviceName
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Audit events retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 // Routes
 app.get('/api/audit/events', authenticate, async (req, res, next) => {
   try {
@@ -33,6 +87,31 @@ app.get('/api/audit/events', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/audit/security-events:
+ *   get:
+ *     summary: Get security-related audit events
+ *     tags: [Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *     responses:
+ *       200:
+ *         description: Security events retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 app.get('/api/audit/security-events', authenticate, async (req, res, next) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -44,6 +123,28 @@ app.get('/api/audit/security-events', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/audit/traces/{traceId}:
+ *   get:
+ *     summary: Get distributed trace by trace ID
+ *     tags: [Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: traceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Trace retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 app.get('/api/audit/traces/:traceId', authenticate, async (req, res, next) => {
   try {
     const result = await auditService.getTrace(req.params.traceId);
@@ -53,6 +154,32 @@ app.get('/api/audit/traces/:traceId', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/audit/metrics:
+ *   post:
+ *     summary: Log a metric
+ *     tags: [Audit]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - metricName
+ *               - value
+ *             properties:
+ *               metricName:
+ *                 type: string
+ *               value:
+ *                 type: number
+ *               tags:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Metric logged successfully
+ */
 app.post('/api/audit/metrics', async (req, res, next) => {
   try {
     await auditService.logMetric(req.body);
@@ -62,6 +189,16 @@ app.post('/api/audit/metrics', async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/audit/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Audit]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ */
 app.get('/api/audit/health', (req, res) => {
   res.json({ status: 'healthy', service: 'audit-service' });
 });

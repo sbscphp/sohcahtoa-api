@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
 import { initKafka, disconnectKafka, subscribeToEvents } from './config/kafka';
 import complianceService from './services/compliance.service';
 import prisma from './config/database';
@@ -22,6 +22,62 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Compliance Service API',
+  description: 'FX Platform Compliance Service - AML checks, compliance reviews, and NFIU reporting',
+  version: '1.0.0',
+  serviceName: 'compliance-service',
+  port: Number(PORT),
+  apiBasePath: '/api/compliance',
+});
+
+/**
+ * @swagger
+ * tags:
+ *   name: Compliance
+ *   description: Compliance and AML checking endpoints
+ */
+
+/**
+ * @swagger
+ * /api/compliance/aml-check:
+ *   post:
+ *     summary: Perform AML check on a transaction
+ *     tags: [Compliance]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - transactionId
+ *               - userId
+ *               - amount
+ *               - currency
+ *               - transactionType
+ *             properties:
+ *               transactionId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               amount:
+ *                 type: number
+ *               currency:
+ *                 type: string
+ *               transactionType:
+ *                 type: string
+ *               sourceOfFunds:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: AML check initiated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 // Routes
 app.post('/api/compliance/aml-check', authenticate, async (req, res, next) => {
   try {
@@ -32,6 +88,28 @@ app.post('/api/compliance/aml-check', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/compliance/aml-check/{id}:
+ *   get:
+ *     summary: Get AML check result by ID
+ *     tags: [Compliance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: AML check result retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 app.get('/api/compliance/aml-check/:id', authenticate, async (req, res, next) => {
   try {
     const result = await complianceService.getAmlCheck(req.params.id);
@@ -41,6 +119,40 @@ app.get('/api/compliance/aml-check/:id', authenticate, async (req, res, next) =>
   }
 });
 
+/**
+ * @swagger
+ * /api/compliance/review/{id}:
+ *   post:
+ *     summary: Review a compliance check
+ *     tags: [Compliance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - decision
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [APPROVED, REJECTED, FLAGGED]
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Review completed
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 app.post('/api/compliance/review/:id', authenticate, async (req, res, next) => {
   try {
     const { decision, notes } = req.body;
@@ -52,6 +164,31 @@ app.post('/api/compliance/review/:id', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/compliance/pending:
+ *   get:
+ *     summary: Get pending compliance reviews
+ *     tags: [Compliance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Pending reviews retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 app.get('/api/compliance/pending', authenticate, async (req, res, next) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -63,6 +200,39 @@ app.get('/api/compliance/pending', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/compliance/nfiu-report:
+ *   post:
+ *     summary: Report a transaction to NFIU
+ *     tags: [Compliance]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - transactionId
+ *               - userId
+ *               - reason
+ *             properties:
+ *               transactionId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *               reason:
+ *                 type: string
+ *               data:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Report submitted successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 app.post('/api/compliance/nfiu-report', authenticate, async (req, res, next) => {
   try {
     const result = await complianceService.reportToNFIU(
@@ -77,6 +247,16 @@ app.post('/api/compliance/nfiu-report', authenticate, async (req, res, next) => 
   }
 });
 
+/**
+ * @swagger
+ * /api/compliance/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Compliance]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ */
 app.get('/api/compliance/health', (req, res) => {
   res.json({ status: 'healthy', service: 'compliance-service' });
 });

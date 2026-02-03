@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import transactionRoutes from './routes/transaction.routes';
 import { errorHandler, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger } from '@fx-platform/shared-utils';
+import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import prisma from './config/database';
@@ -21,6 +21,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
+
+// Swagger Documentation
+setupSwagger(app, {
+  title: 'Transaction Service API',
+  description: 'FX Platform Transaction Service - Manages foreign exchange transactions including PTA, BTA, School Fees, Medical, and Remittances',
+  version: '1.0.0',
+  serviceName: 'transaction-service',
+  port: Number(PORT),
+  apiBasePath: '/api/transactions',
+});
 
 app.use('/api/transactions', transactionRoutes);
 
