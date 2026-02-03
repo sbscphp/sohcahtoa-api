@@ -16,6 +16,10 @@ export interface EmailConfig {
     pass: string;
   };
   from: string;
+  tls?: any; // Allow passing TLS options like rejectUnauthorized
+  connectionTimeout?: number;
+  debug?: boolean;
+  logger?: boolean;
 }
 
 class EmailService {
@@ -30,6 +34,10 @@ class EmailService {
       port: config.port,
       secure: config.secure,
       auth: config.auth,
+      tls: config.tls,
+      connectionTimeout: config.connectionTimeout,
+      debug: config.debug,
+      logger: config.logger,
     });
     this.isConfigured = true;
   }
@@ -110,6 +118,22 @@ class EmailService {
     return result.success;
   }
 
+  async sendAdminWelcomeEmail(email: string, fullName: string, resetPasswordUrl: string): Promise<boolean> {
+    const subject = 'Welcome to FX Platform';
+    const html = this.getAdminWelcomeEmailTemplate(fullName, resetPasswordUrl);
+    const text = `Welcome to FX Platform, ${fullName}!`;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject,
+      text,
+      html,
+    });
+
+    return result.success;
+  }
+
+
   private getOtpSubject(purpose: string): string {
     switch (purpose) {
       case 'REGISTRATION':
@@ -129,10 +153,10 @@ class EmailService {
     const purposeText = purpose === 'REGISTRATION'
       ? 'verify your email address'
       : purpose === 'LOGIN'
-      ? 'complete your login'
-      : purpose === 'PASSWORD_RESET'
-      ? 'reset your password'
-      : 'verify your transaction';
+        ? 'complete your login'
+        : purpose === 'PASSWORD_RESET'
+          ? 'reset your password'
+          : 'verify your transaction';
 
     return `
       <!DOCTYPE html>
@@ -237,6 +261,60 @@ class EmailService {
       </html>
     `;
   }
+
+  private getAdminWelcomeEmailTemplate(fullName: string, resetPasswordUrl: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Welcome to FX Platform</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0;">Welcome to FX Platform</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hello ${fullName},</h2>
+
+            <p>
+              Welcome to <strong>FX Platform</strong>. Your admin account has been successfully created.
+            </p>
+
+            <p>
+              To get started, please set your password by clicking the button below.
+              This link is secure and will expire for your protection.
+            </p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a
+                href="${resetPasswordUrl}"
+                style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Set Your Password
+              </a>
+            </div>
+
+            <p style="color: #666;">
+              If you did not request this account or believe this email was sent in error,
+              please ignore it or contact our support team immediately.
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              FX Platform | Secure Foreign Exchange Transactions
+            </p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
 
   isReady(): boolean {
     return this.isConfigured;

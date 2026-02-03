@@ -242,6 +242,14 @@ router.get("/pending-approvals", adminController.getPendingApprovals);
  */
 router.get("/actions", adminController.getAdminActions);
 
+// User Management
+router.post("/users", authorize(UserRole.SUPER_ADMIN), adminController.createUser);
+router.get("/users", authorize(UserRole.SUPER_ADMIN), adminController.getUsers);
+router.get("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.getUser);
+router.put("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.updateUser);
+
+
+
 /**
  * @swagger
  * /api/admin/audit-log:
