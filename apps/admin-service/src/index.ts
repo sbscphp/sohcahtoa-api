@@ -37,16 +37,6 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Admin Service API',
-  description: 'FX Platform Admin Service - Admin operations for transaction management, customer management, and system oversight',
-  version: '1.0.0',
-  serviceName: 'admin-service',
-  port: Number(PORT),
-  apiBasePath: '/api/admin',
-});
-
 app.use("/api/user", userRoutes);
 app.use(authenticate);
 app.use(authorize(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.OPERATIONS, UserRole.SUPER_ADMIN));
@@ -57,11 +47,32 @@ app.use("/api/admin/customers", customerRoutes);
 
 app.use(errorHandler(logger));
 
-const server = app.listen(PORT, async () => {
-  initializeEmailService();
-  await initKafka();
-  logger.info(`Admin Service running on port ${PORT}`);
-});
+let server: any;
+
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Admin Service API',
+      description: 'FX Platform Admin Service - Admin operations for transaction management, customer management, and system oversight',
+      version: '1.0.0',
+      serviceName: 'admin-service',
+      port: Number(PORT),
+      apiBasePath: '/api/admin',
+    });
+
+    server = app.listen(PORT, async () => {
+      initializeEmailService();
+      await initKafka();
+      logger.info(`Admin Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on("SIGTERM", async () => {
   server.close();

@@ -1,6 +1,5 @@
 import { Express, Request, Response } from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
-import { apiReference } from '@scalar/express-api-reference';
 
 export interface ScalarConfig {
   title: string;
@@ -11,7 +10,7 @@ export interface ScalarConfig {
   apiBasePath?: string;
 }
 
-export const setupScalar = (app: Express, config: ScalarConfig): void => {
+export const setupScalar = async (app: Express, config: ScalarConfig): Promise<void> => {
   const options: swaggerJsdoc.Options = {
     definition: {
       openapi: '3.0.0',
@@ -112,6 +111,9 @@ export const setupScalar = (app: Express, config: ScalarConfig): void => {
   };
 
   const swaggerSpec = swaggerJsdoc(options);
+
+  // Dynamically import the ES Module
+  const { apiReference } = await import('@scalar/express-api-reference');
 
   // Serve Scalar API documentation
   app.use(

@@ -21,16 +21,6 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Payment Service API',
-  description: 'FX Platform Payment Service - Handles payment processing, deposits, settlements, and exchange rate calculations',
-  version: '1.0.0',
-  serviceName: 'payment-service',
-  port: Number(PORT),
-  apiBasePath: '/api/payments',
-});
-
 /**
  * @swagger
  * tags:
@@ -234,10 +224,31 @@ app.get('/api/payments/health', (req, res) => {
 
 app.use(errorHandler(logger));
 
-const server = app.listen(PORT, async () => {
-  await initKafka();
-  logger.info(`Payment Service running on port ${PORT}`);
-});
+let server: any;
+
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Payment Service API',
+      description: 'FX Platform Payment Service - Handles payment processing, deposits, settlements, and exchange rate calculations',
+      version: '1.0.0',
+      serviceName: 'payment-service',
+      port: Number(PORT),
+      apiBasePath: '/api/payments',
+    });
+
+    server = app.listen(PORT, async () => {
+      await initKafka();
+      logger.info(`Payment Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('SIGTERM', async () => {
   server.close();

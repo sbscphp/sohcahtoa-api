@@ -22,16 +22,6 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Compliance Service API',
-  description: 'FX Platform Compliance Service - AML checks, compliance reviews, and NFIU reporting',
-  version: '1.0.0',
-  serviceName: 'compliance-service',
-  port: Number(PORT),
-  apiBasePath: '/api/compliance',
-});
-
 /**
  * @swagger
  * tags:
@@ -278,21 +268,42 @@ async function handleDepositConfirmedEvent(event: any) {
   });
 }
 
-const server = app.listen(PORT, async () => {
-  await initKafka();
+let server: any;
 
-  // Subscribe to deposit confirmed events
-  await subscribeToEvents(
-    [EventType.DEPOSIT_CONFIRMED],
-    async (event) => {
-      if (event.eventType === EventType.DEPOSIT_CONFIRMED) {
-        await handleDepositConfirmedEvent(event);
-      }
-    }
-  );
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Compliance Service API',
+      description: 'FX Platform Compliance Service - AML checks, compliance reviews, and NFIU reporting',
+      version: '1.0.0',
+      serviceName: 'compliance-service',
+      port: Number(PORT),
+      apiBasePath: '/api/compliance',
+    });
 
-  logger.info(`Compliance Service running on port ${PORT}`);
-});
+    server = app.listen(PORT, async () => {
+      await initKafka();
+
+      // Subscribe to deposit confirmed events
+      await subscribeToEvents(
+        [EventType.DEPOSIT_CONFIRMED],
+        async (event) => {
+          if (event.eventType === EventType.DEPOSIT_CONFIRMED) {
+            await handleDepositConfirmedEvent(event);
+          }
+        }
+      );
+
+      logger.info(`Compliance Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('SIGTERM', async () => {
   server.close();

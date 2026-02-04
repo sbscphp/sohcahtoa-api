@@ -21,16 +21,6 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Document Service API',
-  description: 'FX Platform Document Service - Document upload, verification, and review management',
-  version: '1.0.0',
-  serviceName: 'document-service',
-  port: Number(PORT),
-  apiBasePath: '/api/documents',
-});
-
 /**
  * @swagger
  * tags:
@@ -221,21 +211,42 @@ async function handleDocumentUploadedEvent(event: any) {
   });
 }
 
-const server = app.listen(PORT, async () => {
-  await initKafka();
+let server: any;
 
-  // Subscribe to document upload events
-  await subscribeToEvents(
-    [EventType.DOCUMENT_UPLOADED],
-    async (event) => {
-      if (event.eventType === EventType.DOCUMENT_UPLOADED) {
-        await handleDocumentUploadedEvent(event);
-      }
-    }
-  );
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Document Service API',
+      description: 'FX Platform Document Service - Document upload, verification, and review management',
+      version: '1.0.0',
+      serviceName: 'document-service',
+      port: Number(PORT),
+      apiBasePath: '/api/documents',
+    });
 
-  logger.info(`Document Service running on port ${PORT}`);
-});
+    server = app.listen(PORT, async () => {
+      await initKafka();
+
+      // Subscribe to document upload events
+      await subscribeToEvents(
+        [EventType.DOCUMENT_UPLOADED],
+        async (event) => {
+          if (event.eventType === EventType.DOCUMENT_UPLOADED) {
+            await handleDocumentUploadedEvent(event);
+          }
+        }
+      );
+
+      logger.info(`Document Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('SIGTERM', async () => {
   server.close();

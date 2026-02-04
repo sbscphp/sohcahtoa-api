@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Infrastructure
   postgres-auth:
@@ -14,6 +12,11 @@ services:
       - postgres-auth-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-transaction:
     image: postgres:15-alpine
@@ -27,6 +30,11 @@ services:
       - postgres-transaction-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d transaction_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-payment:
     image: postgres:15-alpine
@@ -40,6 +48,11 @@ services:
       - postgres-payment-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-document:
     image: postgres:15-alpine
@@ -53,6 +66,11 @@ services:
       - postgres-document-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d document_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-compliance:
     image: postgres:15-alpine
@@ -66,6 +84,11 @@ services:
       - postgres-compliance-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d compliance_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-admin:
     image: postgres:15-alpine
@@ -79,6 +102,11 @@ services:
       - postgres-admin-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d admin_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-audit:
     image: postgres:15-alpine
@@ -92,6 +120,11 @@ services:
       - postgres-audit-data:/var/lib/postgresql/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d audit_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -101,6 +134,11 @@ services:
       - redis-data:/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka:
     image: apache/kafka:3.7.0
@@ -117,6 +155,12 @@ services:
       - kafka-data:/var/lib/kafka/data
     networks:
       - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # Microservices
   api-gateway:
@@ -137,10 +181,16 @@ services:
       AUDIT_SERVICE_URL: http://audit-service:3008
     depends_on:
       - auth-service
+      - document-service
       - transaction-service
       - payment-service
+      - compliance-service
+      - notification-service
+      - admin-service
+      - audit-service
     networks:
       - fx-network
+    restart: on-failure
 
   auth-service:
     build:
@@ -157,11 +207,15 @@ services:
       JWT_ACCESS_SECRET: your-super-secret-access-key
       JWT_REFRESH_SECRET: your-super-secret-refresh-key
     depends_on:
-      - postgres-auth
-      - redis
-      - kafka
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   transaction-service:
     build:
@@ -172,12 +226,19 @@ services:
     environment:
       PORT: 3003
       DATABASE_URL: postgresql://postgres:password@postgres-transaction:5432/transaction_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      - postgres-transaction
-      - kafka
+      postgres-transaction:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   payment-service:
     build:
@@ -192,11 +253,15 @@ services:
       REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      - postgres-payment
-      - redis
-      - kafka
+      postgres-payment:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   notification-service:
     build:
@@ -206,13 +271,19 @@ services:
       - "3006:3006"
     environment:
       PORT: 3006
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
       SMTP_HOST: smtp.gmail.com
       SMTP_PORT: 587
     depends_on:
-      - kafka
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   document-service:
     build:
@@ -223,12 +294,19 @@ services:
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://postgres:password@postgres-document:5432/document_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      - postgres-document
-      - kafka
+      postgres-document:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   compliance-service:
     build:
@@ -239,12 +317,19 @@ services:
     environment:
       PORT: 3005
       DATABASE_URL: postgresql://postgres:password@postgres-compliance:5432/compliance_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      - postgres-compliance
-      - kafka
+      postgres-compliance:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   admin-service:
     build:
@@ -255,15 +340,22 @@ services:
     environment:
       PORT: 3007
       DATABASE_URL: postgresql://postgres:password@postgres-admin:5432/admin_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
       TRANSACTION_SERVICE_URL: http://transaction-service:3003
       PAYMENT_SERVICE_URL: http://payment-service:3004
       COMPLIANCE_SERVICE_URL: http://compliance-service:3005
     depends_on:
-      - postgres-admin
-      - kafka
+      postgres-admin:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
   audit-service:
     build:
@@ -274,12 +366,19 @@ services:
     environment:
       PORT: 3008
       DATABASE_URL: postgresql://postgres:password@postgres-audit:5432/audit_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:9092
     depends_on:
-      - postgres-audit
-      - kafka
+      postgres-audit:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - fx-network
+    restart: on-failure
 
 volumes:
   postgres-auth-data:

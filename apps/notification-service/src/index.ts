@@ -14,16 +14,6 @@ const logger = createLogger(ServiceName.NOTIFICATION);
 
 app.use(express.json());
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Notification Service API',
-  description: 'FX Platform Notification Service - Email and SMS notification delivery (Event-driven)',
-  version: '1.0.0',
-  serviceName: 'notification-service',
-  port: Number(PORT),
-  apiBasePath: '',
-});
-
 // Email transporter
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -158,7 +148,26 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'notification-service' });
 });
 
-app.listen(PORT, async () => {
-  await startConsumer();
-  logger.info(`Notification Service running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Notification Service API',
+      description: 'FX Platform Notification Service - Email and SMS notification delivery (Event-driven)',
+      version: '1.0.0',
+      serviceName: 'notification-service',
+      port: Number(PORT),
+      apiBasePath: '',
+    });
+
+    app.listen(PORT, async () => {
+      await startConsumer();
+      logger.info(`Notification Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

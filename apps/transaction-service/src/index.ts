@@ -22,19 +22,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Transaction Service API',
-  description: 'FX Platform Transaction Service - Manages foreign exchange transactions including PTA, BTA, School Fees, Medical, and Remittances',
-  version: '1.0.0',
-  serviceName: 'transaction-service',
-  port: Number(PORT),
-  apiBasePath: '/api/transactions',
-});
-
 app.use('/api/transactions', transactionRoutes);
 
 app.use(errorHandler(logger));
+
+let server: any;
 
 const gracefulShutdown = async (signal: string) => {
   logger.info(`${signal} received`);
@@ -45,10 +37,29 @@ const gracefulShutdown = async (signal: string) => {
   });
 };
 
-const server = app.listen(PORT, async () => {
-  await initKafka();
-  logger.info(`Transaction Service running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Transaction Service API',
+      description: 'FX Platform Transaction Service - Manages foreign exchange transactions including PTA, BTA, School Fees, Medical, and Remittances',
+      version: '1.0.0',
+      serviceName: 'transaction-service',
+      port: Number(PORT),
+      apiBasePath: '/api/transactions',
+    });
+
+    server = app.listen(PORT, async () => {
+      await initKafka();
+      logger.info(`Transaction Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -20,16 +20,6 @@ app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 app.use(apiRateLimiter);
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'FX Platform API Gateway',
-  description: 'API Gateway for FX Platform - Single entry point for all microservices. Routes requests to Auth, Transaction, Payment, Compliance, Document, Admin, and Audit services.',
-  version: '1.0.0',
-  serviceName: 'api-gateway',
-  port: Number(PORT),
-  apiBasePath: '',
-});
-
 // Service routes
 const services = {
   auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
@@ -166,9 +156,26 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  logger.info(`API Gateway running on port ${PORT}`);
-  logger.info('Service endpoints:', services);
+const startServer = async () => {
+  // API Documentation with Scalar
+  await setupScalar(app, {
+    title: 'FX Platform API Gateway',
+    description: 'API Gateway for FX Platform - Single entry point for all microservices. Routes requests to Auth, Transaction, Payment, Compliance, Document, Admin, and Audit services.',
+    version: '1.0.0',
+    serviceName: 'api-gateway',
+    port: Number(PORT),
+    apiBasePath: '',
+  });
+
+  app.listen(PORT, () => {
+    logger.info(`API Gateway running on port ${PORT}`);
+    logger.info('Service endpoints:', services);
+  });
+};
+
+startServer().catch((error) => {
+  logger.error('Failed to start API Gateway:', error);
+  process.exit(1);
 });
 
 export default app;

@@ -24,16 +24,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Authentication Service API',
-  description: 'FX Platform Authentication & Authorization Service - Handles user registration, login, KYC verification, and session management',
-  version: '1.0.0',
-  serviceName: 'auth-service',
-  port: Number(PORT),
-  apiBasePath: '/api/auth',
-});
-
 // Routes
 app.use('/api/auth', authRoutes);
 
@@ -66,19 +56,40 @@ const gracefulShutdown = async (signal: string) => {
 };
 
 // Start server
-const server = app.listen(PORT, async () => {
-  try {
-    // Initialize services
-    await initKafka();
-    initializeEmailService();
+let server: any;
 
-    logger.info(`Auth Service running on port ${PORT}`);
-    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Authentication Service API',
+      description: 'FX Platform Authentication & Authorization Service - Handles user registration, login, KYC verification, and session management',
+      version: '1.0.0',
+      serviceName: 'auth-service',
+      port: Number(PORT),
+      apiBasePath: '/api/auth',
+    });
+
+    server = app.listen(PORT, async () => {
+      try {
+        // Initialize services
+        await initKafka();
+        initializeEmailService();
+
+        logger.info(`Auth Service running on port ${PORT}`);
+        logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      } catch (error) {
+        logger.error('Failed to start server:', error);
+        process.exit(1);
+      }
+    });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    logger.error('Failed to initialize server:', error);
     process.exit(1);
   }
-});
+};
+
+startServer();
 
 // Handle shutdown signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

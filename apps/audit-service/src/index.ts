@@ -21,16 +21,6 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// API Documentation with Scalar
-setupScalar(app, {
-  title: 'Audit Service API',
-  description: 'FX Platform Audit Service - Audit logging, event tracking, and distributed tracing',
-  version: '1.0.0',
-  serviceName: 'audit-service',
-  port: Number(PORT),
-  apiBasePath: '/api/audit',
-});
-
 /**
  * @swagger
  * tags:
@@ -205,16 +195,37 @@ app.get('/api/audit/health', (req, res) => {
 
 app.use(errorHandler(logger));
 
-const server = app.listen(PORT, async () => {
-  await initKafka();
+let server: any;
 
-  // Subscribe to all events for audit logging
-  await subscribeToAllEvents(async (event) => {
-    await auditService.logEvent(event);
-  });
+const startServer = async () => {
+  try {
+    // API Documentation with Scalar
+    await setupScalar(app, {
+      title: 'Audit Service API',
+      description: 'FX Platform Audit Service - Audit logging, event tracking, and distributed tracing',
+      version: '1.0.0',
+      serviceName: 'audit-service',
+      port: Number(PORT),
+      apiBasePath: '/api/audit',
+    });
 
-  logger.info(`Audit Service running on port ${PORT}`);
-});
+    server = app.listen(PORT, async () => {
+      await initKafka();
+
+      // Subscribe to all events for audit logging
+      await subscribeToAllEvents(async (event) => {
+        await auditService.logEvent(event);
+      });
+
+      logger.info(`Audit Service running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('SIGTERM', async () => {
   server.close();
