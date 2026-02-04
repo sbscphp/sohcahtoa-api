@@ -11,7 +11,7 @@ import {
   authorize,
 } from "@fx-platform/shared-middlewares";
 
-import { createLogger, setupSwagger } from "@fx-platform/shared-utils";
+import { createLogger, setupScalar } from "@fx-platform/shared-utils";
 import { ServiceName, UserRole } from "@fx-platform/shared-types";
 
 import { initKafka, disconnectKafka } from "./config/kafka";
@@ -37,8 +37,8 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Admin Service API',
   description: 'FX Platform Admin Service - Admin operations for transaction management, customer management, and system oversight',
   version: '1.0.0',

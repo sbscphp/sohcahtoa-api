@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupScalar } from '@fx-platform/shared-utils';
 import { EventType, ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka, subscribeToEvents } from './config/kafka';
 import verificationService from './services/verification.service';
@@ -21,8 +21,8 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Document Service API',
   description: 'FX Platform Document Service - Document upload, verification, and review management',
   version: '1.0.0',

@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupScalar } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types';
 import { initKafka, disconnectKafka } from './config/kafka';
 import paymentService from './services/payment.service';
@@ -21,8 +21,8 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Payment Service API',
   description: 'FX Platform Payment Service - Handles payment processing, deposits, settlements, and exchange rate calculations',
   version: '1.0.0',

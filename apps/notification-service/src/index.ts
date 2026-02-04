@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { Kafka } from 'kafkajs';
-import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, setupScalar } from '@fx-platform/shared-utils';
 import { EventType, ServiceName } from '@fx-platform/shared-types';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
@@ -14,8 +14,8 @@ const logger = createLogger(ServiceName.NOTIFICATION);
 
 app.use(express.json());
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Notification Service API',
   description: 'FX Platform Notification Service - Email and SMS notification delivery (Event-driven)',
   version: '1.0.0',

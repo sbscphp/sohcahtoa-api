@@ -1,8 +1,8 @@
 import { Express, Request, Response } from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
-import swaggerUi from 'swagger-ui-express';
+import { apiReference } from '@scalar/express-api-reference';
 
-export interface SwaggerConfig {
+export interface ScalarConfig {
   title: string;
   description: string;
   version: string;
@@ -11,7 +11,7 @@ export interface SwaggerConfig {
   apiBasePath?: string;
 }
 
-export const setupSwagger = (app: Express, config: SwaggerConfig): void => {
+export const setupScalar = (app: Express, config: ScalarConfig): void => {
   const options: swaggerJsdoc.Options = {
     definition: {
       openapi: '3.0.0',
@@ -113,22 +113,35 @@ export const setupSwagger = (app: Express, config: SwaggerConfig): void => {
 
   const swaggerSpec = swaggerJsdoc(options);
 
-  // Serve swagger documentation
+  // Serve Scalar API documentation
   app.use(
     '/api-docs',
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerSpec, {
-      explorer: true,
-      customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: config.title,
+    apiReference({
+      spec: {
+        content: swaggerSpec,
+      },
+      theme: 'purple',
+      layout: 'modern',
+      darkMode: true,
+      customCss: `
+        .scalar-app {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+      `,
+      metaData: {
+        title: config.title,
+        description: config.description,
+      },
+      searchHotKey: 'k',
+      showSidebar: true,
     })
   );
 
-  // Serve swagger JSON
+  // Serve OpenAPI JSON spec
   app.get('/api-docs.json', (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
 
-  console.log(`📚 Swagger documentation available at http://localhost:${config.port}/api-docs`);
+  console.log(`📚 Scalar API documentation available at http://localhost:${config.port}/api-docs`);
 };

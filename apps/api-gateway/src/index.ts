@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { apiRateLimiter, requestLogger, correlationIdMiddleware } from '@fx-platform/shared-middlewares';
-import { createLogger, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, setupScalar } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types'
 
 dotenv.config();
@@ -20,8 +20,8 @@ app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 app.use(apiRateLimiter);
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'FX Platform API Gateway',
   description: 'API Gateway for FX Platform - Single entry point for all microservices. Routes requests to Auth, Transaction, Payment, Compliance, Document, Admin, and Audit services.',
   version: '1.0.0',

@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupScalar } from '@fx-platform/shared-utils';
 import { ServiceName } from '@fx-platform/shared-types'
 import { initKafka, disconnectKafka, subscribeToAllEvents } from './config/kafka';
 import auditService from './services/audit.service';
@@ -21,8 +21,8 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Audit Service API',
   description: 'FX Platform Audit Service - Audit logging, event tracking, and distributed tracing',
   version: '1.0.0',

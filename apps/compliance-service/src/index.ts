@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { errorHandler, requestLogger, correlationIdMiddleware, authenticate } from '@fx-platform/shared-middlewares';
-import { createLogger, successResponse, setupSwagger } from '@fx-platform/shared-utils';
+import { createLogger, successResponse, setupScalar } from '@fx-platform/shared-utils';
 import { initKafka, disconnectKafka, subscribeToEvents } from './config/kafka';
 import complianceService from './services/compliance.service';
 import prisma from './config/database';
@@ -22,8 +22,8 @@ app.use(express.json());
 app.use(correlationIdMiddleware);
 app.use(requestLogger(logger));
 
-// Swagger Documentation
-setupSwagger(app, {
+// API Documentation with Scalar
+setupScalar(app, {
   title: 'Compliance Service API',
   description: 'FX Platform Compliance Service - AML checks, compliance reviews, and NFIU reporting',
   version: '1.0.0',
