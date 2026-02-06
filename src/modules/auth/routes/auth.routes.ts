@@ -123,6 +123,7 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  * /api/auth/signup/nigerian/send-otp:
  *   post:
  *     summary: Step 2 - Send OTP for Nigerian signup
+ *     description: Send OTP to phone or email for verification. Choose verification type based on preference.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -131,14 +132,48 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *           schema:
  *             type: object
  *             required:
- *               - phoneNumber
+ *               - bvn
+ *               - verificationType
  *             properties:
+ *               bvn:
+ *                 type: string
+ *                 description: BVN from step 1
+ *                 example: "12345678901"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email)
+ *                 example: phone
  *               phoneNumber:
  *                 type: string
+ *                 description: Required if verificationType is 'phone'
  *                 example: "+2348012345678"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Required if verificationType is 'email'
+ *                 example: user@example.com
  *     responses:
  *       200:
  *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your phone
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
  *       429:
  *         description: Too many requests
  */
@@ -288,6 +323,7 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  * /api/auth/signup/tourist/send-otp:
  *   post:
  *     summary: Step 2 - Send OTP for tourist signup
+ *     description: Send OTP to phone or email for verification. Choose verification type based on preference.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -296,14 +332,48 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  *           schema:
  *             type: object
  *             required:
- *               - phoneNumber
+ *               - passportNumber
+ *               - verificationType
  *             properties:
+ *               passportNumber:
+ *                 type: string
+ *                 description: Passport number from step 1
+ *                 example: "A12345678"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email)
+ *                 example: phone
  *               phoneNumber:
  *                 type: string
- *                 example: "+1234567890"
+ *                 description: Required if verificationType is 'phone'
+ *                 example: "+447123456789"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Required if verificationType is 'email'
+ *                 example: tourist@example.com
  *     responses:
  *       200:
  *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your phone
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
  *       429:
  *         description: Too many requests
  */
@@ -455,6 +525,7 @@ router.post('/login', authRateLimiter, authController.login);
  * /api/auth/otp/send:
  *   post:
  *     summary: Send OTP to user
+ *     description: Send OTP to phone or email. Provide either phoneNumber or email based on preference.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -462,15 +533,42 @@ router.post('/login', authRateLimiter, authController.login);
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - phoneNumber
  *             properties:
  *               phoneNumber:
  *                 type: string
+ *                 description: Phone number to receive OTP via SMS
  *                 example: "+2348012345678"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address to receive OTP
+ *                 example: user@example.com
+ *               purpose:
+ *                 type: string
+ *                 enum: [REGISTRATION, LOGIN, PASSWORD_RESET, TRANSACTION_VERIFICATION]
+ *                 description: Purpose of the OTP
+ *                 example: REGISTRATION
  *     responses:
  *       200:
  *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
  *       429:
  *         description: Too many requests
  */

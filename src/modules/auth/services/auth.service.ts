@@ -263,19 +263,26 @@ export class AuthService {
     verificationType: 'email' | 'phone';
     email?: string;
     phoneNumber?: string;
-  }): Promise<{ message: string }> {
+  }): Promise<{ message: string; otp?: string }> {
     const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
 
     // Send OTP
-    await this.sendOtp({
+    const otpResult = await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    return {
+    const response: { message: string; otp?: string } = {
       message: `OTP sent successfully to your ${data.verificationType}`,
     };
+
+    // Include OTP in non-production environments
+    if (otpResult.otp) {
+      response.otp = otpResult.otp;
+    }
+
+    return response;
   }
 
   // STEP 4: After OTP verification, create account with user's password
@@ -412,19 +419,26 @@ export class AuthService {
     verificationType: 'email' | 'phone';
     email?: string;
     phoneNumber?: string;
-  }): Promise<{ message: string }> {
+  }): Promise<{ message: string; otp?: string }> {
     const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
 
     // Send OTP
-    await this.sendOtp({
+    const otpResult = await this.sendOtp({
       email: data.verificationType === 'email' ? contactValue : '',
       phoneNumber: data.verificationType === 'phone' ? contactValue : '',
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    return {
+    const response: { message: string; otp?: string } = {
       message: `OTP sent successfully to your ${data.verificationType}`,
     };
+
+    // Include OTP in non-production environments
+    if (otpResult.otp) {
+      response.otp = otpResult.otp;
+    }
+
+    return response;
   }
 
   // STEP 4: After OTP verification, create account with user's password
@@ -517,7 +531,7 @@ export class AuthService {
     };
   }
 
-  async sendOtp(data: OtpRequest): Promise<{ message: string }> {
+  async sendOtp(data: OtpRequest): Promise<{ message: string; otp?: string }> {
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -546,9 +560,16 @@ export class AuthService {
 
     // TODO: Send OTP via SMS using Termii or similar service for phone verification
 
-    return {
+    const response: { message: string; otp?: string } = {
       message: 'OTP sent successfully',
     };
+
+    // Include OTP in response for non-production environments
+    if (process.env.NODE_ENV !== 'production') {
+      response.otp = otp;
+    }
+
+    return response;
   }
 
   async validateOtp(data: OtpValidationRequest): Promise<{ valid: boolean; message: string }> {
