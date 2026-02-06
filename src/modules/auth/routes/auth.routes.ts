@@ -150,6 +150,7 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  * /api/auth/signup/nigerian/create-account:
  *   post:
  *     summary: Step 4 - Create Nigerian user account
+ *     description: Create account after BVN verification and OTP validation. Include all BVN data from step 1.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -158,25 +159,67 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *           schema:
  *             type: object
  *             required:
+ *               - bvn
+ *               - firstName
+ *               - lastName
  *               - email
- *               - password
  *               - phoneNumber
+ *               - dateOfBirth
+ *               - password
  *             properties:
+ *               bvn:
+ *                 type: string
+ *                 description: BVN from step 1 verification
+ *                 example: "12345678901"
+ *               firstName:
+ *                 type: string
+ *                 description: First name from BVN verification
+ *                 example: Chinedu
+ *               lastName:
+ *                 type: string
+ *                 description: Last name from BVN verification
+ *                 example: Okafor
  *               email:
  *                 type: string
  *                 format: email
  *                 example: user@example.com
+ *               phoneNumber:
+ *                 type: string
+ *                 description: Phone number verified in step 3
+ *                 example: "+2348012345678"
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *                 description: Date of birth from BVN verification
+ *                 example: "1990-05-15"
+ *               address:
+ *                 type: string
+ *                 description: Optional address from BVN verification
+ *                 example: "123 Lagos Street, Victoria Island"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
+ *                 description: User's chosen password
  *                 example: SecurePass123!
- *               phoneNumber:
- *                 type: string
- *                 example: "+2348012345678"
  *     responses:
  *       201:
  *         description: Account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     message:
+ *                       type: string
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -272,6 +315,7 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  * /api/auth/signup/tourist/create-account:
  *   post:
  *     summary: Step 4 - Create tourist user account
+ *     description: Create account after passport verification and OTP validation. Include all passport data from step 1.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -280,25 +324,74 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  *           schema:
  *             type: object
  *             required:
+ *               - passportNumber
+ *               - passportDocumentUrl
+ *               - firstName
+ *               - lastName
  *               - email
- *               - password
  *               - phoneNumber
+ *               - dateOfBirth
+ *               - nationality
+ *               - password
  *             properties:
+ *               passportNumber:
+ *                 type: string
+ *                 description: Passport number from step 1 verification
+ *                 example: "A12345678"
+ *               passportDocumentUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: Passport document URL from step 1
+ *                 example: "https://cloudinary.com/passport/abc123.jpg"
+ *               firstName:
+ *                 type: string
+ *                 description: First name from passport verification
+ *                 example: John
+ *               lastName:
+ *                 type: string
+ *                 description: Last name from passport verification
+ *                 example: Smith
  *               email:
  *                 type: string
  *                 format: email
  *                 example: tourist@example.com
+ *               phoneNumber:
+ *                 type: string
+ *                 description: Phone number verified in step 3
+ *                 example: "+447123456789"
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *                 description: Date of birth from passport verification
+ *                 example: "1985-03-15"
+ *               nationality:
+ *                 type: string
+ *                 description: Nationality from passport
+ *                 example: "United Kingdom"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
+ *                 description: User's chosen password
  *                 example: SecurePass123!
- *               phoneNumber:
- *                 type: string
- *                 example: "+1234567890"
  *     responses:
  *       201:
  *         description: Account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     message:
+ *                       type: string
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
