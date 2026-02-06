@@ -42,34 +42,45 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Server
+      # Server Configuration
       NODE_ENV: production
       PORT: 3000
       HOST: 0.0.0.0
+      SERVICE_NAME: sochatoa-api-monolith
 
-      # Database
+      # Database Configuration
       DATABASE_URL: postgresql://postgres:password@postgres:5432/sochatoa_db?schema=public
 
-      # Redis
+      # Redis Configuration
       REDIS_URL: redis://redis:6379
 
-      # JWT Secrets
+      # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
       JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
       JWT_ACCESS_EXPIRY: 15m
       JWT_REFRESH_EXPIRY: 7d
 
-      # SMTP (Optional - configure for email sending)
+      # SMTP Configuration (Optional - configure for email sending)
       # SMTP_HOST: smtp.gmail.com
       # SMTP_PORT: 587
+      # SMTP_SECURE: false
       # SMTP_USER: your-email@gmail.com
       # SMTP_PASSWORD: your-app-password
-      # SMTP_FROM_EMAIL: noreply@sochatoa.com
-      # SMTP_FROM_NAME: Sochatoa API
+      # SMTP_FROM: noreply@sochatoa.com
 
       # API Configuration
       CORS_ORIGIN: "*"
       API_BASE_URL: http://localhost:3000
+      API_BASE_PATH: ""
+
+      # SMS Configuration (Optional - Termii)
+      # TERMII_API_KEY: your-termii-api-key
+      # TERMII_SENDER_ID: Sochatoa
+
+      # Cloudinary Configuration (Optional - for document uploads)
+      # CLOUDINARY_CLOUD_NAME: your-cloud-name
+      # CLOUDINARY_API_KEY: your-api-key
+      # CLOUDINARY_API_SECRET: your-api-secret
 
     depends_on:
       postgres:

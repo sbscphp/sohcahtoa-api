@@ -189,6 +189,7 @@ router.post('/signup/nigerian/create-account', authRateLimiter, authController.c
  * /api/auth/signup/tourist/verify-passport:
  *   post:
  *     summary: Step 1 - Verify tourist passport for signup
+ *     description: Upload and verify passport document. The system extracts passport information automatically.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -197,31 +198,41 @@ router.post('/signup/nigerian/create-account', authRateLimiter, authController.c
  *           schema:
  *             type: object
  *             required:
- *               - passportNumber
- *               - firstName
- *               - lastName
- *               - dateOfBirth
- *               - nationality
+ *               - passportDocumentUrl
  *             properties:
- *               passportNumber:
+ *               passportDocumentUrl:
  *                 type: string
- *                 example: "A12345678"
- *               firstName:
- *                 type: string
- *                 example: John
- *               lastName:
- *                 type: string
- *                 example: Smith
- *               dateOfBirth:
- *                 type: string
- *                 format: date
- *                 example: "1985-05-15"
- *               nationality:
- *                 type: string
- *                 example: "United States"
+ *                 format: uri
+ *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
+ *                 example: "https://cloudinary.com/passport/abc123.jpg"
  *     responses:
  *       200:
  *         description: Passport verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     passportNumber:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     phoneNumber:
+ *                       type: string
+ *                     dateOfBirth:
+ *                       type: string
+ *                     nationality:
+ *                       type: string
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:

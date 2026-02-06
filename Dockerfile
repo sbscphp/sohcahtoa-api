@@ -9,11 +9,11 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files
-COPY package.json ./
+COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm install
+# Install all dependencies (including devDependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY src ./src
@@ -34,17 +34,16 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
-COPY package.json ./
+COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install production dependencies only
-RUN npm install --production
+RUN npm ci --only=production
 
-# Copy built application from builder
+# Copy built application and Prisma client from builder
 COPY --from=builder /app/dist ./dist
-
-# Generate Prisma Client
-RUN npx prisma generate
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Create non-root user
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
