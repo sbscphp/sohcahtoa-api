@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError, errorResponse } from '@fx-platform/shared-utils';
-import { ErrorCode } from '@fx-platform/shared-types';
-import { Logger } from '@fx-platform/shared-utils';
+import { AppError, errorResponse } from '../utils';
+import { ErrorCode } from '../types';
+import { Logger } from '../utils';
 
 export const errorHandler = (logger: Logger) => {
   return (err: Error, req: Request, res: Response, next: NextFunction) => {

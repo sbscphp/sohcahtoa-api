@@ -1,4 +1,4 @@
-import { ErrorCode } from '@fx-platform/shared-types';
+import { ErrorCode } from '../types';
 
 export class AppError extends Error {
   constructor(
