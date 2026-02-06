@@ -40,7 +40,7 @@ async function startServer() {
     // Start HTTP server
     const server = app.listen(PORT, HOST, () => {
       logger.info(`Server is running on http://${HOST}:${PORT}`);
-      logger.info(`API Documentation available at http://${HOST}:${PORT}/api/docs`);
+      logger.info(`API Documentation available at http://${HOST}:${PORT}/api-docs`);
       logger.info(`Health check available at http://${HOST}:${PORT}/health`);
     });
 

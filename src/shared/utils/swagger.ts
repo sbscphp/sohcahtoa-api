@@ -108,7 +108,13 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       security: [],
     },
-    apis: ['./src/routes/*.ts', './src/routes/*.js', './dist/routes/*.js', './src/index.ts', './dist/index.js'],
+    apis: [
+      './src/modules/*/routes/*.ts',
+      './src/modules/*/routes/*.js',
+      './dist/modules/*/routes/*.js',
+      './src/index.ts',
+      './dist/index.js'
+    ],
   };
 
   const swaggerSpec = swaggerJsdoc(options);

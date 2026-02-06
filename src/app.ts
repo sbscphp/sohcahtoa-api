@@ -30,7 +30,7 @@ export const createApp = async (): Promise<Application> => {
 
   // Request tracking and logging
   app.use(correlationIdMiddleware);
-  app.use(requestLogger);
+  app.use(requestLogger(logger));
 
   // Health check endpoint
   app.get('/health', (req: Request, res: Response) => {
