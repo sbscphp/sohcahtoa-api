@@ -1,35 +1,62 @@
 {
-  "name": "fx-transaction-platform",
+  "name": "sochatoa-api-monolith",
   "version": "1.0.0",
-  "private": true,
-  "description": "Foreign Exchange Transaction Microservices Platform",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "description": "Foreign Exchange Transaction Platform - Monolith Architecture",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "lint": "turbo run lint",
-    "clean": "turbo run clean",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push",
+    "test": "jest",
+    "clean": "rm -rf dist",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "docker:build": "docker compose build",
+    "docker:build": "docker build -t sochatoa-api-monolith .",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "k8s:deploy": "kubectl apply -f k8s/",
-    "prisma:generate": "turbo run prisma:generate",
-    "prisma:migrate": "turbo run prisma:migrate"
+    "docker:down": "docker compose down"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0",
+    "@scalar/express-api-reference": "^0.6.0",
+    "axios": "^1.6.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.7",
+    "qrcode": "^1.5.3",
+    "sharp": "^0.33.0",
+    "swagger-jsdoc": "^6.2.8",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/multer": "^1.4.11",
     "@types/node": "^20.10.0",
+    "@types/nodemailer": "^6.4.14",
+    "@types/qrcode": "^1.5.5",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/uuid": "^9.0.7",
+    "jest": "^29.7.0",
     "prettier": "^3.1.0",
-    "turbo": "^1.13.4",
+    "prisma": "^5.7.0",
+    "tsx": "^4.6.2",
     "typescript": "^5.3.2"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
-  },
-  "packageManager": "pnpm@8.10.0"
+    "node": ">=18.0.0"
+  }
 }

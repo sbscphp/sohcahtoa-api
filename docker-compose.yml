@@ -1,131 +1,24 @@
 services:
-  # Infrastructure
-  postgres-auth:
+  # PostgreSQL - Single unified database
+  postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: auth_db
+      POSTGRES_DB: sochatoa_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
     volumes:
-      - postgres-auth-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     networks:
-      - fx-network
+      - sochatoa-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sochatoa_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  postgres-transaction:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: transaction_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres-transaction-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d transaction_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-payment:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: payment_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5434:5432"
-    volumes:
-      - postgres-payment-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-document:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: document_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5435:5432"
-    volumes:
-      - postgres-document-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d document_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-compliance:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: compliance_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5436:5432"
-    volumes:
-      - postgres-compliance-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d compliance_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-admin:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: admin_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5437:5432"
-    volumes:
-      - postgres-admin-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d admin_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres-audit:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: audit_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5438:5432"
-    volumes:
-      - postgres-audit-data:/var/lib/postgresql/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d audit_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # Redis - Caching and session storage
   redis:
     image: redis:7-alpine
     ports:
@@ -133,264 +26,72 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      - fx-network
+      - sochatoa-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    command: redis-server --appendonly yes
 
-  kafka:
-    image: apache/kafka:3.7.0
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_NODE_ID: 0
-      KAFKA_PROCESS_ROLES: controller,broker
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-    volumes:
-      - kafka-data:/var/lib/kafka/data
-    networks:
-      - fx-network
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-
-  # Microservices
-  api-gateway:
+  # Sochatoa API Monolith
+  api:
     build:
       context: .
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
+      # Server
+      NODE_ENV: production
       PORT: 3000
-      AUTH_SERVICE_URL: http://auth-service:3001
-      DOCUMENT_SERVICE_URL: http://document-service:3002
-      TRANSACTION_SERVICE_URL: http://transaction-service:3003
-      PAYMENT_SERVICE_URL: http://payment-service:3004
-      COMPLIANCE_SERVICE_URL: http://compliance-service:3005
-      NOTIFICATION_SERVICE_URL: http://notification-service:3006
-      ADMIN_SERVICE_URL: http://admin-service:3007
-      AUDIT_SERVICE_URL: http://audit-service:3008
-    depends_on:
-      - auth-service
-      - document-service
-      - transaction-service
-      - payment-service
-      - compliance-service
-      - notification-service
-      - admin-service
-      - audit-service
-    networks:
-      - fx-network
-    restart: on-failure
+      HOST: 0.0.0.0
 
-  auth-service:
-    build:
-      context: .
-      dockerfile: apps/auth-service/Dockerfile
-    ports:
-      - "3001:3001"
-    environment:
-      PORT: 3001
-      DATABASE_URL: postgresql://postgres:password@postgres-auth:5432/auth_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-      JWT_ACCESS_SECRET: your-super-secret-access-key
-      JWT_REFRESH_SECRET: your-super-secret-refresh-key
+      # Database
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/sochatoa_db?schema=public
+
+      # Redis
+      REDIS_URL: redis://redis:6379
+
+      # JWT Secrets
+      JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
+      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+
+      # SMTP (Optional - configure for email sending)
+      # SMTP_HOST: smtp.gmail.com
+      # SMTP_PORT: 587
+      # SMTP_USER: your-email@gmail.com
+      # SMTP_PASSWORD: your-app-password
+      # SMTP_FROM_EMAIL: noreply@sochatoa.com
+      # SMTP_FROM_NAME: Sochatoa API
+
+      # API Configuration
+      CORS_ORIGIN: "*"
+      API_BASE_URL: http://localhost:3000
+
     depends_on:
-      postgres-auth:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
     networks:
-      - fx-network
-    restart: on-failure
-
-  transaction-service:
-    build:
-      context: .
-      dockerfile: apps/transaction-service/Dockerfile
-    ports:
-      - "3003:3003"
-    environment:
-      PORT: 3003
-      DATABASE_URL: postgresql://postgres:password@postgres-transaction:5432/transaction_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      postgres-transaction:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  payment-service:
-    build:
-      context: .
-      dockerfile: apps/payment-service/Dockerfile
-    ports:
-      - "3004:3004"
-    environment:
-      PORT: 3004
-      DATABASE_URL: postgresql://postgres:password@postgres-payment:5432/payment_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      postgres-payment:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: apps/notification-service/Dockerfile
-    ports:
-      - "3006:3006"
-    environment:
-      PORT: 3006
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-      SMTP_HOST: smtp.gmail.com
-      SMTP_PORT: 587
-    depends_on:
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  document-service:
-    build:
-      context: .
-      dockerfile: apps/document-service/Dockerfile
-    ports:
-      - "3002:3002"
-    environment:
-      PORT: 3002
-      DATABASE_URL: postgresql://postgres:password@postgres-document:5432/document_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      postgres-document:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  compliance-service:
-    build:
-      context: .
-      dockerfile: apps/compliance-service/Dockerfile
-    ports:
-      - "3005:3005"
-    environment:
-      PORT: 3005
-      DATABASE_URL: postgresql://postgres:password@postgres-compliance:5432/compliance_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      postgres-compliance:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  admin-service:
-    build:
-      context: .
-      dockerfile: apps/admin-service/Dockerfile
-    ports:
-      - "3007:3007"
-    environment:
-      PORT: 3007
-      DATABASE_URL: postgresql://postgres:password@postgres-admin:5432/admin_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-      TRANSACTION_SERVICE_URL: http://transaction-service:3003
-      PAYMENT_SERVICE_URL: http://payment-service:3004
-      COMPLIANCE_SERVICE_URL: http://compliance-service:3005
-    depends_on:
-      postgres-admin:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
-
-  audit-service:
-    build:
-      context: .
-      dockerfile: apps/audit-service/Dockerfile
-    ports:
-      - "3008:3008"
-    environment:
-      PORT: 3008
-      DATABASE_URL: postgresql://postgres:password@postgres-audit:5432/audit_db?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KAFKA_BROKERS: kafka:9092
-    depends_on:
-      postgres-audit:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - fx-network
-    restart: on-failure
+      - sochatoa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
-  postgres-auth-data:
-  postgres-transaction-data:
-  postgres-payment-data:
-  postgres-document-data:
-  postgres-compliance-data:
-  postgres-admin-data:
-  postgres-audit-data:
+  postgres-data:
+    driver: local
   redis-data:
-  kafka-data:
+    driver: local
 
 networks:
-  fx-network:
+  sochatoa-network:
     driver: bridge

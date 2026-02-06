@@ -1,12 +1,10 @@
 # Dependencies
-node_modules
-.pnpm-store
+node_modules/
+package-lock.json
 
 # Build outputs
-dist
-build
-.next
-.turbo
+dist/
+build/
 
 # Environment files
 .env
@@ -14,18 +12,17 @@ build
 .env*.local
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
-pnpm-debug.log*
 
 # OS
 .DS_Store
 Thumbs.db
 
 # IDEs
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 
@@ -34,12 +31,15 @@ Thumbs.db
 *.db-journal
 
 # Docker
-.docker
+.docker/
 
 # Coverage
-coverage
+coverage/
 *.lcov
 
 # Temporary files
-tmp
-temp
+tmp/
+temp/
+
+# Planning (optional - uncomment if you want to keep planning docs in git)
+# .planning/
