@@ -1,7 +1,8 @@
 import { Express, Request, Response } from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 
-export interface ScalarConfig {
+export interface SwaggerConfig {
   title: string;
   description: string;
   version: string;
@@ -10,7 +11,7 @@ export interface ScalarConfig {
   apiBasePath?: string;
 }
 
-export const setupScalar = async (app: Express, config: ScalarConfig): Promise<void> => {
+export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise<void> => {
   const options: swaggerJsdoc.Options = {
     definition: {
       openapi: '3.0.0',
@@ -112,32 +113,11 @@ export const setupScalar = async (app: Express, config: ScalarConfig): Promise<v
 
   const swaggerSpec = swaggerJsdoc(options);
 
-  // Dynamically import the ES Module
-  const { apiReference } = await import('@scalar/express-api-reference');
-
-  // Serve Scalar API documentation
-  app.use(
-    '/api-docs',
-    apiReference({
-      spec: {
-        content: swaggerSpec,
-      },
-      theme: 'purple',
-      layout: 'modern',
-      darkMode: true,
-      customCss: `
-        .scalar-app {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        }
-      `,
-      metaData: {
-        title: config.title,
-        description: config.description,
-      },
-      searchHotKey: 'k',
-      showSidebar: true,
-    })
-  );
+  // Mount swagger-ui-express
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customSiteTitle: config.title,
+  }));
 
   // Serve OpenAPI JSON spec
   app.get('/api-docs.json', (req: Request, res: Response) => {
@@ -145,5 +125,7 @@ export const setupScalar = async (app: Express, config: ScalarConfig): Promise<v
     res.send(swaggerSpec);
   });
 
-  console.log(`📚 Scalar API documentation available at http://localhost:${config.port}/api-docs`);
+  console.log(`📚 Swagger UI available at http://localhost:${config.port}/api-docs`);
 };
+
+export default setupSwagger;

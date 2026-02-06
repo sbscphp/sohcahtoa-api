@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { ServiceName } from '@fx-platform/shared-types';
+import { ServiceName } from '../types';
 
 const levels = {
   error: 0,
@@ -25,7 +25,7 @@ const format = winston.format.combine(
   winston.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`)
 );
 
-export const createLogger = (serviceName: ServiceName) => {
+export const createLogger = (serviceName: ServiceName | string) => {
   const transports = [
     new winston.transports.Console(),
     new winston.transports.File({

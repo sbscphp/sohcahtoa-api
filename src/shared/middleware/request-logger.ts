@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { Logger } from '@fx-platform/shared-utils';
 
-export const requestLogger = (logger: Logger) => {
+export const requestLogger = (logger: any) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
 

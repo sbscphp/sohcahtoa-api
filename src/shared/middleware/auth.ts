@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken } from '@fx-platform/shared-utils';
-import { JwtPayload, UserRole } from '@fx-platform/shared-types';
-import { UnauthorizedError, ForbiddenError } from '@fx-platform/shared-utils';
+import { verifyAccessToken } from '../utils/jwt';
+import { JwtPayload, UserRole } from '../types';
+import { UnauthorizedError, ForbiddenError } from '../utils/errors';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;

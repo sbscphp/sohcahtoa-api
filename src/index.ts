@@ -35,7 +35,7 @@ async function startServer() {
     initializeEventHandlers();
 
     // Create Express app
-    const app = createApp();
+    const app = await createApp();
 
     // Start HTTP server
     const server = app.listen(PORT, HOST, () => {

@@ -1,15 +1,20 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { setupScalar } from './shared/utils/scalar';
+import { setupSwagger } from './shared/utils/swagger';
 import { errorHandler } from './shared/middleware/error-handler';
 import { requestLogger } from './shared/middleware/request-logger';
 import { correlationIdMiddleware } from './shared/middleware/correlation-id';
 import { createLogger } from './shared/utils/logger';
+import authRoutes from './modules/auth/routes/auth.routes';
+import transactionRoutes from './modules/transactions/routes/transaction.routes';
+import paymentRoutes from './modules/payments/routes/payment.routes';
+import adminRoutes from './modules/admin/routes/admin.routes';
+import userManagementRoutes from './modules/admin/routes/user-management.routes';
 
-const logger = createLogger('App');
+const logger = createLogger('app');
 
-export const createApp = (): Application => {
+export const createApp = async (): Promise<Application> => {
   const app = express();
 
   // Security middleware
@@ -38,11 +43,13 @@ export const createApp = (): Application => {
 
   // API Documentation
   try {
-    setupScalar(app, {
+    await setupSwagger(app, {
       title: 'Sochatoa API - Monolith',
       description: 'Foreign Exchange Transaction Platform API',
       version: '1.0.0',
-      baseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
+      serviceName: process.env.SERVICE_NAME || 'sochatoa-api-monolith',
+      port: Number(process.env.PORT) || 3000,
+      apiBasePath: process.env.API_BASE_PATH || '',
     });
     logger.info('API documentation setup completed');
   } catch (error) {
@@ -50,71 +57,20 @@ export const createApp = (): Application => {
   }
 
   // Module routes - all routes will be registered here
-  // Note: Routes need to be imported and registered
-  // Example structure:
-  // app.use('/api/auth', authRoutes);
-  // app.use('/api/transactions', transactionRoutes);
-  // app.use('/api/payments', paymentRoutes);
-  // app.use('/api/compliance', complianceRoutes);
-  // app.use('/api/documents', documentRoutes);
-  // app.use('/api/admin', adminRoutes);
-  // app.use('/api/audit', auditRoutes);
+  app.use('/api/auth', authRoutes);
+  logger.info('Auth routes registered');
 
-  // Import and register routes dynamically
-  try {
-    // Auth routes
-    const authRoutes = require('./modules/auth/routes/auth.routes');
-    if (authRoutes.default) {
-      app.use('/api/auth', authRoutes.default);
-      logger.info('Auth routes registered');
-    }
-  } catch (error) {
-    logger.warn('Auth routes not found or failed to load');
-  }
+  app.use('/api/transactions', transactionRoutes);
+  logger.info('Transaction routes registered');
 
-  try {
-    // Transaction routes
-    const transactionRoutes = require('./modules/transactions/routes/transaction.routes');
-    if (transactionRoutes.default) {
-      app.use('/api/transactions', transactionRoutes.default);
-      logger.info('Transaction routes registered');
-    }
-  } catch (error) {
-    logger.warn('Transaction routes not found or failed to load');
-  }
+  app.use('/api/payments', paymentRoutes);
+  logger.info('Payment routes registered');
 
-  try {
-    // Payment routes
-    const paymentRoutes = require('./modules/payments/routes/payment.routes');
-    if (paymentRoutes.default) {
-      app.use('/api/payments', paymentRoutes.default);
-      logger.info('Payment routes registered');
-    }
-  } catch (error) {
-    logger.warn('Payment routes not found or failed to load');
-  }
+  app.use('/api/admin', adminRoutes);
+  logger.info('Admin routes registered');
 
-  try {
-    // Admin routes
-    const adminRoutes = require('./modules/admin/routes/admin.routes');
-    if (adminRoutes.default) {
-      app.use('/api/admin', adminRoutes.default);
-      logger.info('Admin routes registered');
-    }
-  } catch (error) {
-    logger.warn('Admin routes not found or failed to load');
-  }
-
-  try {
-    // User management routes (admin)
-    const userManagementRoutes = require('./modules/admin/routes/user-management.routes');
-    if (userManagementRoutes.default) {
-      app.use('/api/admin', userManagementRoutes.default);
-      logger.info('User management routes registered');
-    }
-  } catch (error) {
-    logger.warn('User management routes not found or failed to load');
-  }
+  app.use('/api/admin', userManagementRoutes);
+  logger.info('User management routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

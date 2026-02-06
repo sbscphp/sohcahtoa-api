@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ValidationError } from '@fx-platform/shared-utils';
+import { ValidationError } from '../utils/errors';
 
 export const validateBody = (schema: any) => {
   return (req: Request, res: Response, next: NextFunction) => {

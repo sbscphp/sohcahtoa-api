@@ -1,4 +1,4 @@
-import { ApiResponse, PaginatedResponse, ErrorCode } from '@fx-platform/shared-types';
+import { ApiResponse, PaginatedResponse, ErrorCode } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 export const successResponse = <T>(data: T, metadata?: any): ApiResponse<T> => {
