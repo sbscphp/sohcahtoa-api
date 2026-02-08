@@ -238,14 +238,9 @@ export class AuthService {
       throw new ValidationError(bvnResult.message || 'BVN verification failed');
     }
 
-    // Check if user already exists with this BVN
-    const existingKyc = await prisma.userKyc.findUnique({
-      where: { bvn },
-    });
-
-    if (existingKyc) {
-      throw new DuplicateError('An account with this BVN already exists');
-    }
+    // Note: We don't check for duplicate BVN at this stage (step 1)
+    // The duplicate check will be done at account creation (step 4)
+    // This allows users to verify their BVN multiple times if needed
 
     // Return extracted data for user to preview and confirm
     return {
@@ -305,7 +300,7 @@ export class AuthService {
       throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
     }
 
-    // Check for existing user
+    // Check for existing user by email or phone
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
@@ -314,6 +309,15 @@ export class AuthService {
 
     if (existingUser) {
       throw new DuplicateError('User with this email or phone number already exists');
+    }
+
+    // Check for existing BVN (this is where the BVN duplicate check should happen)
+    const existingKyc = await prisma.userKyc.findUnique({
+      where: { bvn: data.bvn },
+    });
+
+    if (existingKyc) {
+      throw new DuplicateError('An account with this BVN already exists');
     }
 
     // Hash the user's password
