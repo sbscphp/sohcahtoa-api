@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
-import { createLogger } from "../../../shared/utils";
-import { ServiceName, EventType } from "../../../shared/types";
-import { publishEvent } from "../kafka";
+import { createLogger } from "../../../../shared/utils";
+import { ServiceName, EventType } from "../../../../shared/types";
 import { getDatabase } from "../../../../config/database";
+import { eventBus } from "../../../../events/event-bus";
+
 const prisma = getDatabase();
 
 const logger = createLogger(ServiceName.ADMIN);
@@ -16,21 +17,27 @@ export const processOutboxEvents = async (prismaInstance: PrismaClient) => {
 
     for (const event of events) {
         try {
-            await publishEvent({
+            // Publish event using the in-memory event bus
+            eventBus.publish(event.eventType, {
                 eventId: event.id,
-                eventType: event.eventType as any,
-                source: event.source as ServiceName,
-                timestamp: new Date().toISOString(),
-                userId: event.aggregateId,
-                data: event.payload as any,
+                source: event.source,
+                timestamp: event.createdAt.toISOString(),
+                aggregateId: event.aggregateId,
+                payload: event.payload,
             });
 
+            // Mark as published
             await prismaInstance.outboxEvent.update({
                 where: { id: event.id },
                 data: {
                     status: "PUBLISHED",
                     publishedAt: new Date(),
                 },
+            });
+
+            logger.info("Outbox event published", {
+                eventId: event.id,
+                eventType: event.eventType,
             });
         } catch (error) {
             await prismaInstance.outboxEvent.update({
