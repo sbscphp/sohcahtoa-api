@@ -9,7 +9,8 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json ./
+COPY package-lock.json ./
 COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for build)
@@ -34,7 +35,8 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json ./
+COPY package-lock.json ./
 COPY prisma ./prisma/
 
 # Install production dependencies only
