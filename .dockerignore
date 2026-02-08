@@ -5,6 +5,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Keep package-lock.json for Docker builds
+!package-lock.json
+
 # Development
 .env
 .env.local
