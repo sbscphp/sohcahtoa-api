@@ -1,6 +1,8 @@
 import { getDatabase } from '../../../config/database';
-import { ValidationError, NotFoundError } from '../../../shared/utils';
+import { ValidationError, NotFoundError, createLogger } from '../../../shared/utils';
 import { CustomerType, KycStatus } from '../../../shared/types';
+
+const logger = createLogger('PassportService');
 
 const prisma = getDatabase();
 
@@ -42,8 +44,11 @@ export class PassportService {
     // For now, we'll simulate it with a mock request ID
     const verificationRequestId = `VR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log(`Passport verification request created: ${verificationRequestId}`);
-    console.log(`Document URL: ${data.passportDocumentUrl}`);
+    logger.info('Passport verification request created', {
+      verificationRequestId,
+      documentUrl: data.passportDocumentUrl,
+      userId: data.userId,
+    });
 
     /**
      * In production, this would publish an event or make an API call to the document service:

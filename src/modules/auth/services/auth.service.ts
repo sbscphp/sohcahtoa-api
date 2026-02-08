@@ -16,7 +16,10 @@ import {
   validatePhoneNumber,
   validatePasswordStrength,
   emailService,
+  createLogger,
 } from '../../../shared/utils';
+
+const logger = createLogger('AuthService');
 import {
   SignupRequest,
   LoginRequest,
@@ -555,7 +558,11 @@ export class AuthService {
       await emailService.sendOtpEmail(data.email, otp, data.purpose);
     } else {
       // Log OTP for development
-      console.log(`OTP for ${data.email || data.phoneNumber}: ${otp}`);
+      logger.info('OTP generated for development', {
+        recipient: data.email || data.phoneNumber,
+        otp,
+        purpose: data.purpose,
+      });
     }
 
     // TODO: Send OTP via SMS using Termii or similar service for phone verification

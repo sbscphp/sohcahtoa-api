@@ -31,8 +31,6 @@ export const authorize = (...roles: UserRole[]) => {
       return next(new UnauthorizedError('Authentication required'));
     }
 
-    console.log(req.user);
-
     if (!roles.includes(req.user.role)) {
       return next(new ForbiddenError('Insufficient permissions'));
     }
