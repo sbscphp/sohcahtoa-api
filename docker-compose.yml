@@ -53,6 +53,8 @@ services:
 
       # Redis Configuration
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
       # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
