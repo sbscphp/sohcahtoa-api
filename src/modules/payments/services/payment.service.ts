@@ -14,6 +14,7 @@ import {
   PaymentStatus,
   EventType,
   ServiceName,
+  CreateExchangeRateRequest,
 } from '../../../shared/types';
 
 const prisma = getDatabase();
@@ -149,6 +150,57 @@ export class PaymentService {
     }
 
     return settlement;
+  }
+
+  async createExchangeRate(data: CreateExchangeRateRequest, createdBy: string): Promise<any> {
+    // Validate the request
+    if (!data.fromCurrency || !data.toCurrency) {
+      throw new ValidationError('From currency and to currency are required');
+    }
+
+    if (!data.rate || data.rate <= 0) {
+      throw new ValidationError('Rate must be a positive number');
+    }
+
+    if (!data.validUntil) {
+      throw new ValidationError('Valid until date is required');
+    }
+
+    const validUntilDate = new Date(data.validUntil);
+    if (validUntilDate <= new Date()) {
+      throw new ValidationError('Valid until date must be in the future');
+    }
+
+    // Create the exchange rate
+    const exchangeRate = await prisma.exchangeRate.create({
+      data: {
+        fromCurrency: data.fromCurrency.toUpperCase(),
+        toCurrency: data.toCurrency.toUpperCase(),
+        rate: data.rate,
+        validUntil: validUntilDate,
+        source: data.source || 'ADMIN',
+        isActive: true,
+      },
+    });
+
+    // Clear cache for this currency pair
+    const cacheKey = `rate:${data.fromCurrency}:${data.toCurrency}`;
+    await redis.del(cacheKey);
+
+    eventBus.publish(EventType.TRANSACTION_CREATED, {
+      eventId: generateId(),
+      source: ServiceName.PAYMENT,
+      timestamp: new Date().toISOString(),
+      data: {
+        transactionId: exchangeRate.id,
+        userId: createdBy,
+        type: 'exchange_rate_created',
+        amount: Number(exchangeRate.rate),
+        currency: `${data.fromCurrency}/${data.toCurrency}`,
+      },
+    });
+
+    return exchangeRate;
   }
 }
 

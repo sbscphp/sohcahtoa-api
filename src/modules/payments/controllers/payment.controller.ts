@@ -76,6 +76,16 @@ class PaymentController {
     }
   }
 
+  async createExchangeRate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.userId;
+      const result = await paymentService.createExchangeRate(req.body, userId);
+      res.status(201).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async health(req: Request, res: Response) {
     res.json({ status: 'healthy', service: 'payment-service' });
   }

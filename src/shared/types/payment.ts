@@ -95,3 +95,11 @@ export interface PaymentReceipt {
   receiptNumber: string;
   generatedAt: string;
 }
+
+export interface CreateExchangeRateRequest {
+  fromCurrency: string;
+  toCurrency: string;
+  rate: number;
+  validUntil: string;
+  source?: string;
+}
