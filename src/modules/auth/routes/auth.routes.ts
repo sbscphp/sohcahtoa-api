@@ -91,23 +91,10 @@ router.post('/signup', authRateLimiter, authController.signup);
  *             type: object
  *             required:
  *               - bvn
- *               - firstName
- *               - lastName
- *               - dateOfBirth
  *             properties:
  *               bvn:
  *                 type: string
  *                 example: "12345678901"
- *               firstName:
- *                 type: string
- *                 example: John
- *               lastName:
- *                 type: string
- *                 example: Doe
- *               dateOfBirth:
- *                 type: string
- *                 format: date
- *                 example: "1990-01-01"
  *     responses:
  *       200:
  *         description: BVN verified successfully
