@@ -6,29 +6,365 @@ import { UserRole } from "../../../shared/types";
 
 const UserManagementRouter: Router = Router();
 
-
-UserManagementRouter.post("/add-user", addUserValidationStore, validate, userManagementController.addUser);
-UserManagementRouter.post("/login", authRateLimiter, userManagementController.login);
-UserManagementRouter.post("/verify-login", authRateLimiter, userManagementController.verifyLogin);
-UserManagementRouter.post("/forgot-password", authRateLimiter, userManagementController.forgotPassword);
-UserManagementRouter.post("/reset-password", authRateLimiter, userManagementController.resetPassword);
-//SEARCH AND FILTER
-
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: Admin endpoints
+ */
+/**
+ * @swagger
+ * /api/admin/management/users:
+ *   get:
+ *     summary: List admin users
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Users retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.get("/users", authenticate, userManagementController.getAllUsers);
+/**
+ * @swagger
+ * /api/admin/management/profile:
+ *   get:
+ *     summary: Get current admin profile
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.get("/profile", authenticate, userManagementController.getProfile);
+//SEARCH AND FILTER
 
 
 // Role Management
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: Admin endpoints
+ */
+
+/**
+ * @swagger
+ * /api/admin/management/users:
+ *   post:
+ *     summary: Create a new admin user
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, fullName, role, department]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               fullName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Admin user created
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+UserManagementRouter.post("/add-user", authenticate, authorize(UserRole.SUPER_ADMIN), addUserValidationStore, validate, userManagementController.addUser);
+
+/**
+ * @swagger
+ * /api/admin/management/roles:
+ *   post:
+ *     summary: Create a role
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Role created
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.post("/roles", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.createRole);
+/**
+ * @swagger
+ * /api/admin/management/roles:
+ *   get:
+ *     summary: List roles
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: Roles retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.get("/roles", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.getRoles);
+/**
+ * @swagger
+ * /api/admin/management/roles/{id}:
+ *   get:
+ *     summary: Get role by ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Role retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 UserManagementRouter.get("/roles/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.getRole);
+/**
+ * @swagger
+ * /api/admin/management/roles/{id}:
+ *   put:
+ *     summary: Update a role
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Role updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.put("/roles/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.updateRole);
+/**
+ * @swagger
+ * /api/admin/management/roles/{id}:
+ *   delete:
+ *     summary: Delete a role
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Role deleted
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.delete("/roles/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.deleteRole);
 
 // Department Management
+/**
+ * @swagger
+ * tags:
+ *   name: Admin
+ *   description: Admin endpoints
+ */
+/**
+ * @swagger
+ * /api/admin/management/departments:
+ *   post:
+ *     summary: Create a department
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Department created
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.post("/departments", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.createDepartment);
+/**
+ * @swagger
+ * /api/admin/management/departments:
+ *   get:
+ *     summary: List departments
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: Departments retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.get("/departments", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.getDepartments);
+/**
+ * @swagger
+ * /api/admin/management/departments/{id}:
+ *   get:
+ *     summary: Get department by ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Department retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 UserManagementRouter.get("/departments/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.getDepartment);
+/**
+ * @swagger
+ * /api/admin/management/departments/{id}:
+ *   put:
+ *     summary: Update a department
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Department updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.put("/departments/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.updateDepartment);
+
+/**
+ * @swagger
+ * /api/admin/management/departments/{id}:
+ *   delete:
+ *     summary: Delete a department
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Department deleted
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 UserManagementRouter.delete("/departments/:id", authenticate, authorize(UserRole.SUPER_ADMIN), userManagementController.deleteDepartment);
+
 export default UserManagementRouter

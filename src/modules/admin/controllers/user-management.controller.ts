@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { authService } from "../services/user-management.service";
+import { userManagementService } from "../services/user-management.service";
 import { successResponse } from "../../../shared/utils";
 import { CreateAdminUserDto, CreateDepartmentDto, CreateRoleDto, DepartmentQueryDto, RoleQueryDto, UpdateDepartmentDto, UpdateRoleDto } from "../dto/user-management.dto";
 import { asyncHandler } from "../../../shared/middleware";
@@ -7,50 +7,26 @@ import { asyncHandler } from "../../../shared/middleware";
 class UserManagementController {
     addUser = asyncHandler(async (req: Request, res: Response) => {
         const body: CreateAdminUserDto = req.body;
-        const result = await authService.addUser(body);
-        res.json(successResponse(result));
-    });
-
-    login = asyncHandler(async (req: Request, res: Response) => {
-        const { email, password } = req.body;
-        const result = await authService.initiateLogin(email, password);
-        res.json(successResponse(result));
-    });
-
-    verifyLogin = asyncHandler(async (req: Request, res: Response) => {
-        const { email, otp } = req.body;
-        const result = await authService.verifyLogin(email, otp);
-        res.json(successResponse(result));
-    });
-
-    forgotPassword = asyncHandler(async (req: Request, res: Response) => {
-        const { email } = req.body;
-        const result = await authService.forgotPassword(email);
-        res.json(successResponse(result));
-    });
-
-    resetPassword = asyncHandler(async (req: Request, res: Response) => {
-        const { otp, password } = req.body;
-        const result = await authService.resetPassword(otp, password);
+        const result = await userManagementService.addUser(body);
         res.json(successResponse(result));
     });
 
     getAllUsers = asyncHandler(async (req: Request, res: Response) => {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
-        const result = await authService.getAllUsers(page, limit);
+        const result = await userManagementService.getAllUsers(page, limit);
         res.json(successResponse(result));
     });
 
     getProfile = asyncHandler(async (req: Request, res: Response) => {
         const userId = (req as any).user?.userId;
-        const result = await authService.getProfile(userId);
+        const result = await userManagementService.getProfile(userId);
         res.json(successResponse(result));
     });
 
     createRole = asyncHandler(async (req: Request, res: Response) => {
         const body: CreateRoleDto = req.body;
-        const result = await authService.createRole(body);
+        const result = await userManagementService.createRole(body);
         res.json(successResponse(result));
     });
 
@@ -62,32 +38,32 @@ class UserManagementController {
             isActive: req.query.isActive as any,
         };
 
-        const result = await authService.getAllRoles(query);
+        const result = await userManagementService.getAllRoles(query);
         res.json(successResponse(result));
     });
 
     getRole = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
-        const result = await authService.getRole(id);
+        const result = await userManagementService.getRole(id);
         res.json(successResponse(result));
     });
 
     updateRole = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const body: UpdateRoleDto = req.body;
-        const result = await authService.updateRole(id, body);
+        const result = await userManagementService.updateRole(id, body);
         res.json(successResponse(result));
     });
 
     deleteRole = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
-        const result = await authService.deleteRole(id);
+        const result = await userManagementService.deleteRole(id);
         res.json(successResponse(result));
     });
 
     createDepartment = asyncHandler(async (req: Request, res: Response) => {
         const body: CreateDepartmentDto = req.body;
-        const result = await authService.createDepartment(body);
+        const result = await userManagementService.createDepartment(body);
         res.json(successResponse(result));
     });
 
@@ -99,26 +75,26 @@ class UserManagementController {
             isActive: req.query.isActive as any,
         };
 
-        const result = await authService.getAllDepartments(query);
+        const result = await userManagementService.getAllDepartments(query);
         res.json(successResponse(result));
     });
 
     getDepartment = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
-        const result = await authService.getDepartment(id);
+        const result = await userManagementService.getDepartment(id);
         res.json(successResponse(result));
     });
 
     updateDepartment = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const body: UpdateDepartmentDto = req.body;
-        const result = await authService.updateDepartment(id, body);
+        const result = await userManagementService.updateDepartment(id, body);
         res.json(successResponse(result));
     });
 
     deleteDepartment = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
-        const result = await authService.deleteDepartment(id);
+        const result = await userManagementService.deleteDepartment(id);
         res.json(successResponse(result));
     });
 }

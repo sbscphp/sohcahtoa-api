@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
-import { createLogger } from "../../../shared/utils";
-import { ServiceName, EventType } from "../../../shared/types";
-import { publishEvent } from "../kafka";
+import { createLogger } from "../../../../shared/utils";
+import { ServiceName } from "../../../../shared/types";
+import { eventBus } from "../../../../events/event-bus";
 import { getDatabase } from "../../../../config/database";
 const prisma = getDatabase();
 
@@ -16,13 +16,12 @@ export const processOutboxEvents = async (prismaInstance: PrismaClient) => {
 
     for (const event of events) {
         try {
-            await publishEvent({
+            eventBus.publish(event.eventType as any, {
                 eventId: event.id,
-                eventType: event.eventType as any,
                 source: event.source as ServiceName,
                 timestamp: new Date().toISOString(),
                 userId: event.aggregateId,
-                data: event.payload as any,
+                payload: event.payload as any,
             });
 
             await prismaInstance.outboxEvent.update({
