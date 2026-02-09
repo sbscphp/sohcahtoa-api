@@ -3,6 +3,8 @@ import { createLogger } from "../../../../shared/utils";
 import { ServiceName } from "../../../../shared/types";
 import { eventBus } from "../../../../events/event-bus";
 import { getDatabase } from "../../../../config/database";
+import { eventBus } from "../../../../events/event-bus";
+
 const prisma = getDatabase();
 
 const logger = createLogger(ServiceName.ADMIN);
@@ -24,12 +26,18 @@ export const processOutboxEvents = async (prismaInstance: PrismaClient) => {
                 payload: event.payload as any,
             });
 
+            // Mark as published
             await prismaInstance.outboxEvent.update({
                 where: { id: event.id },
                 data: {
                     status: "PUBLISHED",
                     publishedAt: new Date(),
                 },
+            });
+
+            logger.info("Outbox event published", {
+                eventId: event.id,
+                eventType: event.eventType,
             });
         } catch (error) {
             await prismaInstance.outboxEvent.update({

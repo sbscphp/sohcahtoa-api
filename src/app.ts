@@ -80,7 +80,7 @@ export const createApp = async (): Promise<Application> => {
   });
 
   // Error handling middleware (must be last)
-  app.use(errorHandler);
+  app.use(errorHandler(logger));
 
   return app;
 };
