@@ -10,7 +10,6 @@ import authRoutes from './modules/auth/routes/auth.routes';
 import transactionRoutes from './modules/transactions/routes/transaction.routes';
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
-import userManagementRoutes from './modules/admin/routes/user-management.routes';
 
 const logger = createLogger('app');
 
@@ -20,7 +19,7 @@ export const createApp = async (): Promise<Application> => {
   // Security middleware
   app.use(helmet());
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
     credentials: true,
   }));
 
@@ -68,9 +67,6 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/admin', adminRoutes);
   logger.info('Admin routes registered');
-
-  app.use('/api/admin', userManagementRoutes);
-  logger.info('User management routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

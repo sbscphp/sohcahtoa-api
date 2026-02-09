@@ -2,6 +2,16 @@ import { Router } from "express";
 import adminController from "../controllers/admin.controller";
 import { authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
+import { AdminAuthRouter } from "./admin-auth.routes";
+import UserManagementRouter from "./user-management.routes";
+import CustomerRouter from "./customer.routes";
+import { TransactionRouter } from "./transaction.routes";
+import AgentRouter from "./agent.routes";
+import OutletRouter from "./outlet.routes";
+import WorkflowRouter from "./workflow.routes";
+import TicketsRouter from "./tickets.routes";
+import RateRouter from "./rate.routes";
+import ReportRouter from "./report.routes";
 
 const router: Router = Router();
 
@@ -40,166 +50,6 @@ router.get("/dashboard", adminController.getDashboard);
 
 /**
  * @swagger
- * /api/admin/transactions/{id}/review:
- *   post:
- *     summary: Review a transaction
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               notes:
- *                 type: string
- *               reviewStatus:
- *                 type: string
- *     responses:
- *       200:
- *         description: Transaction reviewed successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-// Transactions - Buy FX lifecycle (review, approve, reject, settle)
-router.post("/transactions/:id/review", adminController.reviewTransaction);
-
-/**
- * @swagger
- * /api/admin/transactions/{id}/approve:
- *   post:
- *     summary: Approve a transaction
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               notes:
- *                 type: string
- *     responses:
- *       200:
- *         description: Transaction approved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-router.post("/transactions/:id/approve", adminController.approveTransaction);
-
-/**
- * @swagger
- * /api/admin/transactions/{id}/reject:
- *   post:
- *     summary: Reject a transaction
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - reason
- *             properties:
- *               reason:
- *                 type: string
- *               notes:
- *                 type: string
- *     responses:
- *       200:
- *         description: Transaction rejected successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-router.post("/transactions/:id/reject", adminController.rejectTransaction);
-
-/**
- * @swagger
- * /api/admin/transactions/{id}/settle:
- *   post:
- *     summary: Settle a transaction
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               settlementDetails:
- *                 type: object
- *     responses:
- *       200:
- *         description: Transaction settled successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-router.post("/transactions/:id/settle", adminController.settleTransaction);
-
-/**
- * @swagger
- * /api/admin/deposits/{transactionId}/confirm:
- *   post:
- *     summary: Confirm a deposit
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               confirmationDetails:
- *                 type: object
- *     responses:
- *       200:
- *         description: Deposit confirmed successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-// Deposits
-router.post("/deposits/:transactionId/confirm", adminController.confirmDeposit);
-
-/**
- * @swagger
  * /api/admin/pending-approvals:
  *   get:
  *     summary: Get all pending approvals
@@ -225,30 +75,6 @@ router.post("/deposits/:transactionId/confirm", adminController.confirmDeposit);
  */
 // Admin actions
 router.get("/pending-approvals", adminController.getPendingApprovals);
-
-/**
- * @swagger
- * /api/admin/actions:
- *   get:
- *     summary: Get admin action history
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Admin actions retrieved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-router.get("/actions", adminController.getAdminActions);
-
-// User Management
-router.post("/users", authorize(UserRole.SUPER_ADMIN), adminController.createUser);
-router.get("/users", authorize(UserRole.SUPER_ADMIN), adminController.getUsers);
-router.get("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.getUser);
-router.put("/users/:id", authorize(UserRole.SUPER_ADMIN), adminController.updateUser);
-
-
 
 /**
  * @swagger
@@ -281,5 +107,17 @@ router.get("/audit-log", authorize(UserRole.SUPER_ADMIN), adminController.getAud
  */
 // Health
 router.get("/health", adminController.health);
+
+// Sub-routers
+router.use("/auth", AdminAuthRouter);
+router.use("/management", UserManagementRouter);
+router.use("/customers", CustomerRouter);
+router.use("/transactions", TransactionRouter);
+router.use("/agent", AgentRouter);
+router.use("/outlet", OutletRouter);
+router.use("/workflow", WorkflowRouter);
+router.use("/tickets", TicketsRouter);
+router.use("/rate", RateRouter);
+router.use("/reports", ReportRouter)
 
 export default router;

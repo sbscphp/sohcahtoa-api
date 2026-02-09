@@ -3,19 +3,19 @@ import customerController from "../controllers/customer.controller";
 
 const router:Router = Router();
 
-/**
- * @swagger
- * tags:
- *   name: Customers
- *   description: Customer management and flagging endpoints
- */
+// /**
+//  * @swagger
+//  * tags:
+//  *   name: Customers
+//  *   description: Customer management and flagging endpoints
+//  */
 
 /**
  * @swagger
  * /api/admin/customers:
  *   get:
  *     summary: List all customers
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -47,7 +47,7 @@ router.get("/", customerController.listCustomers);
  * /api/admin/customers/{userId}:
  *   get:
  *     summary: Get customer details by ID
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -71,7 +71,7 @@ router.get("/:userId", customerController.getCustomer);
  * /api/admin/customers/{userId}/flags:
  *   get:
  *     summary: List flags for a specific customer
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -94,7 +94,7 @@ router.get("/:userId/flags", customerController.listCustomerFlags);
  * /api/admin/customers/{userId}/flags:
  *   post:
  *     summary: Create a flag for a customer
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -134,7 +134,7 @@ router.post("/:userId/flags", customerController.createFlag);
  * /api/admin/customers/flags/all:
  *   get:
  *     summary: List all customer flags across the system
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -161,7 +161,7 @@ router.get("/flags/all", customerController.listAllFlags);
  * /api/admin/customers/flags/{flagId}/status:
  *   patch:
  *     summary: Update flag status
- *     tags: [Customers]
+ *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
  *     parameters:
