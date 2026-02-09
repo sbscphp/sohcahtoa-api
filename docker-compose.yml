@@ -72,7 +72,7 @@ services:
 
       # API Configuration
       CORS_ORIGIN: "*"
-      API_BASE_URL: http://localhost:3000
+      API_BASE_URL: http://104.45.229.69:3000
       API_BASE_PATH: ""
 
       # SMS Configuration (Optional - Termii)

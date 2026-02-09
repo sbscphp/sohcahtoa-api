@@ -26,8 +26,12 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       servers: [
         {
+          url: `http://104.45.229.69:${config.port}${config.apiBasePath || ''}`,
+          description: 'Production server',
+        },
+        {
           url: `http://localhost:${config.port}${config.apiBasePath || ''}`,
-          description: 'Development server',
+          description: 'Local development',
         },
         {
           url: `http://${config.serviceName}:${config.port}${config.apiBasePath || ''}`,
@@ -123,6 +127,13 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
     customSiteTitle: config.title,
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      tryItOutEnabled: true,
+    },
+    customCss: '.swagger-ui .topbar { display: none }',
+    customCssUrl: undefined, // Disable external CSS to avoid mixed content issues
   }));
 
   // Serve OpenAPI JSON spec
