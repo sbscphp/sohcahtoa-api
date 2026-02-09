@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { createLogger } from "../../../../shared/utils";
-import { ServiceName, EventType } from "../../../../shared/types";
+import { ServiceName } from "../../../../shared/types";
+import { eventBus } from "../../../../events/event-bus";
 import { getDatabase } from "../../../../config/database";
 import { eventBus } from "../../../../events/event-bus";
 
@@ -17,13 +18,12 @@ export const processOutboxEvents = async (prismaInstance: PrismaClient) => {
 
     for (const event of events) {
         try {
-            // Publish event using the in-memory event bus
-            eventBus.publish(event.eventType, {
+            eventBus.publish(event.eventType as any, {
                 eventId: event.id,
-                source: event.source,
-                timestamp: event.createdAt.toISOString(),
-                aggregateId: event.aggregateId,
-                payload: event.payload,
+                source: event.source as ServiceName,
+                timestamp: new Date().toISOString(),
+                userId: event.aggregateId,
+                payload: event.payload as any,
             });
 
             // Mark as published
