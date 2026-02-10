@@ -17,7 +17,18 @@ export const createApp = async (): Promise<Application> => {
   const app = express();
 
   // Security middleware
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+          scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+          imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+        },
+      },
+    })
+  );
   app.use(cors({
     origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
     credentials: true,
