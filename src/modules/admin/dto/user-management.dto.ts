@@ -4,7 +4,7 @@ export class CreateAdminUserDto {
     phoneNumber!: string;
     department!: string;
     branch!: string;
-    roleId!: string;
+    role!: string;
     position?: string;
     altPhoneNumber?: string;
 }

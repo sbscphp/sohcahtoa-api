@@ -1,7 +1,6 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { customerClient } from "../clients/customer.client";
-import { NotFoundError, ValidationError } from "../../../shared/utils";
+import { NotFoundError, ValidationError, paginate } from "../../../shared/utils";
 
 type CreateCustomerFlagPayload = {
   type: string; // should align with AmlFlagType
@@ -17,16 +16,182 @@ type UpdateFlagStatusPayload = {
 };
 
 export class CustomerService {
-  // --------------------
-  // Read-only customer view
-  // --------------------
+ 
   async listCustomers(page = 1, limit = 20, q?: string) {
-    // pass-through to customer-service
-    return customerClient.listCustomers({ page, limit, q });
+    const where: any = { role: "CUSTOMER" };
+    if (q && q.trim().length > 0) {
+      where.OR = [
+        { email: { contains: q, mode: "insensitive" } },
+        { phoneNumber: { contains: q, mode: "insensitive" } },
+        { profile: { firstName: { contains: q, mode: "insensitive" } } } as any,
+        { profile: { lastName: { contains: q, mode: "insensitive" } } } as any,
+      ];
+    }
+
+    return paginate(
+      prisma.user,
+      {
+        where,
+        include: { profile: true, kyc: true },
+        orderBy: { createdAt: "desc" },
+      },
+      { page, limit },
+      async (users: any[]) => {
+        const userIds = users.map((u: any) => u.id);
+        const txAgg =
+          userIds.length === 0
+            ? []
+            : await prisma.transaction.groupBy({
+                by: ["userId"],
+                where: { userId: { in: userIds } },
+                _count: { _all: true },
+                _sum: { nairaEquivalent: true, foreignAmount: true },
+                _max: { updatedAt: true, completedAt: true },
+              });
+        const sessionAgg =
+          userIds.length === 0
+            ? []
+            : await prisma.session.groupBy({
+                by: ["userId"],
+                where: { userId: { in: userIds } },
+                _max: { createdAt: true },
+              });
+        const txByUser: Record<
+          string,
+          { totalTransactions: number; transactionVolume: number }
+        > = {};
+        const lastActiveByUser: Record<string, Date | null> = {};
+        for (const row of txAgg as any[]) {
+          const count = row._count?._all || 0;
+          const nairaSum = Number(row._sum?.nairaEquivalent || 0);
+          const foreignSum = Number(row._sum?.foreignAmount || 0);
+          const volume = nairaSum || foreignSum || 0;
+          txByUser[row.userId] = {
+            totalTransactions: count,
+            transactionVolume: volume,
+          };
+          const txMax =
+            (row._max?.updatedAt as Date | null) ||
+            (row._max?.completedAt as Date | null) ||
+            null;
+          if (txMax) {
+            lastActiveByUser[row.userId] = txMax;
+          }
+        }
+        for (const row of sessionAgg as any[]) {
+          const sessMax = (row._max?.createdAt as Date | null) || null;
+          const prev = lastActiveByUser[row.userId] || null;
+          if (!prev || (sessMax && prev < sessMax)) {
+            lastActiveByUser[row.userId] = sessMax;
+          }
+        }
+        return users.map((u: any) => {
+          const name =
+            u.profile && (u.profile.firstName || u.profile.lastName)
+              ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+              : undefined;
+          const agg = txByUser[u.id] || {
+            totalTransactions: 0,
+            transactionVolume: 0,
+          };
+          const lastActive = lastActiveByUser[u.id]
+            ? lastActiveByUser[u.id]?.toISOString?.() || lastActiveByUser[u.id]
+            : null;
+          return {
+            id: u.id,
+            name,
+            phoneNumber: u.phoneNumber,
+            email: u.email,
+            dateJoined: u.createdAt?.toISOString?.() || u.createdAt,
+            totalTransactions: agg.totalTransactions,
+            transactionVolume: agg.transactionVolume,
+            status: u.isActive ? "ACTIVE" : "DEACTIVATED",
+            lastActive,
+          };
+        });
+      }
+    );
   }
 
   async getCustomer(userId: string) {
-    return customerClient.getCustomerById(userId);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true, kyc: true },
+    });
+    if (!user) throw new NotFoundError("Customer not found");
+    const txAgg = await prisma.transaction.aggregate({
+      where: { userId },
+      _count: { _all: true },
+      _sum: { nairaEquivalent: true, foreignAmount: true },
+    });
+    const totalTransactions = txAgg._count?._all || 0;
+    const transactionVolume =
+      Number(txAgg._sum?.nairaEquivalent || 0) ||
+      Number(txAgg._sum?.foreignAmount || 0) ||
+      0;
+    const [lastTx] = await prisma.transaction.findMany({
+      where: { userId },
+      orderBy: [{ updatedAt: "desc" }, { completedAt: "desc" }],
+      take: 1,
+      select: { updatedAt: true, completedAt: true },
+    });
+    const [lastSess] = await prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+      select: { createdAt: true },
+    });
+    const lastActiveDate = [
+      lastTx?.updatedAt || null,
+      lastTx?.completedAt || null,
+      lastSess?.createdAt || null,
+    ]
+      .filter(Boolean)
+      .sort((a: any, b: any) => (a > b ? -1 : 1))[0] as Date | undefined;
+
+    const name =
+      user.profile && (user.profile.firstName || user.profile.lastName)
+        ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
+        : undefined;
+
+    return {
+      id: user.id,
+      name,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      dateJoined: user.createdAt?.toISOString?.() || user.createdAt,
+      totalTransactions,
+      transactionVolume,
+      status: user.isActive ? "ACTIVE" : "DEACTIVATED",
+      lastActive: lastActiveDate
+        ? lastActiveDate?.toISOString?.() || lastActiveDate
+        : null,
+    };
+  }
+
+  async getCustomerCounts() {
+    const [totalCustomer, activeCustomer, deactivatedCustomer] = await Promise.all([
+      prisma.user.count({ where: { role: "CUSTOMER" } }),
+      prisma.user.count({ where: { role: "CUSTOMER", isActive: true } }),
+      prisma.user.count({ where: { role: "CUSTOMER", isActive: false } }),
+    ]);
+    return { totalCustomer, activeCustomer, deactivatedCustomer };
+  }
+
+  async deactivateCustomer(userId: string, adminId?: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== "CUSTOMER") {
+      throw new NotFoundError("Customer not found");
+    }
+    if (!user.isActive) {
+      return { id: user.id, status: "DEACTIVATED" };
+    }
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isActive: false },
+      select: { id: true, isActive: true },
+    });
+    return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
   }
 
   // --------------------
