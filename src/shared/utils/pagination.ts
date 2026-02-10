@@ -18,7 +18,7 @@ export const paginate = async <T>(
     model: any,
     args: any = {},
     options: PaginationOptions = {},
-    transform?: (data: T[]) => any[]
+    transform?: (data: T[]) => any[] | Promise<any[]>
 ): Promise<PaginationResult<T>> => {
     const page = Number(options.page) || 1;
     const limit = Number(options.limit) || 10;
@@ -33,7 +33,7 @@ export const paginate = async <T>(
         model.count({ where: args.where }),
     ]);
 
-    const finalData = transform ? transform(data) : data;
+    const finalData = transform ? await Promise.resolve(transform(data)) : data;
 
     return {
         data: finalData,

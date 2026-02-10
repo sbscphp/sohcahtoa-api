@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { createLogger } from '../shared/utils/logger';
+import { emailService } from '../shared/utils/email';
 
 const logger = createLogger('Email');
 
@@ -13,6 +14,12 @@ export const initializeEmail = (): Transporter | null => {
     const smtpPassword = process.env.SMTP_PASSWORD;
     const smtpFromEmail = process.env.SMTP_FROM_EMAIL;
     const smtpFromName = process.env.SMTP_FROM_NAME || 'Sochatoa API';
+    const smtpSecureEnv = process.env.SMTP_SECURE;
+    const smtpSecure = smtpSecureEnv !== undefined ? smtpSecureEnv === 'true' : smtpPort === 465;
+    // const smtpTimeout = parseInt(process.env.SMTP_TIMEOUT || '10000', 10);
+    const smtpDebug = process.env.SMTP_DEBUG === 'true';
+    const smtpLogger = process.env.SMTP_LOGGER === 'true';
+    const smtpAllowInsecureTls = process.env.SMTP_TLS_INSECURE === 'true';
 
     // If SMTP is not configured, use fallback (console logging in development)
     if (!smtpHost || !smtpUser || !smtpPassword) {
@@ -30,7 +37,7 @@ export const initializeEmail = (): Transporter | null => {
     transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
-      secure: smtpPort === 465, // true for 465, false for other ports
+      secure: smtpSecure,
       auth: {
         user: smtpUser,
         pass: smtpPassword,
@@ -39,6 +46,23 @@ export const initializeEmail = (): Transporter | null => {
         name: smtpFromName,
         address: smtpFromEmail || smtpUser,
       },
+      tls: smtpAllowInsecureTls ? { rejectUnauthorized: false } : undefined,
+      // connectionTimeout: smtpTimeout,
+      debug: smtpDebug,
+      logger: smtpLogger,
+    });
+
+    // Configure shared emailService for modules that rely on it
+    emailService.configure({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: { user: smtpUser, pass: smtpPassword },
+      from: `${smtpFromName} <${smtpFromEmail || smtpUser}>`,
+      tls: smtpAllowInsecureTls ? { rejectUnauthorized: false } : undefined,
+      // connectionTimeout: smtpTimeout,
+      debug: smtpDebug,
+      logger: smtpLogger,
     });
 
     // Verify connection
