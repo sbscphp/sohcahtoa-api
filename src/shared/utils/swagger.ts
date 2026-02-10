@@ -26,7 +26,7 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       servers: [
         {
-          url: `http://104.45.229.69:${config.port}${config.apiBasePath || ''}`,
+          url: `https://sohcahtoa-dev.clocksurewise.com${config.apiBasePath || ''}`,
           description: 'Production server',
         },
         {
