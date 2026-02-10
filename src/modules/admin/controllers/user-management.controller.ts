@@ -15,7 +15,7 @@ class UserManagementController {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const result = await userManagementService.getAllUsers(page, limit);
-        res.json(successResponse(result));
+        res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
     getProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -39,7 +39,7 @@ class UserManagementController {
         };
 
         const result = await userManagementService.getAllRoles(query);
-        res.json(successResponse(result));
+        res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
     getRole = asyncHandler(async (req: Request, res: Response) => {
@@ -76,7 +76,7 @@ class UserManagementController {
         };
 
         const result = await userManagementService.getAllDepartments(query);
-        res.json(successResponse(result));
+        res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
     getDepartment = asyncHandler(async (req: Request, res: Response) => {

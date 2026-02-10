@@ -11,6 +11,15 @@ class CustomerController {
       const q = (req.query.q as string) || undefined;
 
       const result = await customerService.listCustomers(page, limit, q);
+      res.json(successResponse(result.data, { pagination: result.meta }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCustomerCounts = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await customerService.getCustomerCounts();
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -65,6 +74,16 @@ class CustomerController {
     try {
       const adminId = (req as any).user?.userId as string;
       const result = await customerService.updateFlagStatus(req.params.flagId, adminId, req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deactivateCustomer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const adminId = (req as any).user?.userId as string;
+      const result = await customerService.deactivateCustomer(req.params.userId, adminId);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

@@ -19,11 +19,40 @@ class UserManagementService {
     addUser = async (body: CreateAdminUserDto) => {
         try {
             const result = await this.prisma.$transaction(async tx => {
-                const { department, ...userData } = body;
+
+                const role = await tx.role.findFirst({
+                    where: {
+                        name: { equals: body.role, mode: "insensitive" },
+                        isActive: true,
+                    },
+                });
+
+                if (!role) {
+                    throw new NotFoundError(`Role '${body.role}' not found`);
+                }
+
+                const department = await tx.department.findFirst({
+                    where: {
+                        name: { equals: body.department, mode: "insensitive" },
+                        isActive: true,
+                    },
+                });
+
+                if (!department) {
+                    throw new NotFoundError(`Department '${body.department}' not found`);
+                }
+
                 const user = await tx.adminUser.create({
                     data: {
-                        ...userData,
-                        departmentName: department,
+                        email: body.email,
+                        fullName: body.fullName,
+                        phoneNumber: body.phoneNumber,
+                        branch: body.branch,
+                        position: body.position,
+                        altPhoneNumber: body.altPhoneNumber,
+
+                        roleId: role.id,
+                        departmentId: department.id,
                     },
                 });
 
@@ -36,42 +65,39 @@ class UserManagementService {
                         payload: {
                             userId: user.id,
                             email: user.email,
-                            firstName: user.fullName,
-                            lastName: user.fullName,
+                            fullName: user.fullName,
                         },
                     },
                 });
 
-                return user;
-            });
+            return user;
+        });
 
-            logger.info("Admin user created with outbox event", {
-                adminUserId: result.id,
-            });
+        logger.info("Admin user created with outbox event", {
+            adminUserId: result.id,
+        });
 
-            /**
-             * Fire-and-forget email
-             */
-            if (emailService.isReady()) {
-                const resetPasswordUrl = `${process.env.ADMIN_FRONTEND_URL || 'http://localhost:3000'}/reset-password`;
+        if (emailService.isReady()) {
+            const resetPasswordUrl =
+                `${process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000"}/reset-password`;
 
-                emailService.sendAdminWelcomeEmail(result.email, result.fullName, resetPasswordUrl)
-                    .catch((err: Error) =>
-                        logger.warn("Welcome email failed", {
-                            userId: result.id,
-                            message: err.message,
-                        }),
-                    );
-            }
+            emailService
+                .sendAdminWelcomeEmail(result.email, result.fullName, resetPasswordUrl)
+                .catch(err =>
+                    logger.warn("Welcome email failed", {
+                        userId: result.id,
+                        message: err.message,
+                    }),
+                );
+        }
 
-            return result;
+        return result;
         } catch (error) {
-            logger.error("Failed to create admin user", {
-                message: (error as Error).message,
-            });
+            logger.error("Failed to create admin user", { error });
             throw error;
         }
     };
+
 
     getProfile = async (userId: string) => {
         try {
