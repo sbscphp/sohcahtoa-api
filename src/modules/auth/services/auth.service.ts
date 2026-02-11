@@ -222,13 +222,10 @@ export class AuthService {
     };
   }
 
-  // STEP 1: Verify BVN and return extracted data for user preview
+  // STEP 1: Verify BVN and return ONLY verification token
   async verifyBvnForSignup(bvn: string): Promise<{
     verificationToken: string;
-    firstName: string;
-    lastName: string;
-    dateOfBirth: string;
-    gender?: string;
+    message: string;
   }> {
     // Verify BVN and extract all user data
     const bvnResult = await bvnService.verifyBvn(bvn);
@@ -259,26 +256,25 @@ export class AuthService {
     };
     await redis.setex(cacheKey, 30 * 60, JSON.stringify(bvnData)); // 30 minutes
 
-    // Return only non-sensitive data to frontend
-    // Sensitive data (BVN, email, phone, address) are NOT returned
+    // Return ONLY verification token to frontend
+    // All sensitive data remains server-side in Redis
     return {
       verificationToken, // Client must send this token in subsequent steps
-      firstName: bvnResult.data.firstName,
-      lastName: bvnResult.data.lastName,
-      dateOfBirth: bvnResult.data.dateOfBirth,
-      gender: bvnResult.data.gender,
+      message: 'BVN verified successfully. Use the verification token to proceed.',
     };
   }
 
-  // STEP 2: Send OTP to user's chosen contact (email or phone)
+  // STEP 2: Send OTP using verification token, return details from Redis
   async sendBvnVerificationOtp(data: {
     verificationToken: string;
     verificationType: 'email' | 'phone';
-  }): Promise<{ 
+  }): Promise<{
     message: string;
     firstName: string;
     lastName: string;
     dateOfBirth: string;
+    email: string;
+    phoneNumber: string;
     gender?: string;
     otp?: string;
   }> {
@@ -300,13 +296,15 @@ export class AuthService {
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    // Return only non-sensitive data with names visible
-    // Redact email, phone, and other sensitive fields
+    // Return user details retrieved from Redis for confirmation
+    // Names are visible, email and phone are redacted for privacy
     const response: {
       message: string;
       firstName: string;
       lastName: string;
       dateOfBirth: string;
+      email: string;
+      phoneNumber: string;
       gender?: string;
       otp?: string;
     } = {
@@ -314,6 +312,8 @@ export class AuthService {
       firstName: bvnData.firstName,
       lastName: bvnData.lastName,
       dateOfBirth: bvnData.dateOfBirth,
+      email: partiallyRedactField(bvnData.email, 'email'),
+      phoneNumber: partiallyRedactField(bvnData.phoneNumber, 'phone'),
       gender: bvnData.gender,
     };
 
@@ -478,13 +478,10 @@ export class AuthService {
     };
   }
 
-  // STEP 1: Verify passport and return only verification token
+  // STEP 1: Verify passport and return ONLY verification token
   async verifyPassportForSignup(passportDocumentUrl: string): Promise<{
     verificationToken: string;
-    firstName: string;
-    lastName: string;
-    dateOfBirth: string;
-    nationality: string;
+    message: string;
   }> {
     // Verify passport document and extract all user data
     const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
@@ -521,18 +518,15 @@ export class AuthService {
     };
     await redis.setex(cacheKey, 30 * 60, JSON.stringify(passportData)); // 30 minutes
 
-    // Return only non-sensitive data to frontend
-    // Sensitive data (email, phone, passport number) are NOT returned
+    // Return ONLY verification token to frontend
+    // All sensitive data remains server-side in Redis
     return {
       verificationToken, // Client must send this token in subsequent steps
-      firstName: passportResult.data.firstName,
-      lastName: passportResult.data.lastName,
-      dateOfBirth: passportResult.data.dateOfBirth,
-      nationality: passportResult.data.nationality,
+      message: 'Passport verified successfully. Use the verification token to proceed.',
     };
   }
 
-  // STEP 2: Send OTP to user's chosen contact (email or phone)
+  // STEP 2: Send OTP using verification token, return details from Redis
   async sendPassportVerificationOtp(data: {
     verificationToken: string;
     verificationType: 'email' | 'phone';
@@ -541,6 +535,8 @@ export class AuthService {
     firstName: string;
     lastName: string;
     dateOfBirth: string;
+    email: string;
+    phoneNumber: string;
     nationality: string;
     otp?: string;
   }> {
@@ -562,13 +558,15 @@ export class AuthService {
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    // Return only non-sensitive data with names visible
-    // Redact email, phone, and other sensitive fields
+    // Return user details retrieved from Redis for confirmation
+    // Names are visible, email and phone are redacted for privacy
     const response: {
       message: string;
       firstName: string;
       lastName: string;
       dateOfBirth: string;
+      email: string;
+      phoneNumber: string;
       nationality: string;
       otp?: string;
     } = {
@@ -576,6 +574,8 @@ export class AuthService {
       firstName: passportData.firstName,
       lastName: passportData.lastName,
       dateOfBirth: passportData.dateOfBirth,
+      email: partiallyRedactField(passportData.email, 'email'),
+      phoneNumber: partiallyRedactField(passportData.phoneNumber, 'phone'),
       nationality: passportData.nationality,
     };
 

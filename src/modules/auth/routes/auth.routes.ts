@@ -113,25 +113,11 @@ router.post('/signup', authRateLimiter, authController.signup);
  *                   properties:
  *                     verificationToken:
  *                       type: string
- *                       description: Token to use in subsequent steps (valid for 30 minutes)
+ *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
  *                       example: "abc123xyz789"
- *                     firstName:
+ *                     message:
  *                       type: string
- *                       description: First name from BVN (for display only)
- *                       example: "Chinedu"
- *                     lastName:
- *                       type: string
- *                       description: Last name from BVN (for display only)
- *                       example: "Okafor"
- *                     dateOfBirth:
- *                       type: string
- *                       format: date
- *                       description: Date of birth from BVN (for display only)
- *                       example: "1990-05-15"
- *                     gender:
- *                       type: string
- *                       description: Gender from BVN (optional, for display only)
- *                       example: "Male"
+ *                       example: "BVN verified successfully. Use the verification token to proceed."
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -144,7 +130,7 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  * /api/auth/signup/nigerian/send-otp:
  *   post:
  *     summary: Step 2 - Send OTP for Nigerian signup
- *     description: Send OTP to phone or email for verification. The contact info is retrieved from the BVN verification session using the token and returned in the response.
+ *     description: Send OTP to phone or email for verification. Retrieves user details from Redis cache using the verification token from step 1.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -182,15 +168,23 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *                     message:
  *                       type: string
  *                       example: OTP sent successfully to your phone
- *                     email:
+ *                     firstName:
  *                       type: string
- *                       format: email
- *                       description: Email from BVN (returned only if verificationType is 'email')
- *                       example: "user@example.com"
- *                     phoneNumber:
+ *                       description: First name from cached BVN data
+ *                       example: "Chinedu"
+ *                     lastName:
  *                       type: string
- *                       description: Phone number from BVN (returned only if verificationType is 'phone')
- *                       example: "+2348012345678"
+ *                       description: Last name from cached BVN data
+ *                       example: "Okafor"
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       description: Date of birth from cached BVN data
+ *                       example: "1990-05-15"
+ *                     gender:
+ *                       type: string
+ *                       description: Gender from cached BVN data
+ *                       example: "Male"
  *                     otp:
  *                       type: string
  *                       description: Only included in non-production environments
@@ -365,20 +359,13 @@ router.post('/signup/nigerian/create-account', authRateLimiter, authController.c
  *                 data:
  *                   type: object
  *                   properties:
- *                     passportNumber:
+ *                     verificationToken:
  *                       type: string
- *                     firstName:
+ *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
+ *                       example: "xyz789abc123"
+ *                     message:
  *                       type: string
- *                     lastName:
- *                       type: string
- *                     email:
- *                       type: string
- *                     phoneNumber:
- *                       type: string
- *                     dateOfBirth:
- *                       type: string
- *                     nationality:
- *                       type: string
+ *                       example: "Passport verified successfully. Use the verification token to proceed."
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
