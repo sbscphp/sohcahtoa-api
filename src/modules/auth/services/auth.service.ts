@@ -17,6 +17,8 @@ import {
   validatePasswordStrength,
   emailService,
   createLogger,
+  redactSensitiveData,
+  partiallyRedactField,
 } from '../../../shared/utils';
 
 const logger = createLogger('AuthService');
@@ -222,13 +224,10 @@ export class AuthService {
 
   // STEP 1: Verify BVN and return extracted data for user preview
   async verifyBvnForSignup(bvn: string): Promise<{
-    bvn: string;
+    verificationToken: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phoneNumber: string;
     dateOfBirth: string;
-    address?: string;
     gender?: string;
   }> {
     // Verify BVN and extract all user data
@@ -242,8 +241,13 @@ export class AuthService {
     // The duplicate check will be done at account creation (step 4)
     // This allows users to verify their BVN multiple times if needed
 
-    // Return extracted data for user to preview and confirm
-    return {
+    // Generate a verification token to track this BVN verification session
+    const verificationToken = generateId();
+
+    // Store full BVN data in Redis with 30-minute expiry for later verification steps
+    // This keeps sensitive data server-side only
+    const cacheKey = `bvn:verification:${verificationToken}`;
+    const bvnData = {
       bvn,
       firstName: bvnResult.data.firstName,
       lastName: bvnResult.data.lastName,
@@ -253,16 +257,41 @@ export class AuthService {
       address: bvnResult.data.address,
       gender: bvnResult.data.gender,
     };
+    await redis.setex(cacheKey, 30 * 60, JSON.stringify(bvnData)); // 30 minutes
+
+    // Return only non-sensitive data to frontend
+    // Sensitive data (BVN, email, phone, address) are NOT returned
+    return {
+      verificationToken, // Client must send this token in subsequent steps
+      firstName: bvnResult.data.firstName,
+      lastName: bvnResult.data.lastName,
+      dateOfBirth: bvnResult.data.dateOfBirth,
+      gender: bvnResult.data.gender,
+    };
   }
 
   // STEP 2: Send OTP to user's chosen contact (email or phone)
   async sendBvnVerificationOtp(data: {
-    bvn: string;
+    verificationToken: string;
     verificationType: 'email' | 'phone';
-    email?: string;
-    phoneNumber?: string;
-  }): Promise<{ message: string; otp?: string }> {
-    const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
+  }): Promise<{ 
+    message: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    gender?: string;
+    otp?: string;
+  }> {
+    // Retrieve BVN data from cache using verification token
+    const cacheKey = `bvn:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('BVN verification session expired. Please verify your BVN again.');
+    }
+
+    const bvnData = JSON.parse(cachedData);
+    const contactValue = data.verificationType === 'email' ? bvnData.email : bvnData.phoneNumber;
 
     // Send OTP
     const otpResult = await this.sendOtp({
@@ -271,8 +300,21 @@ export class AuthService {
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    const response: { message: string; otp?: string } = {
+    // Return only non-sensitive data with names visible
+    // Redact email, phone, and other sensitive fields
+    const response: {
+      message: string;
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string;
+      gender?: string;
+      otp?: string;
+    } = {
       message: `OTP sent successfully to your ${data.verificationType}`,
+      firstName: bvnData.firstName,
+      lastName: bvnData.lastName,
+      dateOfBirth: bvnData.dateOfBirth,
+      gender: bvnData.gender,
     };
 
     // Include OTP in non-production environments
@@ -283,17 +325,70 @@ export class AuthService {
     return response;
   }
 
-  // STEP 4: After OTP verification, create account with user's password
-  async createNigerianAccount(data: {
-    bvn: string;
+  // STEP 3 (OTP Validation): Validate OTP and confirm user data
+  async validateBvnOtp(data: {
+    verificationToken: string;
+    email: string;
+    otp: string;
+  }): Promise<{ 
+    message: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phoneNumber: string;
     dateOfBirth: string;
-    address?: string;
+    gender?: string;
+  }> {
+    // Validate OTP first
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError('OTP validation failed');
+    }
+
+    // Retrieve BVN data from cache using verification token
+    const cacheKey = `bvn:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('BVN verification session expired. Please verify your BVN again.');
+    }
+
+    const bvnData = JSON.parse(cachedData);
+
+    // Return confirmed user data (only non-sensitive fields with names visible)
+    return {
+      message: 'OTP validated successfully. Please proceed to create your account.',
+      firstName: bvnData.firstName,
+      lastName: bvnData.lastName,
+      dateOfBirth: bvnData.dateOfBirth,
+      gender: bvnData.gender,
+    };
+  }
+
+  // STEP 4: After OTP verification, create account with user's password ONLY
+  async createNigerianAccount(data: {
+    verificationToken: string;
+    email: string;
     password: string;
   }): Promise<{ userId: string; message: string }> {
+    // Retrieve BVN data from cache using verification token
+    const cacheKey = `bvn:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('BVN verification session expired. Please verify your BVN again.');
+    }
+
+    const bvnData = JSON.parse(cachedData);
+
+    // Ensure email matches the verified email
+    if (bvnData.email !== data.email) {
+      throw new ValidationError('Email does not match the verified BVN data');
+    }
+
     // Validate password
     const passwordValidation = validatePasswordStrength(data.password);
     if (!passwordValidation.valid) {
@@ -303,7 +398,7 @@ export class AuthService {
     // Check for existing user by email or phone
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
+        OR: [{ email: bvnData.email }, { phoneNumber: bvnData.phoneNumber }],
       },
     });
 
@@ -313,7 +408,7 @@ export class AuthService {
 
     // Check for existing BVN (this is where the BVN duplicate check should happen)
     const existingKyc = await prisma.userKyc.findUnique({
-      where: { bvn: data.bvn },
+      where: { bvn: bvnData.bvn },
     });
 
     if (existingKyc) {
@@ -326,8 +421,8 @@ export class AuthService {
     // Create user with BVN data
     const user = await prisma.user.create({
       data: {
-        email: data.email,
-        phoneNumber: data.phoneNumber,
+        email: bvnData.email,
+        phoneNumber: bvnData.phoneNumber,
         role: UserRole.CUSTOMER,
         customerType: CustomerType.NIGERIAN_CITIZEN,
         emailVerified: true, // Already verified via OTP
@@ -338,16 +433,16 @@ export class AuthService {
         },
         profile: {
           create: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            dateOfBirth: new Date(data.dateOfBirth),
-            address: data.address,
+            firstName: bvnData.firstName,
+            lastName: bvnData.lastName,
+            dateOfBirth: new Date(bvnData.dateOfBirth),
+            address: bvnData.address,
           },
         },
         kyc: {
           create: {
             status: KycStatus.VERIFIED,
-            bvn: data.bvn,
+            bvn: bvnData.bvn,
             bvnVerified: true,
             verifiedAt: new Date(),
           },
@@ -355,9 +450,12 @@ export class AuthService {
       },
     });
 
+    // Delete the verification token from cache after successful account creation
+    await redis.del(cacheKey);
+
     // Send welcome email
     if (emailService.isReady()) {
-      await emailService.sendWelcomeEmail(data.email, data.firstName);
+      await emailService.sendWelcomeEmail(bvnData.email, bvnData.firstName);
     }
 
     // Publish event
@@ -368,9 +466,9 @@ export class AuthService {
       userId: user.id,
       data: {
         userId: user.id,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        email: bvnData.email,
+        firstName: bvnData.firstName,
+        lastName: bvnData.lastName,
       },
     });
 
@@ -380,14 +478,11 @@ export class AuthService {
     };
   }
 
-  // STEP 1: Verify passport and return extracted data for user preview
+  // STEP 1: Verify passport and return only verification token
   async verifyPassportForSignup(passportDocumentUrl: string): Promise<{
-    passportNumber: string;
-    passportDocumentUrl: string;
+    verificationToken: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phoneNumber: string;
     dateOfBirth: string;
     nationality: string;
   }> {
@@ -398,7 +493,8 @@ export class AuthService {
       throw new ValidationError(passportResult.message || 'Passport verification failed');
     }
 
-    // Check if user already exists with this passport
+    // Check if user already exists with this passport (at this stage, just for reference)
+    // The actual duplicate check will be done at account creation
     const existingKyc = await prisma.userKyc.findFirst({
       where: { passportNumber: passportResult.data.passportNumber },
     });
@@ -407,10 +503,15 @@ export class AuthService {
       throw new DuplicateError('An account with this passport already exists');
     }
 
-    // Return extracted data for user to preview and confirm
-    return {
+    // Generate a verification token to track this passport verification session
+    const verificationToken = generateId();
+
+    // Store full passport data in Redis with 30-minute expiry for later verification steps
+    // This keeps sensitive data server-side only
+    const cacheKey = `passport:verification:${verificationToken}`;
+    const passportData = {
       passportNumber: passportResult.data.passportNumber,
-      passportDocumentUrl: passportDocumentUrl,
+      passportDocumentUrl,
       firstName: passportResult.data.firstName,
       lastName: passportResult.data.lastName,
       email: passportResult.data.email!,
@@ -418,16 +519,41 @@ export class AuthService {
       dateOfBirth: passportResult.data.dateOfBirth,
       nationality: passportResult.data.nationality,
     };
+    await redis.setex(cacheKey, 30 * 60, JSON.stringify(passportData)); // 30 minutes
+
+    // Return only non-sensitive data to frontend
+    // Sensitive data (email, phone, passport number) are NOT returned
+    return {
+      verificationToken, // Client must send this token in subsequent steps
+      firstName: passportResult.data.firstName,
+      lastName: passportResult.data.lastName,
+      dateOfBirth: passportResult.data.dateOfBirth,
+      nationality: passportResult.data.nationality,
+    };
   }
 
   // STEP 2: Send OTP to user's chosen contact (email or phone)
   async sendPassportVerificationOtp(data: {
-    passportNumber: string;
+    verificationToken: string;
     verificationType: 'email' | 'phone';
-    email?: string;
-    phoneNumber?: string;
-  }): Promise<{ message: string; otp?: string }> {
-    const contactValue = data.verificationType === 'email' ? data.email! : data.phoneNumber!;
+  }): Promise<{
+    message: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    nationality: string;
+    otp?: string;
+  }> {
+    // Retrieve passport data from cache using verification token
+    const cacheKey = `passport:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('Passport verification session expired. Please verify your passport again.');
+    }
+
+    const passportData = JSON.parse(cachedData);
+    const contactValue = data.verificationType === 'email' ? passportData.email : passportData.phoneNumber;
 
     // Send OTP
     const otpResult = await this.sendOtp({
@@ -436,8 +562,21 @@ export class AuthService {
       purpose: OtpPurpose.REGISTRATION,
     });
 
-    const response: { message: string; otp?: string } = {
+    // Return only non-sensitive data with names visible
+    // Redact email, phone, and other sensitive fields
+    const response: {
+      message: string;
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string;
+      nationality: string;
+      otp?: string;
+    } = {
       message: `OTP sent successfully to your ${data.verificationType}`,
+      firstName: passportData.firstName,
+      lastName: passportData.lastName,
+      dateOfBirth: passportData.dateOfBirth,
+      nationality: passportData.nationality,
     };
 
     // Include OTP in non-production environments
@@ -448,18 +587,70 @@ export class AuthService {
     return response;
   }
 
-  // STEP 4: After OTP verification, create account with user's password
-  async createTouristAccount(data: {
-    passportNumber: string;
-    passportDocumentUrl: string;
+  // STEP 3 (OTP Validation): Validate OTP and confirm user data
+  async validatePassportOtp(data: {
+    verificationToken: string;
+    email: string;
+    otp: string;
+  }): Promise<{
+    message: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phoneNumber: string;
     dateOfBirth: string;
     nationality: string;
+  }> {
+    // Validate OTP first
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError('OTP validation failed');
+    }
+
+    // Retrieve passport data from cache using verification token
+    const cacheKey = `passport:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('Passport verification session expired. Please verify your passport again.');
+    }
+
+    const passportData = JSON.parse(cachedData);
+
+    // Return confirmed user data (only non-sensitive fields with names visible)
+    return {
+      message: 'OTP validated successfully. Please proceed to create your account.',
+      firstName: passportData.firstName,
+      lastName: passportData.lastName,
+      dateOfBirth: passportData.dateOfBirth,
+      nationality: passportData.nationality,
+    };
+  }
+
+  // STEP 4: After OTP verification, create account with user's password ONLY
+  async createTouristAccount(data: {
+    verificationToken: string;
+    email: string;
     password: string;
   }): Promise<{ userId: string; message: string }> {
+    // Retrieve passport data from cache using verification token
+    const cacheKey = `passport:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('Passport verification session expired. Please verify your passport again.');
+    }
+
+    const passportData = JSON.parse(cachedData);
+
+    // Ensure email matches the verified email
+    if (passportData.email !== data.email) {
+      throw new ValidationError('Email does not match the verified passport data');
+    }
+
     // Validate password
     const passwordValidation = validatePasswordStrength(data.password);
     if (!passwordValidation.valid) {
@@ -469,7 +660,7 @@ export class AuthService {
     // Check for existing user
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
+        OR: [{ email: passportData.email }, { phoneNumber: passportData.phoneNumber }],
       },
     });
 
@@ -483,8 +674,8 @@ export class AuthService {
     // Create user with passport data
     const user = await prisma.user.create({
       data: {
-        email: data.email,
-        phoneNumber: data.phoneNumber,
+        email: passportData.email,
+        phoneNumber: passportData.phoneNumber,
         role: UserRole.CUSTOMER,
         customerType: CustomerType.TOURIST,
         emailVerified: true, // Already verified via OTP
@@ -495,17 +686,17 @@ export class AuthService {
         },
         profile: {
           create: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            dateOfBirth: new Date(data.dateOfBirth),
-            country: data.nationality,
+            firstName: passportData.firstName,
+            lastName: passportData.lastName,
+            dateOfBirth: new Date(passportData.dateOfBirth),
+            country: passportData.nationality,
           },
         },
         kyc: {
           create: {
             status: KycStatus.VERIFIED,
-            passportNumber: data.passportNumber,
-            passportDocumentUrl: data.passportDocumentUrl,
+            passportNumber: passportData.passportNumber,
+            passportDocumentUrl: passportData.passportDocumentUrl,
             passportVerified: true,
             verifiedAt: new Date(),
           },
@@ -513,9 +704,12 @@ export class AuthService {
       },
     });
 
+    // Delete the verification token from cache after successful account creation
+    await redis.del(cacheKey);
+
     // Send welcome email
     if (emailService.isReady()) {
-      await emailService.sendWelcomeEmail(data.email, data.firstName);
+      await emailService.sendWelcomeEmail(passportData.email, passportData.firstName);
     }
 
     // Publish event
@@ -526,9 +720,9 @@ export class AuthService {
       userId: user.id,
       data: {
         userId: user.id,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        email: passportData.email,
+        firstName: passportData.firstName,
+        lastName: passportData.lastName,
       },
     });
 

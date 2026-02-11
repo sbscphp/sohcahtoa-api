@@ -82,6 +82,7 @@ router.post('/signup', authRateLimiter, authController.signup);
  * /api/auth/signup/nigerian/verify-bvn:
  *   post:
  *     summary: Step 1 - Verify Nigerian BVN for signup
+ *     description: Verifies BVN and returns a verification token. Sensitive data (BVN, email, phone, address) is stored server-side for security.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -94,10 +95,43 @@ router.post('/signup', authRateLimiter, authController.signup);
  *             properties:
  *               bvn:
  *                 type: string
+ *                 description: 11-digit BVN number
  *                 example: "12345678901"
  *     responses:
  *       200:
  *         description: BVN verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     verificationToken:
+ *                       type: string
+ *                       description: Token to use in subsequent steps (valid for 30 minutes)
+ *                       example: "abc123xyz789"
+ *                     firstName:
+ *                       type: string
+ *                       description: First name from BVN (for display only)
+ *                       example: "Chinedu"
+ *                     lastName:
+ *                       type: string
+ *                       description: Last name from BVN (for display only)
+ *                       example: "Okafor"
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       description: Date of birth from BVN (for display only)
+ *                       example: "1990-05-15"
+ *                     gender:
+ *                       type: string
+ *                       description: Gender from BVN (optional, for display only)
+ *                       example: "Male"
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -110,7 +144,7 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  * /api/auth/signup/nigerian/send-otp:
  *   post:
  *     summary: Step 2 - Send OTP for Nigerian signup
- *     description: Send OTP to phone or email for verification. Choose verification type based on preference.
+ *     description: Send OTP to phone or email for verification. The contact info is retrieved from the BVN verification session using the token and returned in the response.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -119,27 +153,18 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *           schema:
  *             type: object
  *             required:
- *               - bvn
+ *               - verificationToken
  *               - verificationType
  *             properties:
- *               bvn:
+ *               verificationToken:
  *                 type: string
- *                 description: BVN from step 1
- *                 example: "12345678901"
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Method to receive OTP (phone or email)
+ *                 description: Method to receive OTP (phone or email from BVN data)
  *                 example: phone
- *               phoneNumber:
- *                 type: string
- *                 description: Required if verificationType is 'phone'
- *                 example: "+2348012345678"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Required if verificationType is 'email'
- *                 example: user@example.com
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -157,10 +182,21 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *                     message:
  *                       type: string
  *                       example: OTP sent successfully to your phone
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                       description: Email from BVN (returned only if verificationType is 'email')
+ *                       example: "user@example.com"
+ *                     phoneNumber:
+ *                       type: string
+ *                       description: Phone number from BVN (returned only if verificationType is 'phone')
+ *                       example: "+2348012345678"
  *                     otp:
  *                       type: string
  *                       description: Only included in non-production environments
  *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
  *       429:
  *         description: Too many requests
  */
@@ -172,7 +208,7 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  * /api/auth/signup/nigerian/create-account:
  *   post:
  *     summary: Step 4 - Create Nigerian user account
- *     description: Create account after BVN verification and OTP validation. Include all BVN data from step 1.
+ *     description: Create account after BVN verification and OTP validation. All BVN data is retrieved server-side using the verification token.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -181,43 +217,13 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *           schema:
  *             type: object
  *             required:
- *               - bvn
- *               - firstName
- *               - lastName
- *               - email
- *               - phoneNumber
- *               - dateOfBirth
+ *               - verificationToken
  *               - password
  *             properties:
- *               bvn:
+ *               verificationToken:
  *                 type: string
- *                 description: BVN from step 1 verification
- *                 example: "12345678901"
- *               firstName:
- *                 type: string
- *                 description: First name from BVN verification
- *                 example: Chinedu
- *               lastName:
- *                 type: string
- *                 description: Last name from BVN verification
- *                 example: Okafor
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               phoneNumber:
- *                 type: string
- *                 description: Phone number verified in step 3
- *                 example: "+2348012345678"
- *               dateOfBirth:
- *                 type: string
- *                 format: date
- *                 description: Date of birth from BVN verification
- *                 example: "1990-05-15"
- *               address:
- *                 type: string
- *                 description: Optional address from BVN verification
- *                 example: "123 Lagos Street, Victoria Island"
+ *                 description: Verification token from step 1 (contains all BVN data server-side)
+ *                 example: "abc123xyz789"
  *               password:
  *                 type: string
  *                 format: password
@@ -240,10 +246,12 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *                   properties:
  *                     userId:
  *                       type: string
+ *                       example: "user_abc123"
  *                     message:
  *                       type: string
+ *                       example: "Account created successfully. You can now login with your email and password."
  *       400:
- *         $ref: '#/components/responses/ValidationError'
+ *         description: Invalid or expired verification token, or validation error
  *       429:
  *         description: Too many requests
  */
@@ -674,16 +682,15 @@ router.post('/logout', authenticate, authController.logout);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post('/kyc/verify', authenticate, authController.verifyKyc);
+router.post('/kyc/verify', authController.verifyKyc);
 
 /**
  * @swagger
  * /api/auth/kyc/passport/upload:
  *   post:
  *     summary: Upload passport for verification
+ *     description: Public endpoint for tourists to upload passport during signup (Step 1). No authentication required.
  *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -697,10 +704,28 @@ router.post('/kyc/verify', authenticate, authController.verifyKyc);
  *     responses:
  *       200:
  *         description: Passport uploaded successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     passportDocumentUrl:
+ *                       type: string
+ *                       format: uri
+ *                       description: URL of the uploaded passport to use in verify-passport endpoint
+ *                       example: "https://cloudinary.com/passport/abc123.jpg"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many requests
  */
-router.post('/kyc/passport/upload', authenticate, authController.uploadPassport);
+router.post('/kyc/passport/upload', authRateLimiter, authController.uploadPassport);
 
 /**
  * @swagger

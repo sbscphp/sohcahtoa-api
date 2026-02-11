@@ -178,17 +178,18 @@ export class AuthController {
     }
   }
 
-  async uploadPassport(req: AuthRequest, res: Response, next: NextFunction) {
+  async uploadPassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = req.user?.userId;
-      if (!userId) {
-        throw new Error('User ID not found');
-      }
       const { passportDocumentUrl } = req.body;
       if (!passportDocumentUrl) {
         throw new Error('Passport document URL is required');
       }
-      const result = await passportService.uploadPassportForVerification({ userId, passportDocumentUrl });
+      // For tourist signup, this is a public endpoint that just returns the URL
+      // The actual verification happens in the verify-passport step
+      const result = {
+        passportDocumentUrl,
+        message: 'Passport uploaded successfully. Use this URL in the verify-passport endpoint.',
+      };
       res.json(successResponse(result));
     } catch (error) {
       next(error);
