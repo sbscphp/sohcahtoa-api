@@ -429,6 +429,7 @@ model Department {
 
   users           AdminUser[]
   actions         AdminAction[]
+  roles           Role[]
 
   @@map("departments")
 }
@@ -446,6 +447,8 @@ model Franchise {
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  branches           Branch[]
 
   @@index([name])
   @@index([status])
@@ -472,6 +475,7 @@ model Branch {
 
   franchise         Franchise? @relation(fields: [franchiseId], references: [id])
 
+  @@index([franchiseId])
   @@index([name])
   @@index([status])
   @@map("branches")
