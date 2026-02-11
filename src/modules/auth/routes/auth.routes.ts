@@ -201,14 +201,13 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *         description: Too many requests
  */
 router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvnOtp); // Step 2
-// Step 3: Use existing /otp/validate endpoint
 
 /**
  * @swagger
- * /api/auth/signup/nigerian/create-account:
+ * /api/auth/signup/nigerian/validate-otp:
  *   post:
- *     summary: Step 4 - Create Nigerian user account
- *     description: Create account after BVN verification and OTP validation. All BVN data is retrieved server-side using the verification token.
+ *     summary: Step 3 - Validate OTP for Nigerian signup
+ *     description: Validate the OTP sent to email or phone. Returns confirmed user data after successful validation.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -218,17 +217,91 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *             type: object
  *             required:
  *               - verificationToken
+ *               - email
+ *               - otp
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email used for OTP verification (should match verified BVN email)
+ *                 example: "user@example.com"
+ *               otp:
+ *                 type: string
+ *                 description: OTP received via email or phone
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "OTP validated successfully. Please proceed to create your account."
+ *                     firstName:
+ *                       type: string
+ *                       example: "Chinedu"
+ *                     lastName:
+ *                       type: string
+ *                       example: "Okafor"
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       example: "1990-05-15"
+ *                     gender:
+ *                       type: string
+ *                       example: "Male"
+ *       400:
+ *         description: Invalid OTP or verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/nigerian/validate-otp', authRateLimiter, authController.validateBvnOtp); // Step 3
+
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/create-account:
+ *   post:
+ *     summary: Step 4 - Create Nigerian user account with password only
+ *     description: Create account after BVN verification and OTP validation. Only password is required from the user - all other information is retrieved server-side using the verification token for security.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - email
  *               - password
  *             properties:
  *               verificationToken:
  *                 type: string
  *                 description: Verification token from step 1 (contains all BVN data server-side)
  *                 example: "abc123xyz789"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email from BVN verification (must match verified email)
+ *                 example: "user@example.com"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
- *                 description: User's chosen password
+ *                 description: User's chosen password. Other user information (name, DOB, phone, address) comes from BVN data already stored in backend.
  *                 example: SecurePass123!
  *     responses:
  *       201:
@@ -318,7 +391,7 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  * /api/auth/signup/tourist/send-otp:
  *   post:
  *     summary: Step 2 - Send OTP for tourist signup
- *     description: Send OTP to phone or email for verification. Choose verification type based on preference.
+ *     description: Send OTP to phone or email for verification. The contact info is retrieved from the passport verification session using the token.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -327,27 +400,18 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  *           schema:
  *             type: object
  *             required:
- *               - passportNumber
+ *               - verificationToken
  *               - verificationType
  *             properties:
- *               passportNumber:
+ *               verificationToken:
  *                 type: string
- *                 description: Passport number from step 1
- *                 example: "A12345678"
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Method to receive OTP (phone or email)
+ *                 description: Method to receive OTP (phone or email from passport data)
  *                 example: phone
- *               phoneNumber:
- *                 type: string
- *                 description: Required if verificationType is 'phone'
- *                 example: "+447123456789"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Required if verificationType is 'email'
- *                 example: tourist@example.com
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -365,6 +429,19 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  *                     message:
  *                       type: string
  *                       example: OTP sent successfully to your phone
+ *                     firstName:
+ *                       type: string
+ *                       example: John
+ *                     lastName:
+ *                       type: string
+ *                       example: Smith
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       example: "1985-03-15"
+ *                     nationality:
+ *                       type: string
+ *                       example: "United Kingdom"
  *                     otp:
  *                       type: string
  *                       description: Only included in non-production environments
@@ -373,14 +450,13 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  *         description: Too many requests
  */
 router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPassportOtp); // Step 2
-// Step 3: Use existing /otp/validate endpoint
 
 /**
  * @swagger
- * /api/auth/signup/tourist/create-account:
+ * /api/auth/signup/tourist/validate-otp:
  *   post:
- *     summary: Step 4 - Create tourist user account
- *     description: Create account after passport verification and OTP validation. Include all passport data from step 1.
+ *     summary: Step 3 - Validate OTP for tourist signup
+ *     description: Validate the OTP sent to email or phone. Returns confirmed user data after successful validation.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -389,55 +465,92 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  *           schema:
  *             type: object
  *             required:
- *               - passportNumber
- *               - passportDocumentUrl
- *               - firstName
- *               - lastName
+ *               - verificationToken
  *               - email
- *               - phoneNumber
- *               - dateOfBirth
- *               - nationality
- *               - password
+ *               - otp
  *             properties:
- *               passportNumber:
+ *               verificationToken:
  *                 type: string
- *                 description: Passport number from step 1 verification
- *                 example: "A12345678"
- *               passportDocumentUrl:
- *                 type: string
- *                 format: uri
- *                 description: Passport document URL from step 1
- *                 example: "https://cloudinary.com/passport/abc123.jpg"
- *               firstName:
- *                 type: string
- *                 description: First name from passport verification
- *                 example: John
- *               lastName:
- *                 type: string
- *                 description: Last name from passport verification
- *                 example: Smith
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
  *               email:
  *                 type: string
  *                 format: email
- *                 example: tourist@example.com
- *               phoneNumber:
+ *                 description: Email used for OTP verification (should match verified passport email)
+ *                 example: "john.smith@example.com"
+ *               otp:
  *                 type: string
- *                 description: Phone number verified in step 3
- *                 example: "+447123456789"
- *               dateOfBirth:
+ *                 description: OTP received via email or phone
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "OTP validated successfully. Please proceed to create your account."
+ *                     firstName:
+ *                       type: string
+ *                       example: John
+ *                     lastName:
+ *                       type: string
+ *                       example: Smith
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       example: "1985-03-15"
+ *                     nationality:
+ *                       type: string
+ *                       example: "United Kingdom"
+ *       400:
+ *         description: Invalid OTP or verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/tourist/validate-otp', authRateLimiter, authController.validatePassportOtp); // Step 3
+
+/**
+ * @swagger
+ * /api/auth/signup/tourist/create-account:
+ *   post:
+ *     summary: Step 4 - Create tourist user account with password only
+ *     description: Create account after passport verification and OTP validation. Only password and email are required from the user - all other information is retrieved server-side using the verification token for security.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - email
+ *               - password
+ *             properties:
+ *               verificationToken:
  *                 type: string
- *                 format: date
- *                 description: Date of birth from passport verification
- *                 example: "1985-03-15"
- *               nationality:
+ *                 description: Verification token from step 1 (contains all passport data server-side)
+ *                 example: "abc123xyz789"
+ *               email:
  *                 type: string
- *                 description: Nationality from passport
- *                 example: "United Kingdom"
+ *                 format: email
+ *                 description: Email from passport verification (must match verified email)
+ *                 example: "john.smith@example.com"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
- *                 description: User's chosen password
+ *                 description: User's chosen password. Other user information (name, DOB, nationality, phone, passport) comes from passport data already stored in backend.
  *                 example: SecurePass123!
  *     responses:
  *       201:
@@ -455,10 +568,12 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  *                   properties:
  *                     userId:
  *                       type: string
+ *                       example: "user_abc123"
  *                     message:
  *                       type: string
+ *                       example: "Account created successfully. You can now login with your email and password."
  *       400:
- *         $ref: '#/components/responses/ValidationError'
+ *         description: Invalid or expired verification token, or validation error
  *       429:
  *         description: Too many requests
  */

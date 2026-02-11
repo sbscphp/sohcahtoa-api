@@ -49,7 +49,18 @@ export class AuthController {
     }
   }
 
-  // Nigerian Flow - Step 4: Create account with password
+  // Nigerian Flow - Step 3: Validate OTP and confirm user data
+  async validateBvnOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.validateBvnOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Nigerian Flow - Step 4: Create account with password ONLY
   async createNigerianAccount(req: Request, res: Response, next: NextFunction) {
     try {
       const data = req.body;
@@ -85,7 +96,18 @@ export class AuthController {
     }
   }
 
-  // Tourist Flow - Step 4: Create account with password
+  // Tourist Flow - Step 3: Validate OTP and confirm user data
+  async validatePassportOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.validatePassportOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Tourist Flow - Step 4: Create account with password ONLY
   async createTouristAccount(req: Request, res: Response, next: NextFunction) {
     try {
       const data = req.body;
