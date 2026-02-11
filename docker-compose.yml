@@ -57,7 +57,7 @@ services:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/sochatoa_db?schema=public
 
       # Redis Configuration
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://104.45.229.69:6379
 
       # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
@@ -66,12 +66,15 @@ services:
       JWT_REFRESH_EXPIRY: 7d
 
       # SMTP Configuration (Optional - configure for email sending)
-      # SMTP_HOST: smtp.gmail.com
-      # SMTP_PORT: 587
-      # SMTP_SECURE: false
-      # SMTP_USER: your-email@gmail.com
-      # SMTP_PASSWORD: your-app-password
-      # SMTP_FROM: noreply@sochatoa.com
+      SMTP_USER: sbscproject2@gmail.com
+      # sbscproject2@gmail.com
+      SMTP_PASSWORD: dzbrzbgsxirzjrzj
+      # dzbrzbgsxirzjrzj
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_SECURE: false
+      SMTP_FROM: sbscproject2@gmail.com
+      SMTP_PASS: true
 
       # API Configuration
       CORS_ORIGIN: "*"
