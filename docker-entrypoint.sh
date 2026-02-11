@@ -9,21 +9,44 @@ echo "=========================================="
 echo "Sochatoa API - Starting..."
 echo "=========================================="
 
-# Wait for PostgreSQL to be ready
-echo "⏳ Waiting for PostgreSQL to be ready..."
-until node -e "
-  const { Client } = require('pg');
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
-  client.connect()
-    .then(() => client.end())
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
-"; do
-  echo "⏳ PostgreSQL is unavailable - sleeping"
+# Extract database host and port from DATABASE_URL
+# Format: postgresql://user:password@host:port/database
+DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:\/]*\).*/\1/p')
+DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+
+# Default to standard PostgreSQL port if not found
+if [ -z "$DB_PORT" ]; then
+  DB_PORT=5432
+fi
+
+echo "⏳ Waiting for PostgreSQL at $DB_HOST:$DB_PORT..."
+
+# Wait for PostgreSQL to be ready using nc (netcat)
+max_attempts=30
+attempt=0
+
+while [ $attempt -lt $max_attempts ]; do
+  if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
+    echo "✅ PostgreSQL is ready!"
+    break
+  fi
+
+  attempt=$((attempt + 1))
+  echo "⏳ PostgreSQL is unavailable - sleeping (attempt $attempt/$max_attempts)"
   sleep 2
 done
 
-echo "✅ PostgreSQL is ready!"
+if [ $attempt -eq $max_attempts ]; then
+  echo "❌ PostgreSQL did not become ready in time"
+  exit 1
+fi
+
+echo ""
+
+# Generate Prisma Client (in case it's not already generated)
+echo "🔧 Generating Prisma Client..."
+npx prisma generate
+echo "✅ Prisma Client generated"
 echo ""
 
 # Run Prisma migrations
