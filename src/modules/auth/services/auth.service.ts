@@ -328,26 +328,14 @@ export class AuthService {
   // STEP 3 (OTP Validation): Validate OTP and confirm user data
   async validateBvnOtp(data: {
     verificationToken: string;
-    email: string;
     otp: string;
-  }): Promise<{ 
+  }): Promise<{
     message: string;
     firstName: string;
     lastName: string;
     dateOfBirth: string;
     gender?: string;
   }> {
-    // Validate OTP first
-    const otpValidation = await this.validateOtp({
-      email: data.email,
-      otp: data.otp,
-      purpose: OtpPurpose.REGISTRATION,
-    });
-
-    if (!otpValidation.valid) {
-      throw new ValidationError('OTP validation failed');
-    }
-
     // Retrieve BVN data from cache using verification token
     const cacheKey = `bvn:verification:${data.verificationToken}`;
     const cachedData = await redis.get(cacheKey);
@@ -357,6 +345,17 @@ export class AuthService {
     }
 
     const bvnData = JSON.parse(cachedData);
+
+    // Validate OTP using the email from BVN data
+    const otpValidation = await this.validateOtp({
+      email: bvnData.email,
+      otp: data.otp,
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError('OTP validation failed');
+    }
 
     // Return confirmed user data (only non-sensitive fields with names visible)
     return {
@@ -371,7 +370,6 @@ export class AuthService {
   // STEP 4: After OTP verification, create account with user's password ONLY
   async createNigerianAccount(data: {
     verificationToken: string;
-    email: string;
     password: string;
   }): Promise<{ userId: string; message: string }> {
     // Retrieve BVN data from cache using verification token
@@ -383,11 +381,6 @@ export class AuthService {
     }
 
     const bvnData = JSON.parse(cachedData);
-
-    // Ensure email matches the verified email
-    if (bvnData.email !== data.email) {
-      throw new ValidationError('Email does not match the verified BVN data');
-    }
 
     // Validate password
     const passwordValidation = validatePasswordStrength(data.password);
@@ -590,7 +583,6 @@ export class AuthService {
   // STEP 3 (OTP Validation): Validate OTP and confirm user data
   async validatePassportOtp(data: {
     verificationToken: string;
-    email: string;
     otp: string;
   }): Promise<{
     message: string;
@@ -599,17 +591,6 @@ export class AuthService {
     dateOfBirth: string;
     nationality: string;
   }> {
-    // Validate OTP first
-    const otpValidation = await this.validateOtp({
-      email: data.email,
-      otp: data.otp,
-      purpose: OtpPurpose.REGISTRATION,
-    });
-
-    if (!otpValidation.valid) {
-      throw new ValidationError('OTP validation failed');
-    }
-
     // Retrieve passport data from cache using verification token
     const cacheKey = `passport:verification:${data.verificationToken}`;
     const cachedData = await redis.get(cacheKey);
@@ -619,6 +600,17 @@ export class AuthService {
     }
 
     const passportData = JSON.parse(cachedData);
+
+    // Validate OTP using the email from passport data
+    const otpValidation = await this.validateOtp({
+      email: passportData.email,
+      otp: data.otp,
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError('OTP validation failed');
+    }
 
     // Return confirmed user data (only non-sensitive fields with names visible)
     return {
@@ -633,7 +625,6 @@ export class AuthService {
   // STEP 4: After OTP verification, create account with user's password ONLY
   async createTouristAccount(data: {
     verificationToken: string;
-    email: string;
     password: string;
   }): Promise<{ userId: string; message: string }> {
     // Retrieve passport data from cache using verification token
@@ -645,11 +636,6 @@ export class AuthService {
     }
 
     const passportData = JSON.parse(cachedData);
-
-    // Ensure email matches the verified email
-    if (passportData.email !== data.email) {
-      throw new ValidationError('Email does not match the verified passport data');
-    }
 
     // Validate password
     const passwordValidation = validatePasswordStrength(data.password);

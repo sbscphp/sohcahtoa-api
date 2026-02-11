@@ -201,7 +201,7 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  * /api/auth/signup/nigerian/validate-otp:
  *   post:
  *     summary: Step 3 - Validate OTP for Nigerian signup
- *     description: Validate the OTP sent to email or phone. Returns confirmed user data after successful validation.
+ *     description: Validate the OTP sent to email or phone. Email is retrieved from the verification token stored server-side. Returns confirmed user data after successful validation.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -211,18 +211,12 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *             type: object
  *             required:
  *               - verificationToken
- *               - email
  *               - otp
  *             properties:
  *               verificationToken:
  *                 type: string
- *                 description: Verification token from step 1
+ *                 description: Verification token from step 1 (contains email server-side)
  *                 example: "abc123xyz789"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Email used for OTP verification (should match verified BVN email)
- *                 example: "user@example.com"
  *               otp:
  *                 type: string
  *                 description: OTP received via email or phone
@@ -269,7 +263,7 @@ router.post('/signup/nigerian/validate-otp', authRateLimiter, authController.val
  * /api/auth/signup/nigerian/create-account:
  *   post:
  *     summary: Step 4 - Create Nigerian user account with password only
- *     description: Create account after BVN verification and OTP validation. Only password is required from the user - all other information is retrieved server-side using the verification token for security.
+ *     description: Create account after BVN verification and OTP validation. Only password and verification token are required - all user information (email, name, DOB, phone, address) is retrieved server-side from the verification token for security.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -279,23 +273,17 @@ router.post('/signup/nigerian/validate-otp', authRateLimiter, authController.val
  *             type: object
  *             required:
  *               - verificationToken
- *               - email
  *               - password
  *             properties:
  *               verificationToken:
  *                 type: string
- *                 description: Verification token from step 1 (contains all BVN data server-side)
+ *                 description: Verification token from step 1 (contains all BVN data server-side including email)
  *                 example: "abc123xyz789"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Email from BVN verification (must match verified email)
- *                 example: "user@example.com"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
- *                 description: User's chosen password. Other user information (name, DOB, phone, address) comes from BVN data already stored in backend.
+ *                 description: User's chosen password. All other information (email, name, DOB, phone, address) comes from BVN data stored server-side.
  *                 example: SecurePass123!
  *     responses:
  *       201:
@@ -443,7 +431,7 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  * /api/auth/signup/tourist/validate-otp:
  *   post:
  *     summary: Step 3 - Validate OTP for tourist signup
- *     description: Validate the OTP sent to email or phone. Returns confirmed user data after successful validation.
+ *     description: Validate the OTP sent to email or phone. Email is retrieved from the verification token stored server-side. Returns confirmed user data after successful validation.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -453,18 +441,12 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  *             type: object
  *             required:
  *               - verificationToken
- *               - email
  *               - otp
  *             properties:
  *               verificationToken:
  *                 type: string
- *                 description: Verification token from step 1
+ *                 description: Verification token from step 1 (contains email server-side)
  *                 example: "abc123xyz789"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Email used for OTP verification (should match verified passport email)
- *                 example: "john.smith@example.com"
  *               otp:
  *                 type: string
  *                 description: OTP received via email or phone
@@ -511,7 +493,7 @@ router.post('/signup/tourist/validate-otp', authRateLimiter, authController.vali
  * /api/auth/signup/tourist/create-account:
  *   post:
  *     summary: Step 4 - Create tourist user account with password only
- *     description: Create account after passport verification and OTP validation. Only password and email are required from the user - all other information is retrieved server-side using the verification token for security.
+ *     description: Create account after passport verification and OTP validation. Only password and verification token are required - all user information (email, name, DOB, nationality, phone, passport) is retrieved server-side from the verification token for security.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -521,23 +503,17 @@ router.post('/signup/tourist/validate-otp', authRateLimiter, authController.vali
  *             type: object
  *             required:
  *               - verificationToken
- *               - email
  *               - password
  *             properties:
  *               verificationToken:
  *                 type: string
- *                 description: Verification token from step 1 (contains all passport data server-side)
+ *                 description: Verification token from step 1 (contains all passport data server-side including email)
  *                 example: "abc123xyz789"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Email from passport verification (must match verified email)
- *                 example: "john.smith@example.com"
  *               password:
  *                 type: string
  *                 format: password
  *                 minLength: 8
- *                 description: User's chosen password. Other user information (name, DOB, nationality, phone, passport) comes from passport data already stored in backend.
+ *                 description: User's chosen password. All other information (email, name, DOB, nationality, phone, passport) comes from passport data stored server-side.
  *                 example: SecurePass123!
  *     responses:
  *       201:
