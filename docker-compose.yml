@@ -2,6 +2,7 @@ services:
   # PostgreSQL - Single unified database
   postgres:
     image: postgres:15-alpine
+    container_name: sochatoa-postgres
     environment:
       POSTGRES_DB: sochatoa_db
       POSTGRES_USER: postgres
@@ -17,10 +18,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   # Redis - Caching and session storage
   redis:
     image: redis:7-alpine
+    container_name: sochatoa-redis
     ports:
       - "6379:6379"
     volumes:
@@ -33,12 +36,14 @@ services:
       timeout: 5s
       retries: 5
     command: redis-server --appendonly yes
+    restart: unless-stopped
 
   # Sochatoa API Monolith
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: sochatoa-api
     ports:
       - "3000:3000"
     environment:
@@ -53,8 +58,6 @@ services:
 
       # Redis Configuration
       REDIS_URL: redis://redis:6379
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
 
       # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
@@ -72,7 +75,7 @@ services:
 
       # API Configuration
       CORS_ORIGIN: "*"
-      API_BASE_URL: http://104.45.229.69:3000
+      API_BASE_URL: http://localhost:3000
       API_BASE_PATH: ""
 
       # SMS Configuration (Optional - Termii)
