@@ -129,7 +129,10 @@ class AdminAuthService {
   }
 
   async verifyLogin(email: string, otp: string) {
-    const user = await this.prisma.adminUser.findUnique({ where: { email } });
+    const user = await this.prisma.adminUser.findUnique({
+      where: { email },
+      include: { role: true }
+    });
     if (!user) throw new NotFoundError("User not found");
 
     const tokenRecord = await this.prisma.token.findFirst({
@@ -155,7 +158,7 @@ class AdminAuthService {
     const tokenPayload = {
       userId: user.id,
       email: user.email,
-      role: user.role as UserRole,
+      role: UserRole.ADMIN, // Admin users always have ADMIN role
       sessionId,
     };
 

@@ -17,9 +17,20 @@ export const createRateLimiter = (windowMs: number = 15 * 60 * 1000, max: number
   });
 };
 
-export const authRateLimiter = createRateLimiter(15 * 60 * 1000, 5); // 5 requests per 15 minutes
-export const apiRateLimiter = createRateLimiter(15 * 60 * 1000, 100); // 100 requests per 15 minutes
-export const strictRateLimiter = createRateLimiter(60 * 1000, 10); // 10 requests per minute
+// Environment-aware rate limiting: more relaxed limits for development
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+export const authRateLimiter = isDevelopment
+  ? createRateLimiter(1 * 60 * 1000, 50) // Dev: 50 requests per 1 minute
+  : createRateLimiter(15 * 60 * 1000, 5); // Prod: 5 requests per 15 minutes
+
+export const apiRateLimiter = isDevelopment
+  ? createRateLimiter(1 * 60 * 1000, 500) // Dev: 500 requests per 1 minute
+  : createRateLimiter(15 * 60 * 1000, 100); // Prod: 100 requests per 15 minutes
+
+export const strictRateLimiter = isDevelopment
+  ? createRateLimiter(1 * 60 * 1000, 30) // Dev: 30 requests per 1 minute
+  : createRateLimiter(60 * 1000, 10); // Prod: 10 requests per minute
 
 export class RedisRateLimiter {
   private redis: Redis;

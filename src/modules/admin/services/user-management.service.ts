@@ -173,8 +173,12 @@ class UserManagementService {
 
             return await this.prisma.role.create({
                 data: {
-                    ...data,
+                    name: data.name,
+                    description: data.description,
                     permissions: data.permissions ? (data.permissions as any) : [],
+                    branch: data.branch,
+                    departmentId: data.department,
+                    isDefault: data.isDefault,
                 },
             });
         } catch (error) {
