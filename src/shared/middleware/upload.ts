@@ -1,73 +1,151 @@
-import multer from "multer";
-import { Request, Response, NextFunction } from "express";
+import multer from 'multer';
+import { Request } from 'express';
+import { ValidationError } from '../utils';
 
-const ALLOWED_MIME_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-];
+// Configure multer to use memory storage
+const storage = multer.memoryStorage();
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 200 * 1024, // 200KB
-  },
-  fileFilter: (req, file, cb) => {
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      cb(
-        new Error(
-          "Only PDF, JPG, JPEG, and PNG files are allowed"
-        )
-      );
-    } else {
-      cb(null, true);
-    }
-  },
-});
+// File filter for images and PDFs
+const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+  ];
 
-export const uploadAttachment = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  upload.single("attachment")(req, res, (err) => {
-    if (!err) return next();
-
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return next(new Error("File exceeds 200KB limit"));
-      }
-    }
-
-    return next(err);
-  });
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new ValidationError(`Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`));
+  }
 };
 
-export const uploadAgentAttachment = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const agentUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-    fileFilter: (req, file, cb) => {
-      const allowed = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
-      if (!allowed.includes(file.mimetype)) {
-        cb(new Error("Only PDF, JPG, JPEG, and PNG files are allowed"));
-      } else {
-        cb(null, true);
-      }
+// File filter for documents (broader set)
+const documentFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
+
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new ValidationError(`Invalid file type. Allowed types: JPEG, PNG, WEBP, PDF, DOC, DOCX`));
+  }
+};
+
+/**
+ * Upload middleware for single image/PDF files (passports, IDs, etc.)
+ * Max size: 5MB
+ */
+export const uploadSingleImage = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+}).single('file');
+
+/**
+ * Upload middleware for passport documents
+ * Max size: 5MB
+ */
+export const uploadPassport = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+}).single('passport');
+
+/**
+ * Upload middleware for multiple documents
+ * Max files: 5
+ * Max size per file: 5MB
+ */
+export const uploadMultipleDocuments = multer({
+  storage,
+  fileFilter: documentFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB per file
+    files: 5, // Max 5 files
+  },
+}).array('documents', 5);
+
+/**
+ * Upload middleware for single document
+ * Max size: 10MB
+ */
+export const uploadSingleDocument = multer({
+  storage,
+  fileFilter: documentFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+}).single('document');
+
+/**
+ * Upload middleware for proof of payment
+ * Max size: 5MB
+ */
+export const uploadProofOfPayment = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+}).single('proofOfPayment');
+
+/**
+ * Generic upload middleware with custom options
+ */
+export const createUploadMiddleware = (options: {
+  fieldName: string;
+  maxSize?: number;
+  allowedMimeTypes?: string[];
+  multiple?: boolean;
+  maxFiles?: number;
+}) => {
+  const {
+    fieldName,
+    maxSize = 5 * 1024 * 1024,
+    allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'],
+    multiple = false,
+    maxFiles = 5,
+  } = options;
+
+  const customFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new ValidationError(`Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`));
+    }
+  };
+
+  const upload = multer({
+    storage,
+    fileFilter: customFilter,
+    limits: {
+      fileSize: maxSize,
+      files: multiple ? maxFiles : 1,
     },
   });
-  agentUpload.single("attachment")(req, res, (err) => {
-    if (!err) return next();
-    if (err instanceof multer.MulterError) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return next(new Error("File exceeds 2MB limit"));
-      }
-    }
-    return next(err);
-  });
+
+  return multiple ? upload.array(fieldName, maxFiles) : upload.single(fieldName);
+};
+
+export default {
+  uploadSingleImage,
+  uploadPassport,
+  uploadMultipleDocuments,
+  uploadSingleDocument,
+  uploadProofOfPayment,
+  createUploadMiddleware,
 };
