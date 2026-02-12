@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import authService from '../services/auth.service';
 import passportService from '../services/passport.service';
-import { successResponse } from '../../../shared/utils';
+import { successResponse, uploadToCloudinary, ValidationError } from '../../../shared/utils';
 import {
   SignupRequest,
   LoginRequest,
@@ -202,16 +202,35 @@ export class AuthController {
 
   async uploadPassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl } = req.body;
-      if (!passportDocumentUrl) {
-        throw new Error('Passport document URL is required');
+      // Check if file was uploaded
+      const file = req.file;
+
+      if (!file) {
+        throw new ValidationError('Passport file is required');
       }
-      // For tourist signup, this is a public endpoint that just returns the URL
-      // The actual verification happens in the verify-passport step
+
+      // Validate file type
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new ValidationError('Invalid file type. Allowed types: JPEG, PNG, PDF');
+      }
+
+      // Upload to Cloudinary
+      const uploadResult = await uploadToCloudinary(file.buffer, {
+        folder: 'passports',
+        resourceType: 'auto',
+        allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],
+        maxFileSize: 5 * 1024 * 1024, // 5MB
+      });
+
       const result = {
-        passportDocumentUrl,
+        passportDocumentUrl: uploadResult.secureUrl,
+        publicId: uploadResult.publicId,
+        format: uploadResult.format,
+        size: uploadResult.bytes,
         message: 'Passport uploaded successfully. Use this URL in the verify-passport endpoint.',
       };
+
       res.json(successResponse(result));
     } catch (error) {
       next(error);

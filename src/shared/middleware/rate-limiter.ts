@@ -1,11 +1,8 @@
 import rateLimit from 'express-rate-limit';
 import Redis from 'ioredis';
+import { getRedis } from '../../config/redis';
 
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD,
-});
+const redis = getRedis();
 
 export const createRateLimiter = (windowMs: number = 15 * 60 * 1000, max: number = 100) => {
   return rateLimit({

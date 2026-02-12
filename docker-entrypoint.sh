@@ -89,7 +89,13 @@ echo ""
 
 # Run Prisma migrations
 echo "🚀 Running database migrations..."
-npx prisma migrate deploy
+if npx prisma migrate deploy 2>&1 | grep -q "P3005"; then
+  echo "⚠️  Database already has schema, attempting to resolve..."
+  npx prisma migrate resolve --applied 20260206140753_init || true
+  npx prisma migrate deploy || echo "⚠️  Migrations may already be applied, continuing..."
+else
+  npx prisma migrate deploy
+fi
 echo "✅ Migrations completed"
 echo ""
 

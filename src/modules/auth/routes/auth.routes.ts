@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import authController from '../controllers/auth.controller';
-import { authenticate, authRateLimiter } from '../../../shared/middleware';
+import { authenticate, authRateLimiter, uploadPassport } from '../../../shared/middleware';
 
 const router: Router = Router();
 
@@ -803,7 +803,7 @@ router.post('/kyc/verify', authController.verifyKyc);
  *       429:
  *         description: Too many requests
  */
-router.post('/kyc/passport/upload', authRateLimiter, authController.uploadPassport);
+router.post('/kyc/passport/upload', authRateLimiter, uploadPassport, authController.uploadPassport);
 
 /**
  * @swagger

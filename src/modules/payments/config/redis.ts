@@ -1,5 +1,4 @@
-import Redis from 'ioredis';
-export default new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-});
+import { getRedis } from '../../../config/redis';
+
+// Re-export the centralized Redis client
+export default getRedis();

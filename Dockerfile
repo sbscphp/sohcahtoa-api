@@ -47,13 +47,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+# Copy entrypoint script and make it executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Create non-root user
-RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
-USER appuser
 
 # Expose port
 EXPOSE 3000
