@@ -86,7 +86,12 @@ services:
       # TERMII_SENDER_ID: Sochatoa
 
       # Cloudinary Configuration (Optional - for document uploads)
-      # CLOUDINARY_CLOUD_NAME: your-cloud-name
+      
+      CLOUDINARY_API_KEY: 348432696833351
+      CLOUDINARY_API_SECRET: lfIsuQFDy3uBPoyuLSHTlnd_SyA
+      CLOUDINARY_CLOUD_NAME: dlcenmo5x
+      CLOUDINARY_URL: cloudinary://348432696833351:lfIsuQFDy3uBPoyuLSHTlnd_SyA@dlcenmo5x
+
       # CLOUDINARY_API_KEY: your-api-key
       # CLOUDINARY_API_SECRET: your-api-secret
 
