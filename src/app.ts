@@ -30,8 +30,9 @@ export const createApp = async (): Promise<Application> => {
     })
   );
   app.use(cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-    credentials: true,
+    origin: '*',
+    // origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
+    // credentials: true,
   }));
 
   // Body parsing middleware
