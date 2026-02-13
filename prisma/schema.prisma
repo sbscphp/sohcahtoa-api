@@ -140,14 +140,21 @@ enum DocumentType {
   PASSPORT
   VISA
   TICKET
+  RETURN_TICKET
   RECEIPT
   INVOICE
   MEDICAL_LETTER
+  OVERSEAS_MEDICAL_LETTER
   PROFESSIONAL_BODY_LETTER
   BVN
+  NIN
   TIN
   UTILITY_BILL
   SCHOOL_ADMISSION
+  FORM_A_ID
+  FORM_A_DOCUMENT
+  CORPORATE_BODY_LETTER
+  PARTNER_INVITATION_LETTER
 }
 
 // Payment Service
@@ -299,10 +306,12 @@ model UserKyc {
   userId              String      @unique
   status              KycStatus   @default(NOT_STARTED)
   bvn                 String?     @unique
+  nin                 String?     @unique
   tin                 String?
   passportNumber      String?
   passportDocumentUrl String?
   bvnVerified         Boolean     @default(false)
+  ninVerified         Boolean     @default(false)
   tinVerified         Boolean     @default(false)
   passportVerified    Boolean     @default(false)
   verificationNotes   String?
@@ -316,6 +325,7 @@ model UserKyc {
   user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([bvn])
+  @@index([nin])
   @@map("user_kyc")
 }
 

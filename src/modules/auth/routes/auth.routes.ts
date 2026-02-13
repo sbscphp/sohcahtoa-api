@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import authController from '../controllers/auth.controller';
-import { authenticate, authRateLimiter, uploadPassport } from '../../../shared/middleware';
+import { authenticate, uploadPassport } from '../../../shared/middleware';
 
 const router: Router = Router();
 
@@ -75,7 +75,7 @@ const router: Router = Router();
  *         description: Too many requests
  */
 // Public routes
-router.post('/signup', authRateLimiter, authController.signup);
+router.post('/signup', authController.signup);
 
 /**
  * @swagger
@@ -124,7 +124,7 @@ router.post('/signup', authRateLimiter, authController.signup);
  *         description: Too many requests
  */
 // Nigerian signup flow (4 steps)
-router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verifyBvn); // Step 1
+router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1
 /**
  * @swagger
  * /api/auth/signup/nigerian/send-otp:
@@ -194,7 +194,7 @@ router.post('/signup/nigerian/verify-bvn', authRateLimiter, authController.verif
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvnOtp); // Step 2
+router.post('/signup/nigerian/send-otp', authController.sendBvnOtp); // Step 2
 
 /**
  * @swagger
@@ -256,7 +256,7 @@ router.post('/signup/nigerian/send-otp', authRateLimiter, authController.sendBvn
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/nigerian/validate-otp', authRateLimiter, authController.validateBvnOtp); // Step 3
+router.post('/signup/nigerian/validate-otp', authController.validateBvnOtp); // Step 3
 
 /**
  * @swagger
@@ -310,7 +310,7 @@ router.post('/signup/nigerian/validate-otp', authRateLimiter, authController.val
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/nigerian/create-account', authRateLimiter, authController.createNigerianAccount); // Step 4
+router.post('/signup/nigerian/create-account', authController.createNigerianAccount); // Step 4
 
 /**
  * @swagger
@@ -360,7 +360,7 @@ router.post('/signup/nigerian/create-account', authRateLimiter, authController.c
  *         description: Too many requests
  */
 // Tourist signup flow (4 steps)
-router.post('/signup/tourist/verify-passport', authRateLimiter, authController.verifyPassport); // Step 1
+router.post('/signup/tourist/verify-passport', authController.verifyPassport); // Step 1
 /**
  * @swagger
  * /api/auth/signup/tourist/send-otp:
@@ -424,7 +424,7 @@ router.post('/signup/tourist/verify-passport', authRateLimiter, authController.v
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPassportOtp); // Step 2
+router.post('/signup/tourist/send-otp', authController.sendPassportOtp); // Step 2
 
 /**
  * @swagger
@@ -486,7 +486,7 @@ router.post('/signup/tourist/send-otp', authRateLimiter, authController.sendPass
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/tourist/validate-otp', authRateLimiter, authController.validatePassportOtp); // Step 3
+router.post('/signup/tourist/validate-otp', authController.validatePassportOtp); // Step 3
 
 /**
  * @swagger
@@ -540,7 +540,7 @@ router.post('/signup/tourist/validate-otp', authRateLimiter, authController.vali
  *       429:
  *         description: Too many requests
  */
-router.post('/signup/tourist/create-account', authRateLimiter, authController.createTouristAccount); // Step 4
+router.post('/signup/tourist/create-account', authController.createTouristAccount); // Step 4
 
 /**
  * @swagger
@@ -591,7 +591,7 @@ router.post('/signup/tourist/create-account', authRateLimiter, authController.cr
  *       429:
  *         description: Too many requests
  */
-router.post('/login', authRateLimiter, authController.login);
+router.post('/login', authController.login);
 
 /**
  * @swagger
@@ -645,7 +645,7 @@ router.post('/login', authRateLimiter, authController.login);
  *       429:
  *         description: Too many requests
  */
-router.post('/otp/send', authRateLimiter, authController.sendOtp);
+router.post('/otp/send', authController.sendOtp);
 
 /**
  * @swagger
@@ -677,7 +677,7 @@ router.post('/otp/send', authRateLimiter, authController.sendOtp);
  *       429:
  *         description: Too many requests
  */
-router.post('/otp/validate', authRateLimiter, authController.validateOtp);
+router.post('/otp/validate', authController.validateOtp);
 
 /**
  * @swagger
@@ -803,7 +803,7 @@ router.post('/kyc/verify', authController.verifyKyc);
  *       429:
  *         description: Too many requests
  */
-router.post('/kyc/passport/upload', authRateLimiter, uploadPassport, authController.uploadPassport);
+router.post('/kyc/passport/upload', uploadPassport, authController.uploadPassport);
 
 /**
  * @swagger
