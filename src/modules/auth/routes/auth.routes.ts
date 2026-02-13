@@ -838,7 +838,8 @@ router.get('/kyc/passport/status', authenticate, authController.getPassportVerif
  * @swagger
  * /api/auth/profile:
  *   get:
- *     summary: Get user profile
+ *     summary: Get user profile with roles and permissions
+ *     description: Retrieve complete user profile including personal details, KYC status, role, permissions, and active sessions
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -852,8 +853,129 @@ router.get('/kyc/passport/status', authenticate, authController.getPassportVerif
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile retrieved successfully
  *                 data:
  *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "user_abc123"
+ *                     email:
+ *                       type: string
+ *                       example: "user@example.com"
+ *                     phoneNumber:
+ *                       type: string
+ *                       description: Partially redacted for security
+ *                       example: "+234****5678"
+ *                     role:
+ *                       type: string
+ *                       enum: [CUSTOMER, ADMIN, COMPLIANCE_OFFICER, OPERATIONS, SUPER_ADMIN]
+ *                       example: "CUSTOMER"
+ *                     customerType:
+ *                       type: string
+ *                       enum: [NIGERIAN_CITIZEN, TOURIST, AGENT]
+ *                       example: "NIGERIAN_CITIZEN"
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *                     emailVerified:
+ *                       type: boolean
+ *                       example: true
+ *                     phoneVerified:
+ *                       type: boolean
+ *                       example: true
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                     profile:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         firstName:
+ *                           type: string
+ *                           example: "John"
+ *                         lastName:
+ *                           type: string
+ *                           example: "Doe"
+ *                         dateOfBirth:
+ *                           type: string
+ *                           format: date
+ *                         address:
+ *                           type: string
+ *                         city:
+ *                           type: string
+ *                         state:
+ *                           type: string
+ *                         country:
+ *                           type: string
+ *                         postalCode:
+ *                           type: string
+ *                         avatar:
+ *                           type: string
+ *                           format: uri
+ *                     kyc:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         status:
+ *                           type: string
+ *                           enum: [NOT_STARTED, IN_PROGRESS, PENDING_VERIFICATION, VERIFIED, REJECTED]
+ *                           example: "VERIFIED"
+ *                         bvn:
+ *                           type: string
+ *                           description: Partially redacted for security
+ *                           example: "*******8901"
+ *                         tin:
+ *                           type: string
+ *                         passportNumber:
+ *                           type: string
+ *                         passportDocumentUrl:
+ *                           type: string
+ *                           format: uri
+ *                         bvnVerified:
+ *                           type: boolean
+ *                         tinVerified:
+ *                           type: boolean
+ *                         passportVerified:
+ *                           type: boolean
+ *                         verifiedAt:
+ *                           type: string
+ *                           format: date-time
+ *                         rejectedAt:
+ *                           type: string
+ *                           format: date-time
+ *                         rejectionReason:
+ *                           type: string
+ *                     permissions:
+ *                       type: array
+ *                       description: List of permissions based on user role
+ *                       items:
+ *                         type: string
+ *                       example: ["transactions.create", "transactions.view.own", "profile.view", "profile.update"]
+ *                     activeSessions:
+ *                       type: array
+ *                       description: List of active user sessions (up to 5 most recent)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           userAgent:
+ *                             type: string
+ *                           ipAddress:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           expiresAt:
+ *                             type: string
+ *                             format: date-time
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */

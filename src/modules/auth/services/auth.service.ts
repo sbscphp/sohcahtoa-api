@@ -900,6 +900,157 @@ export class AuthService {
       message: 'KYC verification initiated',
     };
   }
+
+  async getUserProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        profile: true,
+        kyc: true,
+        sessions: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            userAgent: true,
+            ipAddress: true,
+            createdAt: true,
+            expiresAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Redact sensitive information
+    const userProfile = {
+      id: user.id,
+      email: user.email,
+      phoneNumber: partiallyRedactField(user.phoneNumber, 'phone'),
+      role: user.role,
+      customerType: user.customerType,
+      isActive: user.isActive,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      profile: user.profile ? {
+        firstName: user.profile.firstName,
+        lastName: user.profile.lastName,
+        dateOfBirth: user.profile.dateOfBirth,
+        address: user.profile.address,
+        city: user.profile.city,
+        state: user.profile.state,
+        country: user.profile.country,
+        postalCode: user.profile.postalCode,
+        avatar: user.profile.avatar,
+      } : null,
+      kyc: user.kyc ? {
+        status: user.kyc.status,
+        bvn: user.kyc.bvn ? partiallyRedactField(user.kyc.bvn, 'bvn') : null,
+        tin: user.kyc.tin,
+        passportNumber: user.kyc.passportNumber,
+        passportDocumentUrl: user.kyc.passportDocumentUrl,
+        bvnVerified: user.kyc.bvnVerified,
+        tinVerified: user.kyc.tinVerified,
+        passportVerified: user.kyc.passportVerified,
+        verifiedAt: user.kyc.verifiedAt,
+        rejectedAt: user.kyc.rejectedAt,
+        rejectionReason: user.kyc.rejectionReason,
+      } : null,
+      permissions: this.getUserPermissions(user.role),
+      activeSessions: user.sessions,
+    };
+
+    return userProfile;
+  }
+
+  private getUserPermissions(role: string): string[] {
+    const permissionMap: Record<string, string[]> = {
+      CUSTOMER: [
+        'transactions.create',
+        'transactions.view.own',
+        'profile.view',
+        'profile.update',
+        'kyc.submit',
+        'kyc.view.own',
+        'documents.upload',
+        'documents.view.own',
+        'payments.initiate',
+        'payments.view.own',
+      ],
+      ADMIN: [
+        'transactions.view.all',
+        'transactions.approve',
+        'transactions.reject',
+        'users.view.all',
+        'users.manage',
+        'kyc.review',
+        'kyc.approve',
+        'kyc.reject',
+        'documents.view.all',
+        'payments.view.all',
+        'reports.view',
+        'admin.actions.perform',
+      ],
+      COMPLIANCE_OFFICER: [
+        'transactions.view.all',
+        'transactions.review',
+        'transactions.flag',
+        'users.view.all',
+        'kyc.review',
+        'kyc.approve',
+        'kyc.reject',
+        'compliance.review',
+        'compliance.flag',
+        'documents.view.all',
+        'reports.view',
+        'audit.view',
+      ],
+      OPERATIONS: [
+        'transactions.view.all',
+        'transactions.process',
+        'payments.process',
+        'payments.view.all',
+        'users.view.all',
+        'kyc.view.all',
+        'documents.view.all',
+        'reports.view',
+      ],
+      SUPER_ADMIN: [
+        'transactions.view.all',
+        'transactions.approve',
+        'transactions.reject',
+        'transactions.delete',
+        'users.view.all',
+        'users.manage',
+        'users.delete',
+        'kyc.review',
+        'kyc.approve',
+        'kyc.reject',
+        'documents.view.all',
+        'documents.delete',
+        'payments.view.all',
+        'payments.process',
+        'reports.view',
+        'reports.generate',
+        'admin.actions.perform',
+        'admin.users.manage',
+        'roles.manage',
+        'departments.manage',
+        'system.settings',
+        'audit.view',
+        'compliance.review',
+        'compliance.flag',
+      ],
+    };
+
+    return permissionMap[role] || [];
+  }
 }
 
 export default new AuthService();
