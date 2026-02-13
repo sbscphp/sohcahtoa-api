@@ -15,6 +15,7 @@ interface CreateCustomerTransactionPayload {
   // Personal info
   bvn?: string;
   nin?: string;
+  formAId?: string;
 
   // School fees specific fields
   admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
@@ -26,6 +27,15 @@ interface CreateCustomerTransactionPayload {
     accountName?: string;
     bankName?: string;
     iban?: string;
+  };
+
+  // Pickup Location details
+  pickupLocation?: {
+    id: string;
+    name: string;
+    address: string;
+    recipientName: string;
+    recipientPhone: string;
   };
 }
 
@@ -49,7 +59,7 @@ export class CustomerTransactionService {
    * Create a new transaction for a customer
    */
   async createTransaction(payload: CreateCustomerTransactionPayload) {
-    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, admissionType, beneficiaryDetails } = payload;
+    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, admissionType, beneficiaryDetails, pickupLocation } = payload;
 
     // Validate user exists
     const user = await prisma.user.findUnique({
@@ -115,6 +125,8 @@ export class CustomerTransactionService {
         destinationCountry,
         currency,
         foreignAmount: amount as any,
+        formAId,
+        disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null) as any,
       },
     });
 
@@ -127,8 +139,10 @@ export class CustomerTransactionService {
         data: {
           bvn: bvn ? "***" + bvn.slice(-4) : null,
           nin: nin ? "***" + nin.slice(-4) : null,
+          formAId,
           admissionType: type === "SCHOOL_FEES" ? admissionType : null,
           beneficiaryDetails,
+          pickupLocation,
         },
         completedAt: new Date(),
       },
@@ -171,7 +185,6 @@ export class CustomerTransactionService {
       "BVN",
       "NIN",
       "TIN",
-      "FORM_A_ID",
       "FORM_A_DOCUMENT",
       "CORPORATE_BODY_LETTER",
       "PARTNER_INVITATION_LETTER",
@@ -429,24 +442,24 @@ export class CustomerTransactionService {
   private getRequiredDocuments(transactionType: string): string[] {
     const documentRequirements: Record<string, string[]> = {
       // Personal Travel Allowance - Requires NIN
-      PTA: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_ID", "FORM_A_DOCUMENT"],
+      PTA: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT"],
 
       // Business Travel Allowance - Requires TIN instead of NIN + corporate documents
-      BTA: ["BVN", "TIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_ID", "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
+      BTA: ["BVN", "TIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
 
       // School Fees - Simplified: Only Form A documents required (bank details captured separately)
-      SCHOOL_FEES: ["FORM_A_ID", "FORM_A_DOCUMENT"],
+      SCHOOL_FEES: ["FORM_A_DOCUMENT"],
 
       // Medical - Same as PTA plus Utility Bill and Medical Letters (local + overseas) (bank details captured separately, no pickup location)
-      MEDICAL: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_ID", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER"],
+      MEDICAL: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER"],
 
       // Professional Body - BVN, Form A, Utility Bill, Membership Card, Invoice (bank details captured separately)
-      PROFESSIONAL_BODY: ["BVN", "FORM_A_ID", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEMBERSHIP_CARD", "INVOICE"],
-      TOURIST_FX: ["BVN", "NIN", "PASSPORT", "RETURN_TICKET", "FORM_A_ID", "FORM_A_DOCUMENT"],
-      RESIDENT_FX: ["BVN", "NIN", "PASSPORT", "FORM_A_ID", "FORM_A_DOCUMENT"],
-      EXPATRIATE_FX: ["PASSPORT", "VISA", "FORM_A_ID", "FORM_A_DOCUMENT"],
-      IMTO_REMITTANCE: ["BVN", "NIN", "FORM_A_ID", "FORM_A_DOCUMENT"],
-      CASH_REMITTANCE: ["BVN", "NIN", "FORM_A_ID", "FORM_A_DOCUMENT"],
+      PROFESSIONAL_BODY: ["BVN", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEMBERSHIP_CARD", "INVOICE"],
+      TOURIST_FX: ["BVN", "NIN", "PASSPORT", "RETURN_TICKET", "FORM_A_DOCUMENT"],
+      RESIDENT_FX: ["BVN", "NIN", "PASSPORT", "FORM_A_DOCUMENT"],
+      EXPATRIATE_FX: ["PASSPORT", "VISA", "FORM_A_DOCUMENT"],
+      IMTO_REMITTANCE: ["BVN", "NIN", "FORM_A_DOCUMENT"],
+      CASH_REMITTANCE: ["BVN", "NIN", "FORM_A_DOCUMENT"],
     };
 
     return documentRequirements[transactionType] || [];

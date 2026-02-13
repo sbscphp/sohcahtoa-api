@@ -151,7 +151,6 @@ enum DocumentType {
   TIN
   UTILITY_BILL
   SCHOOL_ADMISSION
-  FORM_A_ID
   FORM_A_DOCUMENT
   CORPORATE_BODY_LETTER
   PARTNER_INVITATION_LETTER
@@ -664,6 +663,7 @@ model Transaction {
   destinationCountry  String
   currency            String
   foreignAmount       Decimal?            @db.Decimal(18, 2)
+  formAId             String?
   nairaEquivalent     Decimal?            @db.Decimal(18, 2)
   exchangeRate        Decimal?            @db.Decimal(18, 6)
   disbursementMethod  DisbursementMethod?

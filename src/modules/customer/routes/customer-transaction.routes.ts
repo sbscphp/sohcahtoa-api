@@ -30,7 +30,7 @@ router.use(authenticate);
  *       - Passport
  *       - Visa
  *       - Return Ticket
- *       - Form A ID
+ *       - Form A ID (provided as string in creation)
  *       - Form A Document
  *
  *       The response includes a list of required documents based on transaction type.
@@ -79,6 +79,10 @@ router.use(authenticate);
  *                 type: string
  *                 description: National Identification Number (11 digits) - Required for PTA and personal transactions
  *                 example: "12345678901"
+ *               formAId:
+ *                 type: string
+ *                 description: Form A ID Number
+ *                 example: "FMA12345678"
  *               admissionType:
  *                 type: string
  *                 enum: [UNDERGRADUATE, POSTGRADUATE, OTHER]
@@ -103,6 +107,25 @@ router.use(authenticate);
  *                   iban:
  *                     type: string
  *                     description: International Bank Account Number
+ *               pickupLocation:
+ *                 type: object
+ *                 description: Pickup location details (required for cash pickup transactions)
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     description: Outlet ID
+ *                   name:
+ *                     type: string
+ *                     description: Outlet name
+ *                   address:
+ *                     type: string
+ *                     description: Outlet address
+ *                   recipientName:
+ *                     type: string
+ *                     description: Name of person picking up cash
+ *                   recipientPhone:
+ *                     type: string
+ *                     description: Phone number of person picking up cash
  *     responses:
  *       201:
  *         description: Transaction created successfully
@@ -133,7 +156,7 @@ router.use(authenticate);
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_ID", "FORM_A_DOCUMENT"]
+ *                       example: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT"]
  *                     message:
  *                       type: string
  *                       example: "Transaction initiated successfully. Please upload required documents to proceed."
@@ -157,7 +180,6 @@ router.post("/", customerTransactionController.createTransaction);
  *       - BVN
  *       - NIN (for PTA and personal transactions)
  *       - TIN (for BTA and business transactions)
- *       - FORM_A_ID
  *       - FORM_A_DOCUMENT
  *       - CORPORATE_BODY_LETTER (required for BTA)
  *       - PARTNER_INVITATION_LETTER (required for BTA)
@@ -193,7 +215,7 @@ router.post("/", customerTransactionController.createTransaction);
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: [PASSPORT, VISA, RETURN_TICKET, BVN, NIN, TIN, FORM_A_ID, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
+ *                 enum: [PASSPORT, VISA, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
  *                 description: Type of document being uploaded
  *               documents:
  *                 type: array
