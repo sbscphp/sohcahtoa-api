@@ -172,14 +172,14 @@ class UserManagementService {
             }
 
             return await this.prisma.role.create({
-                data: {
+                data: ({
                     name: data.name,
                     description: data.description,
                     permissions: data.permissions ? (data.permissions as any) : [],
                     branch: data.branch,
-                    departmentId: data.department,
+                    department: data.department ? { connect: { id: data.department } } : undefined,
                     isDefault: data.isDefault,
-                },
+                } as any),
             });
         } catch (error) {
             logger.error("Failed to create role", { error });
