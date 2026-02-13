@@ -95,9 +95,9 @@ AdminAuthRouter.post("/forgot-password", authRateLimiter, adminAuthController.fo
 
 /**
  * @swagger
- * /api/admin/auth/reset-password:
+ * /api/admin/auth/otp/validate:
  *   post:
- *     summary: Reset password using OTP
+ *     summary: Validate OTP for admin password reset and receive resetToken
  *     tags: [Admin]
  *     requestBody:
  *       required: true
@@ -105,16 +105,45 @@ AdminAuthRouter.post("/forgot-password", authRateLimiter, adminAuthController.fo
  *         application/json:
  *           schema:
  *             type: object
- *             required: [otp, password]
+ *             required: [otp]
  *             properties:
  *               otp:
  *                 type: string
- *               password:
- *                 type: string
  *     responses:
  *       200:
- *         description: Password reset successful
+ *         description: OTP validated; resetToken issued
  *       400:
  *         $ref: '#/components/responses/ValidationError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/reset-password", authRateLimiter, adminAuthController.resetPassword);
+AdminAuthRouter.post("/otp/validate", authRateLimiter, adminAuthController.validateResetOtp);
+
+/**
+ * @swagger
+ * /api/admin/auth/reset-password:
+ *   post:
+ *     summary: Submit new admin password using resetToken
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [resetToken, password]
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AdminAuthRouter.post("/reset-password", authRateLimiter, adminAuthController.submitNewPassword);

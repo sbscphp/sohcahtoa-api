@@ -23,6 +23,7 @@ class AdminAuthService {
 
   async forgotPassword(email: string) {
     const user = await this.prisma.adminUser.findUnique({ where: { email } });
+    
     if (!user) throw new NotFoundError("User not found");
 
     const otp = generateOtp();
@@ -86,6 +87,120 @@ class AdminAuthService {
     logger.info("Password reset successful", { userId: tokenRecord.userId });
     return { message: "Password reset successful" };
   }
+
+  async validateResetOtp(otp: string) {
+    const tokenRecords = await this.prisma.token.findMany({
+      where: {
+        type: "OTP",
+        isUsed: false,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    let matchedToken = null;
+
+    for (const record of tokenRecords) {
+      const isValid = await comparePassword(otp, record.token);
+    if (isValid) {
+      matchedToken = record;
+      break;
+    }
+  }
+
+  if (!matchedToken) {
+    throw new ValidationError("Invalid or expired OTP");
+  }
+
+  const metadata = matchedToken.metadata as any;
+  if (metadata?.purpose !== "PASSWORD_RESET") {
+    throw new ValidationError("Invalid OTP purpose");
+  }
+
+  const resetToken = generateId();
+  const hashedResetToken = await hashPassword(resetToken);
+
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+  await this.prisma.$transaction([
+    // Mark OTP as used
+    this.prisma.token.update({
+      where: { id: matchedToken.id },
+      data: { isUsed: true, usedAt: new Date() },
+    }),
+
+    // Invalidate existing reset tokens
+    this.prisma.token.updateMany({
+      where: {
+        userId: matchedToken.userId,
+        type: "PASSWORD_RESET",
+        isUsed: false,
+      },
+      data: { isUsed: true, usedAt: new Date() },
+    }),
+
+    // Create new reset token
+    this.prisma.token.create({
+      data: {
+        userId: matchedToken.userId,
+        type: "PASSWORD_RESET",
+        token: hashedResetToken,
+        expiresAt,
+        isUsed: false,
+      },
+    }),
+  ]);
+
+  return {
+    resetToken,
+    message: "OTP validated. Use resetToken within 10 minutes.",
+  };
+  }
+
+  async submitNewPassword(resetToken: string, newPassword: string) {
+  const tokenRecord = await this.prisma.token.findFirst({
+    where: {
+      type: "PASSWORD_RESET",
+      isUsed: false,
+      expiresAt: { gt: new Date() },
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!tokenRecord) {
+    throw new ValidationError("Invalid or expired reset token");
+  }
+
+  const isValid = await comparePassword(
+    resetToken,
+    tokenRecord.token
+  );
+
+  if (!isValid) {
+    throw new ValidationError("Invalid or expired reset token");
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  await this.prisma.$transaction([
+    this.prisma.adminUser.update({
+      where: { id: tokenRecord.userId },
+      data: { password: hashedPassword },
+    }),
+
+    this.prisma.token.update({
+      where: { id: tokenRecord.id },
+      data: { isUsed: true, usedAt: new Date() },
+    }),
+  ]);
+
+  return { message: "Password updated successfully" };
+}
 
   async initiateLogin(email: string, password: string) {
     const user = await this.prisma.adminUser.findUnique({ where: { email } });

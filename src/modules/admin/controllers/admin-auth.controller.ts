@@ -24,9 +24,15 @@ class AdminAuthController {
     res.json(successResponse(result));
   });
 
-  resetPassword = asyncHandler(async (req: Request, res: Response) => {
-    const { otp, password } = req.body;
-    const result = await adminAuthService.resetPassword(otp, password);
+  validateResetOtp = asyncHandler(async (req: Request, res: Response) => {
+    const { otp } = req.body;
+    const result = await adminAuthService.validateResetOtp(otp);
+    res.json(successResponse(result));
+  });
+
+  submitNewPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { resetToken, password } = req.body;
+    const result = await adminAuthService.submitNewPassword(resetToken, password);
     res.json(successResponse(result));
   });
 }
