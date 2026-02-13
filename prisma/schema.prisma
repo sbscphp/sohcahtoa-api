@@ -259,6 +259,7 @@ model User {
   kyc           UserKyc?
   sessions      Session[]
   otpLogs       OtpLog[]
+  tickets       Ticket[]
 
   @@index([email])
   @@index([phoneNumber])
@@ -418,6 +419,8 @@ model AdminUser {
   actions        AdminAction[]
   assignments    TaskAssignment[]
   tokens         Token[]
+  assignedTickets Ticket[]
+  ticketComments  TicketComment[]
 
   @@index([email])
   @@index([roleId])
