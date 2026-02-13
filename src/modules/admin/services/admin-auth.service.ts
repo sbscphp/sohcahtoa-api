@@ -245,8 +245,7 @@ class AdminAuthService {
 
   async verifyLogin(email: string, otp: string) {
     const user = await this.prisma.adminUser.findUnique({
-      where: { email },
-      include: { role: true }
+      where: { email }
     });
     if (!user) throw new NotFoundError("User not found");
 
