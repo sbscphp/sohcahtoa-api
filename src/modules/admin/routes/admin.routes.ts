@@ -11,6 +11,7 @@ import OutletRouter from "./outlet.routes";
 import WorkflowRouter from "./workflow.routes";
 import TicketsRouter from "./tickets.routes";
 import RateRouter from "./rate.routes";
+import AuditRouter from "./audit.routes";
 import ReportRouter from "./report.routes";
 
 const router: Router = Router();
@@ -118,6 +119,7 @@ router.use("/outlet", OutletRouter);
 router.use("/workflow", WorkflowRouter);
 router.use("/tickets", TicketsRouter);
 router.use("/rate", RateRouter);
+router.use("/audit", AuditRouter);
 router.use("/reports", ReportRouter)
 
 export default router;

@@ -481,10 +481,42 @@ model Branch {
   @@map("branches")
 }
 
+model Agent {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phoneNumber String   @unique
+  isActive    Boolean  @default(true)
+  isApproved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attachments AgentAttachment[]
+
+  @@index([name])
+  @@map("agents")
+}
+
+model AgentAttachment {
+  id        String   @id @default(uuid())
+  agentId   String
+  fileUrl   String
+  fileName  String?
+  fileSize  Int?
+  mimeType  String?
+  createdAt DateTime @default(now())
+
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@map("agent_attachments")
+}
+
 model AdminAction {
   id              String     @id @default(uuid())
   adminId         String
   actionType      ActionType
+  actionLabel     String?
   resourceType    String
   resourceId      String
   previousState   Json?
@@ -494,6 +526,7 @@ model AdminAction {
   performedAt     DateTime   @default(now())
   ipAddress       String?
   userAgent       String?
+  status          String     @default("SUCCESS")
 
   departmentId  String?
   department    Department? @relation(fields: [departmentId], references: [id])
@@ -856,10 +889,13 @@ model ExchangeRate {
   fromCurrency    String
   toCurrency      String
   rate            Decimal  @db.Decimal(18, 6)
+  buyRate         Decimal? @db.Decimal(18, 6)
+  sellRate        Decimal? @db.Decimal(18, 6)
   source          String   @default("MANUAL")
   validFrom       DateTime @default(now())
   validUntil      DateTime
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   isActive        Boolean  @default(true)
 
   @@index([fromCurrency, toCurrency, isActive])
@@ -992,6 +1028,74 @@ model VerificationRequest {
   @@map("verification_requests")
 }
 
+// ========================================
+// TICKET SERVICE MODELS
+// ========================================
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Ticket {
+  id               String         @id @default(uuid())
+  reference        String         @unique
+  customerId       String
+  caseType         String
+  description      String
+  priority         TicketPriority @default(MEDIUM)
+  status           TicketStatus   @default(OPEN)
+  assignedAgentId  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  customer         User           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedAgent    AdminUser?     @relation(fields: [assignedAgentId], references: [id])
+
+  attachments      TicketAttachment[]
+  comments         TicketComment[]
+
+  @@index([customerId])
+  @@index([status, priority])
+  @@map("tickets")
+}
+
+model TicketAttachment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  fileUrl    String
+  fileName   String?
+  fileSize   Int?
+  mimeType   String
+  createdAt  DateTime @default(now())
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+model TicketComment {
+  id         String     @id @default(uuid())
+  ticketId   String
+  adminId    String?
+  message    String
+  createdAt  DateTime   @default(now())
+
+  ticket     Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  admin      AdminUser? @relation(fields: [adminId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
 model VerificationResult {
   id                  String              @id @default(uuid())
   requestId           String
@@ -1134,4 +1238,38 @@ model SecurityEvent {
   @@index([userId])
   @@index([resolved])
   @@map("security_events")
+}
+
+enum ReportFormat {
+  CSV
+  PDF
+}
+
+enum ReportModule {
+  OUTLET
+  RATE
+  TRANSACTION
+  WORKFLOW
+  AGENT
+  FRANCHISE
+  BRANCH
+  INCIDENT
+}
+
+model ReportJob {
+  id            String        @id @default(uuid())
+  module        ReportModule
+  format        ReportFormat
+  startDate     DateTime
+  endDate       DateTime
+  requestedBy   String
+  status        String        @default("PENDING")
+  generatedUrl  String?
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+  metadata      Json?
+
+  @@index([module])
+  @@index([status])
+  @@map("report_jobs")
 }
