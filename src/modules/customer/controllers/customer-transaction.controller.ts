@@ -33,17 +33,19 @@ class CustomerTransactionController {
       const files = req.files as Express.Multer.File[];
 
       if (!files || files.length === 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: "No files provided",
         });
+        return;
       }
 
       if (!documentType) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: "documentType is required",
         });
+        return;
       }
 
       const result = await customerTransactionService.uploadDocuments({
@@ -80,10 +82,11 @@ class CustomerTransactionController {
       const { currency, amount } = req.body;
 
       if (!currency || !amount) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           message: "currency and amount are required",
         });
+        return;
       }
 
       const result = await customerTransactionService.calculateAmount(currency, parseFloat(amount));
