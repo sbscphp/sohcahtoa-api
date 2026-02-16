@@ -2,7 +2,6 @@ import { Router } from "express";
 import { adminAuthController } from "../controllers/admin-auth.controller";
 import { addUserValidationStore, validate } from "../validations/user-management.validation";
 
-
 export const AdminAuthRouter: Router = Router();
 
 /**
@@ -66,7 +65,7 @@ AdminAuthRouter.post("/login", adminAuthController.login);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AdminAuthRouter.post("/verify-login", adminAuthController.verifyLogin);
+AdminAuthRouter.post("/verify-login",  adminAuthController.verifyLogin);
 
 /**
  * @swagger
@@ -91,7 +90,7 @@ AdminAuthRouter.post("/verify-login", adminAuthController.verifyLogin);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/forgot-password", adminAuthController.forgotPassword);
+AdminAuthRouter.post("/forgot-password",  adminAuthController.forgotPassword);
 
 /**
  * @swagger
@@ -117,7 +116,7 @@ AdminAuthRouter.post("/forgot-password", adminAuthController.forgotPassword);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/otp/validate", adminAuthController.validateResetOtp);
+AdminAuthRouter.post("/otp/validate",  adminAuthController.validateResetOtp);
 
 /**
  * @swagger
@@ -146,4 +145,4 @@ AdminAuthRouter.post("/otp/validate", adminAuthController.validateResetOtp);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/reset-password", adminAuthController.submitNewPassword);
+AdminAuthRouter.post("/reset-password",  adminAuthController.submitNewPassword);

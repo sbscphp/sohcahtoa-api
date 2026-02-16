@@ -12,10 +12,21 @@ async function main() {
 
   logger.info("Starting Prisma seed...");
 
-  // Create default role
-  let defaultRole = await prisma.role.findFirst({
-    where: { isDefault: true },
-  });
+  const branchName = "Head Office";
+  const departmentName = "Administration";
+
+  const department =
+    (await prisma.department.findFirst({ where: { name: departmentName } })) ||
+    (await prisma.department.create({
+      data: {
+        name: departmentName,
+        description: "Default administration department",
+        branch: branchName,
+        isActive: true,
+      },
+    }));
+
+  let defaultRole = await prisma.role.findFirst({ where: { isDefault: true } });
 
   if (!defaultRole) {
     defaultRole = await prisma.role.create({
@@ -25,9 +36,9 @@ async function main() {
         permissions: [],
         isDefault: true,
         isActive: true,
-        branch: "Head Office",
-        department: "Administration",
-      } as any,
+        branch: branchName,
+        departmentId: department.id,
+      },
     });
     logger.info("Created default SUPER_ADMIN role", { roleId: defaultRole.id });
   }
@@ -59,6 +70,19 @@ async function main() {
     logger.info("Admin user already exists", { email: adminEmail });
   }
 
+  const passwordHash = await hashPassword(adminPassword);
+
+  const admin = await prisma.adminUser.create({
+    data: {
+      email: adminEmail,
+      fullName,
+      phoneNumber: "08000000000",
+      branch: branchName,
+      departmentId: department.id,
+      roleId: defaultRole.id,
+      password: passwordHash,
+      isActive: true,
+    },
   // Seed mock Nigerian customer
   const nigerianEmail = "nigerian@yopmail.com";
   const existingNigerian = await prisma.user.findUnique({
