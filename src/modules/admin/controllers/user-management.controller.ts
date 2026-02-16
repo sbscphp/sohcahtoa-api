@@ -18,6 +18,11 @@ class UserManagementController {
         res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
+    getUserStats = asyncHandler(async (_req: Request, res: Response) => {
+        const result = await userManagementService.getUserStats();
+        res.json(successResponse(result));
+    });
+
     getProfile = asyncHandler(async (req: Request, res: Response) => {
         const userId = (req as any).user?.userId;
         const result = await userManagementService.getProfile(userId);
@@ -42,6 +47,11 @@ class UserManagementController {
         res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
+    getRoleStats = asyncHandler(async (_req: Request, res: Response) => {
+        const result = await userManagementService.getRoleStats();
+        res.json(successResponse(result));
+    });
+
     getRole = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const result = await userManagementService.getRole(id);
@@ -58,6 +68,13 @@ class UserManagementController {
     deleteRole = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const result = await userManagementService.deleteRole(id);
+        res.json(successResponse(result));
+    });
+
+    getRolePermissions = asyncHandler(async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const format = (req.query.format as string) === "flat" ? "flat" : "grouped";
+        const result = await userManagementService.getRolePermissions(id, format as any);
         res.json(successResponse(result));
     });
 
@@ -95,6 +112,10 @@ class UserManagementController {
     deleteDepartment = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const result = await userManagementService.deleteDepartment(id);
+        res.json(successResponse(result));
+    });
+    getDepartmentStats = asyncHandler(async (_req: Request, res: Response) => {
+        const result = await userManagementService.getDepartmentStats();
         res.json(successResponse(result));
     });
 }

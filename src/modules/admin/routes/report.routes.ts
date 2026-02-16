@@ -19,23 +19,23 @@ const ReportRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-ReportRouter.get("/modules", authenticate, authorize(UserRole.SUPER_ADMIN), reportController.modules);
+ReportRouter.get("/modules", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.modules);
 
-/**
- * @swagger
- * /api/admin/reports/stats:
- *   get:
- *     summary: Report job counters
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Report stats retrieved
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-ReportRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), reportController.stats);
+// /**
+//  * @swagger
+//  * /api/admin/reports/stats:
+//  *   get:
+//  *     summary: Report job counters
+//  *     tags: [Admin]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: Report stats retrieved
+//  *       401:
+//  *         $ref: '#/components/responses/UnauthorizedError'
+//  */
+// ReportRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.stats);
 
 /**
  * @swagger
@@ -80,7 +80,7 @@ ReportRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), report
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-ReportRouter.get("/jobs", authenticate, authorize(UserRole.SUPER_ADMIN), reportController.list);
+// ReportRouter.get("/jobs", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.list);
 
 /**
  * @swagger
@@ -104,7 +104,7 @@ ReportRouter.get("/jobs", authenticate, authorize(UserRole.SUPER_ADMIN), reportC
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-ReportRouter.get("/jobs/:id", authenticate, authorize(UserRole.SUPER_ADMIN), reportController.get);
+// ReportRouter.get("/jobs/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.get);
 
 /**
  * @swagger
@@ -139,6 +139,6 @@ ReportRouter.get("/jobs/:id", authenticate, authorize(UserRole.SUPER_ADMIN), rep
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-ReportRouter.post("/generate", authenticate, authorize(UserRole.SUPER_ADMIN), reportController.generate);
+ReportRouter.post("/generate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.generate);
 
 export default ReportRouter;

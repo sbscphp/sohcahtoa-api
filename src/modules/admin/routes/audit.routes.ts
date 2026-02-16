@@ -52,7 +52,7 @@ const AuditRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AuditRouter.get("/trail", authenticate, authorize(UserRole.SUPER_ADMIN), auditController.list);
+AuditRouter.get("/trail", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), auditController.list);
 
 
 export default AuditRouter;

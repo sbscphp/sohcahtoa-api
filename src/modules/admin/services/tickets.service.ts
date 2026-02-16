@@ -1,4 +1,4 @@
-import { createLogger, generateId, ValidationError } from "../../../shared/utils";
+import { createLogger, generateId, UploadResult, ValidationError } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
@@ -14,12 +14,14 @@ export type CreateTicketPayload = {
   caseType: string;
   priorityLevel: TicketPriority;
   description: string;
-  attachment?: {
-    fileUrl: string;
-    fileName?: string;
-    fileSize?: number;
-    mimeType?: string; // should be application/pdf
-  };
+  attachment?: TicketAttachmentInput;
+};
+
+export type TicketAttachmentInput = {
+  url: string;
+  publicId: string;
+  format: string;
+  bytes: number;
 };
 
 export class TicketsService {
@@ -83,44 +85,114 @@ export class TicketsService {
   }
 
   async create(payload: CreateTicketPayload) {
-    if (!payload.customer || !payload.caseType || !payload.priorityLevel || !payload.description) {
-      throw new ValidationError("customer, caseType, priorityLevel, description are required");
-    }
-    if (payload.attachment && payload.attachment.mimeType) {
-      const allowed = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
-      if (!allowed.includes(payload.attachment.mimeType)) {
-        throw new ValidationError("attachment must be one of: PDF, JPG, JPEG, PNG");
-      }
-    }
-    if (payload.attachment && typeof payload.attachment.fileSize === "number" && payload.attachment.fileSize > 200 * 1024) {
-      throw new ValidationError("attachment exceeds 200KB limit");
-    }
+    this.validateCreatePayload(payload);
+
     const reference = generateId();
-    const client: any = prisma as any;
-    const created = await client.ticket.create({
-      data: {
-        reference,
-        customerId: payload.customer,
-        caseType: payload.caseType,
-        description: payload.description,
-        priority: payload.priorityLevel,
-        status: "OPEN",
-        attachments: payload.attachment
-          ? {
+    const prio = (payload.priorityLevel || 'MEDIUM').toString().toUpperCase();
+    if (!['LOW', 'MEDIUM', 'HIGH'].includes(prio)) {
+      throw new ValidationError('priorityLevel must be LOW, MEDIUM or HIGH');
+    }
+    const customerId = await this.resolveCustomerId(payload.customer);
+
+    const ticket = await prisma.$transaction(async (tx) => {
+      const created = await tx.ticket.create({
+        data: {
+          reference,
+          customerId,
+          caseType: payload.caseType,
+          description: payload.description.trim(),
+          priority: prio as any,
+          status: 'OPEN',
+          attachments: payload.attachment
+            ? {
               create: {
-                fileUrl: payload.attachment.fileUrl,
-                fileName: payload.attachment.fileName,
-                fileSize: typeof payload.attachment.fileSize === "number" ? Math.floor(payload.attachment.fileSize) : null,
-                mimeType: payload.attachment.mimeType || "application/pdf",
+                fileUrl: payload.attachment.url,
+                mimeType: payload.attachment.format,
+                fileSize: payload.attachment.bytes,
               },
             }
           : undefined,
       },
-      include: { attachments: true },
+      include: {
+        attachments: true,
+      },
     });
-    logger.info(`Ticket created: ${created.id}`);
+
     return created;
+  });
+
+  logger.info('Ticket created successfully', {
+    ticketId: ticket.id,
+    reference: ticket.reference,
+  });
+
+  return ticket;
+}
+
+private validateCreatePayload(payload: CreateTicketPayload): void {
+  const requiredFields = ['customer', 'caseType', 'priorityLevel', 'description'] as const;
+
+  for (const field of requiredFields) {
+    if (!payload[field]) {
+      throw new ValidationError(`${field} is required`);
+    }
   }
+
+  if (payload.attachment) {
+    this.validateAttachment(payload.attachment);
+  }
+}
+
+private validateAttachment(attachment: {
+  url: string;
+  format: string;
+  bytes?: number;
+}) {
+  const allowedMimeTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+  ];
+
+  if (!attachment.url) {
+    throw new ValidationError('attachment url is required');
+  }
+
+  if (!allowedMimeTypes.includes(attachment.format)) {
+    throw new ValidationError(
+      'Attachment must be one of: PDF, JPG, JPEG, PNG'
+    );
+  }
+
+  if (attachment.bytes && attachment.bytes > 200 * 1024) {
+    throw new ValidationError('Attachment exceeds 200KB limit');
+  }
+}
+
+  private async resolveCustomerId(input: string): Promise<string> {
+    const client: any = prisma as any;
+    const s = (input || '').toString().trim();
+    if (!s) throw new ValidationError('customer is required');
+    let user: any = null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)) {
+      user = await client.user.findUnique({ where: { id: s } });
+    }
+    if (!user && s.includes('@')) {
+      user = await client.user.findUnique({ where: { email: s } });
+    }
+    if (!user && /^\+?\d{7,}$/.test(s)) {
+      user = await client.user.findUnique({ where: { phoneNumber: s } });
+    }
+    if (!user) {
+      throw new ValidationError('customer must be a valid user id, email, or phone');
+    }
+    if (user.role !== 'CUSTOMER') {
+      throw new ValidationError('customer must be a CUSTOMER user');
+    }
+    return user.id;
+  }
+
 
   async updateStatus(id: string, status: TicketStatus, notes?: string, adminId?: string) {
     const client: any = prisma as any;

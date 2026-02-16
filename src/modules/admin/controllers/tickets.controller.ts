@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
 import { successResponse } from "../../../shared/utils";
-import { ticketsService } from "../services/tickets.service";
-import { uploadFile } from "../../../shared/utils/file-upload";
+import { CreateTicketPayload, ticketsService } from "../services/tickets.service";
+import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
+import { PrismaClientRustPanicError } from "@prisma/client/runtime/library";
 
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -23,20 +24,48 @@ class TicketsController {
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
-    let attachment;
+  let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+
+  try {
     if (req.file) {
-      attachment = await uploadFile(req.file, { folder: "tickets" });
+      uploadedFile = await uploadToCloudinary(req.file.buffer, {
+        folder: 'tickets',
+        resourceType: 'auto',
+        allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],
+        maxFileSize: 2 * 1024 * 1024,
+      });
     }
-    const payload = {
+
+    const payload: CreateTicketPayload = {
       customer: req.body.customer,
       caseType: req.body.caseType,
       priorityLevel: req.body.priorityLevel,
       description: req.body.description,
-      attachment,
+      attachment: uploadedFile
+        ? {
+            url: uploadedFile.secureUrl,
+            format: req.file?.mimetype || '',
+            bytes: uploadedFile.bytes,
+            publicId: uploadedFile.publicId,
+          }
+        : undefined,
     };
-    const created = await ticketsService.create(payload);
-    res.status(201).json(successResponse(created));
+
+      const created = await ticketsService.create(payload);
+
+      return res.status(201).json(successResponse(created));
+    } catch (error) {
+      // Prevent orphaned uploads if DB fails
+      if (uploadedFile?.publicId) {
+        await CloudinaryService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {
+        // Optional: log cleanup failure
+        });
+      }
+
+      throw error;
+    }
   });
+
 
   updateStatus = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;

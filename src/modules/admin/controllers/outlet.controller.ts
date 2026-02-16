@@ -71,10 +71,10 @@ class OutletController {
     res.json(successResponse(data));
   });
 
-  exportBranches = asyncHandler(async (_req: Request, res: Response) => {
-    const data = await outletService.exportBranches();
-    res.json(successResponse(data));
-  });
+  // exportBranches = asyncHandler(async (_req: Request, res: Response) => {
+  //   const data = await outletService.exportBranches();
+  //   res.json(successResponse(data));
+  // });
 
   addAgents = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.addAgentsToBranch(req.params.id, req.body.agentIds || []);

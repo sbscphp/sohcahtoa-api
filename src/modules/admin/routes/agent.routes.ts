@@ -20,7 +20,7 @@ const AgentRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.stats);
+AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.stats);
 
 /**
  * @swagger
@@ -49,13 +49,32 @@ AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), agentCo
  *         name: isActive
  *         schema:
  *           type: boolean
+ *       - in: query
+ *         name: branch
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
  *     responses:
  *       200:
  *         description: Agents retrieved successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.list);
+AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.list);
 
 /**
  * @swagger
@@ -71,7 +90,7 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), agentControl
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [name, email, phoneNumber]
+ *             required: [name, email, phoneNumber, branch]
  *             properties:
  *               name:
  *                 type: string
@@ -79,6 +98,8 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), agentControl
  *                 type: string
  *                 format: email
  *               phoneNumber:
+ *                 type: string
+ *               branch:
  *                 type: string
  *               attachment:
  *                 type: string
@@ -89,7 +110,7 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), agentControl
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN), uploadSingleImage, agentController.create);
+AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadSingleImage, agentController.create);
 
 /**
  * @swagger
@@ -113,7 +134,45 @@ AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN), uploadSingl
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.get);
+AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.get);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}:
+ *   patch:
+ *     summary: Update agent details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phoneNumber:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Agent updated successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.update);
 
 /**
  * @swagger
@@ -145,54 +204,60 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), agentCont
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.updateStatus);
+AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateStatus);
 
-// /**
-//  * @swagger
-//  * /api/admin/agent/{id}/assign-branch:
-//  *   post:
-//  *     summary: Assign agent to branch
-//  *     tags: [Admin]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     parameters:
-//  *       - in: path
-//  *         name: id
-//  *         required: true
-//  *         schema:
-//  *           type: string
-//  *     requestBody:
-//  *       required: true
-//  *       content:
-//  *         application/json:
-//  *           schema:
-//  *             type: object
-//  *             required: [branch]
-//  *             properties:
-//  *               branch:
-//  *                 type: string
-//  *     responses:
-//  *       200:
-//  *         description: Agent branch assigned
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// AgentRouter.post("/:id/assign-branch", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.assignBranch);
+/**
+ * @swagger
+ * /api/admin/agent/{id}/deactivate:
+ *   patch:
+ *     summary: Deactivate an agent
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agent deactivated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.deactivate);
 
-// /**
-//  * @swagger
-//  * /api/admin/agent/export:
-//  *   get:
-//  *     summary: Export agents
-//  *     tags: [Admin]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Export URL returned
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// AgentRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN), agentController.export);
+/**
+ * @swagger
+ * /api/admin/agent/{id}/approval:
+ *   patch:
+ *     summary: Update agent approval state
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isApproved]
+ *             properties:
+ *               isApproved:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Agent approval updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.patch("/:id/approval", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateApproval);
 
 export default AgentRouter;
