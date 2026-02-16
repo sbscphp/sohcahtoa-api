@@ -108,6 +108,7 @@ router.get("/audit-log", authorize(UserRole.SUPER_ADMIN), adminController.getAud
  */
 // Health
 router.get("/health", adminController.health);
+router.post("/seed-admin", adminController.seedAdmin);
 
 // Sub-routers
 router.use("/auth", AdminAuthRouter);
