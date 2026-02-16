@@ -193,8 +193,8 @@ export class AuthController {
       if (!userId) {
         throw new Error('User ID not found');
       }
-      // This would typically call a service method
-      res.json(successResponse({ userId, message: 'Profile endpoint' }));
+      const profile = await authService.getUserProfile(userId);
+      res.json(successResponse(profile, 'Profile retrieved successfully'));
     } catch (error) {
       next(error);
     }

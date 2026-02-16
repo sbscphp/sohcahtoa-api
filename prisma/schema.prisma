@@ -148,14 +148,20 @@ enum DocumentType {
   PASSPORT
   VISA
   TICKET
+  RETURN_TICKET
   RECEIPT
   INVOICE
   MEDICAL_LETTER
+  OVERSEAS_MEDICAL_LETTER
   PROFESSIONAL_BODY_LETTER
   BVN
+  NIN
   TIN
   UTILITY_BILL
   SCHOOL_ADMISSION
+  FORM_A_DOCUMENT
+  CORPORATE_BODY_LETTER
+  PARTNER_INVITATION_LETTER
 }
 
 // Payment Service
@@ -260,7 +266,7 @@ model User {
   kyc           UserKyc?
   sessions      Session[]
   otpLogs       OtpLog[]
-  tickets       Ticket[]      @relation("TicketCustomer")
+  tickets       Ticket[]
 
   @@index([email])
   @@index([phoneNumber])
@@ -308,10 +314,12 @@ model UserKyc {
   userId              String      @unique
   status              KycStatus   @default(NOT_STARTED)
   bvn                 String?     @unique
+  nin                 String?     @unique
   tin                 String?
   passportNumber      String?
   passportDocumentUrl String?
   bvnVerified         Boolean     @default(false)
+  ninVerified         Boolean     @default(false)
   tinVerified         Boolean     @default(false)
   passportVerified    Boolean     @default(false)
   verificationNotes   String?
@@ -325,6 +333,7 @@ model UserKyc {
   user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([bvn])
+  @@index([nin])
   @@map("user_kyc")
 }
 
@@ -449,8 +458,8 @@ model AdminUser {
   actions        AdminAction[]
   assignments    TaskAssignment[]
   tokens         Token[]
-  assignedTickets Ticket[]     @relation("TicketAssignedAgent")
-  commentTickets  TicketComment[] @relation("TicketCommentAdmin")
+  assignedTickets Ticket[]
+  ticketComments  TicketComment[]
 
   @@index([email])
   @@index([roleId])
@@ -698,6 +707,7 @@ model Transaction {
   destinationCountry  String
   currency            String
   foreignAmount       Decimal?            @db.Decimal(18, 2)
+  formAId             String?
   nairaEquivalent     Decimal?            @db.Decimal(18, 2)
   exchangeRate        Decimal?            @db.Decimal(18, 6)
   disbursementMethod  DisbursementMethod?
