@@ -612,6 +612,26 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *                     message:
  *                       type: string
  *                       example: "Passport verified successfully. Use the verification token to proceed."
+ *                     firstName:
+ *                       type: string
+ *                       example: "Maria"
+ *                     lastName:
+ *                       type: string
+ *                       example: "Garcia"
+ *                     dateOfBirth:
+ *                       type: string
+ *                       example: "1988-05-15"
+ *                     email:
+ *                       type: string
+ *                       description: Partially redacted email address
+ *                       example: "m***@example.com"
+ *                     phoneNumber:
+ *                       type: string
+ *                       description: Partially redacted phone number
+ *                       example: "+34****567890"
+ *                     nationality:
+ *                       type: string
+ *                       example: "Spanish"
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
