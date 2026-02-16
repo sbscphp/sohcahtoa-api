@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { userManagementController } from "../controllers/user-management.controller";
 import { addUserValidationStore, validate } from "../validations/user-management.validation";
-import { authRateLimiter, authenticate, authorize } from "../../../shared/middleware";
+import { authenticate, authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 
 const UserManagementRouter: Router = Router();

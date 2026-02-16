@@ -12,9 +12,21 @@ async function main() {
 
   logger.info("Starting Prisma seed...");
 
-  let defaultRole = await prisma.role.findFirst({
-    where: { isDefault: true },
-  });
+  const branchName = "Head Office";
+  const departmentName = "Administration";
+
+  const department =
+    (await prisma.department.findFirst({ where: { name: departmentName } })) ||
+    (await prisma.department.create({
+      data: {
+        name: departmentName,
+        description: "Default administration department",
+        branch: branchName,
+        isActive: true,
+      },
+    }));
+
+  let defaultRole = await prisma.role.findFirst({ where: { isDefault: true } });
 
   if (!defaultRole) {
     defaultRole = await prisma.role.create({
@@ -24,9 +36,9 @@ async function main() {
         permissions: [],
         isDefault: true,
         isActive: true,
-        branch: "Head Office",
-        department: "Administration",
-      } as any,
+        branch: branchName,
+        departmentId: department.id,
+      },
     });
     logger.info("Created default SUPER_ADMIN role", { roleId: defaultRole.id });
   }
@@ -47,13 +59,12 @@ async function main() {
       email: adminEmail,
       fullName,
       phoneNumber: "08000000000",
-      branch: "Head Office",
-      departmentName: "Administration",
+      branch: branchName,
+      departmentId: department.id,
       roleId: defaultRole.id,
-      role: "SUPER_ADMIN" as any,
       password: passwordHash,
       isActive: true,
-    } as any,
+    },
   });
 
   logger.info("Seeded SUPER_ADMIN user", { email: admin.email, id: admin.id });

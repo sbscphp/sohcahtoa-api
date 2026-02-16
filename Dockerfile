@@ -18,6 +18,7 @@ RUN npm ci
 
 # Copy source code
 COPY src ./src
+COPY scripts ./scripts
 COPY tsconfig.json ./
 
 # Generate Prisma Client
@@ -62,4 +63,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Start application
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]

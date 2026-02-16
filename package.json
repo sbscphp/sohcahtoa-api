@@ -13,6 +13,7 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed",
+    "db:seed": "prisma db seed",
     "db:init": "prisma generate && prisma migrate deploy",
     "db:log-tables": "tsx scripts/log-db-tables.ts",
     "deploy": "prisma migrate deploy && npm run build && npm start",
@@ -67,6 +68,6 @@
     "node": ">=18.0.0"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "node dist/scripts/seed.js"
   }
 }
