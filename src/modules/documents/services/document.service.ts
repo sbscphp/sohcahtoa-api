@@ -62,16 +62,22 @@ export class DocumentService {
 
       if (transactionId) {
         // Transaction-specific document
+        const documentData: any = {
+          transactionId,
+          documentType,
+          fileUrl: uploadResult.secureUrl,
+          fileName: file.originalname,
+          fileSize: file.size,
+          verificationStatus: VerificationStatus.PENDING,
+        };
+
+        // Only add metadata if it exists
+        if (metadata) {
+          documentData.metadata = metadata;
+        }
+
         document = await prisma.transactionDocument.create({
-          data: {
-            transactionId,
-            documentType,
-            fileUrl: uploadResult.secureUrl,
-            fileName: file.originalname,
-            fileSize: file.size,
-            verificationStatus: VerificationStatus.PENDING,
-            metadata: metadata || null,
-          },
+          data: documentData,
         });
       } else {
         // General user document (we'll need to check if there's a UserDocument table or create transaction without transaction ID)
