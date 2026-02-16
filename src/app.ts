@@ -11,6 +11,7 @@ import transactionRoutes from './modules/transactions/routes/transaction.routes'
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
 import customerTransactionRoutes from './modules/customer/routes/customer-transaction.routes';
+import { DocumentRouter } from './modules/documents/routes/document.routes';
 
 const logger = createLogger('app');
 
@@ -83,6 +84,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/customer', customerTransactionRoutes);
   logger.info('Customer transaction routes registered');
+
+  app.use('/api/documents', DocumentRouter);
+  logger.info('Document routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {
