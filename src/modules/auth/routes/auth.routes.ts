@@ -358,6 +358,26 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *                     message:
  *                       type: string
  *                       example: "Passport verified successfully. Use the verification token to proceed."
+ *                     firstName:
+ *                       type: string
+ *                       example: "John"
+ *                     lastName:
+ *                       type: string
+ *                       example: "Doe"
+ *                     dateOfBirth:
+ *                       type: string
+ *                       example: "1990-01-01"
+ *                     email:
+ *                       type: string
+ *                       description: Partially redacted email address
+ *                       example: "j***@example.com"
+ *                     phoneNumber:
+ *                       type: string
+ *                       description: Partially redacted phone number
+ *                       example: "+44****567890"
+ *                     nationality:
+ *                       type: string
+ *                       example: "British"
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -890,6 +910,7 @@ router.post('/otp/send', authController.sendOtp);
  * /api/auth/otp/validate:
  *   post:
  *     summary: Validate OTP code
+ *     description: Validates an OTP code. Email is optional - OTP code alone is sufficient for validation.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -898,20 +919,45 @@ router.post('/otp/send', authController.sendOtp);
  *           schema:
  *             type: object
  *             required:
- *               - phoneNumber
  *               - otp
+ *               - purpose
  *             properties:
- *               phoneNumber:
- *                 type: string
- *                 example: "+2348012345678"
  *               otp:
  *                 type: string
+ *                 description: The OTP code to validate
  *                 example: "123456"
+ *               purpose:
+ *                 type: string
+ *                 enum: [REGISTRATION, LOGIN, PASSWORD_RESET, TRANSACTION_VERIFICATION]
+ *                 description: Purpose of the OTP
+ *                 example: REGISTRATION
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Optional - Email address (not required, OTP code is sufficient)
+ *                 example: user@example.com
  *     responses:
  *       200:
  *         description: OTP validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     valid:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                       example: OTP validated successfully
  *       400:
- *         description: Invalid OTP
+ *         description: Invalid or expired OTP
  *       429:
  *         description: Too many requests
  */

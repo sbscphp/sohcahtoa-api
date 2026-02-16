@@ -87,7 +87,7 @@ export enum OtpPurpose {
 }
 
 export interface OtpValidationRequest {
-  email: string;
+  email?: string;
   otp: string;
   purpose: OtpPurpose;
 }

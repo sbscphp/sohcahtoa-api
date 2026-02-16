@@ -346,9 +346,8 @@ export class AuthService {
 
     const bvnData = JSON.parse(cachedData);
 
-    // Validate OTP using the email from BVN data
+    // Validate OTP (email not required, OTP code is sufficient)
     const otpValidation = await this.validateOtp({
-      email: bvnData.email,
       otp: data.otp,
       purpose: OtpPurpose.REGISTRATION,
     });
@@ -471,7 +470,7 @@ export class AuthService {
     };
   }
 
-  // STEP 1: Verify passport and return ONLY verification token
+  // STEP 1: Verify passport and return verification token with redacted user info
   async verifyPassportForSignup(
     passportDocumentUrl: string,
     passportNumber?: string,
@@ -479,6 +478,12 @@ export class AuthService {
   ): Promise<{
     verificationToken: string;
     message: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    email: string;
+    phoneNumber: string;
+    nationality: string;
   }> {
     // Verify passport document and extract all user data
     const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
@@ -521,11 +526,17 @@ export class AuthService {
     };
     await redis.setex(cacheKey, 30 * 60, JSON.stringify(passportData)); // 30 minutes
 
-    // Return ONLY verification token to frontend
-    // All sensitive data remains server-side in Redis
+    // Return verification token with redacted user information
+    // Full sensitive data remains server-side in Redis
     return {
       verificationToken, // Client must send this token in subsequent steps
       message: 'Passport verified successfully. Use the verification token to proceed.',
+      firstName: passportData.firstName,
+      lastName: passportData.lastName,
+      dateOfBirth: passportData.dateOfBirth,
+      email: partiallyRedactField(passportData.email, 'email'),
+      phoneNumber: partiallyRedactField(passportData.phoneNumber, 'phone'),
+      nationality: passportData.nationality,
     };
   }
 
@@ -611,9 +622,8 @@ export class AuthService {
 
     const passportData = JSON.parse(cachedData);
 
-    // Validate OTP using the email from passport data
+    // Validate OTP (email not required, OTP code is sufficient)
     const otpValidation = await this.validateOtp({
-      email: passportData.email,
       otp: data.otp,
       purpose: OtpPurpose.REGISTRATION,
     });
@@ -840,8 +850,19 @@ export class AuthService {
     });
 
     // Cache OTP in Redis for faster validation
+    // Store with both email/phone key and OTP-only key for flexible validation
     const cacheKey = `otp:${data.email || data.phoneNumber}:${data.purpose}`;
     await redis.setex(cacheKey, OTP_EXPIRY_MINUTES * 60, otp);
+
+    // Also store with OTP code as key for validation without email/phone
+    const otpOnlyKey = `otp:code:${otp}:${data.purpose}`;
+    const otpData = JSON.stringify({
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      otp,
+      purpose: data.purpose,
+    });
+    await redis.setex(otpOnlyKey, OTP_EXPIRY_MINUTES * 60, otpData);
 
     // Send OTP via email if email service is configured
     if (emailService.isReady() && data.email) {
@@ -864,63 +885,116 @@ export class AuthService {
   }
 
   async validateOtp(data: OtpValidationRequest): Promise<{ valid: boolean; message: string }> {
-    // Check Redis cache first
-    const cacheKey = `otp:${data.email}:${data.purpose}`;
-    const cachedOtp = await redis.get(cacheKey);
+    let email = data.email;
 
-    if (cachedOtp && cachedOtp === data.otp) {
-      // Mark OTP as used
-      await redis.del(cacheKey);
+    // If email not provided, look up by OTP code
+    if (!email) {
+      const otpOnlyKey = `otp:code:${data.otp}:${data.purpose}`;
+      const otpDataStr = await redis.get(otpOnlyKey);
 
-      await prisma.otpLog.updateMany({
-        where: {
-          email: data.email,
-          purpose: data.purpose,
-          otp: data.otp,
-          isUsed: false,
-        },
-        data: {
-          isUsed: true,
-          usedAt: new Date(),
-        },
-      });
+      if (otpDataStr) {
+        const otpData = JSON.parse(otpDataStr);
+        email = otpData.email;
 
-      // Update user verification status if needed
-      if (data.purpose === OtpPurpose.REGISTRATION) {
-        const user = await prisma.user.update({
-          where: { email: data.email },
-          data: { emailVerified: true },
-          include: { profile: true },
+        // Delete the OTP-only key
+        await redis.del(otpOnlyKey);
+
+        // Also delete the email/phone key if it exists
+        if (email) {
+          const cacheKey = `otp:${email}:${data.purpose}`;
+          await redis.del(cacheKey);
+        }
+
+        // Mark OTP as used in database
+        await prisma.otpLog.updateMany({
+          where: {
+            otp: data.otp,
+            purpose: data.purpose,
+            isUsed: false,
+          },
+          data: {
+            isUsed: true,
+            usedAt: new Date(),
+          },
         });
 
-        // Send welcome email after verification
-        if (emailService.isReady() && user.profile) {
-          await emailService.sendWelcomeEmail(user.email, user.profile.firstName);
-        }
+        return { valid: true, message: 'OTP validated successfully' };
       }
-
-      return { valid: true, message: 'OTP validated successfully' };
     }
 
-    // Check database
+    // Check Redis cache with email if provided
+    if (email) {
+      const cacheKey = `otp:${email}:${data.purpose}`;
+      const cachedOtp = await redis.get(cacheKey);
+
+      if (cachedOtp && cachedOtp === data.otp) {
+        // Mark OTP as used
+        await redis.del(cacheKey);
+
+        // Also delete OTP-only key
+        const otpOnlyKey = `otp:code:${data.otp}:${data.purpose}`;
+        await redis.del(otpOnlyKey);
+
+        await prisma.otpLog.updateMany({
+          where: {
+            email: email,
+            purpose: data.purpose,
+            otp: data.otp,
+            isUsed: false,
+          },
+          data: {
+            isUsed: true,
+            usedAt: new Date(),
+          },
+        });
+
+        // Update user verification status if needed
+        if (data.purpose === OtpPurpose.REGISTRATION && email) {
+          const user = await prisma.user.update({
+            where: { email: email },
+            data: { emailVerified: true },
+            include: { profile: true },
+          });
+
+          // Send welcome email after verification
+          if (emailService.isReady() && user.profile) {
+            await emailService.sendWelcomeEmail(user.email, user.profile.firstName);
+          }
+        }
+
+        return { valid: true, message: 'OTP validated successfully' };
+      }
+    }
+
+    // Check database - build where clause based on available data
+    const whereClause: any = {
+      purpose: data.purpose,
+      otp: data.otp,
+      isUsed: false,
+      expiresAt: { gt: new Date() },
+    };
+
+    // Only filter by email if provided
+    if (email) {
+      whereClause.email = email;
+    }
+
     const otpLog = await prisma.otpLog.findFirst({
-      where: {
-        email: data.email,
-        purpose: data.purpose,
-        otp: data.otp,
-        isUsed: false,
-        expiresAt: { gt: new Date() },
-      },
+      where: whereClause,
     });
 
     if (!otpLog) {
       // Increment attempts
+      const updateWhereClause: any = {
+        purpose: data.purpose,
+        otp: data.otp,
+      };
+      if (email) {
+        updateWhereClause.email = email;
+      }
+
       await prisma.otpLog.updateMany({
-        where: {
-          email: data.email,
-          purpose: data.purpose,
-          otp: data.otp,
-        },
+        where: updateWhereClause,
         data: {
           attempts: { increment: 1 },
         },
