@@ -22,8 +22,26 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
   // IMPORTANT: Always use TypeScript source files because compiled JS files lose JSDoc comments
   // swagger-jsdoc can read .ts files directly even in production
   const apiPaths = [
+    // All module route files (main pattern)
     path.join(rootDir, 'src/modules/*/routes/*.ts'),
+    path.join(rootDir, 'src/modules/*/*/routes/*.ts'),
+
+    // All module controller files (may contain JSDoc)
     path.join(rootDir, 'src/modules/*/controllers/*.ts'),
+    path.join(rootDir, 'src/modules/*/*/controllers/*.ts'),
+
+    // Service files (some may have JSDoc)
+    path.join(rootDir, 'src/modules/*/services/*.ts'),
+
+    // Root level routes
+    path.join(rootDir, 'src/routes/*.ts'),
+
+    // Main app files
+    path.join(rootDir, 'src/app.ts'),
+    path.join(rootDir, 'src/index.ts'),
+
+    // Shared utilities that might have JSDoc
+    path.join(rootDir, 'src/shared/middleware/*.ts'),
   ];
 
   const options: swaggerJsdoc.Options = {
