@@ -7,6 +7,7 @@ const ACCESS_TOKEN_EXPIRY = process.env.JWT_ACCESS_EXPIRY || '15m';
 const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
 
 export const generateAccessToken = (payload: JwtPayload): string => {
+  console.log(">>>>>> payload", payload, ACCESS_TOKEN_EXPIRY)
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   } as SignOptions);

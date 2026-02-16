@@ -42,7 +42,7 @@ const router:Router = Router();
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Read-only admin view
-router.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), customerController.listCustomers);
+router.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listCustomers);
 
 /**
  * @swagger
@@ -58,7 +58,11 @@ router.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), customerControlle
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/counts", customerController.getCustomerCounts);
+router.get("/counts", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomerCounts);
+
+// Global flags view and flag status updates should precede dynamic :userId routes
+router.get("/flags/all", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listAllFlags);
+router.patch("/flags/:flagId/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.updateFlagStatus);
 
 /**
  * @swagger
@@ -82,7 +86,7 @@ router.get("/counts", customerController.getCustomerCounts);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.get("/:userId", customerController.getCustomer);
+router.get("/:userId", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomer);
 
 /**
  * @swagger
@@ -105,7 +109,7 @@ router.get("/:userId", customerController.getCustomer);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Flags
-router.get("/:userId/flags", customerController.listCustomerFlags);
+router.get("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listCustomerFlags);
 
 /**
  * @swagger
@@ -129,7 +133,7 @@ router.get("/:userId/flags", customerController.listCustomerFlags);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN), customerController.deactivateCustomer);
+router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.deactivateCustomer);
 
 /**
  * @swagger
@@ -169,72 +173,6 @@ router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN), customerController.createFlag);
-
-/**
- * @swagger
- * /api/admin/customers/flags/all:
- *   get:
- *     summary: List all customer flags across the system
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [ACTIVE, RESOLVED, DISMISSED]
- *       - in: query
- *         name: type
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: All flags retrieved
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-// Global flags view (optional but useful)
-router.get("/flags/all", authenticate, authorize(UserRole.SUPER_ADMIN), customerController.listAllFlags);
-
-/**
- * @swagger
- * /api/admin/customers/flags/{flagId}/status:
- *   patch:
- *     summary: Update flag status
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: flagId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - status
- *             properties:
- *               status:
- *                 type: string
- *                 enum: [ACTIVE, RESOLVED, DISMISSED]
- *               notes:
- *                 type: string
- *     responses:
- *       200:
- *         description: Flag status updated
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- *       404:
- *         $ref: '#/components/responses/NotFoundError'
- */
-// Update flag status
-router.patch("/flags/:flagId/status", authenticate, authorize(UserRole.SUPER_ADMIN), customerController.updateFlagStatus);
+router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.createFlag);
 
 export default router;

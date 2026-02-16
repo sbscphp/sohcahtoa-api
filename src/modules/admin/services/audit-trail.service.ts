@@ -38,7 +38,18 @@ class AuditTrailService {
       departmentId: payload.departmentId || null,
     };
     const client: any = prisma as any;
-    return client.adminAction.create({ data });
+    try {
+      return client.adminAction.create({ data });
+    } catch (error: any) {
+      const msg = String(error?.message || "");
+      if (msg.includes("Invalid value for argument `actionType`")) {
+        if (data.actionType === "AGENT_APPROVE" || data.actionType === "AGENT_DEACTIVATE") {
+          data.actionType = "AGENT_UPDATE_STATUS";
+          return client.adminAction.create({ data });
+        }
+      }
+      throw error;
+    }
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {

@@ -2,10 +2,15 @@ import { Router } from "express";
 import { ticketsController } from "../controllers/tickets.controller";
 import { authenticate, authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
-import { uploadSingleImage } from "../../../shared/middleware/upload";
+import { createUploadMiddleware } from "../../../shared/middleware/upload";
 
 const TicketsRouter: Router = Router();
 
+const uploadTicketAttachment = createUploadMiddleware({
+  fieldName: "file",
+  maxSize: 200 * 1024,
+  allowedMimeTypes: ["application/pdf", "image/jpeg", "image/jpg", "image/png"],
+});
 /**
  * @swagger
  * /api/admin/tickets/stats:
@@ -20,7 +25,7 @@ const TicketsRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.stats);
+TicketsRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.stats);
 
 /**
  * @swagger
@@ -64,7 +69,7 @@ TicketsRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), ticke
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.list);
+TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.list);
 
 /**
  * @swagger
@@ -77,41 +82,6 @@ TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsCon
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [customer, caseType, priorityLevel, description]
- *             properties:
- *               customer:
- *                 type: string
- *                 description: Customer ID
- *               caseType:
- *                 type: string
- *                 description: Case type/category
- *               priorityLevel:
- *                 type: string
- *                 enum: [LOW, MEDIUM, HIGH]
- *               description:
- *                 type: string
- *               attachment:
- *                 type: object
- *                 properties:
- *                   fileUrl:
- *                     type: string
- *                   fileName:
- *                     type: string
- *                   fileSize:
- *                     type: number
- *                   mimeType:
- *                     type: string
- *                     enum: [application/pdf, image/jpeg, image/jpg, image/png]
- *               attachmentUrl:
- *                 type: string
- *                 description: If provided, server uploads to Cloudinary
- *               attachmentBase64:
- *                 type: string
- *                 description: Data URI or base64; server uploads to Cloudinary
- *             description: Max file size 200KB; allowed types: PDF/JPG/JPEG/PNG
  *         multipart/form-data:
  *           schema:
  *             type: object
@@ -126,20 +96,18 @@ TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsCon
  *                 enum: [LOW, MEDIUM, HIGH]
  *               description:
  *                 type: string
- *               attachmentUrl:
+ *               file:
  *                 type: string
- *               attachmentName:
- *                 type: string
- *               attachmentSize:
- *                 type: number
- *           description: Max file size 200KB; allowed types: PDF/JPG/JPEG/PNG
+ *                 format: binary
+ *                 description: Attachment (PDF/JPG/JPEG/PNG), max size 200KB
+ *           description: "Allowed types: PDF/JPG/JPEG/PNG; Max size: 200KB"
  *     responses:
  *       201:
  *         description: Ticket created successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN), uploadSingleImage, ticketsController.create);
+TicketsRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadTicketAttachment, ticketsController.create);
 
 /**
  * @swagger
@@ -163,7 +131,7 @@ TicketsRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN), uploadSin
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.get);
+TicketsRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.get);
 
 /**
  * @swagger
@@ -200,7 +168,7 @@ TicketsRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), tickets
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.updateStatus);
+TicketsRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.updateStatus);
 
 /**
  * @swagger
@@ -224,7 +192,7 @@ TicketsRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN)
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.post("/:id/assign", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.assign);
+TicketsRouter.post("/:id/assign", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.assign);
 
 /**
  * @swagger

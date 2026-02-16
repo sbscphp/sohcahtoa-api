@@ -19,7 +19,7 @@ const OutletRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.franchiseStats);
+OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.franchiseStats);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -51,7 +51,7 @@ OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADM
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.listFranchises);
+OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.listFranchises);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -89,7 +89,7 @@ OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), o
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.createFranchise);
+OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.createFranchise);
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/status:
@@ -121,7 +121,7 @@ OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), 
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.updateFranchiseStatus);
+OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.updateFranchiseStatus);
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/approve:
@@ -142,7 +142,7 @@ OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SU
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.approveFranchise);
+OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.approveFranchise);
 // /**
 //  * @swagger
 //  * /api/admin/outlet/franchises/export:
@@ -173,48 +173,10 @@ OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.S
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.list);
-/**
- * @swagger
- * /api/admin/outlet/{name}:
- *   get:
- *     summary: Get outlet details and recent pickups
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: name
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Outlet details retrieved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- *       404:
- *         $ref: '#/components/responses/NotFoundError'
- */
-OutletRouter.get("/:name", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.get);
+// OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.list);
 
 /**
- * @swagger
- * /api/admin/outlet/branches/stats:
- *   get:
- *     summary: Get branch counters
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Stats retrieved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.branchStats);
-/**
- * @swagger
+ *  * @swagger
  * /api/admin/outlet/branches:
  *   get:
  *     summary: List branches
@@ -244,7 +206,24 @@ OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.listBranches);
+OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.listBranches);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/stats:
+ *   get:
+ *     summary: Get branch counters
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stats retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.branchStats);
+
 /**
  * @swagger
  * /api/admin/outlet/branches:
@@ -290,7 +269,7 @@ OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), out
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.createBranch);
+OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.createBranch);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}:
@@ -313,7 +292,7 @@ OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), ou
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.getBranch);
+OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.getBranch);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/status:
@@ -345,7 +324,7 @@ OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN),
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.updateBranchStatus);
+OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.updateBranchStatus);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/agents:
@@ -377,7 +356,7 @@ OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPE
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.addAgents);
+OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.addAgents);
 // /**
 //  * @swagger
 //  * /api/admin/outlet/branches/export:
@@ -393,5 +372,29 @@ OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER
 //  *         $ref: '#/components/responses/UnauthorizedError'
 //  */
 // // OutletRouter.get("/branches/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportBranches);
+
+/**
+ * @swagger
+ * /api/admin/outlet/{name}:
+ *   get:
+ *     summary: Get outlet details and recent pickups
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Outlet details retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+// OutletRouter.get("/:name", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.get);
 
 export default OutletRouter;

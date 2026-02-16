@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, ValidationError } from "../../../shared/utils";
 import { agentService } from "../services/agent.service";
-import { uploadFile } from "../../../shared/utils/file-upload";
+import { uploadToCloudinary } from "../../../shared/utils/cloudinary";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
 
@@ -10,17 +10,36 @@ class AgentController {
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
     let attachment;
     if (req.file) {
-      attachment = await uploadFile(req.file, { folder: "agents" });
-      if (typeof attachment.fileSize === "number" && attachment.fileSize > 2 * 1024 * 1024) {
-        throw new Error("Attachment exceeds 2MB limit");
+      if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
+        throw new ValidationError("Attachment exceeds 2MB limit");
+      }
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: "agents",
+          resourceType: "auto",
+          allowedFormats: ["jpg", "jpeg", "png", "pdf"],
+          maxFileSize: 2 * 1024 * 1024,
+        });
+        attachment = {
+          fileUrl: result.secureUrl,
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype,
+        };
+      } catch (err: any) {
+        throw new ValidationError(`Attachment upload failed: ${err?.message || "Unknown error"}`);
       }
     }
     const payload = {
       name: req.body.name,
       email: req.body.email,
       phoneNumber: req.body.phoneNumber,
+      branch: req.body.branch,
       attachment,
     };
+    if (!payload.branch) {
+      throw new ValidationError("branch is required");
+    }
     const created = await agentService.create(payload);
     if (req.user) {
       await auditTrailService.logAction({
@@ -63,6 +82,71 @@ class AgentController {
         adminId: req.user.userId,
         actionType: "AGENT_UPDATE_STATUS",
         actionLabel: "Agent status updated",
+        resourceType: "AGENT",
+        resourceId: updated.id,
+        previousState: before,
+        newState: updated,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
+    res.json(successResponse(updated));
+  });
+
+  updateApproval = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const before = await agentService.get(req.params.id);
+    const updated = await agentService.updateApproval(req.params.id, !!req.body.isApproved);
+    if (req.user) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: "AGENT_APPROVE",
+        actionLabel: "Agent approval updated",
+        resourceType: "AGENT",
+        resourceId: updated.id,
+        previousState: before,
+        newState: updated,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
+    res.json(successResponse(updated));
+  });
+
+  update = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const before = await agentService.get(req.params.id);
+    const updated = await agentService.update(req.params.id, {
+      name: req.body.name,
+      email: req.body.email,
+      phoneNumber: req.body.phoneNumber,
+      branch: req.body.branch,
+    });
+    if (req.user) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: "AGENT_UPDATE_STATUS",
+        actionLabel: "Agent details updated",
+        resourceType: "AGENT",
+        resourceId: updated.id,
+        previousState: before,
+        newState: updated,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
+    res.json(successResponse(updated));
+  });
+
+  deactivate = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const before = await agentService.get(req.params.id);
+    const updated = await agentService.updateStatus(req.params.id, false);
+    if (req.user) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: "AGENT_DEACTIVATE",
+        actionLabel: "Agent deactivated",
         resourceType: "AGENT",
         resourceId: updated.id,
         previousState: before,

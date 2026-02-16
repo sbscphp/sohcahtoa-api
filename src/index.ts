@@ -1,13 +1,10 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { createApp } from './app';
 import { initializeDatabase, disconnectDatabase } from './config/database';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import { initializeEmail } from './config/email';
 import { createLogger } from './shared/utils/logger';
 import { eventBus } from './events/event-bus';
-
-// Load environment variables
-dotenv.config();
 
 const logger = createLogger('Server');
 

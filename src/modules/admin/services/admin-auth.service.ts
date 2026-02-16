@@ -1,4 +1,4 @@
-import { createLogger, emailService } from "../../../shared/utils";
+import { createLogger, emailService, generateSecureOtp } from "../../../shared/utils";
 import { EventType, ServiceName, UserRole } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
@@ -22,40 +22,70 @@ class AdminAuthService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async forgotPassword(email: string) {
-    const user = await this.prisma.adminUser.findUnique({ where: { email } });
-    
-    if (!user) throw new NotFoundError("User not found");
+  const user = await this.prisma.adminUser.findUnique({
+    where: { email },
+  });
 
-    const otp = generateOtp();
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+  if (!user) {
+    return { message: "If an account exists, an OTP has been sent." };
+  }
 
-    await this.prisma.token.updateMany({
-      where: { userId: user.id, type: "OTP", isUsed: false },
-      data: { isUsed: true },
-    });
+  const now = new Date();
 
-    await this.prisma.token.create({
+  const recentOtp = await this.prisma.token.findFirst({
+    where: {
+      userId: user.id,
+      type: "OTP",
+      createdAt: { gt: new Date(Date.now() - 60 * 1000) },
+    },
+  });
+
+  if (recentOtp) {
+    return { message: "Please wait before requesting another OTP." };
+  }
+
+  const otp = generateSecureOtp();
+  const hashedOtp = await hashPassword(otp);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  const purpose = user.password ? "PASSWORD_RESET" : "WELCOME";
+
+  await this.prisma.$transaction([
+    // Invalidate previous unused OTPs
+    this.prisma.token.updateMany({
+      where: {
+        userId: user.id,
+        type: "OTP",
+        isUsed: false,
+      },
+      data: {
+        isUsed: true,
+        usedAt: now,
+      },
+    }),
+
+    // Create new OTP
+    this.prisma.token.create({
       data: {
         userId: user.id,
         type: "OTP",
-        token: otp,
+        token: hashedOtp,
         expiresAt,
-        metadata: { purpose: user.password ? "PASSWORD_RESET" : "WELCOME" },
+        attempts: 0,
+        metadata: { purpose },
       },
-    });
+    }),
+  ]);
 
-    logger.info("Forgot password initiated", { email });
-
-    if (emailService.isReady()) {
-      const purpose = user.password ? "PASSWORD_RESET" : "REGISTRATION";
-      emailService
-        .sendOtpEmail(user.email, otp, purpose)
-        .catch((err: Error) => logger.warn("OTP email failed", { userId: user.id, message: err.message }));
-    }
-
-    return { message: "OTP sent to your email" };
+  if (emailService.isReady()) {
+    emailService
+      .sendOtpEmail(user.email, otp, purpose)
+      .catch(() => {});
   }
+
+  return { message: "If an account exists, an OTP has been sent." };
+}
+
 
   async resetPassword(otp: string, newPassword: string) {
     const tokenRecord = await this.prisma.token.findFirst({
@@ -89,67 +119,89 @@ class AdminAuthService {
   }
 
   async validateResetOtp(otp: string) {
-    const tokenRecords = await this.prisma.token.findMany({
-      where: {
-        type: "OTP",
-        isUsed: false,
-        expiresAt: { gt: new Date() },
-      },
-      include: {
-        user: true,
-      },
-    });
+  const now = new Date();
 
-    let matchedToken = null;
+  const activeTokens = await this.prisma.token.findMany({
+    where: {
+      type: "OTP",
+      isUsed: false,
+      expiresAt: { gt: now },
+    },
+    select: {
+      id: true,
+      userId: true,
+      token: true,
+      metadata: true,
+      attempts: true,
+    },
+  });
 
-    for (const record of tokenRecords) {
-      const isValid = await comparePassword(otp, record.token);
-    if (isValid) {
-      matchedToken = record;
-      break;
+  let matchedToken: typeof activeTokens[number] | null = null;
+
+  for (const record of activeTokens) {
+    const isValid = await comparePassword(otp, record.token);
+
+    if (!isValid) {
+      // increment attempts safely
+      await this.prisma.token.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      continue;
     }
+
+    matchedToken = record;
+    break;
   }
 
   if (!matchedToken) {
     throw new ValidationError("Invalid or expired OTP");
   }
 
-  const metadata = matchedToken.metadata as any;
+  // Lock if too many attempts
+  if (matchedToken.attempts >= 5) {
+    await this.prisma.token.update({
+      where: { id: matchedToken.id },
+      data: { isUsed: true, usedAt: now },
+    });
+
+    throw new ValidationError("OTP locked due to multiple failed attempts");
+  }
+
+  const metadata = matchedToken.metadata as { purpose?: string };
+
   if (metadata?.purpose !== "PASSWORD_RESET") {
     throw new ValidationError("Invalid OTP purpose");
   }
 
   const resetToken = generateId();
   const hashedResetToken = await hashPassword(resetToken);
-
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   await this.prisma.$transaction([
     // Mark OTP as used
     this.prisma.token.update({
       where: { id: matchedToken.id },
-      data: { isUsed: true, usedAt: new Date() },
+      data: { isUsed: true, usedAt: now },
     }),
 
-    // Invalidate existing reset tokens
+    // Invalidate previous reset tokens
     this.prisma.token.updateMany({
       where: {
         userId: matchedToken.userId,
         type: "PASSWORD_RESET",
         isUsed: false,
       },
-      data: { isUsed: true, usedAt: new Date() },
+      data: { isUsed: true, usedAt: now },
     }),
 
-    // Create new reset token
+    // Create reset token
     this.prisma.token.create({
       data: {
         userId: matchedToken.userId,
         type: "PASSWORD_RESET",
         token: hashedResetToken,
         expiresAt,
-        isUsed: false,
       },
     }),
   ]);
@@ -158,44 +210,62 @@ class AdminAuthService {
     resetToken,
     message: "OTP validated. Use resetToken within 10 minutes.",
   };
-  }
+}
 
-  async submitNewPassword(resetToken: string, newPassword: string) {
-  const tokenRecord = await this.prisma.token.findFirst({
+
+async submitNewPassword(resetToken: string, newPassword: string) {
+  const now = new Date();
+
+  const activeTokens = await this.prisma.token.findMany({
     where: {
       type: "PASSWORD_RESET",
       isUsed: false,
-      expiresAt: { gt: new Date() },
+      expiresAt: { gt: now },
     },
-    include: {
-      user: true,
+    select: {
+      id: true,
+      userId: true,
+      token: true,
     },
   });
 
-  if (!tokenRecord) {
-    throw new ValidationError("Invalid or expired reset token");
+  let matchedToken: typeof activeTokens[number] | null = null;
+
+  for (const record of activeTokens) {
+    const isValid = await comparePassword(resetToken, record.token);
+    if (isValid) {
+      matchedToken = record;
+      break;
+    }
   }
 
-  const isValid = await comparePassword(
-    resetToken,
-    tokenRecord.token
-  );
-
-  if (!isValid) {
+  if (!matchedToken) {
     throw new ValidationError("Invalid or expired reset token");
   }
 
   const hashedPassword = await hashPassword(newPassword);
 
   await this.prisma.$transaction([
+    // Update user password
     this.prisma.adminUser.update({
-      where: { id: tokenRecord.userId },
+      where: { id: matchedToken.userId },
       data: { password: hashedPassword },
     }),
 
+    // Mark reset token as used
     this.prisma.token.update({
-      where: { id: tokenRecord.id },
-      data: { isUsed: true, usedAt: new Date() },
+      where: { id: matchedToken.id },
+      data: { isUsed: true, usedAt: now },
+    }),
+
+    // Optional: invalidate all remaining reset tokens for this user
+    this.prisma.token.updateMany({
+      where: {
+        userId: matchedToken.userId,
+        type: "PASSWORD_RESET",
+        isUsed: false,
+      },
+      data: { isUsed: true, usedAt: now },
     }),
   ]);
 
@@ -212,7 +282,7 @@ class AdminAuthService {
 
     const otp = generateOtp();
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+    expiresAt.setHours(expiresAt.getHours() + 10);
 
     await this.prisma.token.updateMany({
       where: {
@@ -272,7 +342,7 @@ class AdminAuthService {
     const tokenPayload = {
       userId: user.id,
       email: user.email,
-      role: UserRole.ADMIN, // Admin users always have ADMIN role
+      role: UserRole.ADMIN,
       sessionId,
     };
 

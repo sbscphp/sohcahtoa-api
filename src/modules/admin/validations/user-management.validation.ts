@@ -25,5 +25,5 @@ export const addUserValidationStore = [
     body('position').optional().isString().withMessage('Invalid position'),
     body('department').notEmpty().withMessage('Department is required'),
     body('branch').notEmpty().withMessage('Branch is required'),
-    body('roleId').isUUID().withMessage('Invalid Role ID'),
+    body('role').isUUID().withMessage('Role is required'),
 ];

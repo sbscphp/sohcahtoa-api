@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { randomInt } from "crypto";
 
 export const generateId = (): string => {
   return uuidv4();
@@ -36,3 +37,15 @@ export const generatePickupCode = (): string => {
   }
   return code;
 };
+
+export const generateSecureOtp = (length = 6): string => {
+  const OTP_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let otp = "";
+
+  for (let i = 0; i < length; i++) {
+    const index = randomInt(0, OTP_CHARSET.length);
+    otp += OTP_CHARSET[index];
+  }
+
+  return otp;
+}
