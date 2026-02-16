@@ -1,3 +1,4 @@
+import { CustomerType, UserRole } from "@prisma/client";
 import { getDatabase } from "../src/config/database";
 import { createLogger } from "../src/shared/utils/logger";
 import { hashPassword } from "../src/shared/utils/password";
@@ -56,33 +57,18 @@ async function main() {
         email: adminEmail,
         fullName,
         phoneNumber: "08000000000",
-        branch: "Head Office",
-        departmentName: "Administration",
+        branch: branchName,
+        departmentId: department.id,
         roleId: defaultRole.id,
-        role: "SUPER_ADMIN" as any,
         password: passwordHash,
         isActive: true,
-      } as any,
+      },
     });
 
     logger.info("Seeded SUPER_ADMIN user", { email: admin.email, id: admin.id });
   } else {
     logger.info("Admin user already exists", { email: adminEmail });
   }
-
-  const passwordHash = await hashPassword(adminPassword);
-
-  const admin = await prisma.adminUser.create({
-    data: {
-      email: adminEmail,
-      fullName,
-      phoneNumber: "08000000000",
-      branch: branchName,
-      departmentId: department.id,
-      roleId: defaultRole.id,
-      password: passwordHash,
-      isActive: true,
-    },
   // Seed mock Nigerian customer
   const nigerianEmail = "nigerian@yopmail.com";
   const existingNigerian = await prisma.user.findUnique({
@@ -91,17 +77,16 @@ async function main() {
 
   if (!existingNigerian) {
     const passwordHash = await hashPassword("password@1234");
-
     const nigerianUser = await prisma.user.create({
       data: {
         email: nigerianEmail,
-        password: passwordHash,
         phoneNumber: "+2348012345678",
-        role: "CUSTOMER",
-        customerType: "NIGERIAN_CITIZEN",
+        role: UserRole.CUSTOMER,
+        customerType: CustomerType.NIGERIAN_CITIZEN,
         emailVerified: true,
         phoneVerified: true,
         isActive: true,
+        credentials: { create: { passwordHash } },
         profile: {
           create: {
             firstName: "Chinedu",
@@ -138,17 +123,16 @@ async function main() {
 
   if (!existingTourist) {
     const passwordHash = await hashPassword("password@1234");
-
     const touristUser = await prisma.user.create({
       data: {
         email: touristEmail,
-        password: passwordHash,
         phoneNumber: "+447700900123",
-        role: "CUSTOMER",
-        customerType: "TOURIST",
+        role: UserRole.CUSTOMER,
+        customerType: CustomerType.TOURIST,
         emailVerified: true,
         phoneVerified: true,
         isActive: true,
+        credentials: { create: { passwordHash } },
         profile: {
           create: {
             firstName: "John",
@@ -186,17 +170,16 @@ async function main() {
 
   if (!existingExpatriate) {
     const passwordHash = await hashPassword("password@1234");
-
     const expatriateUser = await prisma.user.create({
       data: {
         email: expatriateEmail,
-        password: passwordHash,
         phoneNumber: "+2348087654321",
-        role: "CUSTOMER",
-        customerType: "EXPATRIATE",
+        role: UserRole.CUSTOMER,
+        customerType: "EXPATRIATE" as unknown as CustomerType,
         emailVerified: true,
         phoneVerified: true,
         isActive: true,
+        credentials: { create: { passwordHash } },
         profile: {
           create: {
             firstName: "Maria",
