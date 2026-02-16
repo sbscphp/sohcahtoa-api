@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import path from 'path';
 
 export interface SwaggerConfig {
   title: string;
@@ -12,6 +13,19 @@ export interface SwaggerConfig {
 }
 
 export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise<void> => {
+  // Determine if we're running from dist or src
+  const isProduction = __dirname.includes('/dist/');
+  const rootDir = isProduction
+    ? path.join(__dirname, '../../..')
+    : path.join(__dirname, '../..');
+
+  // IMPORTANT: Always use TypeScript source files because compiled JS files lose JSDoc comments
+  // swagger-jsdoc can read .ts files directly even in production
+  const apiPaths = [
+    path.join(rootDir, 'src/modules/*/routes/*.ts'),
+    path.join(rootDir, 'src/modules/*/controllers/*.ts'),
+  ];
+
   const options: swaggerJsdoc.Options = {
     definition: {
       openapi: '3.0.0',
@@ -112,16 +126,30 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       security: [],
     },
-    apis: [
-      './src/modules/*/routes/*.ts',
-      './src/modules/*/routes/*.js',
-      './dist/modules/*/routes/*.js',
-      './src/index.ts',
-      './dist/index.js'
-    ],
+    apis: apiPaths,
   };
 
-  const swaggerSpec = swaggerJsdoc(options);
+  console.log('🔍 Swagger scanning paths:', apiPaths);
+  console.log('📁 Current directory:', __dirname);
+  console.log('📁 Root directory:', rootDir);
+  console.log('🏭 Is production:', isProduction);
+
+  const swaggerSpec = swaggerJsdoc(options) as any;
+
+  // Log the number of paths found
+  const pathCount = Object.keys(swaggerSpec.paths || {}).length;
+  console.log(`📚 Swagger generated ${pathCount} API endpoints`);
+
+  if (pathCount === 0) {
+    console.warn('⚠️  WARNING: No API endpoints found! Check the api paths configuration.');
+    console.log('📂 Trying to list route files...');
+    const glob = require('glob');
+    apiPaths.forEach((pattern: string) => {
+      const files = glob.sync(pattern);
+      console.log(`   Pattern: ${pattern}`);
+      console.log(`   Found ${files.length} files:`, files.slice(0, 5));
+    });
+  }
 
   // Mount swagger-ui-express
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
