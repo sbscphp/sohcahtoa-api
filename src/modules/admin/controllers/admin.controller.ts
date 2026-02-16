@@ -68,6 +68,19 @@ class AdminController {
     }
   };
 
+  seedAdmin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.seedAdminDefaults({
+        email: req.body?.email,
+        password: req.body?.password,
+        name: req.body?.name,
+      });
+      res.status(result.created ? 201 : 200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   health = async (_req: Request, res: Response) => {
     res.json({ status: "healthy", service: "admin-service" });
   };

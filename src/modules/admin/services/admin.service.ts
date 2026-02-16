@@ -2,6 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger, ForbiddenError, NotFoundError } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared/types";
+import { hashPassword } from "../../../shared/utils/password";
 
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
@@ -291,6 +292,60 @@ export class AdminService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async seedAdminDefaults(params?: { email?: string; password?: string; name?: string }) {
+    const adminEmail = params?.email || process.env.SEED_ADMIN_EMAIL || "sohcahtoa@yopmail.com";
+    const adminPassword = params?.password || process.env.SEED_ADMIN_PASSWORD || "password@1234";
+    const fullName = params?.name || process.env.SEED_ADMIN_NAME || "Local Super Admin";
+    const branchName = "Head Office";
+    const departmentName = "Administration";
+
+    const department =
+      (await prisma.department.findFirst({ where: { name: departmentName } })) ||
+      (await prisma.department.create({
+        data: {
+          name: departmentName,
+          description: "Default administration department",
+          branch: branchName,
+          isActive: true,
+        },
+      }));
+
+    let defaultRole = await prisma.role.findFirst({ where: { isDefault: true } });
+    if (!defaultRole) {
+      defaultRole = await prisma.role.create({
+        data: {
+          name: "SUPER_ADMIN",
+          description: "Default super admin role",
+          permissions: [],
+          isDefault: true,
+          isActive: true,
+          branch: branchName,
+          departmentId: department.id,
+        },
+      });
+    }
+
+    const existing = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
+    if (!existing) {
+      const passwordHash = await hashPassword(adminPassword);
+      const admin = await prisma.adminUser.create({
+        data: {
+          email: adminEmail,
+          fullName,
+          phoneNumber: "08000000000",
+          branch: branchName,
+          departmentId: department.id,
+          roleId: defaultRole.id,
+          password: passwordHash,
+          isActive: true,
+        },
+      });
+      return { created: true, admin: { id: admin.id, email: admin.email, fullName: admin.fullName }, role: { id: defaultRole.id, name: defaultRole.name }, department: { id: department.id, name: department.name } };
+    } else {
+      return { created: false, admin: { id: existing.id, email: existing.email, fullName: existing.fullName }, role: { id: defaultRole.id, name: defaultRole.name }, department: { id: department.id, name: department.name } };
+    }
   }
 }
 
