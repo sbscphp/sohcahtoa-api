@@ -472,7 +472,11 @@ export class AuthService {
   }
 
   // STEP 1: Verify passport and return ONLY verification token
-  async verifyPassportForSignup(passportDocumentUrl: string): Promise<{
+  async verifyPassportForSignup(
+    passportDocumentUrl: string,
+    passportNumber?: string,
+    customerType: 'TOURIST' | 'EXPATRIATE' = 'TOURIST'
+  ): Promise<{
     verificationToken: string;
     message: string;
   }> {
@@ -483,14 +487,19 @@ export class AuthService {
       throw new ValidationError(passportResult.message || 'Passport verification failed');
     }
 
+    // Use provided passport number or extracted one
+    const finalPassportNumber = passportNumber || passportResult.data.passportNumber;
+
     // Check if user already exists with this passport (at this stage, just for reference)
     // The actual duplicate check will be done at account creation
-    const existingKyc = await prisma.userKyc.findFirst({
-      where: { passportNumber: passportResult.data.passportNumber },
-    });
+    if (finalPassportNumber) {
+      const existingKyc = await prisma.userKyc.findFirst({
+        where: { passportNumber: finalPassportNumber },
+      });
 
-    if (existingKyc) {
-      throw new DuplicateError('An account with this passport already exists');
+      if (existingKyc) {
+        throw new DuplicateError('An account with this passport already exists');
+      }
     }
 
     // Generate a verification token to track this passport verification session
@@ -500,8 +509,9 @@ export class AuthService {
     // This keeps sensitive data server-side only
     const cacheKey = `passport:verification:${verificationToken}`;
     const passportData = {
-      passportNumber: passportResult.data.passportNumber,
+      passportNumber: finalPassportNumber,
       passportDocumentUrl,
+      customerType,
       firstName: passportResult.data.firstName,
       lastName: passportResult.data.lastName,
       email: passportResult.data.email!,
@@ -718,6 +728,102 @@ export class AuthService {
     };
   }
 
+  // STEP 4: Create expatriate account (same as tourist but different customer type)
+  async createExpatriateAccount(data: {
+    verificationToken: string;
+    password: string;
+  }): Promise<{ userId: string; message: string }> {
+    // Retrieve passport data from cache using verification token
+    const cacheKey = `passport:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('Passport verification session expired. Please verify your passport again.');
+    }
+
+    const passportData = JSON.parse(cachedData);
+
+    // Validate password
+    const passwordValidation = validatePasswordStrength(data.password);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    // Check for existing user
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: passportData.email }, { phoneNumber: passportData.phoneNumber }],
+      },
+    });
+
+    if (existingUser) {
+      throw new DuplicateError('User with this email or phone number already exists');
+    }
+
+    // Hash the user's password
+    const passwordHash = await hashPassword(data.password);
+
+    // Create user with passport data
+    const user = await prisma.user.create({
+      data: {
+        email: passportData.email,
+        phoneNumber: passportData.phoneNumber,
+        role: UserRole.CUSTOMER,
+        customerType: CustomerType.EXPATRIATE,
+        emailVerified: true, // Already verified via OTP
+        credentials: {
+          create: {
+            passwordHash,
+          },
+        },
+        profile: {
+          create: {
+            firstName: passportData.firstName,
+            lastName: passportData.lastName,
+            dateOfBirth: new Date(passportData.dateOfBirth),
+            country: passportData.nationality,
+          },
+        },
+        kyc: {
+          create: {
+            status: KycStatus.VERIFIED,
+            passportNumber: passportData.passportNumber,
+            passportDocumentUrl: passportData.passportDocumentUrl,
+            passportVerified: true,
+            verifiedAt: new Date(),
+          },
+        },
+      },
+    });
+
+    // Delete the verification token from cache after successful account creation
+    await redis.del(cacheKey);
+
+    // Send welcome email
+    if (emailService.isReady()) {
+      await emailService.sendWelcomeEmail(passportData.email, passportData.firstName);
+    }
+
+    // Publish event
+    eventBus.publish(EventType.USER_REGISTERED, {
+      eventId: generateId(),
+      source: ServiceName.AUTH,
+      timestamp: new Date().toISOString(),
+      userId: user.id,
+      data: {
+        userId: user.id,
+        email: passportData.email,
+        firstName: passportData.firstName,
+        lastName: passportData.lastName,
+      },
+    });
+
+    return {
+      userId: user.id,
+      message: 'Account created successfully. You can now login with your email and password.',
+    };
+  }
+
   async sendOtp(data: OtpRequest): Promise<{ message: string; otp?: string }> {
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -751,16 +857,10 @@ export class AuthService {
 
     // TODO: Send OTP via SMS using Termii or similar service for phone verification
 
-    const response: { message: string; otp?: string } = {
+    return {
       message: 'OTP sent successfully',
+      otp,
     };
-
-    // Include OTP in response for non-production environments
-    if (process.env.NODE_ENV !== 'production') {
-      response.otp = otp;
-    }
-
-    return response;
   }
 
   async validateOtp(data: OtpValidationRequest): Promise<{ valid: boolean; message: string }> {

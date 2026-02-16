@@ -333,6 +333,10 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *                 format: uri
  *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
  *                 example: "https://cloudinary.com/passport/abc123.jpg"
+ *               passportNumber:
+ *                 type: string
+ *                 description: Optional passport number
+ *                 example: "GB123456789"
  *     responses:
  *       200:
  *         description: Passport verified successfully
@@ -541,6 +545,240 @@ router.post('/signup/tourist/validate-otp', authController.validatePassportOtp);
  *         description: Too many requests
  */
 router.post('/signup/tourist/create-account', authController.createTouristAccount); // Step 4
+
+/**
+ * @swagger
+ * /api/auth/signup/expatriate/verify-passport:
+ *   post:
+ *     summary: Step 1 - Verify expatriate passport for signup
+ *     description: Upload and verify passport document. The system extracts passport information automatically.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - passportDocumentUrl
+ *             properties:
+ *               passportDocumentUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
+ *                 example: "https://cloudinary.com/passport/abc123.jpg"
+ *               passportNumber:
+ *                 type: string
+ *                 description: Optional passport number
+ *                 example: "ES987654321"
+ *     responses:
+ *       200:
+ *         description: Passport verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     verificationToken:
+ *                       type: string
+ *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
+ *                       example: "xyz789abc123"
+ *                     message:
+ *                       type: string
+ *                       example: "Passport verified successfully. Use the verification token to proceed."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many requests
+ */
+// Expatriate signup flow (4 steps - same as tourist)
+router.post('/signup/expatriate/verify-passport', authController.verifyExpatriatePassport); // Step 1
+/**
+ * @swagger
+ * /api/auth/signup/expatriate/send-otp:
+ *   post:
+ *     summary: Step 2 - Send OTP for expatriate signup
+ *     description: Send OTP to phone or email for verification. The contact info is retrieved from the passport verification session using the token.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email from passport data)
+ *                 example: phone
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your phone
+ *                     firstName:
+ *                       type: string
+ *                       example: Maria
+ *                     lastName:
+ *                       type: string
+ *                       example: Garcia
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       example: "1988-08-12"
+ *                     nationality:
+ *                       type: string
+ *                       example: "Spain"
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/expatriate/send-otp', authController.sendExpatriateOtp); // Step 2
+
+/**
+ * @swagger
+ * /api/auth/signup/expatriate/validate-otp:
+ *   post:
+ *     summary: Step 3 - Validate OTP for expatriate signup
+ *     description: Validate the OTP sent to email or phone. Email is retrieved from the verification token stored server-side. Returns confirmed user data after successful validation.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - otp
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1 (contains email server-side)
+ *                 example: "abc123xyz789"
+ *               otp:
+ *                 type: string
+ *                 description: OTP received via email or phone
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "OTP validated successfully. Please proceed to create your account."
+ *                     firstName:
+ *                       type: string
+ *                       example: Maria
+ *                     lastName:
+ *                       type: string
+ *                       example: Garcia
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                       example: "1988-08-12"
+ *                     nationality:
+ *                       type: string
+ *                       example: "Spain"
+ *       400:
+ *         description: Invalid OTP or verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/expatriate/validate-otp', authController.validateExpatriateOtp); // Step 3
+
+/**
+ * @swagger
+ * /api/auth/signup/expatriate/create-account:
+ *   post:
+ *     summary: Step 4 - Create expatriate user account with password only
+ *     description: Create account after passport verification and OTP validation. Only password and verification token are required - all user information (email, name, DOB, nationality, phone, passport) is retrieved server-side from the verification token for security.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - password
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1 (contains all passport data server-side including email)
+ *                 example: "abc123xyz789"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 description: User's chosen password. All other information (email, name, DOB, nationality, phone, passport) comes from passport data stored server-side.
+ *                 example: SecurePass123!
+ *     responses:
+ *       201:
+ *         description: Account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                       example: "user_abc123"
+ *                     message:
+ *                       type: string
+ *                       example: "Account created successfully. You can now login with your email and password."
+ *       400:
+ *         description: Invalid or expired verification token, or validation error
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/expatriate/create-account', authController.createExpatriateAccount); // Step 4
 
 /**
  * @swagger

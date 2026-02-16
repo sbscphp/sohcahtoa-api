@@ -18,6 +18,7 @@ export enum UserRole {
 export enum CustomerType {
   NIGERIAN_CITIZEN = 'NIGERIAN_CITIZEN',
   TOURIST = 'TOURIST',
+  EXPATRIATE = 'EXPATRIATE',
   AGENT = 'AGENT',
 }
 
@@ -54,6 +55,12 @@ export interface NigerianSignupRequest {
 
 export interface TouristSignupRequest {
   passportDocumentUrl: string;
+  passportNumber?: string;
+}
+
+export interface ExpatriateSignupRequest {
+  passportDocumentUrl: string;
+  passportNumber?: string;
 }
 
 export interface BvnVerificationResponse {

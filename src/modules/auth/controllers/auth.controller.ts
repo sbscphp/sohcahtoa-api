@@ -74,11 +74,11 @@ export class AuthController {
   // Tourist Flow - Step 1: Verify passport
   async verifyPassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl } = req.body;
+      const { passportDocumentUrl, passportNumber } = req.body;
       if (!passportDocumentUrl) {
         throw new Error('Passport document URL is required');
       }
-      const result = await authService.verifyPassportForSignup(passportDocumentUrl);
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST');
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -112,6 +112,53 @@ export class AuthController {
     try {
       const data = req.body;
       const result = await authService.createTouristAccount(data);
+      res.status(201).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Expatriate Flow - Step 1: Verify passport (same as tourist but different customer type)
+  async verifyExpatriatePassport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { passportDocumentUrl, passportNumber } = req.body;
+      if (!passportDocumentUrl) {
+        throw new Error('Passport document URL is required');
+      }
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE');
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Expatriate Flow - Step 2: Send OTP
+  async sendExpatriateOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.sendPassportVerificationOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Expatriate Flow - Step 3: Validate OTP and confirm user data
+  async validateExpatriateOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.validatePassportOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Expatriate Flow - Step 4: Create account with password ONLY
+  async createExpatriateAccount(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.createExpatriateAccount(data);
       res.status(201).json(successResponse(result));
     } catch (error) {
       next(error);

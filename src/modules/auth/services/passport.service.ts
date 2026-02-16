@@ -23,8 +23,8 @@ export class PassportService {
       throw new NotFoundError('User not found');
     }
 
-    if (user.customerType !== CustomerType.TOURIST) {
-      throw new ValidationError('Passport upload is only available for tourist accounts');
+    if (user.customerType !== CustomerType.TOURIST && user.customerType !== CustomerType.EXPATRIATE) {
+      throw new ValidationError('Passport upload is only available for tourist and expatriate accounts');
     }
 
     if (!user.kyc) {
