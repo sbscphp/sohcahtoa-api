@@ -13,35 +13,38 @@ export interface SwaggerConfig {
 }
 
 export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise<void> => {
-  // Determine if we're running from dist or src
+  // Find the project root by looking for package.json
+  // This works regardless of whether we're running from src or dist
+  let rootDir = __dirname;
+  while (rootDir !== '/' && !require('fs').existsSync(path.join(rootDir, 'package.json'))) {
+    rootDir = path.dirname(rootDir);
+  }
+
   const isProduction = __dirname.includes('/dist/');
-  const rootDir = isProduction
-    ? path.join(__dirname, '../../..')
-    : path.join(__dirname, '../..');
 
   // IMPORTANT: Always use TypeScript source files because compiled JS files lose JSDoc comments
   // swagger-jsdoc can read .ts files directly even in production
   const apiPaths = [
     // All module route files (main pattern)
-    path.join(rootDir, 'src/modules/*/routes/*.ts'),
-    path.join(rootDir, 'src/modules/*/*/routes/*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', 'routes', '*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', '*', 'routes', '*.ts'),
 
     // All module controller files (may contain JSDoc)
-    path.join(rootDir, 'src/modules/*/controllers/*.ts'),
-    path.join(rootDir, 'src/modules/*/*/controllers/*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', 'controllers', '*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', '*', 'controllers', '*.ts'),
 
     // Service files (some may have JSDoc)
-    path.join(rootDir, 'src/modules/*/services/*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', 'services', '*.ts'),
 
     // Root level routes
-    path.join(rootDir, 'src/routes/*.ts'),
+    path.join(rootDir, 'src', 'routes', '*.ts'),
 
     // Main app files
-    path.join(rootDir, 'src/app.ts'),
-    path.join(rootDir, 'src/index.ts'),
+    path.join(rootDir, 'src', 'app.ts'),
+    path.join(rootDir, 'src', 'index.ts'),
 
     // Shared utilities that might have JSDoc
-    path.join(rootDir, 'src/shared/middleware/*.ts'),
+    path.join(rootDir, 'src', 'shared', 'middleware', '*.ts'),
   ];
 
   const options: swaggerJsdoc.Options = {
