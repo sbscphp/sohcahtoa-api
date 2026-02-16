@@ -61,6 +61,14 @@ enum ActionType {
   LIMITS_OVERRIDE
   CASH_PICKUP_ISSUE
   PREPAID_CARD_ISSUE
+  AGENT_CREATE
+  AGENT_UPDATE_STATUS
+  AGENT_APPROVE
+  AGENT_DEACTIVATE
+  RATE_CREATE
+  RATE_UPDATE
+  RATE_DEACTIVATE
+  REPORT_GENERATE
 }
 
 enum TokenType {
@@ -252,6 +260,7 @@ model User {
   kyc           UserKyc?
   sessions      Session[]
   otpLogs       OtpLog[]
+  tickets       Ticket[]      @relation("TicketCustomer")
 
   @@index([email])
   @@index([phoneNumber])
@@ -378,11 +387,43 @@ model Role {
   updatedAt    DateTime   @updatedAt
 
   users        AdminUser[]
+  rolePermissions RolePermission[]
 
   @@index([departmentId])
   @@map("roles")
 }
 
+model Permission {
+  id         String   @id @default(uuid())
+  module     String
+  featureKey String
+  action     String   // e.g. VIEW | EDIT | CREATE | UPDATE | DELETE | EXPORT
+  label      String?
+  isActive   Boolean  @default(true)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  roleLinks  RolePermission[]
+
+  @@index([module, featureKey, action])
+  @@unique([module, featureKey, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
 model AdminUser {
   id             String     @id @default(uuid())
   email          String     @unique
@@ -396,8 +437,8 @@ model AdminUser {
   roleId         String
   role           Role       @relation(fields: [roleId], references: [id])
 
-  departmentId   String
-  department     Department @relation(fields: [departmentId], references: [id])
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id])
 
   permissions    Json?
   isActive       Boolean    @default(true)
@@ -408,6 +449,8 @@ model AdminUser {
   actions        AdminAction[]
   assignments    TaskAssignment[]
   tokens         Token[]
+  assignedTickets Ticket[]     @relation("TicketAssignedAgent")
+  commentTickets  TicketComment[] @relation("TicketCommentAdmin")
 
   @@index([email])
   @@index([roleId])
@@ -474,10 +517,11 @@ model Branch {
   updatedAt         DateTime @updatedAt
 
   franchise         Franchise? @relation(fields: [franchiseId], references: [id])
+  agents            Agent[]
 
   @@index([franchiseId])
-  @@index([name])
   @@index([status])
+  @@unique([franchiseId, name])
   @@map("branches")
 }
 
@@ -488,11 +532,14 @@ model Agent {
   phoneNumber String   @unique
   isActive    Boolean  @default(true)
   isApproved  Boolean  @default(false)
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   attachments AgentAttachment[]
 
+  @@index([branchId])
   @@index([name])
   @@map("agents")
 }
@@ -1057,8 +1104,8 @@ model Ticket {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  customer         User           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  assignedAgent    AdminUser?     @relation(fields: [assignedAgentId], references: [id])
+  customer         User           @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  assignedAgent    AdminUser?     @relation("TicketAssignedAgent", fields: [assignedAgentId], references: [id])
 
   attachments      TicketAttachment[]
   comments         TicketComment[]
@@ -1091,7 +1138,7 @@ model TicketComment {
   createdAt  DateTime   @default(now())
 
   ticket     Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  admin      AdminUser? @relation(fields: [adminId], references: [id])
+  admin      AdminUser? @relation("TicketCommentAdmin", fields: [adminId], references: [id])
 
   @@index([ticketId])
   @@map("ticket_comments")

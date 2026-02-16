@@ -12,7 +12,7 @@ export class CreateAdminUserDto {
 export class CreateRoleDto {
     name!: string;
     description!: string;
-    permissions?: string[];
+    permissions?: string[] | Record<string, Record<string, string[]>>;
     branch!: string;
     department!: string;
     isDefault?: boolean;
@@ -21,7 +21,7 @@ export class CreateRoleDto {
 export class UpdateRoleDto {
     name?: string;
     description?: string;
-    permissions?: string[];
+    permissions?: string[] | Record<string, Record<string, string[]>>;
     branches?: string[];
     departments?: string[];
     isDefault?: boolean;
@@ -56,4 +56,3 @@ export class DepartmentQueryDto {
     search?: string;
     isActive?: boolean;
 }
-

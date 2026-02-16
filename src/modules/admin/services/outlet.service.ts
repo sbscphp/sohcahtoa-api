@@ -175,6 +175,7 @@ class OutletService {
       db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
       db.branch.count({ where }),
     ]);
+    console.log(">>>>>>", rows)
     const items = rows.map((b: any) => ({
       id: b.id,
       branchName: b.name,
@@ -190,6 +191,22 @@ class OutletService {
     const { branchName, branchEmail, state, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {
       throw new ValidationError("branchName, state, address, branchManager, email, phoneNumber are required");
+    }
+    const existingByName = await db.branch.findFirst({
+      where: { name: { equals: branchName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existingByName) {
+      throw new ValidationError("Branch name already exists", { field: "branchName" });
+    }
+    if (branchEmail) {
+      const existingByEmail = await db.branch.findFirst({
+        where: { branchEmail: { equals: branchEmail, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (existingByEmail) {
+        throw new ValidationError("Branch email already exists", { field: "branchEmail" });
+      }
     }
     const created = await db.branch.create({
       data: {
@@ -225,9 +242,9 @@ class OutletService {
     return updated;
   }
 
-  async exportBranches() {
-    return { message: "Export generated", url: "/exports/branches.csv" };
-  }
+  // async exportBranches() {
+  //   return { message: "Export generated", url: "/exports/branches.csv" };
+  // }
 
   async addAgentsToBranch(id: string, agentIds: string[]) {
     return { message: "Agents added", branchId: id, count: agentIds?.length || 0 };

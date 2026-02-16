@@ -1,21 +1,34 @@
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiResponse, UploadApiOptions } from 'cloudinary';
 import { createLogger } from './logger';
 
-const logger = createLogger('Cloudinary');
+const logger = createLogger('CloudinaryService');
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+function assertCloudinaryConfigured(): void {
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    throw new Error('Cloudinary configuration missing');
+  }
+}
+
+export type CloudinaryResourceType = 'image' | 'raw' | 'video' | 'auto';
+
 export interface UploadOptions {
   folder?: string;
-  resourceType?: 'image' | 'raw' | 'video' | 'auto';
+  resourceType?: CloudinaryResourceType;
   allowedFormats?: string[];
-  maxFileSize?: number; // in bytes
-  transformation?: any;
+  maxFileSize?: number;
+  transformation?: UploadApiOptions['transformation'];
+  publicId?: string;
+  timeoutMs?: number;
 }
 
 export interface UploadResult {
@@ -29,55 +42,90 @@ export interface UploadResult {
   height?: number;
 }
 
-/**
- * Upload a file to Cloudinary
- */
+function extractCloudinaryError(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const err = error as any;
+    return (
+      err.message ||
+      err.error?.message ||
+      (err.http_code ? `Cloudinary error ${err.http_code}` : 'Unknown error')
+    );
+  }
+  return 'Unknown error';
+}
+
+function validateFileSize(buffer: Buffer, maxSize: number): void {
+  if (buffer.length > maxSize) {
+    throw new Error(
+      `File size exceeds maximum allowed size of ${maxSize / (1024 * 1024)}MB`
+    );
+  }
+}
+
+function validateUploadResponse(result: UploadApiResponse | undefined): asserts result is UploadApiResponse {
+  if (!result || !result.public_id || !result.secure_url) {
+    throw new Error('Invalid upload response from Cloudinary');
+  }
+}
+
 export async function uploadToCloudinary(
   fileBuffer: Buffer,
   options: UploadOptions = {}
 ): Promise<UploadResult> {
+  assertCloudinaryConfigured();
+
   const {
     folder = 'documents',
     resourceType = 'auto',
     allowedFormats = ['jpg', 'jpeg', 'png', 'pdf'],
-    maxFileSize = 10 * 1024 * 1024, // 10MB default
+    maxFileSize = 10 * 1024 * 1024,
+    transformation,
+    publicId,
+    timeoutMs = 30000,
   } = options;
 
-  // Check file size
-  if (fileBuffer.length > maxFileSize) {
-    throw new Error(`File size exceeds maximum allowed size of ${maxFileSize / (1024 * 1024)}MB`);
-  }
+  validateFileSize(fileBuffer, maxFileSize);
+
+  logger.info('Uploading file to Cloudinary', {
+    folder,
+    resourceType,
+    size: fileBuffer.length,
+    publicId,
+  });
+
+  const uploadOptions: UploadApiOptions = {
+    folder,
+    resource_type: resourceType,
+    allowed_formats: allowedFormats,
+    transformation,
+    public_id: publicId,
+  };
+
+  const uploadPromise = new Promise<UploadApiResponse>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      uploadOptions,
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result as UploadApiResponse);
+      }
+    );
+
+    stream.end(fileBuffer);
+  });
 
   try {
-    logger.info('Uploading file to Cloudinary', {
-      folder,
-      resourceType,
-      size: fileBuffer.length,
-    });
+    const result = await Promise.race([
+      uploadPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Cloudinary upload timeout')), timeoutMs)
+      ),
+    ]);
 
-    // Upload to Cloudinary using upload_stream
-    const result = await new Promise<any>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: resourceType,
-          allowed_formats: allowedFormats,
-        },
-        (error, result) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }
-      );
+    validateUploadResponse(result);
 
-      uploadStream.end(fileBuffer);
-    });
-
-    logger.info('File uploaded successfully to Cloudinary', {
+    logger.info('Cloudinary upload successful', {
       publicId: result.public_id,
-      url: result.secure_url,
+      bytes: result.bytes,
     });
 
     return {
@@ -91,46 +139,73 @@ export async function uploadToCloudinary(
       height: result.height,
     };
   } catch (error) {
-    logger.error('Failed to upload file to Cloudinary', error);
-    throw new Error(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const message = extractCloudinaryError(error);
+    logger.error('Cloudinary upload failed', { message, error });
+    throw new Error(`Upload failed: ${message}`);
   }
 }
 
-/**
- * Delete a file from Cloudinary
- */
-export async function deleteFromCloudinary(publicId: string, resourceType: 'image' | 'raw' | 'video' = 'image'): Promise<void> {
+export async function deleteFromCloudinary(
+  publicId: string,
+  resourceType: CloudinaryResourceType = 'auto'
+): Promise<void> {
+  assertCloudinaryConfigured();
+
+  const tryDelete = async (rt: CloudinaryResourceType) => {
+    const result = await cloudinary.uploader.destroy(publicId, { resource_type: rt });
+    return result?.result === 'ok' || result?.result === 'not found';
+  };
+
   try {
-    logger.info('Deleting file from Cloudinary', { publicId });
-    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
-    logger.info('File deleted successfully from Cloudinary', { publicId });
+    logger.info('Deleting Cloudinary asset', { publicId });
+
+    if (resourceType === 'auto') {
+      const order: CloudinaryResourceType[] = ['image', 'raw', 'video'];
+      for (const rt of order) {
+        try {
+          const ok = await tryDelete(rt);
+          if (ok) {
+            logger.info('Cloudinary asset deleted', { publicId });
+            return;
+          }
+        } catch {}
+      }
+      throw new Error('Delete failed for all resource types');
+    } else {
+      const ok = await tryDelete(resourceType);
+      if (!ok) {
+        throw new Error('Delete failed');
+      }
+    }
+
+    logger.info('Cloudinary asset deleted', { publicId });
   } catch (error) {
-    logger.error('Failed to delete file from Cloudinary', error);
-    throw new Error(`Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const message = extractCloudinaryError(error);
+    logger.error('Cloudinary delete failed', { message });
+    throw new Error(`Delete failed: ${message}`);
   }
 }
 
-/**
- * Get Cloudinary URL for a public ID
- */
-export function getCloudinaryUrl(publicId: string, options: any = {}): string {
+export function getCloudinaryUrl(
+  publicId: string,
+  options?: UploadApiOptions
+): string {
+  assertCloudinaryConfigured();
   return cloudinary.url(publicId, options);
 }
 
-/**
- * Check if Cloudinary is configured
- */
-export function isCloudinaryConfigured(): boolean {
-  return !!(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
+export function generateSignedUploadParams(options: UploadApiOptions = {}) {
+  assertCloudinaryConfigured();
+
+  return cloudinary.utils.api_sign_request(
+    options,
+    process.env.CLOUDINARY_API_SECRET as string
   );
 }
 
-export default {
+export const CloudinaryService = {
   upload: uploadToCloudinary,
   delete: deleteFromCloudinary,
   getUrl: getCloudinaryUrl,
-  isConfigured: isCloudinaryConfigured,
+  generateSignedUploadParams,
 };
