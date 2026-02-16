@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { adminAuthController } from "../controllers/admin-auth.controller";
 import { addUserValidationStore, validate } from "../validations/user-management.validation";
-import { authRateLimiter } from "../../../shared/middleware";
+
 
 export const AdminAuthRouter: Router = Router();
 
@@ -37,7 +37,7 @@ export const AdminAuthRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AdminAuthRouter.post("/login", authRateLimiter, adminAuthController.login);
+AdminAuthRouter.post("/login", adminAuthController.login);
 
 /**
  * @swagger
@@ -66,7 +66,7 @@ AdminAuthRouter.post("/login", authRateLimiter, adminAuthController.login);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AdminAuthRouter.post("/verify-login", authRateLimiter, adminAuthController.verifyLogin);
+AdminAuthRouter.post("/verify-login", adminAuthController.verifyLogin);
 
 /**
  * @swagger
@@ -91,7 +91,7 @@ AdminAuthRouter.post("/verify-login", authRateLimiter, adminAuthController.verif
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/forgot-password", authRateLimiter, adminAuthController.forgotPassword);
+AdminAuthRouter.post("/forgot-password", adminAuthController.forgotPassword);
 
 /**
  * @swagger
@@ -117,7 +117,7 @@ AdminAuthRouter.post("/forgot-password", authRateLimiter, adminAuthController.fo
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/otp/validate", authRateLimiter, adminAuthController.validateResetOtp);
+AdminAuthRouter.post("/otp/validate", adminAuthController.validateResetOtp);
 
 /**
  * @swagger
@@ -146,4 +146,4 @@ AdminAuthRouter.post("/otp/validate", authRateLimiter, adminAuthController.valid
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/reset-password", authRateLimiter, adminAuthController.submitNewPassword);
+AdminAuthRouter.post("/reset-password", adminAuthController.submitNewPassword);
