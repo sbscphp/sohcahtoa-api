@@ -227,14 +227,7 @@ export class AuthService {
     verificationToken: string;
     message: string;
   }> {
-    // Verify BVN and extract all user data
-    const bvnResult = await bvnService.verifyBvn(bvn);
-
-    if (!bvnResult.success || !bvnResult.data) {
-      throw new ValidationError(bvnResult.message || 'BVN verification failed');
-    }
-
-    // Check if a user with this BVN already exists in KYC records
+    // Check DB first — before any expensive external call
     const existingKyc = await prisma.userKyc.findFirst({
       where: { bvn },
       include: {
@@ -263,21 +256,21 @@ export class AuthService {
         throw new DuplicateError('An account with this BVN already exists');
       }
 
-      // User started but never finished — resume using their stored DB data
+      // User started but never finished — resume entirely from DB, no mock generation needed
       const storedUser = existingKyc.user;
       const verificationToken = generateId();
       const cacheKey = `bvn:verification:${verificationToken}`;
       const resumedBvnData = {
         bvn,
-        firstName: storedUser.profile?.firstName ?? bvnResult.data.firstName,
-        lastName: storedUser.profile?.lastName ?? bvnResult.data.lastName,
+        firstName: storedUser.profile!.firstName,
+        lastName: storedUser.profile!.lastName,
         email: storedUser.email,
         phoneNumber: storedUser.phoneNumber,
         dateOfBirth: storedUser.profile?.dateOfBirth
           ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
-          : bvnResult.data.dateOfBirth,
-        address: storedUser.profile?.address ?? bvnResult.data.address,
-        gender: bvnResult.data.gender,
+          : null,
+        address: storedUser.profile?.address ?? null,
+        gender: null,
       };
       await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedBvnData));
 
@@ -285,6 +278,13 @@ export class AuthService {
         verificationToken,
         message: 'BVN recognised. Your previous verification session has been restored. Use the verification token to continue.',
       };
+    }
+
+    // New BVN — call the verification service to generate/fetch user data
+    const bvnResult = await bvnService.verifyBvn(bvn);
+
+    if (!bvnResult.success || !bvnResult.data) {
+      throw new ValidationError(bvnResult.message || 'BVN verification failed');
     }
 
     // Generate a verification token to track this BVN verification session
@@ -597,20 +597,10 @@ export class AuthService {
     phoneNumber: string;
     nationality: string;
   }> {
-    // Verify passport document and extract all user data
-    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
-
-    if (!passportResult.success || !passportResult.data) {
-      throw new ValidationError(passportResult.message || 'Passport verification failed');
-    }
-
-    // Use provided passport number or extracted one
-    const finalPassportNumber = passportNumber || passportResult.data.passportNumber;
-
-    // Check if a user with this passport number already exists in KYC records
-    if (finalPassportNumber) {
+    // If passport number is supplied, check DB before the expensive OCR call
+    if (passportNumber) {
       const existingKyc = await prisma.userKyc.findFirst({
-        where: { passportNumber: finalPassportNumber },
+        where: { passportNumber },
         include: {
           user: {
             select: {
@@ -632,27 +622,27 @@ export class AuthService {
       });
 
       if (existingKyc) {
-        // User completed full onboarding — hard block
+        // User completed full onboarding — hard block, skip OCR entirely
         if (existingKyc.status === KycStatus.VERIFIED) {
           throw new DuplicateError('An account with this passport already exists');
         }
 
-        // User started but never finished — resume using their stored DB data
+        // User started but never finished — resume entirely from DB, skip OCR
         const storedUser = existingKyc.user;
         const verificationToken = generateId();
         const cacheKey = `passport:verification:${verificationToken}`;
         const resumedPassportData = {
-          passportNumber: finalPassportNumber,
+          passportNumber,
           passportDocumentUrl: existingKyc.passportDocumentUrl ?? passportDocumentUrl,
           customerType,
-          firstName: storedUser.profile?.firstName ?? passportResult.data.firstName,
-          lastName: storedUser.profile?.lastName ?? passportResult.data.lastName,
+          firstName: storedUser.profile!.firstName,
+          lastName: storedUser.profile!.lastName,
           email: storedUser.email,
           phoneNumber: storedUser.phoneNumber,
           dateOfBirth: storedUser.profile?.dateOfBirth
             ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
-            : passportResult.data.dateOfBirth,
-          nationality: storedUser.profile?.country ?? passportResult.data.nationality,
+            : null,
+          nationality: storedUser.profile?.country ?? null,
         };
         await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedPassportData));
 
@@ -661,10 +651,79 @@ export class AuthService {
           message: 'Passport recognised. Your previous verification session has been restored. Use the verification token to continue.',
           firstName: resumedPassportData.firstName,
           lastName: resumedPassportData.lastName,
-          dateOfBirth: resumedPassportData.dateOfBirth,
+          dateOfBirth: resumedPassportData.dateOfBirth ?? '',
           email: partiallyRedactField(resumedPassportData.email, 'email'),
           phoneNumber: partiallyRedactField(resumedPassportData.phoneNumber, 'phone'),
-          nationality: resumedPassportData.nationality,
+          nationality: resumedPassportData.nationality ?? '',
+        };
+      }
+    }
+
+    // New passport (or number not provided) — run OCR/verification to extract data
+    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
+
+    if (!passportResult.success || !passportResult.data) {
+      throw new ValidationError(passportResult.message || 'Passport verification failed');
+    }
+
+    // Use provided passport number or the one extracted from OCR
+    const finalPassportNumber = passportNumber || passportResult.data.passportNumber;
+
+    // If passport number came from OCR (wasn't supplied), do the DB check now
+    if (!passportNumber && finalPassportNumber) {
+      const existingKyc = await prisma.userKyc.findFirst({
+        where: { passportNumber: finalPassportNumber },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              phoneNumber: true,
+              profile: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  dateOfBirth: true,
+                  country: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (existingKyc) {
+        if (existingKyc.status === KycStatus.VERIFIED) {
+          throw new DuplicateError('An account with this passport already exists');
+        }
+
+        const storedUser = existingKyc.user;
+        const verificationToken = generateId();
+        const cacheKey = `passport:verification:${verificationToken}`;
+        const resumedPassportData = {
+          passportNumber: finalPassportNumber,
+          passportDocumentUrl: existingKyc.passportDocumentUrl ?? passportDocumentUrl,
+          customerType,
+          firstName: storedUser.profile!.firstName,
+          lastName: storedUser.profile!.lastName,
+          email: storedUser.email,
+          phoneNumber: storedUser.phoneNumber,
+          dateOfBirth: storedUser.profile?.dateOfBirth
+            ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
+            : null,
+          nationality: storedUser.profile?.country ?? null,
+        };
+        await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedPassportData));
+
+        return {
+          verificationToken,
+          message: 'Passport recognised. Your previous verification session has been restored. Use the verification token to continue.',
+          firstName: resumedPassportData.firstName,
+          lastName: resumedPassportData.lastName,
+          dateOfBirth: resumedPassportData.dateOfBirth ?? '',
+          email: partiallyRedactField(resumedPassportData.email, 'email'),
+          phoneNumber: partiallyRedactField(resumedPassportData.phoneNumber, 'phone'),
+          nationality: resumedPassportData.nationality ?? '',
         };
       }
     }
