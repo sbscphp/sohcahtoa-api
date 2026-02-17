@@ -260,6 +260,107 @@ router.post('/signup/nigerian/validate-otp', authController.validateBvnOtp); // 
 
 /**
  * @swagger
+ * /api/auth/signup/nigerian/send-email-otp:
+ *   post:
+ *     summary: Step 3.5 - Send OTP to email for Nigerian citizen
+ *     description: After validating the phone OTP from BVN, send an additional OTP to the user's email for verification.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1 (BVN verification)
+ *                 example: "abc123xyz789"
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully to email
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "OTP sent successfully to your email"
+ *                     email:
+ *                       type: string
+ *                       description: Redacted email address
+ *                       example: "c***@example.com"
+ *                     otp:
+ *                       type: string
+ *                       description: OTP code (only in development)
+ *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/nigerian/send-email-otp', authController.sendNigerianEmailOtp); // Step 3.5
+
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/validate-email-otp:
+ *   post:
+ *     summary: Step 3.6 - Validate email OTP for Nigerian citizen
+ *     description: Validate the OTP sent to the user's email address.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - otp
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1 (BVN verification)
+ *                 example: "abc123xyz789"
+ *               otp:
+ *                 type: string
+ *                 description: OTP code received via email
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: Email OTP validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Email OTP validated successfully. Please proceed to create your account."
+ *       400:
+ *         description: Invalid OTP or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/nigerian/validate-email-otp', authController.validateNigerianEmailOtp); // Step 3.6
+
+/**
+ * @swagger
  * /api/auth/signup/nigerian/create-account:
  *   post:
  *     summary: Step 4 - Create Nigerian user account with password only
@@ -1295,6 +1396,150 @@ router.get('/profile', authenticate, authController.getProfile);
  *       200:
  *         description: Service is healthy
  */
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset OTP
+ *     description: Sends a password reset OTP to the customer's registered email address. Always returns success to prevent email enumeration.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: customer@example.com
+ *                 description: The email address associated with the customer account
+ *     responses:
+ *       200:
+ *         description: OTP sent if account exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: If an account with that email exists, a password reset OTP has been sent
+ *                     otp:
+ *                       type: string
+ *                       example: "123456"
+ *                       description: OTP code (only returned in development mode)
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/forgot-password', authController.forgotPassword);
+
+/**
+ * @swagger
+ * /api/auth/verify-reset-otp:
+ *   post:
+ *     summary: Step 2 - Verify password reset OTP
+ *     description: Validates the OTP received by email. On success returns a short-lived reset token (10 min) to be used in the next step.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: customer@example.com
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: The OTP received via email
+ *     responses:
+ *       200:
+ *         description: OTP verified, reset token issued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     resetToken:
+ *                       type: string
+ *                       description: Short-lived token (10 min) to authorise the password reset
+ *                     message:
+ *                       type: string
+ *                       example: OTP verified successfully. Use the reset token to set your new password.
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/verify-reset-otp', authController.verifyResetOtp);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Step 3 - Set new password
+ *     description: Sets a new password using the reset token obtained from /verify-reset-otp. Invalidates all active sessions.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resetToken
+ *               - newPassword
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *                 description: The reset token received from /verify-reset-otp
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: NewSecurePass@123
+ *                 description: "New password (min 8 chars, must include uppercase, lowercase, number, and special character)"
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: Password reset successfully. Please log in with your new password.
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/reset-password', authController.resetPassword);
+
 // Health check
 router.get('/health', authController.healthCheck);
 

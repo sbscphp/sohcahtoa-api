@@ -56,40 +56,64 @@ export class BvnService {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    // Mock data - in production, this would come from CBN TRMS API
-    const mockDatabase: Record<string, any> = {
-      '12345678901': {
-        firstName: 'Chinedu',
-        lastName: 'Okafor',
-        middleName: 'Emmanuel',
-        dateOfBirth: '1990-05-15',
-        phoneNumber: '+2348012345678',
-        email: 'chinedu.okafor@example.com',
-        address: '123 Lagos Street, Victoria Island, Lagos',
-        gender: 'Male',
-        nationality: 'Nigerian',
-      },
-      '23456789012': {
-        firstName: 'Amina',
-        lastName: 'Ibrahim',
-        dateOfBirth: '1995-08-20',
-        phoneNumber: '+2348023456789',
-        email: 'amina.ibrahim@example.com',
-        address: '45 Abuja Road, Wuse, Abuja',
-        gender: 'Female',
-        nationality: 'Nigerian',
-      },
+    // Generate dynamic user data based on BVN
+    // This ensures each BVN generates consistent but unique data
+    const timestamp = Date.now();
+    const bvnHash = parseInt(bvn.slice(-6)); // Use last 6 digits for variation
+
+    const firstNames = ['Chinedu', 'Amina', 'Tunde', 'Aisha', 'Oluwaseun', 'Fatima', 'Emeka', 'Zainab', 'Adebayo', 'Hauwa'];
+    const lastNames = ['Okafor', 'Ibrahim', 'Adeyemi', 'Bello', 'Eze', 'Musa', 'Nwosu', 'Yusuf', 'Okoro', 'Sani'];
+    const middleNames = ['Emmanuel', 'Mohammed', 'Oluwaseun', 'Ahmed', 'Chukwuemeka', 'Abubakar', 'Oluwakemi', 'Hassan'];
+    const genders = ['Male', 'Female'];
+    const cities = [
+      { city: 'Lagos', street: 'Victoria Island' },
+      { city: 'Abuja', street: 'Wuse' },
+      { city: 'Port Harcourt', street: 'GRA' },
+      { city: 'Kano', street: 'Sabon Gari' },
+      { city: 'Ibadan', street: 'Bodija' },
+    ];
+
+    const firstNameIndex = bvnHash % firstNames.length;
+    const lastNameIndex = (bvnHash * 2) % lastNames.length;
+    const middleNameIndex = (bvnHash * 3) % middleNames.length;
+    const genderIndex = bvnHash % genders.length;
+    const cityIndex = bvnHash % cities.length;
+
+    const firstName = firstNames[firstNameIndex];
+    const lastName = lastNames[lastNameIndex];
+    const middleName = middleNames[middleNameIndex];
+    const gender = genders[genderIndex];
+    const location = cities[cityIndex];
+
+    // Generate unique email using timestamp
+    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${timestamp}`;
+    const email = `${emailPrefix}@example.com`;
+
+    // Generate unique phone number
+    const phoneNumber = `+234${800 + (bvnHash % 100)}${String(timestamp).slice(-7)}`;
+
+    // Generate date of birth (between 18 and 65 years old)
+    const age = 18 + (bvnHash % 47);
+    const year = new Date().getFullYear() - age;
+    const month = String(1 + (bvnHash % 12)).padStart(2, '0');
+    const day = String(1 + (bvnHash % 28)).padStart(2, '0');
+    const dateOfBirth = `${year}-${month}-${day}`;
+
+    // Generate address
+    const streetNumber = 1 + (bvnHash % 999);
+    const address = `${streetNumber} ${location.street} Street, ${location.city}`;
+
+    const bvnData = {
+      firstName,
+      lastName,
+      middleName,
+      dateOfBirth,
+      phoneNumber,
+      email,
+      address,
+      gender,
+      nationality: 'Nigerian',
     };
-
-    const bvnData = mockDatabase[bvn];
-
-    if (!bvnData) {
-      return {
-        success: false,
-        message: 'BVN not found in database',
-        error: 'INVALID_BVN',
-      };
-    }
 
     return {
       success: true,

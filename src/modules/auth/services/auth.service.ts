@@ -234,9 +234,58 @@ export class AuthService {
       throw new ValidationError(bvnResult.message || 'BVN verification failed');
     }
 
-    // Note: We don't check for duplicate BVN at this stage (step 1)
-    // The duplicate check will be done at account creation (step 4)
-    // This allows users to verify their BVN multiple times if needed
+    // Check if a user with this BVN already exists in KYC records
+    const existingKyc = await prisma.userKyc.findFirst({
+      where: { bvn },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            customerType: true,
+            profile: {
+              select: {
+                firstName: true,
+                lastName: true,
+                dateOfBirth: true,
+                address: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (existingKyc) {
+      // User completed full onboarding — hard block
+      if (existingKyc.status === KycStatus.VERIFIED) {
+        throw new DuplicateError('An account with this BVN already exists');
+      }
+
+      // User started but never finished — resume using their stored DB data
+      const storedUser = existingKyc.user;
+      const verificationToken = generateId();
+      const cacheKey = `bvn:verification:${verificationToken}`;
+      const resumedBvnData = {
+        bvn,
+        firstName: storedUser.profile?.firstName ?? bvnResult.data.firstName,
+        lastName: storedUser.profile?.lastName ?? bvnResult.data.lastName,
+        email: storedUser.email,
+        phoneNumber: storedUser.phoneNumber,
+        dateOfBirth: storedUser.profile?.dateOfBirth
+          ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
+          : bvnResult.data.dateOfBirth,
+        address: storedUser.profile?.address ?? bvnResult.data.address,
+        gender: bvnResult.data.gender,
+      };
+      await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedBvnData));
+
+      return {
+        verificationToken,
+        message: 'BVN recognised. Your previous verification session has been restored. Use the verification token to continue.',
+      };
+    }
 
     // Generate a verification token to track this BVN verification session
     const verificationToken = generateId();
@@ -363,6 +412,69 @@ export class AuthService {
       lastName: bvnData.lastName,
       dateOfBirth: bvnData.dateOfBirth,
       gender: bvnData.gender,
+    };
+  }
+
+  // STEP 3.5: Send OTP to email for Nigerian citizen (after phone OTP validation)
+  async sendNigerianEmailOtp(data: {
+    verificationToken: string;
+  }): Promise<{
+    message: string;
+    email: string;
+    otp?: string;
+  }> {
+    // Retrieve BVN data from cache using verification token
+    const cacheKey = `bvn:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('BVN verification session expired. Please verify your BVN again.');
+    }
+
+    const bvnData = JSON.parse(cachedData);
+
+    // Send OTP to email
+    const otpResult = await this.sendOtp({
+      email: bvnData.email,
+      phoneNumber: '', // Email-only OTP
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    // Return redacted email and OTP (for dev/testing)
+    return {
+      message: 'OTP sent successfully to your email',
+      email: partiallyRedactField(bvnData.email, 'email'),
+      otp: otpResult.otp,
+    };
+  }
+
+  // STEP 3.6: Validate email OTP for Nigerian citizen
+  async validateNigerianEmailOtp(data: {
+    verificationToken: string;
+    otp: string;
+  }): Promise<{
+    message: string;
+  }> {
+    // Retrieve BVN data from cache using verification token
+    const cacheKey = `bvn:verification:${data.verificationToken}`;
+    const cachedData = await redis.get(cacheKey);
+
+    if (!cachedData) {
+      throw new ValidationError('BVN verification session expired. Please verify your BVN again.');
+    }
+
+    // Validate OTP (email not required, OTP code is sufficient)
+    const otpValidation = await this.validateOtp({
+      otp: data.otp,
+      purpose: OtpPurpose.REGISTRATION,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError('OTP validation failed');
+    }
+
+    return {
+      message: 'Email OTP validated successfully. Please proceed to create your account.',
     };
   }
 
@@ -495,15 +607,65 @@ export class AuthService {
     // Use provided passport number or extracted one
     const finalPassportNumber = passportNumber || passportResult.data.passportNumber;
 
-    // Check if user already exists with this passport (at this stage, just for reference)
-    // The actual duplicate check will be done at account creation
+    // Check if a user with this passport number already exists in KYC records
     if (finalPassportNumber) {
       const existingKyc = await prisma.userKyc.findFirst({
         where: { passportNumber: finalPassportNumber },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              phoneNumber: true,
+              customerType: true,
+              profile: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  dateOfBirth: true,
+                  country: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (existingKyc) {
-        throw new DuplicateError('An account with this passport already exists');
+        // User completed full onboarding — hard block
+        if (existingKyc.status === KycStatus.VERIFIED) {
+          throw new DuplicateError('An account with this passport already exists');
+        }
+
+        // User started but never finished — resume using their stored DB data
+        const storedUser = existingKyc.user;
+        const verificationToken = generateId();
+        const cacheKey = `passport:verification:${verificationToken}`;
+        const resumedPassportData = {
+          passportNumber: finalPassportNumber,
+          passportDocumentUrl: existingKyc.passportDocumentUrl ?? passportDocumentUrl,
+          customerType,
+          firstName: storedUser.profile?.firstName ?? passportResult.data.firstName,
+          lastName: storedUser.profile?.lastName ?? passportResult.data.lastName,
+          email: storedUser.email,
+          phoneNumber: storedUser.phoneNumber,
+          dateOfBirth: storedUser.profile?.dateOfBirth
+            ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
+            : passportResult.data.dateOfBirth,
+          nationality: storedUser.profile?.country ?? passportResult.data.nationality,
+        };
+        await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedPassportData));
+
+        return {
+          verificationToken,
+          message: 'Passport recognised. Your previous verification session has been restored. Use the verification token to continue.',
+          firstName: resumedPassportData.firstName,
+          lastName: resumedPassportData.lastName,
+          dateOfBirth: resumedPassportData.dateOfBirth,
+          email: partiallyRedactField(resumedPassportData.email, 'email'),
+          phoneNumber: partiallyRedactField(resumedPassportData.phoneNumber, 'phone'),
+          nationality: resumedPassportData.nationality,
+        };
       }
     }
 
@@ -1141,6 +1303,115 @@ export class AuthService {
     };
 
     return userProfile;
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string; otp?: string }> {
+    if (!validateEmail(email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, isActive: true, role: true },
+    });
+
+    // Always return the same message to prevent email enumeration
+    if (!user || !user.isActive || user.role !== UserRole.CUSTOMER) {
+      return {
+        message: 'If an account with that email exists, a password reset OTP has been sent',
+      };
+    }
+
+    const otpResult = await this.sendOtp({
+      email,
+      phoneNumber: '',
+      purpose: OtpPurpose.PASSWORD_RESET,
+    });
+
+    logger.info('Forgot password OTP sent', { userId: user.id });
+
+    return {
+      message: 'If an account with that email exists, a password reset OTP has been sent',
+      otp: otpResult.otp,
+    };
+  }
+
+  async verifyResetOtp(data: {
+    email: string;
+    otp: string;
+  }): Promise<{ resetToken: string; message: string }> {
+    if (!validateEmail(data.email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      select: { id: true, isActive: true, role: true },
+    });
+
+    if (!user || !user.isActive || user.role !== UserRole.CUSTOMER) {
+      throw new ValidationError('Invalid email or OTP');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.PASSWORD_RESET,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message);
+    }
+
+    // Issue a short-lived reset token (10 minutes) so the client can set a new password
+    const resetToken = generateId();
+    const resetKey = `password:reset:${resetToken}`;
+    await redis.setex(resetKey, 10 * 60, user.id);
+
+    logger.info('Password reset OTP verified', { userId: user.id });
+
+    return {
+      resetToken,
+      message: 'OTP verified successfully. Use the reset token to set your new password.',
+    };
+  }
+
+  async resetPassword(data: {
+    resetToken: string;
+    newPassword: string;
+  }): Promise<{ message: string }> {
+    const resetKey = `password:reset:${data.resetToken}`;
+    const userId = await redis.get(resetKey);
+
+    if (!userId) {
+      throw new ValidationError('Invalid or expired reset token. Please restart the forgot password flow.');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    // Consume the token immediately to prevent reuse
+    await redis.del(resetKey);
+
+    const passwordHash = await hashPassword(data.newPassword);
+
+    await prisma.userCredential.upsert({
+      where: { userId },
+      update: { passwordHash, lastPasswordChange: new Date() },
+      create: { userId, passwordHash },
+    });
+
+    // Invalidate all active sessions for security
+    await prisma.session.updateMany({
+      where: { userId, isActive: true },
+      data: { isActive: false },
+    });
+
+    logger.info('Password reset successfully', { userId });
+
+    return { message: 'Password reset successfully. Please log in with your new password.' };
   }
 
   private getUserPermissions(role: string): string[] {

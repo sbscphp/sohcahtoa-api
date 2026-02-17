@@ -60,6 +60,28 @@ export class AuthController {
     }
   }
 
+  // Nigerian Flow - Step 3.5: Send email OTP
+  async sendNigerianEmailOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.sendNigerianEmailOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Nigerian Flow - Step 3.6: Validate email OTP
+  async validateNigerianEmailOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = req.body;
+      const result = await authService.validateNigerianEmailOtp(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Nigerian Flow - Step 4: Create account with password ONLY
   async createNigerianAccount(req: Request, res: Response, next: NextFunction) {
     try {
@@ -291,6 +313,34 @@ export class AuthController {
         throw new Error('User ID not found');
       }
       const result = await passportService.getPassportVerificationStatus(userId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body;
+      const result = await authService.forgotPassword(email);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyResetOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.verifyResetOtp(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.resetPassword(req.body);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
