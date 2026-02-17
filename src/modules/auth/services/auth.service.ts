@@ -382,8 +382,11 @@ export class AuthService {
     message: string;
     firstName: string;
     lastName: string;
-    dateOfBirth: string;
+    dateOfBirth?: string;
     gender?: string;
+    address?: string;
+    email?: string;
+    phoneNumber?: string;
   }> {
     // Retrieve BVN data from cache using verification token
     const cacheKey = `bvn:verification:${data.verificationToken}`;
@@ -410,8 +413,9 @@ export class AuthService {
       message: 'OTP validated successfully. Please proceed to create your account.',
       firstName: bvnData.firstName,
       lastName: bvnData.lastName,
-      dateOfBirth: bvnData.dateOfBirth,
-      gender: bvnData.gender,
+      email: partiallyRedactField(bvnData.email, 'email'),
+      phoneNumber: partiallyRedactField(bvnData.phoneNumber, 'phone'),
+      address: bvnData.address
     };
   }
 

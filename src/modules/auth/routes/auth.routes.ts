@@ -198,6 +198,60 @@ router.post('/signup/nigerian/send-otp', authController.sendBvnOtp); // Step 2
 
 /**
  * @swagger
+ * /api/auth/signup/nigerian/resend-otp:
+ *   post:
+ *     summary: Resend OTP for Nigerian signup
+ *     description: Resend OTP to phone or email during the Nigerian signup flow. Uses the same verification token from step 1.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email)
+ *                 example: phone
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your phone
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/nigerian/resend-otp', authController.sendBvnOtp);
+
+/**
+ * @swagger
  * /api/auth/signup/nigerian/validate-otp:
  *   post:
  *     summary: Step 3 - Validate OTP for Nigerian signup
@@ -309,6 +363,57 @@ router.post('/signup/nigerian/validate-otp', authController.validateBvnOtp); // 
  *         description: Too many requests
  */
 router.post('/signup/nigerian/send-email-otp', authController.sendNigerianEmailOtp); // Step 3.5
+
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/resend-email-otp:
+ *   post:
+ *     summary: Resend email OTP for Nigerian signup
+ *     description: Resend OTP to email during step 3.5 of the Nigerian signup flow. Uses the same verification token.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *     responses:
+ *       200:
+ *         description: Email OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your email
+ *                     email:
+ *                       type: string
+ *                       example: "c***@example.com"
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/nigerian/resend-email-otp', authController.sendNigerianEmailOtp);
 
 /**
  * @swagger
@@ -550,6 +655,60 @@ router.post('/signup/tourist/verify-passport', authController.verifyPassport); /
  *         description: Too many requests
  */
 router.post('/signup/tourist/send-otp', authController.sendPassportOtp); // Step 2
+
+/**
+ * @swagger
+ * /api/auth/signup/tourist/resend-otp:
+ *   post:
+ *     summary: Resend OTP for tourist signup
+ *     description: Resend OTP to phone or email during the tourist signup flow. Uses the same verification token from step 1.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email from passport data)
+ *                 example: email
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your email
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/tourist/resend-otp', authController.sendPassportOtp);
 
 /**
  * @swagger
@@ -804,6 +963,60 @@ router.post('/signup/expatriate/verify-passport', authController.verifyExpatriat
  *         description: Too many requests
  */
 router.post('/signup/expatriate/send-otp', authController.sendExpatriateOtp); // Step 2
+
+/**
+ * @swagger
+ * /api/auth/signup/expatriate/resend-otp:
+ *   post:
+ *     summary: Resend OTP for expatriate signup
+ *     description: Resend OTP to phone or email during the expatriate signup flow. Uses the same verification token from step 1.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from step 1
+ *                 example: "abc123xyz789"
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *                 description: Method to receive OTP (phone or email from passport data)
+ *                 example: email
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: OTP sent successfully to your email
+ *                     otp:
+ *                       type: string
+ *                       description: Only included in non-production environments
+ *                       example: "123456"
+ *       400:
+ *         description: Invalid or expired verification token
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/signup/expatriate/resend-otp', authController.sendExpatriateOtp);
 
 /**
  * @swagger
