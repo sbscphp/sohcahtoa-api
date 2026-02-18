@@ -50,7 +50,12 @@ export const DocumentRouter: Router = Router();
  * /api/documents/upload:
  *   post:
  *     summary: Upload a single document
- *     description: Upload a single document file (PDF, JPEG, PNG, WEBP, DOC, DOCX). Maximum file size is 10MB.
+ *     description: |
+ *       Upload a single document file (PDF, JPEG, PNG, WEBP, DOC, DOCX). Maximum file size is 10MB.
+ *
+ *       `transactionId` is optional. When omitted the file is uploaded to Cloudinary and the URL is
+ *       returned — no database record is created. Use the returned `fileUrl` in the `documents[]`
+ *       array when creating a transaction.
  *     tags: [Documents]
  *     requestBody:
  *       required: true
@@ -61,7 +66,6 @@ export const DocumentRouter: Router = Router();
  *             required:
  *               - document
  *               - userId
- *               - transactionId
  *               - documentType
  *             properties:
  *               document:
@@ -75,7 +79,7 @@ export const DocumentRouter: Router = Router();
  *               transactionId:
  *                 type: string
  *                 format: uuid
- *                 description: The transaction this document belongs to
+ *                 description: The transaction this document belongs to (optional — omit to get a URL back without saving to DB)
  *               documentType:
  *                 type: string
  *                 enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, RECEIPT, INVOICE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, BVN, NIN, TIN, UTILITY_BILL, SCHOOL_ADMISSION, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER]
@@ -115,7 +119,12 @@ DocumentRouter.post(
  * /api/documents/upload/multiple:
  *   post:
  *     summary: Upload multiple documents
- *     description: Upload up to 5 documents at once. Each file must be paired with a document type. Maximum file size is 10MB per file.
+ *     description: |
+ *       Upload up to 5 documents at once. Each file must be paired with a document type. Maximum file size is 10MB per file.
+ *
+ *       `transactionId` is optional. When omitted, all files are uploaded to Cloudinary and their
+ *       URLs are returned — no database records are created. Use the returned `fileUrl` values in
+ *       the `documents[]` array when creating a transaction.
  *     tags: [Documents]
  *     requestBody:
  *       required: true
@@ -126,7 +135,6 @@ DocumentRouter.post(
  *             required:
  *               - documents
  *               - userId
- *               - transactionId
  *               - documentTypes
  *             properties:
  *               documents:
@@ -143,7 +151,7 @@ DocumentRouter.post(
  *               transactionId:
  *                 type: string
  *                 format: uuid
- *                 description: The transaction these documents belong to
+ *                 description: The transaction these documents belong to (optional — omit to get URLs back without saving to DB)
  *               documentTypes:
  *                 type: string
  *                 description: JSON array of document types matching the order of files, e.g., ["PASSPORT", "VISA", "PROOF_OF_ADDRESS"]

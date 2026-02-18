@@ -21,10 +21,6 @@ export class DocumentController {
         throw new ValidationError('User ID is required');
       }
 
-      if (!transactionId) {
-        throw new ValidationError('Transaction ID is required');
-      }
-
       if (!documentType) {
         throw new ValidationError('Document type is required');
       }
@@ -64,10 +60,6 @@ export class DocumentController {
 
       if (!userId) {
         throw new ValidationError('User ID is required');
-      }
-
-      if (!transactionId) {
-        throw new ValidationError('Transaction ID is required');
       }
 
       if (!documentTypes) {

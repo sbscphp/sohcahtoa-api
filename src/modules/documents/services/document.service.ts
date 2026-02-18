@@ -61,7 +61,7 @@ export class DocumentService {
       let document;
 
       if (transactionId) {
-        // Transaction-specific document
+        // Transaction-specific document — persist to DB
         const documentData: any = {
           transactionId,
           documentType,
@@ -71,7 +71,6 @@ export class DocumentService {
           verificationStatus: VerificationStatus.PENDING,
         };
 
-        // Only add metadata if it exists
         if (metadata) {
           documentData.metadata = metadata;
         }
@@ -80,8 +79,20 @@ export class DocumentService {
           data: documentData,
         });
       } else {
-        // General user document (we'll need to check if there's a UserDocument table or create transaction without transaction ID)
-        throw new ValidationError('Transaction ID is required for document uploads');
+        // No transaction yet — return Cloudinary URL for the caller to attach later
+        logger.info('Document uploaded without transaction, returning URL only', {
+          fileUrl: uploadResult.secureUrl,
+        });
+        return {
+          id: '',
+          documentType,
+          fileUrl: uploadResult.secureUrl,
+          fileName: file.originalname,
+          fileSize: file.size,
+          verificationStatus: VerificationStatus.PENDING,
+          uploadedAt: new Date(),
+          metadata,
+        };
       }
 
       logger.info('Document uploaded successfully', {
@@ -110,7 +121,7 @@ export class DocumentService {
    */
   async uploadMultipleDocuments(
     userId: string,
-    transactionId: string,
+    transactionId: string | undefined,
     files: Express.Multer.File[],
     documentTypes: DocumentType[],
     metadata?: Record<string, any>
