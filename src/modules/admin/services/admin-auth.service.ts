@@ -294,7 +294,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
       data: { isUsed: true },
     });
 
-    await this.prisma.token.create({
+    const tokenRecord = await this.prisma.token.create({
       data: {
         userId: user.id,
         type: "OTP",
@@ -310,7 +310,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
         .catch((err: Error) => logger.warn("Login OTP email failed", { userId: user.id, message: err.message }));
     }
 
-    return { message: "OTP sent to your email" };
+    return { otp: tokenRecord.token, message: "OTP sent to your email" };
   }
 
   async verifyLogin(email: string, otp: string) {
