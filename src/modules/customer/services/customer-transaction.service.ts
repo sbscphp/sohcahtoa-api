@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
 import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
+import auditService from "../../audit/services/audit.service";
 
 const prisma = getDatabase();
 
@@ -200,7 +201,7 @@ export class CustomerTransactionService {
       },
     });
 
-    return {
+    const result = {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
@@ -210,6 +211,16 @@ export class CustomerTransactionService {
         ? "Transaction submitted successfully and is awaiting admin review."
         : "Transaction initiated successfully. Please upload required documents to proceed.",
     };
+
+    auditService.logTransactionEvent({
+      userId,
+      transactionId: transaction.id,
+      action: 'CREATED',
+      newStatus: transaction.status,
+      metadata: { type, referenceNumber: transaction.referenceNumber, hasDocuments },
+    });
+
+    return result;
   }
 
   /**
@@ -328,6 +339,13 @@ export class CustomerTransactionService {
         verificationStatus: true,
         uploadedAt: true,
       },
+    });
+
+    auditService.logTransactionEvent({
+      userId,
+      transactionId,
+      action: 'DOCUMENT_UPLOADED',
+      metadata: { documentCount: uploadedDocuments.length, documentType },
     });
 
     return {

@@ -41,6 +41,7 @@ import {
 } from '../../../shared/types';
 import bvnService from './bvn.service';
 import passportVerificationService from './passport-verification.service';
+import auditService from '../../audit/services/audit.service';
 
 const prisma = getDatabase();
 
@@ -116,6 +117,9 @@ export class AuthService {
       },
     });
 
+    // Audit trail
+    auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { email: user.email } });
+
     // Send OTP
     await this.sendOtp({
       email: user.email,
@@ -163,6 +167,7 @@ export class AuthService {
 
       if (failedAttempts >= MAX_LOGIN_ATTEMPTS) {
         updateData.lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000);
+        auditService.logAuthEvent({ userId: user.id, action: 'SESSION_EXPIRED', success: false, ipAddress, userAgent, metadata: { reason: 'account_locked', failedAttempts } });
       }
 
       await prisma.userCredential.update({
@@ -170,6 +175,7 @@ export class AuthService {
         data: updateData,
       });
 
+      auditService.logAuthEvent({ userId: user.id, action: 'LOGIN', success: false, ipAddress, userAgent, metadata: { reason: 'invalid_password', failedAttempts } });
       throw new UnauthorizedError('Invalid email or password');
     }
 
@@ -203,6 +209,8 @@ export class AuthService {
         expiresAt,
       },
     });
+
+    auditService.logAuthEvent({ userId: user.id, action: 'LOGIN', success: true, ipAddress, userAgent });
 
     return {
       accessToken,
@@ -408,6 +416,8 @@ export class AuthService {
       throw new ValidationError('OTP validation failed');
     }
 
+    auditService.logAuthEvent({ action: 'OTP_VERIFIED', success: true, metadata: { purpose: 'BVN_REGISTRATION', channel: 'phone' } });
+
     // Return confirmed user data (only non-sensitive fields with names visible)
     return {
       message: 'OTP validated successfully. Please proceed to create your account.',
@@ -476,6 +486,8 @@ export class AuthService {
     if (!otpValidation.valid) {
       throw new ValidationError('OTP validation failed');
     }
+
+    auditService.logAuthEvent({ action: 'OTP_VERIFIED', success: true, metadata: { purpose: 'BVN_REGISTRATION', channel: 'email' } });
 
     return {
       message: 'Email OTP validated successfully. Please proceed to create your account.',
@@ -579,6 +591,9 @@ export class AuthService {
         lastName: bvnData.lastName,
       },
     });
+
+    auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'NIGERIAN_CITIZEN', bvnVerified: true } });
+    auditService.logAuthEvent({ userId: user.id, action: 'BVN_VERIFIED', success: true });
 
     return {
       userId: user.id,
@@ -957,6 +972,8 @@ export class AuthService {
       },
     });
 
+    auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'TOURIST', passportVerified: true } });
+
     return {
       userId: user.id,
       message: 'Account created successfully. You can now login with your email and password.',
@@ -1052,6 +1069,8 @@ export class AuthService {
         lastName: passportData.lastName,
       },
     });
+
+    auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'EXPATRIATE', passportVerified: true } });
 
     return {
       userId: user.id,

@@ -7,11 +7,12 @@ import { requestLogger } from './shared/middleware/request-logger';
 import { correlationIdMiddleware } from './shared/middleware/correlation-id';
 import { createLogger } from './shared/utils/logger';
 import authRoutes from './modules/auth/routes/auth.routes';
-import transactionRoutes from './modules/transactions/routes/transaction.routes';
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
 import customerTransactionRoutes from './modules/customer/routes/customer-transaction.routes';
 import { DocumentRouter } from './modules/documents/routes/document.routes';
+import { AuditRouter } from './modules/audit/routes/audit.routes';
+import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
 
 const logger = createLogger('app');
 
@@ -44,6 +45,7 @@ export const createApp = async (): Promise<Application> => {
   // Request tracking and logging
   app.use(correlationIdMiddleware);
   app.use(requestLogger(logger));
+  app.use(auditMiddleware);
 
   // Health check endpoint
   app.get('/health', (req: Request, res: Response) => {
@@ -73,9 +75,6 @@ export const createApp = async (): Promise<Application> => {
   app.use('/api/auth', authRoutes);
   logger.info('Auth routes registered');
 
-  app.use('/api/transactions', transactionRoutes);
-  logger.info('Transaction routes registered');
-
   app.use('/api/payments', paymentRoutes);
   logger.info('Payment routes registered');
 
@@ -87,6 +86,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/documents', DocumentRouter);
   logger.info('Document routes registered');
+
+  app.use('/api/audit', AuditRouter);
+  logger.info('Audit routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

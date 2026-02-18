@@ -2,6 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
+import auditService from "../../audit/services/audit.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -244,6 +245,14 @@ export class AdminTransactionsService {
       } as any,
     });
 
+    auditService.logAdminEvent({
+      adminId,
+      resourceType: 'TRANSACTION',
+      resourceId: transactionId,
+      action: 'TRANSACTION_REVIEWED',
+      metadata: { notes: payload?.notes, riskLevel: payload?.riskLevel },
+    });
+
     return { message: "Transaction reviewed successfully" };
   }
 
@@ -287,6 +296,14 @@ export class AdminTransactionsService {
       },
     });
 
+    auditService.logAdminEvent({
+      adminId,
+      resourceType: 'TRANSACTION',
+      resourceId: transactionId,
+      action: 'TRANSACTION_APPROVED',
+      reason,
+    });
+
     return { message: "Transaction approved successfully" };
   }
 
@@ -317,6 +334,14 @@ export class AdminTransactionsService {
         performedBy: adminId,
         notes: reason,
       },
+    });
+
+    auditService.logAdminEvent({
+      adminId,
+      resourceType: 'TRANSACTION',
+      resourceId: transactionId,
+      action: 'TRANSACTION_REJECTED',
+      reason,
     });
 
     return { message: "Transaction rejected successfully" };

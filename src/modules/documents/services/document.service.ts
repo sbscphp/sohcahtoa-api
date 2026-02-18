@@ -12,6 +12,7 @@ import {
   VerificationStatus,
   ServiceName,
 } from '../../../shared/types';
+import auditService from '../../audit/services/audit.service';
 
 const logger = createLogger(ServiceName.DOCUMENT);
 
@@ -98,6 +99,14 @@ export class DocumentService {
       logger.info('Document uploaded successfully', {
         documentId: document.id,
         fileUrl: uploadResult.secureUrl,
+      });
+
+      auditService.logDocumentEvent({
+        userId,
+        documentId: document.id,
+        transactionId,
+        action: 'UPLOADED',
+        documentType,
       });
 
       return {
@@ -281,6 +290,13 @@ export class DocumentService {
       });
 
       logger.info('Document deleted successfully', { documentId });
+
+      auditService.logDocumentEvent({
+        userId,
+        documentId,
+        action: 'DELETED',
+        documentType: document.documentType,
+      });
     } catch (error) {
       logger.error('Document deletion failed', { error, documentId });
       throw error;
