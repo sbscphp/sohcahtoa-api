@@ -107,6 +107,33 @@ router.use(authenticate);
  *                   iban:
  *                     type: string
  *                     description: International Bank Account Number
+ *               documents:
+ *                 type: array
+ *                 description: Document links to attach at transaction creation time. Each item references a file already hosted (e.g. uploaded via the general document upload endpoint).
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - documentType
+ *                     - fileUrl
+ *                     - fileName
+ *                   properties:
+ *                     documentType:
+ *                       type: string
+ *                       enum: [PASSPORT, VISA, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
+ *                       description: Type of document
+ *                       example: PASSPORT
+ *                     fileUrl:
+ *                       type: string
+ *                       description: URL of the uploaded document
+ *                       example: "https://res.cloudinary.com/..."
+ *                     fileName:
+ *                       type: string
+ *                       description: Original file name
+ *                       example: "passport.pdf"
+ *                     fileSize:
+ *                       type: integer
+ *                       description: File size in bytes (optional)
+ *                       example: 204800
  *               pickupLocation:
  *                 type: object
  *                 description: Pickup location details (required for cash pickup transactions)
@@ -148,15 +175,41 @@ router.use(authenticate);
  *                       example: "TXN-1708123456789-ABC123DEF"
  *                     status:
  *                       type: string
- *                       example: DRAFT
+ *                       enum: [DRAFT, AWAITING_VERIFICATION]
+ *                       description: DRAFT if no documents provided, AWAITING_VERIFICATION if documents were submitted inline
+ *                       example: AWAITING_VERIFICATION
  *                     currentStep:
  *                       type: string
- *                       example: PERSONAL_INFO
+ *                       example: DOCUMENT_UPLOAD
  *                     requiredDocuments:
  *                       type: array
+ *                       description: Required documents for the transaction type, each showing upload status
  *                       items:
- *                         type: string
- *                       example: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT"]
+ *                         type: object
+ *                         properties:
+ *                           type:
+ *                             type: string
+ *                             example: PASSPORT
+ *                           uploaded:
+ *                             type: object
+ *                             nullable: true
+ *                             description: null if not yet uploaded
+ *                             properties:
+ *                               id:
+ *                                 type: string
+ *                               fileName:
+ *                                 type: string
+ *                                 example: "passport.pdf"
+ *                               fileUrl:
+ *                                 type: string
+ *                                 example: "https://res.cloudinary.com/..."
+ *                               status:
+ *                                 type: string
+ *                                 enum: [PENDING, APPROVED, REJECTED]
+ *                                 example: PENDING
+ *                               uploadedAt:
+ *                                 type: string
+ *                                 format: date-time
  *                     message:
  *                       type: string
  *                       example: "Transaction initiated successfully. Please upload required documents to proceed."
@@ -240,28 +293,36 @@ router.post("/", customerTransactionController.createTransaction);
  *                     message:
  *                       type: string
  *                       example: "Documents uploaded successfully"
- *                     documents:
+ *                     requiredDocuments:
  *                       type: array
+ *                       description: All required documents for the transaction type with their current upload and verification status
  *                       items:
  *                         type: object
  *                         properties:
- *                           id:
- *                             type: string
  *                           type:
  *                             type: string
- *                           fileName:
- *                             type: string
- *                           fileUrl:
- *                             type: string
- *                           verificationStatus:
- *                             type: string
- *                           uploadedAt:
- *                             type: string
- *                             format: date-time
- *                     requiredDocuments:
- *                       type: array
- *                       items:
- *                         type: string
+ *                             example: PASSPORT
+ *                           uploaded:
+ *                             type: object
+ *                             nullable: true
+ *                             description: null if this document has not been uploaded yet
+ *                             properties:
+ *                               id:
+ *                                 type: string
+ *                                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *                               fileName:
+ *                                 type: string
+ *                                 example: "passport.pdf"
+ *                               fileUrl:
+ *                                 type: string
+ *                                 example: "https://res.cloudinary.com/..."
+ *                               status:
+ *                                 type: string
+ *                                 enum: [PENDING, APPROVED, REJECTED]
+ *                                 example: PENDING
+ *                               uploadedAt:
+ *                                 type: string
+ *                                 format: date-time
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -485,7 +546,7 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  * /api/customer/transactions/{transactionId}:
  *   get:
  *     summary: Get transaction details
- *     description: Get detailed information about a specific transaction
+ *     description: Get detailed information about a specific transaction including approval status, rejection reason, and per-document verification status.
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -499,6 +560,75 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *     responses:
  *       200:
  *         description: Transaction details retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     transactionId:
+ *                       type: string
+ *                     referenceNumber:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                       enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
+ *                     status:
+ *                       type: string
+ *                       enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
+ *                       example: AWAITING_VERIFICATION
+ *                     currentStep:
+ *                       type: string
+ *                     rejection:
+ *                       type: object
+ *                       nullable: true
+ *                       description: Populated only when the transaction has been rejected
+ *                       properties:
+ *                         reason:
+ *                           type: string
+ *                           example: "Passport document is expired"
+ *                         rejectedAt:
+ *                           type: string
+ *                           format: date-time
+ *                     requiredDocuments:
+ *                       type: array
+ *                       description: Required documents with per-document verification status
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           type:
+ *                             type: string
+ *                             example: PASSPORT
+ *                           uploaded:
+ *                             type: object
+ *                             nullable: true
+ *                             properties:
+ *                               id:
+ *                                 type: string
+ *                               fileName:
+ *                                 type: string
+ *                               fileUrl:
+ *                                 type: string
+ *                               status:
+ *                                 type: string
+ *                                 enum: [PENDING, IN_PROGRESS, VERIFIED, FAILED, REQUIRES_MANUAL_REVIEW]
+ *                                 example: VERIFIED
+ *                               rejectionNotes:
+ *                                 type: string
+ *                                 nullable: true
+ *                                 description: Populated only when document status is FAILED
+ *                               uploadedAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               verifiedAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                                 nullable: true
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:

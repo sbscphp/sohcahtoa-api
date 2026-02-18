@@ -76,8 +76,8 @@ export class PassportVerificationService {
     const nationality = nationalities[nationalityIndex];
 
     // Generate unique email using timestamp
-    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${timestamp}`;
-    const email = `${emailPrefix}@example.com`;
+    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${String(timestamp).slice(-9)}`;
+    const email = `${emailPrefix}@yopmail.com`;
 
     // Generate unique passport number using nationality prefix and timestamp
     const passportNumber = `${nationality.prefix}${String(timestamp).slice(-8)}`;

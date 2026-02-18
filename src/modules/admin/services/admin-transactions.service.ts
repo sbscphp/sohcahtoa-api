@@ -256,13 +256,26 @@ export class AdminTransactionsService {
       reason,
     });
 
-    const updated = await prisma.transaction.update({
+    await prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.APPROVED as any,
         currentStep: TransactionStep.ADMIN_REVIEW as any,
         updatedAt: new Date(),
       },
+    });
+
+    // Mark all pending documents as verified
+    await prisma.transactionDocument.updateMany({
+      where: {
+        transactionId,
+        verificationStatus: VerificationStatus.PENDING as any,
+      },
+      data: {
+        verificationStatus: VerificationStatus.VERIFIED as any,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+      } as any,
     });
 
     await prisma.transactionHistory.create({

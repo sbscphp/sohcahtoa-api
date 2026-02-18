@@ -86,8 +86,8 @@ export class BvnService {
     const location = cities[cityIndex];
 
     // Generate unique email using timestamp
-    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${timestamp}`;
-    const email = `${emailPrefix}@example.com`;
+    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${bvn}`;
+    const email = `${emailPrefix}@yopmail.com`;
 
     // Generate unique phone number
     const phoneNumber = `+234${800 + (bvnHash % 100)}${String(timestamp).slice(-7)}`;

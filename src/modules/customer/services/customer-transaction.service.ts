@@ -4,6 +4,13 @@ import { v2 as cloudinary } from "cloudinary";
 
 const prisma = getDatabase();
 
+interface TransactionDocumentLink {
+  documentType: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize?: number;
+}
+
 interface CreateCustomerTransactionPayload {
   userId: string;
   type: string;
@@ -19,6 +26,9 @@ interface CreateCustomerTransactionPayload {
 
   // School fees specific fields
   admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
+
+  // Documents submitted inline with transaction creation
+  documents?: TransactionDocumentLink[];
 
   // Beneficiary/Bank details
   beneficiaryDetails?: {
@@ -59,7 +69,7 @@ export class CustomerTransactionService {
    * Create a new transaction for a customer
    */
   async createTransaction(payload: CreateCustomerTransactionPayload) {
-    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, admissionType, beneficiaryDetails, pickupLocation } = payload;
+    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
 
     // Validate user exists
     const user = await prisma.user.findUnique({
@@ -113,14 +123,19 @@ export class CustomerTransactionService {
     // Generate unique reference number
     const referenceNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+    // Determine initial status — if documents are provided upfront, submit for admin review immediately
+    const hasDocuments = documents && documents.length > 0;
+    const initialStatus = hasDocuments ? "AWAITING_VERIFICATION" : "DRAFT";
+    const initialStep = hasDocuments ? "DOCUMENT_UPLOAD" : "PERSONAL_INFO";
+
     // Create transaction
     const transaction = await prisma.transaction.create({
       data: {
         userId,
         referenceNumber,
         type: type as any,
-        status: "DRAFT",
-        currentStep: "PERSONAL_INFO",
+        status: initialStatus as any,
+        currentStep: initialStep as any,
         purpose,
         destinationCountry,
         currency,
@@ -134,7 +149,7 @@ export class CustomerTransactionService {
     await prisma.transactionStepLog.create({
       data: {
         transactionId: transaction.id,
-        step: "PERSONAL_INFO",
+        step: initialStep as any,
         status: "COMPLETED",
         data: {
           bvn: bvn ? "***" + bvn.slice(-4) : null,
@@ -148,13 +163,52 @@ export class CustomerTransactionService {
       },
     });
 
+    // Save any document links provided inline with the transaction
+    if (documents && documents.length > 0) {
+      const validDocumentTypes = [
+        "PASSPORT", "VISA", "TICKET", "RETURN_TICKET", "BVN", "NIN", "TIN",
+        "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER",
+        "RECEIPT", "INVOICE", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER",
+        "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "UTILITY_BILL",
+      ];
+
+      await prisma.transactionDocument.createMany({
+        data: documents
+          .filter((doc) => validDocumentTypes.includes(doc.documentType))
+          .map((doc) => ({
+            transactionId: transaction.id,
+            documentType: doc.documentType as any,
+            fileUrl: doc.fileUrl,
+            fileName: doc.fileName,
+            fileSize: doc.fileSize ?? 0,
+            verificationStatus: "PENDING" as any,
+            metadata: { source: "inline_upload", uploadedBy: userId },
+          })),
+      });
+    }
+
+    // Fetch any already-uploaded documents for this transaction
+    const existingDocuments = await prisma.transactionDocument.findMany({
+      where: { transactionId: transaction.id },
+      select: {
+        id: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        verificationStatus: true,
+        uploadedAt: true,
+      },
+    });
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
       currentStep: transaction.currentStep,
-      requiredDocuments: this.getRequiredDocuments(type),
-      message: "Transaction initiated successfully. Please upload required documents to proceed.",
+      requiredDocuments: this.buildDocumentStatus(type, existingDocuments),
+      message: hasDocuments
+        ? "Transaction submitted successfully and is awaiting admin review."
+        : "Transaction initiated successfully. Please upload required documents to proceed.",
     };
   }
 
@@ -263,17 +317,22 @@ export class CustomerTransactionService {
       });
     }
 
+    // Fetch all documents for this transaction (including previously uploaded ones)
+    const allDocuments = await prisma.transactionDocument.findMany({
+      where: { transactionId },
+      select: {
+        id: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        verificationStatus: true,
+        uploadedAt: true,
+      },
+    });
+
     return {
       message: "Documents uploaded successfully",
-      documents: uploadedDocuments.map((doc) => ({
-        id: doc.id,
-        type: doc.documentType,
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        verificationStatus: doc.verificationStatus,
-        uploadedAt: doc.uploadedAt,
-      })),
-      requiredDocuments: this.getRequiredDocuments(transaction.type),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments),
     };
   }
 
@@ -420,7 +479,18 @@ export class CustomerTransactionService {
         userId,
       },
       include: {
-        documents: true,
+        documents: {
+          select: {
+            id: true,
+            documentType: true,
+            fileUrl: true,
+            fileName: true,
+            verificationStatus: true,
+            verificationNotes: true,
+            uploadedAt: true,
+            verifiedAt: true,
+          },
+        },
         steps: {
           orderBy: { createdAt: "asc" },
         },
@@ -433,7 +503,69 @@ export class CustomerTransactionService {
       throw new NotFoundError("Transaction not found");
     }
 
-    return transaction;
+    return {
+      transactionId: transaction.id,
+      referenceNumber: transaction.referenceNumber,
+      type: transaction.type,
+      status: transaction.status,
+      currentStep: transaction.currentStep,
+      purpose: transaction.purpose,
+      destinationCountry: transaction.destinationCountry,
+      currency: transaction.currency,
+      foreignAmount: transaction.foreignAmount,
+      nairaEquivalent: transaction.nairaEquivalent,
+      exchangeRate: transaction.exchangeRate,
+      disbursementMethod: transaction.disbursementMethod,
+      rejection: transaction.rejectionReason
+        ? {
+            reason: transaction.rejectionReason,
+            rejectedAt: transaction.rejectedAt,
+          }
+        : null,
+      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any),
+      cashPickup: transaction.cashPickup,
+      prepaidCard: transaction.prepaidCard,
+      steps: transaction.steps,
+      createdAt: transaction.createdAt,
+      updatedAt: transaction.updatedAt,
+    };
+  }
+
+  /**
+   * Build document status list for a transaction type, merging with uploaded docs
+   */
+  private buildDocumentStatus(
+    transactionType: string,
+    uploadedDocuments: {
+      id: string;
+      documentType: string;
+      fileUrl: string;
+      fileName: string;
+      verificationStatus: string;
+      verificationNotes?: string | null;
+      uploadedAt: Date;
+      verifiedAt?: Date | null;
+    }[]
+  ) {
+    const required = this.getRequiredDocuments(transactionType);
+
+    return required.map((docType) => {
+      const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
+      return {
+        type: docType,
+        uploaded: uploaded
+          ? {
+              id: uploaded.id,
+              fileName: uploaded.fileName,
+              fileUrl: uploaded.fileUrl,
+              status: uploaded.verificationStatus,
+              rejectionNotes: uploaded.verificationStatus === "FAILED" ? (uploaded.verificationNotes ?? null) : null,
+              uploadedAt: uploaded.uploadedAt,
+              verifiedAt: uploaded.verifiedAt ?? null,
+            }
+          : null,
+      };
+    });
   }
 
   /**
