@@ -2,18 +2,44 @@ import { Request, Response, NextFunction } from "express";
 import customerTransactionService from "../services/customer-transaction.service";
 import { successResponse, paginatedResponse } from "../../../shared/utils";
 import { AuthRequest } from "../../../shared/middleware";
+import { UserRole } from "../../../shared/types";
 
 class CustomerTransactionController {
+  /**
+   * Resolve userId: for agents use body/query, otherwise use authenticated user.
+   * Returns { userId } or sends error response and returns null.
+   */
+  private resolveUserId(
+    req: AuthRequest,
+    res: Response,
+    fromBody: boolean
+  ): string | null {
+    const isAgent = req.user?.role === UserRole.AGENT;
+    const userId = isAgent
+      ? (fromBody ? req.body.userId : (req.query.userId as string))
+      : req.user?.userId;
+
+    if (!userId) {
+      const status = isAgent ? 400 : 401;
+      const message = isAgent
+        ? (fromBody ? "userId is required in request body when acting as an agent" : "userId is required in query when acting as an agent")
+        : "Authentication required";
+      res.status(status).json({ success: false, message });
+      return null;
+    }
+    return userId;
+  }
+
   /**
    * Create a new transaction
    */
   createTransaction = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.userId!;
-      const payload = {
-        userId,
-        ...req.body,
-      };
+      const userId = this.resolveUserId(req, res, true);
+      if (userId === null) return;
+
+      const { userId: _omit, ...rest } = req.body;
+      const payload = { userId, ...rest };
 
       const result = await customerTransactionService.createTransaction(payload);
       res.status(201).json(successResponse(result));
@@ -27,7 +53,9 @@ class CustomerTransactionController {
    */
   uploadDocuments = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.userId!;
+      const userId = this.resolveUserId(req, res, true);
+      if (userId === null) return;
+
       const { transactionId } = req.params;
       const { documentType } = req.body;
       const files = req.files as Express.Multer.File[];
@@ -121,7 +149,9 @@ class CustomerTransactionController {
    */
   getMyTransactions = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.userId!;
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
+
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
 
@@ -155,7 +185,8 @@ class CustomerTransactionController {
    */
   exportMyTransactions = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.userId!;
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
 
       const filters = {
         q: req.query.q as string | undefined,
@@ -183,7 +214,9 @@ class CustomerTransactionController {
    */
   getTransactionDetails = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.userId!;
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
+
       const { transactionId } = req.params;
 
       const result = await customerTransactionService.getTransactionDetails(transactionId, userId);

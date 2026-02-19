@@ -9,6 +9,7 @@ export interface JwtPayload {
 
 export enum UserRole {
   CUSTOMER = 'CUSTOMER',
+  AGENT = 'AGENT',
   ADMIN = 'ADMIN',
   COMPLIANCE_OFFICER = 'COMPLIANCE_OFFICER',
   OPERATIONS = 'OPERATIONS',
@@ -19,7 +20,6 @@ export enum CustomerType {
   NIGERIAN_CITIZEN = 'NIGERIAN_CITIZEN',
   TOURIST = 'TOURIST',
   EXPATRIATE = 'EXPATRIATE',
-  AGENT = 'AGENT',
 }
 
 export enum KycStatus {
