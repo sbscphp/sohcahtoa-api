@@ -1,7 +1,7 @@
 import { Router } from "express";
 import customerTransactionController from "../controllers/customer-transaction.controller";
 import { authenticate } from "../../../shared/middleware";
-import { uploadMultipleDocuments, uploadSingleDocument } from "../../../shared/middleware/upload";
+import { uploadMultipleDocuments } from "../../../shared/middleware/upload";
 
 const router: Router = Router();
 
@@ -336,12 +336,75 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  * @swagger
  * /api/customer/transactions:
  *   get:
- *     summary: Get customer's transactions
- *     description: Retrieve all transactions for the authenticated customer with pagination
+ *     summary: List my transactions (paginated, filterable, searchable)
+ *     description: |
+ *       Returns the authenticated customer's transactions with full filtering,
+ *       search, and sorting support.
+ *
+ *       **Transaction groups:**
+ *       - `BUY` – PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY
+ *       - `SELL` – TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX
+ *       - `REMITTANCE` – IMTO_REMITTANCE, CASH_REMITTANCE
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search across reference number, purpose, destination country, and currency
+ *         example: TXN-170
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
+ *         description: Filter by transaction status
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
+ *         description: Filter by exact transaction type
+ *       - in: query
+ *         name: group
+ *         schema:
+ *           type: string
+ *           enum: [BUY, SELL, REMITTANCE]
+ *         description: Filter by transaction group (ignored when `type` is also provided)
+ *       - in: query
+ *         name: currency
+ *         schema:
+ *           type: string
+ *         description: Filter by foreign currency code (e.g. USD, GBP)
+ *         example: USD
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter transactions created on or after this date (ISO 8601)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter transactions created on or before this date (ISO 8601)
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, updatedAt, foreignAmount, nairaEquivalent, status, type]
+ *           default: createdAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort direction
  *       - in: query
  *         name: page
  *         schema:
@@ -353,7 +416,8 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Items per page
+ *           maximum: 100
+ *         description: Items per page (max 100)
  *     responses:
  *       200:
  *         description: Transactions retrieved successfully
@@ -364,12 +428,63 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
  *                   type: array
  *                   items:
  *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       referenceNumber:
+ *                         type: string
+ *                         example: TXN-1708123456789-ABC123DEF
+ *                       group:
+ *                         type: string
+ *                         enum: [BUY, SELL, REMITTANCE, OTHER]
+ *                         example: BUY
+ *                       type:
+ *                         type: string
+ *                         example: PTA
+ *                       status:
+ *                         type: string
+ *                         example: AWAITING_VERIFICATION
+ *                       purpose:
+ *                         type: string
+ *                       destinationCountry:
+ *                         type: string
+ *                       currency:
+ *                         type: string
+ *                         example: USD
+ *                       foreignAmount:
+ *                         type: number
+ *                       nairaEquivalent:
+ *                         type: number
+ *                         nullable: true
+ *                       exchangeRate:
+ *                         type: number
+ *                         nullable: true
+ *                       disbursementMethod:
+ *                         type: string
+ *                         nullable: true
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       documents:
+ *                         type: array
+ *                         items:
+ *                           type: object
  *                 pagination:
  *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -377,20 +492,79 @@ router.get("/", customerTransactionController.getMyTransactions);
 
 /**
  * @swagger
- * /api/customer/transactions/rates:
+ * /api/customer/transactions/export:
  *   get:
- *     summary: Get active exchange rates
- *     description: Retrieve current active exchange rates. Optionally filter by currency.
+ *     summary: Export my transactions as CSV
+ *     description: |
+ *       Downloads all transactions matching the given filters as a CSV file.
+ *       Accepts the same filter parameters as the list endpoint (no pagination —
+ *       all matching rows up to 10 000 are included).
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: q
+ *         schema: { type: string }
+ *         description: Search term
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *         description: Filter by status
+ *       - in: query
+ *         name: type
+ *         schema: { type: string }
+ *         description: Filter by transaction type
+ *       - in: query
+ *         name: group
+ *         schema: { type: string, enum: [BUY, SELL, REMITTANCE] }
+ *         description: Filter by transaction group
+ *       - in: query
  *         name: currency
+ *         schema: { type: string }
+ *         description: Filter by currency
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/transactions/export", customerTransactionController.exportMyTransactions);
+
+/**
+ * @swagger
+ * /api/customer/transactions/rates:
+ *   get:
+ *     summary: Get active exchange rates
+ *     description: |
+ *       Retrieve current active exchange rates. Optionally filter by fromCurrency and/or toCurrency.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: fromCurrency
  *         schema:
  *           type: string
- *         description: Filter by currency code (e.g., USD, EUR, GBP)
+ *         description: Filter by source currency (e.g., USD, EUR, GBP)
  *         example: USD
+ *       - in: query
+ *         name: toCurrency
+ *         schema:
+ *           type: string
+ *         description: Filter by target currency (e.g., NGN)
+ *         example: NGN
  *     responses:
  *       200:
  *         description: Exchange rates retrieved successfully
@@ -436,8 +610,11 @@ router.get("/transactions/rates", customerTransactionController.getActiveRates);
  * @swagger
  * /api/customer/transactions/rates/calculate:
  *   post:
- *     summary: Calculate transaction amount
- *     description: Calculate the Naira equivalent for a given foreign currency amount using current exchange rates
+ *     summary: Calculate converted amount between two currencies
+ *     description: |
+ *       Calculate the converted amount for a given currency pair using the current
+ *       active sell rate. Supports any currency pair configured in the system
+ *       (e.g. USD → NGN, GBP → NGN).
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -448,16 +625,21 @@ router.get("/transactions/rates", customerTransactionController.getActiveRates);
  *           schema:
  *             type: object
  *             required:
- *               - currency
+ *               - fromCurrency
+ *               - toCurrency
  *               - amount
  *             properties:
- *               currency:
+ *               fromCurrency:
  *                 type: string
- *                 description: Foreign currency code
+ *                 description: Source currency code
  *                 example: USD
+ *               toCurrency:
+ *                 type: string
+ *                 description: Target currency code
+ *                 example: NGN
  *               amount:
  *                 type: number
- *                 description: Amount in foreign currency
+ *                 description: Amount in the source currency
  *                 example: 5000
  *     responses:
  *       200:
@@ -473,16 +655,22 @@ router.get("/transactions/rates", customerTransactionController.getActiveRates);
  *                 data:
  *                   type: object
  *                   properties:
- *                     currency:
+ *                     fromCurrency:
  *                       type: string
  *                       example: USD
- *                     foreignAmount:
+ *                     toCurrency:
+ *                       type: string
+ *                       example: NGN
+ *                     amount:
  *                       type: number
  *                       example: 5000
- *                     exchangeRate:
+ *                     sellRate:
  *                       type: number
  *                       example: 1465.75
- *                     nairaEquivalent:
+ *                     buyRate:
+ *                       type: number
+ *                       example: 1450.50
+ *                     convertedAmount:
  *                       type: number
  *                       example: 7328750
  *                     rateValidUntil:
@@ -493,7 +681,7 @@ router.get("/transactions/rates", customerTransactionController.getActiveRates);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:
- *         description: No active exchange rate found
+ *         description: No active exchange rate found for the given currency pair
  */
 router.post("/transactions/rates/calculate", customerTransactionController.calculateAmount);
 

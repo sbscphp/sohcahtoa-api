@@ -355,9 +355,12 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Get active exchange rates for customers
+   * Get active exchange rates for customers.
+   *
+   * @param fromCurrency - Optional: filter rates where this is the source currency
+   * @param toCurrency   - Optional: filter rates where this is the target currency
    */
-  async getActiveRates(currency?: string) {
+  async getActiveRates(fromCurrency?: string, toCurrency?: string) {
     const now = new Date();
     const where: any = {
       isActive: true,
@@ -365,9 +368,8 @@ export class CustomerTransactionService {
       validUntil: { gt: now },
     };
 
-    if (currency) {
-      where.OR = [{ fromCurrency: currency }, { toCurrency: currency }];
-    }
+    if (fromCurrency) where.fromCurrency = fromCurrency.toUpperCase();
+    if (toCurrency) where.toCurrency = toCurrency.toUpperCase();
 
     const client: any = prisma as any;
     const rates = await client.exchangeRate.findMany({
@@ -388,16 +390,20 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Calculate transaction amount based on current rate
+   * Calculate transaction amount based on current rate.
+   *
+   * @param fromCurrency - The source currency (e.g. "USD")
+   * @param toCurrency   - The target currency (e.g. "NGN")
+   * @param amount       - The amount in fromCurrency to convert
    */
-  async calculateAmount(currency: string, foreignAmount: number) {
+  async calculateAmount(fromCurrency: string, toCurrency: string, amount: number) {
     const now = new Date();
     const client: any = prisma as any;
 
     const rate = await client.exchangeRate.findFirst({
       where: {
-        fromCurrency: currency,
-        toCurrency: "NGN",
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: toCurrency.toUpperCase(),
         isActive: true,
         validFrom: { lte: now },
         validUntil: { gt: now },
@@ -406,16 +412,22 @@ export class CustomerTransactionService {
     });
 
     if (!rate) {
-      throw new NotFoundError(`No active exchange rate found for ${currency} to NGN`);
+      throw new NotFoundError(
+        `No active exchange rate found for ${fromCurrency.toUpperCase()} to ${toCurrency.toUpperCase()}`
+      );
     }
 
-    const nairaEquivalent = foreignAmount * parseFloat(rate.sellRate);
+    const sellRate = parseFloat(rate.sellRate);
+    const buyRate = parseFloat(rate.buyRate);
+    const convertedAmount = amount * sellRate;
 
     return {
-      currency,
-      foreignAmount,
-      exchangeRate: parseFloat(rate.sellRate),
-      nairaEquivalent,
+      fromCurrency: rate.fromCurrency,
+      toCurrency: rate.toCurrency,
+      amount,
+      sellRate,
+      buyRate,
+      convertedAmount,
       rateValidUntil: rate.validUntil,
     };
   }
@@ -444,16 +456,132 @@ export class CustomerTransactionService {
     return outlets;
   }
 
+  // ── Transaction groups ────────────────────────────────────────────────────
+  // BUY  : PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY
+  // SELL : TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX
+  // REMITTANCE: IMTO_REMITTANCE, CASH_REMITTANCE
+  private static readonly TRANSACTION_GROUPS: Record<string, string[]> = {
+    BUY: ["PTA", "BTA", "SCHOOL_FEES", "MEDICAL", "PROFESSIONAL_BODY"],
+    SELL: ["TOURIST_FX", "RESIDENT_FX", "EXPATRIATE_FX"],
+    REMITTANCE: ["IMTO_REMITTANCE", "CASH_REMITTANCE"],
+  };
+
   /**
-   * Get customer's transactions
+   * Build a Prisma `where` clause from customer transaction query filters.
    */
-  async getCustomerTransactions(userId: string, page = 1, limit = 10) {
+  private buildTransactionWhere(
+    userId: string,
+    filters: {
+      q?: string;
+      status?: string;
+      type?: string;
+      group?: string;
+      currency?: string;
+      startDate?: string;
+      endDate?: string;
+    }
+  ) {
+    const where: any = { userId };
+
+    // Full-text search across reference number and purpose
+    if (filters.q) {
+      where.OR = [
+        { referenceNumber: { contains: filters.q, mode: "insensitive" } },
+        { purpose: { contains: filters.q, mode: "insensitive" } },
+        { destinationCountry: { contains: filters.q, mode: "insensitive" } },
+        { currency: { contains: filters.q, mode: "insensitive" } },
+      ];
+    }
+
+    if (filters.status) where.status = filters.status;
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+
+    // Filter by explicit type OR by group (BUY / SELL / REMITTANCE)
+    if (filters.type) {
+      where.type = filters.type.toUpperCase();
+    } else if (filters.group) {
+      const groupTypes =
+        CustomerTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
+      if (groupTypes) where.type = { in: groupTypes };
+    }
+
+    if (filters.startDate || filters.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    }
+
+    return where;
+  }
+
+  /**
+   * Get customer's transactions — paginated, filterable, and searchable.
+   *
+   * Filters:
+   *   q           – search across referenceNumber, purpose, destinationCountry, currency
+   *   status      – exact TransactionStatus value
+   *   type        – exact TransactionType value
+   *   group       – BUY | SELL | REMITTANCE (maps to type set)
+   *   currency    – e.g. "USD"
+   *   startDate   – ISO datetime lower bound on createdAt
+   *   endDate     – ISO datetime upper bound on createdAt
+   *   sortBy      – field to sort by (default: createdAt)
+   *   sortOrder   – asc | desc (default: desc)
+   */
+  async getCustomerTransactions(
+    userId: string,
+    filters: {
+      q?: string;
+      status?: string;
+      type?: string;
+      group?: string;
+      currency?: string;
+      startDate?: string;
+      endDate?: string;
+      sortBy?: string;
+      sortOrder?: "asc" | "desc";
+    } = {},
+    page = 1,
+    limit = 10
+  ) {
     const skip = (page - 1) * limit;
+    const where = this.buildTransactionWhere(userId, filters);
+
+    const allowedSortFields: Record<string, boolean> = {
+      createdAt: true,
+      updatedAt: true,
+      foreignAmount: true,
+      nairaEquivalent: true,
+      status: true,
+      type: true,
+    };
+    const sortBy =
+      filters.sortBy && allowedSortFields[filters.sortBy]
+        ? filters.sortBy
+        : "createdAt";
+    const sortOrder = filters.sortOrder === "asc" ? "asc" : "desc";
 
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
-        where: { userId },
-        include: {
+        where,
+        select: {
+          id: true,
+          referenceNumber: true,
+          type: true,
+          status: true,
+          currentStep: true,
+          purpose: true,
+          destinationCountry: true,
+          currency: true,
+          foreignAmount: true,
+          nairaEquivalent: true,
+          exchangeRate: true,
+          disbursementMethod: true,
+          createdAt: true,
+          updatedAt: true,
+          completedAt: true,
+          rejectedAt: true,
+          rejectionReason: true,
           documents: {
             select: {
               id: true,
@@ -463,21 +591,24 @@ export class CustomerTransactionService {
             },
           },
           cashPickup: {
-            select: {
-              pickupLocation: true,
-              status: true,
-            },
+            select: { pickupLocation: true, status: true },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { [sortBy]: sortOrder },
         skip,
         take: limit,
       }),
-      prisma.transaction.count({ where: { userId } }),
+      prisma.transaction.count({ where }),
     ]);
 
+    // Attach the transaction group label to each row
+    const data = transactions.map((t) => ({
+      ...t,
+      group: this.resolveTransactionGroup(t.type as string),
+    }));
+
     return {
-      data: transactions,
+      data,
       pagination: {
         page,
         limit,
@@ -485,6 +616,106 @@ export class CustomerTransactionService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Export customer transactions as a CSV string.
+   * Accepts the same filters as getCustomerTransactions (no pagination —
+   * fetches all matching rows up to a safety cap of 10 000).
+   */
+  async exportCustomerTransactions(
+    userId: string,
+    filters: {
+      q?: string;
+      status?: string;
+      type?: string;
+      group?: string;
+      currency?: string;
+      startDate?: string;
+      endDate?: string;
+    } = {}
+  ): Promise<string> {
+    const where = this.buildTransactionWhere(userId, filters);
+
+    const transactions = await prisma.transaction.findMany({
+      where,
+      select: {
+        referenceNumber: true,
+        type: true,
+        status: true,
+        purpose: true,
+        destinationCountry: true,
+        currency: true,
+        foreignAmount: true,
+        nairaEquivalent: true,
+        exchangeRate: true,
+        disbursementMethod: true,
+        createdAt: true,
+        completedAt: true,
+        rejectedAt: true,
+        rejectionReason: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+
+    const headers = [
+      "Reference Number",
+      "Group",
+      "Type",
+      "Status",
+      "Purpose",
+      "Destination Country",
+      "Currency",
+      "Foreign Amount",
+      "NGN Equivalent",
+      "Exchange Rate",
+      "Disbursement Method",
+      "Created At",
+      "Completed At",
+      "Rejected At",
+      "Rejection Reason",
+    ];
+
+    const escape = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      // Wrap in quotes if contains comma, quote, or newline
+      return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const rows = transactions.map((t) =>
+      [
+        t.referenceNumber,
+        this.resolveTransactionGroup(t.type as string),
+        t.type,
+        t.status,
+        t.purpose,
+        t.destinationCountry,
+        t.currency,
+        t.foreignAmount ?? "",
+        t.nairaEquivalent ?? "",
+        t.exchangeRate ?? "",
+        t.disbursementMethod ?? "",
+        t.createdAt.toISOString(),
+        t.completedAt?.toISOString() ?? "",
+        t.rejectedAt?.toISOString() ?? "",
+        t.rejectionReason ?? "",
+      ]
+        .map(escape)
+        .join(",")
+    );
+
+    return [headers.join(","), ...rows].join("\n");
+  }
+
+  private resolveTransactionGroup(type: string): string {
+    for (const [group, types] of Object.entries(
+      CustomerTransactionService.TRANSACTION_GROUPS
+    )) {
+      if (types.includes(type)) return group;
+    }
+    return "OTHER";
   }
 
   /**

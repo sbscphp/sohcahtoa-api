@@ -66,8 +66,11 @@ class CustomerTransactionController {
    */
   getActiveRates = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { currency } = req.query;
-      const result = await customerTransactionService.getActiveRates(currency as string);
+      const { fromCurrency, toCurrency } = req.query;
+      const result = await customerTransactionService.getActiveRates(
+        fromCurrency as string | undefined,
+        toCurrency as string | undefined
+      );
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -79,17 +82,21 @@ class CustomerTransactionController {
    */
   calculateAmount = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { currency, amount } = req.body;
+      const { fromCurrency, toCurrency, amount } = req.body;
 
-      if (!currency || !amount) {
+      if (!fromCurrency || !toCurrency || !amount) {
         res.status(400).json({
           success: false,
-          message: "currency and amount are required",
+          message: "fromCurrency, toCurrency and amount are required",
         });
         return;
       }
 
-      const result = await customerTransactionService.calculateAmount(currency, parseFloat(amount));
+      const result = await customerTransactionService.calculateAmount(
+        fromCurrency,
+        toCurrency,
+        parseFloat(amount)
+      );
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -109,16 +116,63 @@ class CustomerTransactionController {
   };
 
   /**
-   * Get customer's transactions
+   * GET /api/customer/transactions
+   * Paginated, filterable, searchable transaction list for the authenticated customer.
    */
   getMyTransactions = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId!;
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
 
-      const result = await customerTransactionService.getCustomerTransactions(userId, page, limit);
+      const filters = {
+        q: req.query.q as string | undefined,
+        status: req.query.status as string | undefined,
+        type: req.query.type as string | undefined,
+        group: req.query.group as string | undefined,
+        currency: req.query.currency as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate: req.query.endDate as string | undefined,
+        sortBy: req.query.sortBy as string | undefined,
+        sortOrder: (req.query.sortOrder as "asc" | "desc") || "desc",
+      };
+
+      const result = await customerTransactionService.getCustomerTransactions(
+        userId,
+        filters,
+        page,
+        limit
+      );
       res.json(paginatedResponse(result.data, page, limit, result.pagination.total));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /api/customer/transactions/export
+   * Download all matching transactions as a CSV file.
+   */
+  exportMyTransactions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId!;
+
+      const filters = {
+        q: req.query.q as string | undefined,
+        status: req.query.status as string | undefined,
+        type: req.query.type as string | undefined,
+        group: req.query.group as string | undefined,
+        currency: req.query.currency as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate: req.query.endDate as string | undefined,
+      };
+
+      const csv = await customerTransactionService.exportCustomerTransactions(userId, filters);
+
+      const filename = `transactions-${userId}-${Date.now()}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
     } catch (error) {
       next(error);
     }
