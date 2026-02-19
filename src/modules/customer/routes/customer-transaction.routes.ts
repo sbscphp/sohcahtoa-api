@@ -21,19 +21,29 @@ router.use(authenticate);
  *   post:
  *     summary: Create a new transaction (Customer)
  *     description: |
- *       Initiate a new foreign exchange transaction. Customers must provide:
- *       - BVN (Bank Verification Number)
- *       - NIN (National Identification Number)
- *       - Transaction details (type, amount, currency)
+ *       Initiate a new foreign exchange transaction.
  *
- *       After creation, customers will need to upload required documents including:
- *       - Passport
- *       - Visa
- *       - Return Ticket
- *       - Form A ID (provided as string in creation)
- *       - Form A Document
+ *       **Required fields:** `type`, `currency`, `amount`, `purpose`, `destinationCountry`
  *
- *       The response includes a list of required documents based on transaction type.
+ *       **Optional fields:** `bvn`, `nin`, `formAId`, `admissionType` (SCHOOL_FEES only),
+ *       `beneficiaryDetails` (SCHOOL_FEES / bank transfers), `pickupLocation` (CASH_REMITTANCE),
+ *       `documents` (inline document links).
+ *
+ *       **Transaction status after creation:**
+ *       - `DRAFT` — no documents provided, customer must upload separately
+ *       - `AWAITING_VERIFICATION` — documents submitted inline at creation time
+ *
+ *       **Required documents per type:**
+ *       - `PTA`: BVN, NIN, PASSPORT, VISA, RETURN_TICKET, FORM_A_DOCUMENT
+ *       - `BTA`: BVN, TIN, PASSPORT, VISA, RETURN_TICKET, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER
+ *       - `SCHOOL_FEES`: FORM_A_DOCUMENT
+ *       - `MEDICAL`: BVN, NIN, PASSPORT, VISA, RETURN_TICKET, FORM_A_DOCUMENT, UTILITY_BILL, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER
+ *       - `PROFESSIONAL_BODY`: BVN, FORM_A_DOCUMENT, UTILITY_BILL, MEMBERSHIP_CARD, INVOICE
+ *       - `TOURIST_FX`: BVN, NIN, PASSPORT, RETURN_TICKET, FORM_A_DOCUMENT
+ *       - `RESIDENT_FX`: BVN, NIN, PASSPORT, FORM_A_DOCUMENT
+ *       - `EXPATRIATE_FX`: PASSPORT, VISA, FORM_A_DOCUMENT
+ *       - `IMTO_REMITTANCE`: BVN, NIN, FORM_A_DOCUMENT
+ *       - `CASH_REMITTANCE`: BVN, NIN, FORM_A_DOCUMENT
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -73,28 +83,28 @@ router.use(authenticate);
  *                 example: United States
  *               bvn:
  *                 type: string
- *                 description: Bank Verification Number (11 digits)
+ *                 description: Bank Verification Number (11 digits). Stored on the customer's KYC record.
  *                 example: "12345678901"
  *               nin:
  *                 type: string
- *                 description: National Identification Number (11 digits) - Required for PTA and personal transactions
+ *                 description: National Identification Number (11 digits). Stored on the customer's KYC record.
  *                 example: "12345678901"
  *               formAId:
  *                 type: string
- *                 description: Form A ID Number
+ *                 description: Form A ID number saved against the transaction
  *                 example: "FMA12345678"
  *               admissionType:
  *                 type: string
  *                 enum: [UNDERGRADUATE, POSTGRADUATE, OTHER]
- *                 description: Type of admission (required for SCHOOL_FEES transactions)
- *                 example: "UNDERGRADUATE"
+ *                 description: Type of admission — only relevant for SCHOOL_FEES transactions
+ *                 example: UNDERGRADUATE
  *               beneficiaryDetails:
  *                 type: object
- *                 description: Beneficiary/Bank details (required for SCHOOL_FEES and international transfers)
+ *                 description: Bank / beneficiary details required for SCHOOL_FEES and international bank transfers
  *                 properties:
  *                   name:
  *                     type: string
- *                     description: Beneficiary name
+ *                     description: Beneficiary full name
  *                   accountNumber:
  *                     type: string
  *                     description: Bank account number
@@ -106,10 +116,12 @@ router.use(authenticate);
  *                     description: Bank name
  *                   iban:
  *                     type: string
- *                     description: International Bank Account Number
+ *                     description: International Bank Account Number (IBAN)
  *               documents:
  *                 type: array
- *                 description: Document links to attach at transaction creation time. Each item references a file already hosted (e.g. uploaded via the general document upload endpoint).
+ *                 description: |
+ *                   Optional — attach already-hosted document links at creation time.
+ *                   When provided, the transaction is immediately set to AWAITING_VERIFICATION.
  *                 items:
  *                   type: object
  *                   required:
@@ -119,12 +131,12 @@ router.use(authenticate);
  *                   properties:
  *                     documentType:
  *                       type: string
- *                       enum: [PASSPORT, VISA, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
+ *                       enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
  *                       description: Type of document
  *                       example: PASSPORT
  *                     fileUrl:
  *                       type: string
- *                       description: URL of the uploaded document
+ *                       description: Publicly accessible URL of the uploaded file
  *                       example: "https://res.cloudinary.com/..."
  *                     fileName:
  *                       type: string
@@ -136,11 +148,17 @@ router.use(authenticate);
  *                       example: 204800
  *               pickupLocation:
  *                 type: object
- *                 description: Pickup location details (required for cash pickup transactions)
+ *                 description: Required for CASH_REMITTANCE transactions. Sets disbursementMethod to CASH_PICKUP.
+ *                 required:
+ *                   - id
+ *                   - name
+ *                   - address
+ *                   - recipientName
+ *                   - recipientPhone
  *                 properties:
  *                   id:
  *                     type: string
- *                     description: Outlet ID
+ *                     description: Outlet ID (from GET /customer/transactions/pickup-points)
  *                   name:
  *                     type: string
  *                     description: Outlet name
@@ -149,10 +167,10 @@ router.use(authenticate);
  *                     description: Outlet address
  *                   recipientName:
  *                     type: string
- *                     description: Name of person picking up cash
+ *                     description: Full name of the person picking up the cash
  *                   recipientPhone:
  *                     type: string
- *                     description: Phone number of person picking up cash
+ *                     description: Phone number of the person picking up the cash
  *     responses:
  *       201:
  *         description: Transaction created successfully
@@ -169,6 +187,7 @@ router.use(authenticate);
  *                   properties:
  *                     transactionId:
  *                       type: string
+ *                       format: uuid
  *                       example: "550e8400-e29b-41d4-a716-446655440000"
  *                     referenceNumber:
  *                       type: string
@@ -176,14 +195,16 @@ router.use(authenticate);
  *                     status:
  *                       type: string
  *                       enum: [DRAFT, AWAITING_VERIFICATION]
- *                       description: DRAFT if no documents provided, AWAITING_VERIFICATION if documents were submitted inline
- *                       example: AWAITING_VERIFICATION
+ *                       description: DRAFT when no documents provided; AWAITING_VERIFICATION when documents are submitted inline
+ *                       example: DRAFT
  *                     currentStep:
  *                       type: string
- *                       example: DOCUMENT_UPLOAD
+ *                       enum: [PERSONAL_INFO, DOCUMENT_UPLOAD]
+ *                       description: PERSONAL_INFO when no documents; DOCUMENT_UPLOAD when documents submitted inline
+ *                       example: PERSONAL_INFO
  *                     requiredDocuments:
  *                       type: array
- *                       description: Required documents for the transaction type, each showing upload status
+ *                       description: All required documents for this transaction type with their current upload status
  *                       items:
  *                         type: object
  *                         properties:
@@ -193,10 +214,11 @@ router.use(authenticate);
  *                           uploaded:
  *                             type: object
  *                             nullable: true
- *                             description: null if not yet uploaded
+ *                             description: null if this document has not been uploaded yet
  *                             properties:
  *                               id:
  *                                 type: string
+ *                                 format: uuid
  *                               fileName:
  *                                 type: string
  *                                 example: "passport.pdf"
@@ -205,11 +227,19 @@ router.use(authenticate);
  *                                 example: "https://res.cloudinary.com/..."
  *                               status:
  *                                 type: string
- *                                 enum: [PENDING, APPROVED, REJECTED]
+ *                                 enum: [PENDING, IN_PROGRESS, VERIFIED, FAILED, REQUIRES_MANUAL_REVIEW]
  *                                 example: PENDING
+ *                               rejectionNotes:
+ *                                 type: string
+ *                                 nullable: true
+ *                                 description: Populated only when status is FAILED
  *                               uploadedAt:
  *                                 type: string
  *                                 format: date-time
+ *                               verifiedAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                                 nullable: true
  *                     message:
  *                       type: string
  *                       example: "Transaction initiated successfully. Please upload required documents to proceed."
@@ -268,7 +298,7 @@ router.post("/", customerTransactionController.createTransaction);
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: [PASSPORT, VISA, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
+ *                 enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
  *                 description: Type of document being uploaded
  *               documents:
  *                 type: array
@@ -309,6 +339,7 @@ router.post("/", customerTransactionController.createTransaction);
  *                             properties:
  *                               id:
  *                                 type: string
+ *                                 format: uuid
  *                                 example: "550e8400-e29b-41d4-a716-446655440000"
  *                               fileName:
  *                                 type: string
@@ -318,11 +349,19 @@ router.post("/", customerTransactionController.createTransaction);
  *                                 example: "https://res.cloudinary.com/..."
  *                               status:
  *                                 type: string
- *                                 enum: [PENDING, APPROVED, REJECTED]
+ *                                 enum: [PENDING, IN_PROGRESS, VERIFIED, FAILED, REQUIRES_MANUAL_REVIEW]
  *                                 example: PENDING
+ *                               rejectionNotes:
+ *                                 type: string
+ *                                 nullable: true
+ *                                 description: Populated only when status is FAILED
  *                               uploadedAt:
  *                                 type: string
  *                                 format: date-time
+ *                               verifiedAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                                 nullable: true
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -436,6 +475,7 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *                     properties:
  *                       id:
  *                         type: string
+ *                         format: uuid
  *                       referenceNumber:
  *                         type: string
  *                         example: TXN-1708123456789-ABC123DEF
@@ -445,19 +485,28 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *                         example: BUY
  *                       type:
  *                         type: string
+ *                         enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
  *                         example: PTA
  *                       status:
  *                         type: string
+ *                         enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
  *                         example: AWAITING_VERIFICATION
+ *                       currentStep:
+ *                         type: string
+ *                         nullable: true
+ *                         description: Current workflow step for the transaction
  *                       purpose:
  *                         type: string
+ *                         nullable: true
  *                       destinationCountry:
  *                         type: string
+ *                         nullable: true
  *                       currency:
  *                         type: string
  *                         example: USD
  *                       foreignAmount:
  *                         type: number
+ *                         nullable: true
  *                       nairaEquivalent:
  *                         type: number
  *                         nullable: true
@@ -470,21 +519,63 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *                       createdAt:
  *                         type: string
  *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       completedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       rejectedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       rejectionReason:
+ *                         type: string
+ *                         nullable: true
  *                       documents:
  *                         type: array
  *                         items:
  *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: string
+ *                               format: uuid
+ *                             documentType:
+ *                               type: string
+ *                               example: PASSPORT
+ *                             verificationStatus:
+ *                               type: string
+ *                               enum: [PENDING, APPROVED, REJECTED]
+ *                             uploadedAt:
+ *                               type: string
+ *                               format: date-time
+ *                       cashPickup:
+ *                         type: object
+ *                         nullable: true
+ *                         description: Cash pickup details (only present for CASH_REMITTANCE transactions)
+ *                         properties:
+ *                           pickupLocation:
+ *                             type: string
+ *                             nullable: true
+ *                           status:
+ *                             type: string
+ *                             nullable: true
  *                 pagination:
  *                   type: object
  *                   properties:
  *                     page:
  *                       type: integer
+ *                       example: 1
  *                     limit:
  *                       type: integer
+ *                       example: 10
  *                     total:
  *                       type: integer
+ *                       example: 42
  *                     totalPages:
  *                       type: integer
+ *                       example: 5
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -496,42 +587,69 @@ router.get("/", customerTransactionController.getMyTransactions);
  *   get:
  *     summary: Export my transactions as CSV
  *     description: |
- *       Downloads all transactions matching the given filters as a CSV file.
- *       Accepts the same filter parameters as the list endpoint (no pagination —
- *       all matching rows up to 10 000 are included).
+ *       Downloads all transactions matching the given filters as a CSV file attachment.
+ *       Accepts the same filter parameters as the list endpoint — no pagination applies;
+ *       all matching rows up to 10 000 are included.
+ *
+ *       **CSV columns (in order):**
+ *       Reference Number, Group, Type, Status, Purpose, Destination Country, Currency,
+ *       Foreign Amount, NGN Equivalent, Exchange Rate, Disbursement Method,
+ *       Created At, Completed At, Rejected At, Rejection Reason
+ *
+ *       The response includes a `Content-Disposition: attachment; filename="transactions-<userId>-<timestamp>.csv"` header.
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: q
- *         schema: { type: string }
- *         description: Search term
+ *         schema:
+ *           type: string
+ *         description: Search across reference number, purpose, destination country, and currency
  *       - in: query
  *         name: status
- *         schema: { type: string }
- *         description: Filter by status
+ *         schema:
+ *           type: string
+ *           enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
+ *         description: Filter by transaction status
  *       - in: query
  *         name: type
- *         schema: { type: string }
- *         description: Filter by transaction type
+ *         schema:
+ *           type: string
+ *           enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
+ *         description: Filter by exact transaction type
  *       - in: query
  *         name: group
- *         schema: { type: string, enum: [BUY, SELL, REMITTANCE] }
- *         description: Filter by transaction group
+ *         schema:
+ *           type: string
+ *           enum: [BUY, SELL, REMITTANCE]
+ *         description: Filter by transaction group (ignored when `type` is also provided)
  *       - in: query
  *         name: currency
- *         schema: { type: string }
- *         description: Filter by currency
+ *         schema:
+ *           type: string
+ *         description: Filter by foreign currency code (e.g. USD, GBP)
+ *         example: USD
  *       - in: query
  *         name: startDate
- *         schema: { type: string, format: date-time }
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter transactions created on or after this date (ISO 8601)
  *       - in: query
  *         name: endDate
- *         schema: { type: string, format: date-time }
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter transactions created on or before this date (ISO 8601)
  *     responses:
  *       200:
  *         description: CSV file download
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *             example: 'attachment; filename="transactions-abc123-1708123456789.csv"'
  *         content:
  *           text/csv:
  *             schema:
@@ -734,7 +852,7 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  * /api/customer/transactions/{transactionId}:
  *   get:
  *     summary: Get transaction details
- *     description: Get detailed information about a specific transaction including approval status, rejection reason, and per-document verification status.
+ *     description: Get full details of a specific transaction including financial info, document verification status, rejection reason, cash pickup details, prepaid card info, and workflow step history.
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -744,6 +862,7 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
  *         description: Transaction ID
  *     responses:
  *       200:
@@ -761,17 +880,43 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                   properties:
  *                     transactionId:
  *                       type: string
+ *                       format: uuid
  *                     referenceNumber:
  *                       type: string
+ *                       example: TXN-1708123456789-ABC123DEF
  *                     type:
  *                       type: string
  *                       enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
+ *                       example: PTA
  *                     status:
  *                       type: string
  *                       enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
  *                       example: AWAITING_VERIFICATION
  *                     currentStep:
  *                       type: string
+ *                       nullable: true
+ *                     purpose:
+ *                       type: string
+ *                       nullable: true
+ *                     destinationCountry:
+ *                       type: string
+ *                       nullable: true
+ *                     currency:
+ *                       type: string
+ *                       example: USD
+ *                     foreignAmount:
+ *                       type: number
+ *                       nullable: true
+ *                     nairaEquivalent:
+ *                       type: number
+ *                       nullable: true
+ *                     exchangeRate:
+ *                       type: number
+ *                       nullable: true
+ *                     disbursementMethod:
+ *                       type: string
+ *                       nullable: true
+ *                       enum: [BANK_TRANSFER, CASH_PICKUP]
  *                     rejection:
  *                       type: object
  *                       nullable: true
@@ -783,9 +928,10 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                         rejectedAt:
  *                           type: string
  *                           format: date-time
+ *                           nullable: true
  *                     requiredDocuments:
  *                       type: array
- *                       description: Required documents with per-document verification status
+ *                       description: All required documents for this transaction type with per-document verification status
  *                       items:
  *                         type: object
  *                         properties:
@@ -795,21 +941,25 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                           uploaded:
  *                             type: object
  *                             nullable: true
+ *                             description: null if this document has not been uploaded yet
  *                             properties:
  *                               id:
  *                                 type: string
+ *                                 format: uuid
  *                               fileName:
  *                                 type: string
+ *                                 example: "passport.pdf"
  *                               fileUrl:
  *                                 type: string
+ *                                 example: "https://res.cloudinary.com/..."
  *                               status:
  *                                 type: string
  *                                 enum: [PENDING, IN_PROGRESS, VERIFIED, FAILED, REQUIRES_MANUAL_REVIEW]
- *                                 example: VERIFIED
+ *                                 example: PENDING
  *                               rejectionNotes:
  *                                 type: string
  *                                 nullable: true
- *                                 description: Populated only when document status is FAILED
+ *                                 description: Populated only when status is FAILED
  *                               uploadedAt:
  *                                 type: string
  *                                 format: date-time
@@ -817,6 +967,25 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                                 type: string
  *                                 format: date-time
  *                                 nullable: true
+ *                     cashPickup:
+ *                       type: object
+ *                       nullable: true
+ *                       description: Cash pickup details — present only for CASH_REMITTANCE transactions
+ *                     prepaidCard:
+ *                       type: object
+ *                       nullable: true
+ *                       description: Prepaid card details — present when disbursement method is prepaid card
+ *                     steps:
+ *                       type: array
+ *                       description: Ordered workflow step history for this transaction
+ *                       items:
+ *                         type: object
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:
