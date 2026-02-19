@@ -20,7 +20,7 @@ export const TransactionRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.stats);
+TransactionRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.stats);
 /**
  * @swagger
  * /api/admin/transactions:
@@ -79,7 +79,7 @@ TransactionRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN), a
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.list);
+TransactionRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.list);
 /**
  * @swagger
  * /api/admin/transactions/buy:
@@ -138,7 +138,7 @@ TransactionRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), adminT
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.get("/buy", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.listBuy);
+TransactionRouter.get("/buy", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.listBuy);
 /**
  * @swagger
  * /api/admin/transactions/sell:
@@ -197,7 +197,7 @@ TransactionRouter.get("/buy", authenticate, authorize(UserRole.SUPER_ADMIN), adm
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.get("/sell", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.listSell);
+TransactionRouter.get("/sell", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.listSell);
 /**
  * @swagger
  * /api/admin/transactions/receive:
@@ -256,7 +256,7 @@ TransactionRouter.get("/sell", authenticate, authorize(UserRole.SUPER_ADMIN), ad
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.get("/receive", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.listReceive);
+TransactionRouter.get("/receive", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.listReceive);
 /**
  * @swagger
  * /api/admin/transactions/{id}:
@@ -279,7 +279,7 @@ TransactionRouter.get("/receive", authenticate, authorize(UserRole.SUPER_ADMIN),
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TransactionRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.get);
+TransactionRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.get);
 /**
  * @swagger
  * /api/admin/transactions/{id}/request-info:
@@ -313,7 +313,7 @@ TransactionRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN), adm
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.post("/:id/request-info", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.requestInfo);
+TransactionRouter.post("/:id/request-info", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.requestInfo);
 /**
  * @swagger
  * /api/admin/transactions/{id}/review:
@@ -346,7 +346,7 @@ TransactionRouter.post("/:id/request-info", authenticate, authorize(UserRole.SUP
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Transactions - Buy FX lifecycle (review, approve, reject, settle)
-TransactionRouter.post("/:id/review", authenticate, authorize(UserRole.SUPER_ADMIN),adminTransactionsController.review);
+TransactionRouter.post("/:id/review", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.review);
 
 /**
  * @swagger
@@ -376,7 +376,7 @@ TransactionRouter.post("/:id/review", authenticate, authorize(UserRole.SUPER_ADM
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.post("/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.approve);
+TransactionRouter.post("/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.approve);
 
 /**
  * @swagger
@@ -411,7 +411,7 @@ TransactionRouter.post("/:id/approve", authenticate, authorize(UserRole.SUPER_AD
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.post("/:id/reject", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.reject);
+TransactionRouter.post("/:id/reject", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.reject);
 
 /**
  * @swagger
@@ -441,7 +441,7 @@ TransactionRouter.post("/:id/reject", authenticate, authorize(UserRole.SUPER_ADM
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TransactionRouter.post("/:id/settle", authenticate, authorize(UserRole.SUPER_ADMIN), adminTransactionsController.settle);
+TransactionRouter.post("/:id/settle", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.settle);
 
 /**
  * @swagger

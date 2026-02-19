@@ -13,6 +13,7 @@ import TicketsRouter from "./tickets.routes";
 import RateRouter from "./rate.routes";
 import AuditRouter from "./audit.routes";
 import ReportRouter from "./report.routes";
+import SettlementRouter from "./settlement.routes";
 
 const router: Router = Router();
 
@@ -117,6 +118,7 @@ router.use("/customers", CustomerRouter);
 router.use("/transactions", TransactionRouter);
 router.use("/agent", AgentRouter);
 router.use("/outlet", OutletRouter);
+router.use("/settlement", SettlementRouter);
 router.use("/workflow", WorkflowRouter);
 router.use("/tickets", TicketsRouter);
 router.use("/rate", RateRouter);
