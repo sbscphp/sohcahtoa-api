@@ -20,7 +20,6 @@ export enum CustomerType {
   NIGERIAN_CITIZEN = 'NIGERIAN_CITIZEN',
   TOURIST = 'TOURIST',
   EXPATRIATE = 'EXPATRIATE',
-  AGENT = 'AGENT',
 }
 
 export enum KycStatus {
