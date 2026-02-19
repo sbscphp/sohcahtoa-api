@@ -66,13 +66,13 @@ services:
       JWT_REFRESH_EXPIRY: 7d
 
       # SMTP Configuration (Optional - configure for email sending)
-      SMTP_USER: sbscproject2@gmail.com
+      SMTP_USER: oladeletobiadedoyin@gmail.com
       # sbscproject2@gmail.com
-      SMTP_PASSWORD: dzbrzbgsxirzjrzj
+      SMTP_PASSWORD: mebjzgbonwzpqqcb
       # dzbrzbgsxirzjrzj
       SMTP_HOST: smtp.gmail.com
-      SMTP_PORT: 587
-      SMTP_SECURE: false
+      SMTP_PORT: 465
+      SMTP_SECURE: true
       SMTP_FROM: sbscproject2@gmail.com
       SMTP_PASS: true
 
