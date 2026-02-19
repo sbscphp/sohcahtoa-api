@@ -388,6 +388,7 @@ export class AuthService {
     otp: string;
   }): Promise<{
     message: string;
+    verificationToken: string;
     firstName: string;
     lastName: string;
     dateOfBirth?: string;
@@ -421,6 +422,7 @@ export class AuthService {
     // Return confirmed user data (only non-sensitive fields with names visible)
     return {
       message: 'OTP validated successfully. Please proceed to create your account.',
+      verificationToken: data.verificationToken,
       firstName: bvnData.firstName,
       lastName: bvnData.lastName,
       email: partiallyRedactField(bvnData.email, 'email'),
