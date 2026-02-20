@@ -3,8 +3,10 @@ import { createApp } from './app';
 import { initializeDatabase, disconnectDatabase } from './config/database';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import { initializeEmail } from './config/email';
+import { initializeFirebase } from './config/firebase';
 import { createLogger } from './shared/utils/logger';
 import { eventBus } from './events/event-bus';
+import notificationHandler from './modules/notifications/handlers/notification.handler';
 
 const logger = createLogger('Server');
 
@@ -27,6 +29,10 @@ async function startServer() {
     // Initialize Email service
     logger.info('Initializing email service...');
     initializeEmail();
+
+    // Initialize Firebase for push notifications
+    logger.info('Initializing Firebase for push notifications...');
+    initializeFirebase();
 
     // Initialize event bus handlers
     initializeEventHandlers();
@@ -103,8 +109,11 @@ function initializeEventHandlers() {
 
   // Initialize module-specific event handlers
   try {
-    // Notification service handlers
-    initializeNotificationHandlers();
+    // Notification service handlers (new comprehensive handler)
+    notificationHandler.initialize();
+
+    // Legacy notification handlers (email only)
+    initializeLegacyNotificationHandlers();
   } catch (error) {
     logger.warn('Failed to initialize notification handlers:', error);
   }
@@ -127,9 +136,10 @@ function initializeEventHandlers() {
 }
 
 /**
- * Initialize notification event handlers
+ * Initialize legacy notification event handlers (email only)
+ * This function maintains backward compatibility with existing email notifications
  */
-function initializeNotificationHandlers() {
+function initializeLegacyNotificationHandlers() {
   const { EventTypes } = require('./events/event-bus');
   const { sendEmail } = require('./config/email');
 

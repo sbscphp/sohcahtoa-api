@@ -13,6 +13,7 @@ import customerTransactionRoutes from './modules/customer/routes/customer-transa
 import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
 import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
+import notificationRoutes from './modules/notifications/routes/notification.routes';
 
 const logger = createLogger('app');
 
@@ -89,6 +90,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/audit', AuditRouter);
   logger.info('Audit routes registered');
+
+  app.use('/api/notifications', notificationRoutes);
+  logger.info('Notification routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

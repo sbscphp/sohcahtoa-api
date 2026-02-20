@@ -1331,3 +1331,199 @@ model ReportJob {
   @@index([status])
   @@map("report_jobs")
 }
+
+// ========================================
+// NOTIFICATION SERVICE MODELS
+// ========================================
+
+enum NotificationType {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  READ
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+  ALL
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+model DeviceToken {
+  id          String         @id @default(uuid())
+  userId      String
+  token       String         @unique
+  platform    DevicePlatform
+  deviceId    String?
+  deviceName  String?
+  appVersion  String?
+  isActive    Boolean        @default(true)
+  lastUsedAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@index([isActive])
+  @@map("device_tokens")
+}
+
+model NotificationPreference {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+
+  // Email preferences
+  emailEnabled          Boolean  @default(true)
+  emailTransactional    Boolean  @default(true)
+  emailMarketing        Boolean  @default(false)
+  emailSecurity         Boolean  @default(true)
+
+  // SMS preferences
+  smsEnabled            Boolean  @default(true)
+  smsTransactional      Boolean  @default(true)
+  smsMarketing          Boolean  @default(false)
+  smsSecurity           Boolean  @default(true)
+
+  // Push preferences
+  pushEnabled           Boolean  @default(true)
+  pushTransactional     Boolean  @default(true)
+  pushMarketing         Boolean  @default(false)
+  pushSecurity          Boolean  @default(true)
+
+  // In-app preferences
+  inAppEnabled          Boolean  @default(true)
+
+  // Quiet hours
+  quietHoursEnabled     Boolean  @default(false)
+  quietHoursStart       String?  // Format: "22:00"
+  quietHoursEnd         String?  // Format: "08:00"
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id              String               @id @default(uuid())
+  userId          String
+  type            NotificationType
+  channel         NotificationChannel
+  priority        NotificationPriority @default(NORMAL)
+  status          NotificationStatus   @default(PENDING)
+
+  title           String
+  body            String
+  data            Json?
+
+  // Template info
+  template        String?
+  templateData    Json?
+
+  // Delivery tracking
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  failedAt        DateTime?
+  errorMessage    String?
+
+  // Retry logic
+  retryCount      Int                  @default(0)
+  maxRetries      Int                  @default(3)
+
+  // Related entities
+  transactionId   String?
+  ticketId        String?
+
+  // Metadata
+  metadata        Json?
+  expiresAt       DateTime?
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@index([transactionId])
+  @@map("notifications")
+}
+
+model PushNotificationLog {
+  id              String             @id @default(uuid())
+  notificationId  String
+  deviceToken     String
+  platform        DevicePlatform
+
+  title           String
+  body            String
+  data            Json?
+
+  status          NotificationStatus @default(PENDING)
+  fcmResponse     Json?
+
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  failedAt        DateTime?
+  errorMessage    String?
+  errorCode       String?
+
+  createdAt       DateTime           @default(now())
+
+  @@index([notificationId])
+  @@index([deviceToken])
+  @@index([status])
+  @@index([createdAt])
+  @@map("push_notification_logs")
+}
+
+model InAppNotification {
+  id              String             @id @default(uuid())
+  userId          String
+  notificationId  String?
+
+  title           String
+  body            String
+  icon            String?
+  actionUrl       String?
+  data            Json?
+
+  isRead          Boolean            @default(false)
+  readAt          DateTime?
+
+  priority        NotificationPriority @default(NORMAL)
+  expiresAt       DateTime?
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("in_app_notifications")
+}
