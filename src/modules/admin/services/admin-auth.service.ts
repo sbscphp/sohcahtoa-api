@@ -1,5 +1,5 @@
 import { createLogger, emailService, generateSecureOtp } from "../../../shared/utils";
-import { EventType, ServiceName, UserRole } from "../../../shared/types";
+import { ServiceName, UserRole } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import {
@@ -13,7 +13,6 @@ import {
   ValidationError,
   NotFoundError,
 } from "../../../shared/utils";
-import { CreateAdminUserDto } from "../dto/user-management.dto";
 
 const prisma: PrismaClient = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -351,6 +350,74 @@ async submitNewPassword(resetToken: string, newPassword: string) {
 
     const { password: _password, ...userWithoutPassword } = user;
     return { ...userWithoutPassword, accessToken, refreshToken };
+  }
+
+  async resendLoginOtp(email: string) {
+    const user = await this.prisma.adminUser.findUnique({ where: { email } });
+    if (!user) throw new NotFoundError("User not found");
+    if (!user.password) throw new UnauthorizedError("Password not set. Please complete registration first.");
+
+    const recent = await this.prisma.token.findFirst({
+      where: {
+        userId: user.id,
+        type: "OTP",
+        isUsed: false,
+        metadata: { path: ["purpose"], equals: "LOGIN" } as any,
+        createdAt: { gt: new Date(Date.now() - 60 * 1000) },
+      },
+    });
+    if (recent) {
+      return { message: "Please wait before requesting another OTP." };
+    }
+
+    await this.prisma.token.updateMany({
+      where: {
+        userId: user.id,
+        type: "OTP",
+        isUsed: false,
+        metadata: { path: ["purpose"], equals: "LOGIN" } as any,
+      },
+      data: { isUsed: true },
+    });
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const tokenRecord = await this.prisma.token.create({
+      data: {
+        userId: user.id,
+        type: "OTP",
+        token: otp,
+        expiresAt,
+        metadata: { purpose: "LOGIN" },
+      },
+    });
+
+    if (emailService.isReady()) {
+      emailService
+        .sendOtpEmail(user.email, otp, "LOGIN")
+        .catch((err: Error) => logger.warn("Resend login OTP email failed", { userId: user.id, message: err.message }));
+    }
+
+    return { message: "OTP resent to your email" };
+  }
+
+  async logout(userId: string, sessionId: string) {
+    try {
+      await (this.prisma as any).securityEvent.create({
+        data: {
+          eventType: "USER_LOGOUT",
+          severity: "INFO",
+          userId,
+          description: "Admin user logout",
+          details: { sessionId },
+        },
+      });
+    } catch {}
+    return { message: "Logged out successfully" };
+  }
+
+  async resendForgotOtp(email: string) {
+    return this.forgotPassword(email);
   }
 }
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { adminAuthController } from "../controllers/admin-auth.controller";
 import { addUserValidationStore, validate } from "../validations/user-management.validation";
+import { authenticate } from "../../../shared/middleware";
 
 export const AdminAuthRouter: Router = Router();
 
@@ -94,6 +95,28 @@ AdminAuthRouter.post("/forgot-password",  adminAuthController.forgotPassword);
 
 /**
  * @swagger
+ * /api/admin/auth/forgot-password/resend:
+ *   post:
+ *     summary: Resend password reset OTP
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent if account exists
+ */
+
+/**
+ * @swagger
  * /api/admin/auth/otp/validate:
  *   post:
  *     summary: Validate OTP for admin password reset and receive resetToken
@@ -146,3 +169,45 @@ AdminAuthRouter.post("/otp/validate",  adminAuthController.validateResetOtp);
  *         $ref: '#/components/responses/NotFoundError'
  */
 AdminAuthRouter.post("/reset-password",  adminAuthController.submitNewPassword);
+AdminAuthRouter.post("/forgot-password/resend", adminAuthController.resendForgotPassword);
+
+/**
+ * @swagger
+ * /api/admin/auth/resend-otp:
+ *   post:
+ *     summary: Resend login OTP to admin email
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AdminAuthRouter.post("/resend-otp", adminAuthController.resendOtp);
+
+/**
+ * @swagger
+ * /api/admin/auth/logout:
+ *   post:
+ *     summary: Logout current admin session
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminAuthRouter.post("/logout", authenticate, adminAuthController.logout);
