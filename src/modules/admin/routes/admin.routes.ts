@@ -14,6 +14,7 @@ import RateRouter from "./rate.routes";
 import AuditRouter from "./audit.routes";
 import ReportRouter from "./report.routes";
 import SettlementRouter from "./settlement.routes";
+import RegulatoryRouter from "./regulatory.routes";
 
 const router: Router = Router();
 
@@ -124,5 +125,6 @@ router.use("/tickets", TicketsRouter);
 router.use("/rate", RateRouter);
 router.use("/audit", AuditRouter);
 router.use("/reports", ReportRouter)
+router.use("/regulatory", RegulatoryRouter);
 
 export default router;

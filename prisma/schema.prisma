@@ -1534,3 +1534,65 @@ model InAppNotification {
   @@index([createdAt])
   @@map("in_app_notifications")
 }
+
+enum WorkflowType {
+  REVIEW
+  APPROVAL
+}
+
+enum WorkflowTemplateStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+model WorkflowTemplate {
+  id                String                  @id @default(uuid())
+  name              String
+  type              WorkflowType
+  departmentId      String?
+  department        Department?             @relation(fields: [departmentId], references: [id])
+  escalationMinutes Int                     @default(0)
+  hasPtaRequest     Boolean                 @default(false)
+  status            WorkflowTemplateStatus  @default(ACTIVE)
+  createdBy         String
+  creator           AdminUser               @relation(fields: [createdBy], references: [id])
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  stages            WorkflowStage[]
+
+  @@index([status])
+  @@index([departmentId])
+  @@map("workflow_templates")
+}
+
+model WorkflowStage {
+  id                String           @id @default(uuid())
+  templateId        String
+  template          WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name              String
+  order             Int
+  escalationMinutes Int              @default(0)
+  createdAt         DateTime         @default(now())
+
+  assignees         WorkflowAssignee[]
+
+  @@index([templateId])
+  @@index([order])
+  @@map("workflow_stages")
+}
+
+model WorkflowAssignee {
+  id        String     @id @default(uuid())
+  stageId   String
+  stage     WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     AdminUser  @relation(fields: [adminId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([stageId])
+  @@index([adminId])
+  @@unique([stageId, adminId])
+  @@map("workflow_assignees")
+}
