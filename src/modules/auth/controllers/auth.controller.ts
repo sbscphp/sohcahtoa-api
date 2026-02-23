@@ -9,7 +9,8 @@ import {
   OtpValidationRequest,
   KycVerificationRequest,
   NigerianSignupRequest,
-  TouristSignupRequest
+  TouristSignupRequest,
+  CreateAgentPasswordRequest,
 } from '../../../shared/types';
 import { AuthRequest } from '../../../shared/middleware';
 
@@ -193,6 +194,28 @@ export class AuthController {
       const userAgent = req.get('user-agent');
       const ipAddress = req.ip;
       const result = await authService.login(data, userAgent, ipAddress);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async loginAgent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: LoginRequest = req.body;
+      const userAgent = req.get('user-agent');
+      const ipAddress = req.ip;
+      const result = await authService.loginAgent(data, userAgent, ipAddress);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createAgentPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: CreateAgentPasswordRequest = req.body;
+      const result = await authService.createAgentPassword(data);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
