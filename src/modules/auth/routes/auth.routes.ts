@@ -1239,6 +1239,35 @@ router.post('/agent/login', authController.loginAgent);
 
 /**
  * @swagger
+ * /api/auth/agent/verify-login:
+ *   post:
+ *     summary: Verify OTP and complete agent login (2FA)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful, returns accessToken, refreshToken, and user
+ *       400:
+ *         description: Invalid or expired OTP
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/agent/verify-login', authController.verifyAgentLogin);
+
+/**
+ * @swagger
  * /api/auth/agent/create-password:
  *   post:
  *     summary: Create or set password for an agent using OTP

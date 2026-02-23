@@ -11,6 +11,7 @@ import {
   NigerianSignupRequest,
   TouristSignupRequest,
   CreateAgentPasswordRequest,
+  VerifyAgentLoginRequest,
 } from '../../../shared/types';
 import { AuthRequest } from '../../../shared/middleware';
 
@@ -216,6 +217,18 @@ export class AuthController {
     try {
       const data: CreateAgentPasswordRequest = req.body;
       const result = await authService.createAgentPassword(data);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyAgentLogin(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data: VerifyAgentLoginRequest = req.body;
+      const userAgent = req.get('user-agent');
+      const ipAddress = req.ip;
+      const result = await authService.verifyAgentLogin(data, userAgent, ipAddress);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

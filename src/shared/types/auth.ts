@@ -106,6 +106,17 @@ export interface AgentPasswordPromptResponse {
   otp?: string;
 }
 
+export interface AgentLoginOtpSentResponse {
+  message: string;
+  requiresVerification: true;
+  otp?: string;
+}
+
+export interface VerifyAgentLoginRequest {
+  email: string;
+  otp: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;

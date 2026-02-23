@@ -40,6 +40,8 @@ import {
   OtpPurpose,
   CreateAgentPasswordRequest,
   AgentPasswordPromptResponse,
+  AgentLoginOtpSentResponse,
+  VerifyAgentLoginRequest,
 } from '../../../shared/types';
 import bvnService from './bvn.service';
 import passportVerificationService from './passport-verification.service';
@@ -236,7 +238,7 @@ export class AuthService {
     data: LoginRequest,
     userAgent?: string,
     ipAddress?: string,
-  ): Promise<LoginResponse | AgentPasswordPromptResponse> {
+  ): Promise<LoginResponse | AgentPasswordPromptResponse | AgentLoginOtpSentResponse> {
     const client = prisma as any;
     const agent = await client.agent.findUnique({
       where: { email: data.email },
@@ -274,6 +276,56 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
+    const otpResult = await this.sendOtp({
+      email: agent.email,
+      phoneNumber: agent.phoneNumber || '',
+      purpose: OtpPurpose.LOGIN,
+    });
+
+    const response: AgentLoginOtpSentResponse = {
+      message: 'OTP sent to your email',
+      requiresVerification: true,
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      response.otp = otpResult.otp;
+    }
+
+    return response;
+  }
+
+  async verifyAgentLogin(
+    data: VerifyAgentLoginRequest,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<LoginResponse> {
+    if (!data.email || !data.otp) {
+      throw new ValidationError('email and otp are required');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.LOGIN,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message || 'Invalid or expired OTP');
+    }
+
+    const client = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!agent) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    if (!agent.isActive) {
+      throw new UnauthorizedError('Account is deactivated');
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
       include: { profile: true, kyc: true },
@@ -308,6 +360,7 @@ export class AuthService {
       });
       sessionUser = created as NonNullable<typeof existingUser>;
     }
+
     const sessionId = generateId();
     const tokenPayload = {
       userId: sessionUser.id,
@@ -337,7 +390,7 @@ export class AuthService {
       success: true,
       ipAddress,
       userAgent,
-      metadata: { agentLogin: true },
+      metadata: { agentLogin: true, verifiedViaOtp: true },
     });
 
     return {
@@ -386,15 +439,16 @@ export class AuthService {
       where: { email: data.email },
     });
 
-    console.log({agent});
-    
-
     if (!agent) {
       throw new UnauthorizedError('Agent not found');
     }
 
     if (!agent.isActive) {
       throw new UnauthorizedError('Account is deactivated');
+    }
+
+    if (agent.password) {
+      throw new ValidationError('Password has already been set. Please use the login flow.');
     }
 
     const otpValidation = await this.validateOtp({
