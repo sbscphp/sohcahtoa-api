@@ -234,7 +234,7 @@ class CustomerTransactionController {
       const states = await customerTransactionService.getPickupStates();
       return res.json(successResponse({ states }));
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 
@@ -255,7 +255,7 @@ class CustomerTransactionController {
       const cities = await customerTransactionService.getPickupCities(state);
       return res.json(successResponse({ state, cities }));
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 
@@ -289,7 +289,7 @@ class CustomerTransactionController {
 
       return res.json(successResponse({ terminals }));
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 
@@ -336,7 +336,7 @@ class CustomerTransactionController {
         })
       );
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 
@@ -374,7 +374,7 @@ class CustomerTransactionController {
         })
       );
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 }

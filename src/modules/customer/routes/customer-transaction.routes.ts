@@ -268,7 +268,7 @@ router.use(authenticate);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post("/", customerTransactionController.createTransaction);
+router.post("/transactions", customerTransactionController.createTransaction);
 
 /**
  * @swagger
@@ -389,7 +389,7 @@ router.post("/", customerTransactionController.createTransaction);
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransactionController.uploadDocuments);
+router.post("/transactions/:transactionId/documents", uploadMultipleDocuments, customerTransactionController.uploadDocuments);
 
 /**
  * @swagger
@@ -599,7 +599,7 @@ router.post("/:transactionId/documents", uploadMultipleDocuments, customerTransa
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/", customerTransactionController.getMyTransactions);
+router.get("/transactions", customerTransactionController.getMyTransactions);
 
 /**
  * @swagger
@@ -1011,7 +1011,7 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.get("/:transactionId", customerTransactionController.getTransactionDetails);
+router.get("/transactions/:transactionId", customerTransactionController.getTransactionDetails);
 
 /**
  * @swagger
@@ -1044,7 +1044,7 @@ router.get("/:transactionId", customerTransactionController.getTransactionDetail
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/pickup-locations/states", customerTransactionController.getPickupStates);
+router.get("/transactions/pickup-locations/states", customerTransactionController.getPickupStates);
 
 /**
  * @swagger
@@ -1090,7 +1090,7 @@ router.get("/pickup-locations/states", customerTransactionController.getPickupSt
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/pickup-locations/cities", customerTransactionController.getPickupCities);
+router.get("/transactions/pickup-locations/cities", customerTransactionController.getPickupCities);
 
 /**
  * @swagger
@@ -1180,7 +1180,7 @@ router.get("/pickup-locations/cities", customerTransactionController.getPickupCi
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/pickup-locations/terminals", customerTransactionController.getPickupTerminals);
+router.get("/transactions/pickup-locations/terminals", customerTransactionController.getPickupTerminals);
 
 /**
  * @swagger
@@ -1246,7 +1246,7 @@ router.get("/pickup-locations/terminals", customerTransactionController.getPicku
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/pickup-locations/check-availability", customerTransactionController.checkTerminalAvailability);
+router.get("/transactions/pickup-locations/check-availability", customerTransactionController.checkTerminalAvailability);
 
 /**
  * @swagger
@@ -1312,6 +1312,6 @@ router.get("/pickup-locations/check-availability", customerTransactionController
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/pickup-locations/availability-slots", customerTransactionController.getTerminalAvailabilitySlots);
+router.get("/transactions/pickup-locations/availability-slots", customerTransactionController.getTerminalAvailabilitySlots);
 
 export default router;
