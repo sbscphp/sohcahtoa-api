@@ -138,13 +138,21 @@ class UserManagementService {
         try {
             return await paginate(
                 this.prisma.adminUser,
-                { orderBy: { createdAt: 'desc' } },
+                {
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        role: { select: { name: true } },
+                        department: { select: { name: true } },
+                    },
+                },
                 { page, limit },
-                async (users: AdminUser[]) => {
+                async (users: any[]) => {
                     const enriched = await Promise.all(users.map(async (user) => {
-                        const { password: _password, ...userWithoutPassword } = user;
+                        const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user;
                         const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
-                        return { user: userWithoutPassword, rolePermissions };
+                        const roleName = user.role?.name || null;
+                        const departmentName = user.department?.name || null;
+                        return { user: { ...userWithoutPassword, roleName, departmentName }, rolePermissions };
                     }));
                     return enriched;
                 }
