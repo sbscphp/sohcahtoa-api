@@ -461,6 +461,8 @@ model AdminUser {
   tokens         Token[]
   assignedTickets Ticket[]        @relation("TicketAssignedAgent")
   ticketComments  TicketComment[] @relation("TicketCommentAdmin")
+  createdWorkflowTemplates WorkflowTemplate[]
+  workflowAssignees        WorkflowAssignee[]
 
   @@index([email])
   @@index([roleId])
@@ -483,6 +485,7 @@ model Department {
   users           AdminUser[]
   actions         AdminAction[]
   roles           Role[]
+  workflowTemplates WorkflowTemplate[]
 
   @@map("departments")
 }
