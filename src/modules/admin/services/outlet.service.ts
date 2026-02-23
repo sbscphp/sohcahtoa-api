@@ -175,7 +175,7 @@ class OutletService {
       db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
       db.branch.count({ where }),
     ]);
-    console.log(">>>>>>", rows)
+
     const items = rows.map((b: any) => ({
       id: b.id,
       branchName: b.name,

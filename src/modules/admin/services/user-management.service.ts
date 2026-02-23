@@ -185,6 +185,50 @@ class UserManagementService {
         }
     };
 
+    getUser = async (id: string) => {
+        try {
+            const user = await this.prisma.adminUser.findUnique({
+                where: { id },
+                include: {
+                    role: { select: { name: true } },
+                    department: { select: { name: true } },
+                },
+            });
+            if (!user) {
+                throw new NotFoundError("User not found");
+            }
+            const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user as any;
+            const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
+            const roleName = (user as any).role?.name || null;
+            const departmentName = (user as any).department?.name || null;
+            return { user: { ...userWithoutPassword, roleName, departmentName }, rolePermissions };
+        } catch (error) {
+            logger.error("Failed to get admin user", {
+                id,
+                message: (error as Error).message,
+            });
+            throw error;
+        }
+    };
+
+    getLookups = async (type?: "role" | "department") => {
+        const roleWhere: any = { isActive: true };
+        const deptWhere: any = { isActive: true };
+        if (type === "role") {
+            const roles = await this.prisma.role.findMany({ where: roleWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } });
+            return { roles };
+        }
+        if (type === "department") {
+            const departments = await this.prisma.department.findMany({ where: deptWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } });
+            return { departments };
+        }
+        const [roles, departments] = await Promise.all([
+            this.prisma.role.findMany({ where: roleWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } }),
+            this.prisma.department.findMany({ where: deptWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } }),
+        ]);
+        return { roles, departments };
+    };
+
     // --- Role Management ---
 
     createRole = async (data: CreateRoleDto) => {
