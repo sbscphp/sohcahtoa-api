@@ -804,24 +804,31 @@ model TransactionLimit {
 }
 
 model CashPickup {
-  id             String      @id @default(uuid())
-  transactionId  String      @unique
-  pickupLocation String
-  pickupCode     String      @unique
-  recipientName  String
-  recipientPhone String
-  amount         Decimal     @db.Decimal(18, 2)
-  currency       String
-  status         String      @default("PENDING")
-  expiryDate     DateTime
-  pickedUpAt     DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                String      @id @default(uuid())
+  transactionId     String      @unique
+  pickupLocation    String
+  pickupLocationId  String?
+  pickupState       String?
+  pickupCity        String?
+  pickupCode        String      @unique
+  recipientName     String
+  recipientPhone    String
+  amount            Decimal     @db.Decimal(18, 2)
+  currency          String
+  status            String      @default("PENDING")
+  scheduledPickupDate DateTime?
+  scheduledPickupTime String?
+  expiryDate        DateTime
+  pickedUpAt        DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([pickupCode])
   @@index([status])
+  @@index([pickupState])
+  @@index([pickupCity])
   @@map("cash_pickup")
 }
 

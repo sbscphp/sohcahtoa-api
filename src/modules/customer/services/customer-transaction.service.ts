@@ -45,8 +45,12 @@ interface CreateCustomerTransactionPayload {
     id: string;
     name: string;
     address: string;
+    state: string;
+    city: string;
     recipientName: string;
     recipientPhone: string;
+    scheduledPickupDate?: string;
+    scheduledPickupTime?: string;
   };
 }
 
@@ -185,6 +189,34 @@ export class CustomerTransactionService {
             verificationStatus: "PENDING" as any,
             metadata: { source: "inline_upload", uploadedBy: userId },
           })),
+      });
+    }
+
+    // Create cash pickup record if pickup location is provided
+    if (pickupLocation) {
+      const pickupCode = `PICKUP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30); // 30 days expiry
+
+      await prisma.cashPickup.create({
+        data: {
+          transactionId: transaction.id,
+          pickupLocation: pickupLocation.name,
+          pickupLocationId: pickupLocation.id,
+          pickupState: pickupLocation.state,
+          pickupCity: pickupLocation.city,
+          pickupCode,
+          recipientName: pickupLocation.recipientName,
+          recipientPhone: pickupLocation.recipientPhone,
+          amount: amount as any,
+          currency,
+          scheduledPickupDate: pickupLocation.scheduledPickupDate
+            ? new Date(pickupLocation.scheduledPickupDate)
+            : null,
+          scheduledPickupTime: pickupLocation.scheduledPickupTime || null,
+          expiryDate,
+          status: 'PENDING',
+        },
       });
     }
 
@@ -844,6 +876,212 @@ export class CustomerTransactionService {
     };
 
     return documentRequirements[transactionType] || [];
+  }
+
+  /**
+   * Get all available states where pickup terminals are located
+   */
+  async getPickupStates(): Promise<string[]> {
+    const states = await prisma.branch.findMany({
+      where: {
+        isActive: true,
+        status: 'APPROVED',
+      },
+      select: {
+        state: true,
+      },
+      distinct: ['state'],
+      orderBy: {
+        state: 'asc',
+      },
+    });
+
+    return states.map((s) => s.state);
+  }
+
+  /**
+   * Get cities in a specific state where pickup terminals are located
+   */
+  async getPickupCities(state: string): Promise<string[]> {
+    // Since we don't have a separate city field, we'll extract from address
+    // For now, return unique branch names as "cities" or use address parsing
+    const branches = await prisma.branch.findMany({
+      where: {
+        state,
+        isActive: true,
+        status: 'APPROVED',
+      },
+      select: {
+        address: true,
+        name: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    // Extract unique cities from addresses (assuming format like "City, State")
+    // This is a simplified approach - adjust based on your address format
+    const cities = new Set<string>();
+    branches.forEach((branch) => {
+      // Try to extract city from address
+      const addressParts = branch.address.split(',');
+      if (addressParts.length > 0) {
+        const city = addressParts[0].trim();
+        if (city) cities.add(city);
+      }
+    });
+
+    return Array.from(cities).sort();
+  }
+
+  /**
+   * Get available pickup terminals filtered by state, city, date, and time
+   */
+  async getPickupTerminals(params: {
+    state: string;
+    city: string;
+    pickupDate?: string;
+    pickupTime?: string;
+  }): Promise<any[]> {
+    const { state, city, pickupDate, pickupTime } = params;
+
+    // Get all branches in the specified state and city
+    const branches = await prisma.branch.findMany({
+      where: {
+        state,
+        isActive: true,
+        status: 'APPROVED',
+        address: {
+          contains: city,
+          mode: 'insensitive',
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        state: true,
+        email: true,
+        phoneNumber: true,
+        branchManager: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    // If date and time are provided, filter by availability
+    if (pickupDate && pickupTime) {
+      const availableTerminals = [];
+
+      for (const branch of branches) {
+        const isAvailable = await this.checkTerminalAvailability(
+          branch.id,
+          pickupDate,
+          pickupTime
+        );
+
+        if (isAvailable) {
+          availableTerminals.push({
+            ...branch,
+            available: true,
+          });
+        }
+      }
+
+      return availableTerminals;
+    }
+
+    // Return all terminals with availability unknown
+    return branches.map((branch) => ({
+      ...branch,
+      available: true,
+    }));
+  }
+
+  /**
+   * Check if a terminal is available at a specific date and time
+   */
+  async checkTerminalAvailability(
+    terminalId: string,
+    pickupDate: string,
+    pickupTime: string
+  ): Promise<boolean> {
+    // Check if the branch exists and is active
+    const branch = await prisma.branch.findFirst({
+      where: {
+        id: terminalId,
+        isActive: true,
+        status: 'APPROVED',
+      },
+    });
+
+    if (!branch) {
+      return false;
+    }
+
+    // Check if there are too many scheduled pickups at this time
+    // This is a simplified check - you can make it more sophisticated
+    const scheduledPickupsCount = await prisma.cashPickup.count({
+      where: {
+        pickupLocationId: terminalId,
+        scheduledPickupDate: new Date(pickupDate),
+        scheduledPickupTime: pickupTime,
+        status: {
+          in: ['PENDING', 'READY_FOR_PICKUP'],
+        },
+      },
+    });
+
+    // Allow max 10 pickups per time slot (adjust as needed)
+    const MAX_PICKUPS_PER_SLOT = 10;
+    return scheduledPickupsCount < MAX_PICKUPS_PER_SLOT;
+  }
+
+  /**
+   * Get detailed terminal availability for a specific date
+   */
+  async getTerminalAvailabilitySlots(
+    terminalId: string,
+    pickupDate: string
+  ): Promise<{ time: string; available: boolean; spotsLeft: number }[]> {
+    // Define available time slots (9 AM to 5 PM, hourly)
+    const timeSlots = [
+      '09:00',
+      '10:00',
+      '11:00',
+      '12:00',
+      '13:00',
+      '14:00',
+      '15:00',
+      '16:00',
+      '17:00',
+    ];
+
+    const MAX_PICKUPS_PER_SLOT = 10;
+    const availabilitySlots = [];
+
+    for (const time of timeSlots) {
+      const scheduledCount = await prisma.cashPickup.count({
+        where: {
+          pickupLocationId: terminalId,
+          scheduledPickupDate: new Date(pickupDate),
+          scheduledPickupTime: time,
+          status: {
+            in: ['PENDING', 'READY_FOR_PICKUP'],
+          },
+        },
+      });
+
+      availabilitySlots.push({
+        time,
+        available: scheduledCount < MAX_PICKUPS_PER_SLOT,
+        spotsLeft: MAX_PICKUPS_PER_SLOT - scheduledCount,
+      });
+    }
+
+    return availabilitySlots;
   }
 }
 

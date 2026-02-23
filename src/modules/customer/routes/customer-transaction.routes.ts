@@ -153,24 +153,44 @@ router.use(authenticate);
  *                   - id
  *                   - name
  *                   - address
+ *                   - state
+ *                   - city
  *                   - recipientName
  *                   - recipientPhone
  *                 properties:
  *                   id:
  *                     type: string
- *                     description: Outlet ID (from GET /customer/transactions/pickup-points)
+ *                     description: Terminal/Branch ID (from GET /customer/transactions/pickup-locations/terminals)
  *                   name:
  *                     type: string
- *                     description: Outlet name
+ *                     description: Terminal name
  *                   address:
  *                     type: string
- *                     description: Outlet address
+ *                     description: Terminal address
+ *                   state:
+ *                     type: string
+ *                     description: State where terminal is located
+ *                     example: Lagos
+ *                   city:
+ *                     type: string
+ *                     description: City where terminal is located
+ *                     example: Ikeja
  *                   recipientName:
  *                     type: string
  *                     description: Full name of the person picking up the cash
  *                   recipientPhone:
  *                     type: string
  *                     description: Phone number of the person picking up the cash
+ *                   scheduledPickupDate:
+ *                     type: string
+ *                     format: date
+ *                     description: Preferred pickup date (ISO 8601 format)
+ *                     example: 2026-03-15
+ *                   scheduledPickupTime:
+ *                     type: string
+ *                     pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                     description: Preferred pickup time (HH:mm format)
+ *                     example: "14:00"
  *     responses:
  *       201:
  *         description: Transaction created successfully
@@ -992,5 +1012,306 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *         $ref: '#/components/responses/NotFoundError'
  */
 router.get("/:transactionId", customerTransactionController.getTransactionDetails);
+
+/**
+ * @swagger
+ * /api/customer/transactions/pickup-locations/states:
+ *   get:
+ *     summary: Get available states for pickup locations
+ *     description: Returns a list of all states where pickup terminals are available
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of available states
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     states:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Lagos", "Abuja", "Rivers", "Kano"]
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/pickup-locations/states", customerTransactionController.getPickupStates);
+
+/**
+ * @swagger
+ * /api/customer/transactions/pickup-locations/cities:
+ *   get:
+ *     summary: Get available cities in a state
+ *     description: Returns a list of cities in the specified state where pickup terminals are available
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: state
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: State name
+ *         example: Lagos
+ *     responses:
+ *       200:
+ *         description: List of available cities
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     state:
+ *                       type: string
+ *                       example: Lagos
+ *                     cities:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Ikeja", "Victoria Island", "Lekki", "Surulere"]
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/pickup-locations/cities", customerTransactionController.getPickupCities);
+
+/**
+ * @swagger
+ * /api/customer/transactions/pickup-locations/terminals:
+ *   get:
+ *     summary: Get available pickup terminals
+ *     description: Returns a list of pickup terminals filtered by state, city, and optionally by date/time availability
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: state
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: State name
+ *         example: Lagos
+ *       - in: query
+ *         name: city
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: City name
+ *         example: Ikeja
+ *       - in: query
+ *         name: pickupDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Desired pickup date (ISO 8601 format)
+ *         example: 2026-03-15
+ *       - in: query
+ *         name: pickupTime
+ *         required: false
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: Desired pickup time (HH:mm format)
+ *         example: "14:00"
+ *     responses:
+ *       200:
+ *         description: List of available terminals
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     terminals:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             example: "branch-uuid-123"
+ *                           name:
+ *                             type: string
+ *                             example: "Ikeja Branch"
+ *                           address:
+ *                             type: string
+ *                             example: "123 Allen Avenue, Ikeja"
+ *                           state:
+ *                             type: string
+ *                             example: "Lagos"
+ *                           email:
+ *                             type: string
+ *                             example: "ikeja@sochatoa.com"
+ *                           phoneNumber:
+ *                             type: string
+ *                             example: "+2348012345678"
+ *                           branchManager:
+ *                             type: string
+ *                             example: "John Doe"
+ *                           available:
+ *                             type: boolean
+ *                             example: true
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/pickup-locations/terminals", customerTransactionController.getPickupTerminals);
+
+/**
+ * @swagger
+ * /api/customer/transactions/pickup-locations/check-availability:
+ *   get:
+ *     summary: Check terminal availability
+ *     description: Check if a specific terminal is available at a given date and time
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: terminalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Terminal/Branch ID
+ *         example: "branch-uuid-123"
+ *       - in: query
+ *         name: pickupDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Desired pickup date (ISO 8601 format)
+ *         example: 2026-03-15
+ *       - in: query
+ *         name: pickupTime
+ *         required: true
+ *         schema:
+ *           type: string
+ *           pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *         description: Desired pickup time (HH:mm format)
+ *         example: "14:00"
+ *     responses:
+ *       200:
+ *         description: Availability status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     terminalId:
+ *                       type: string
+ *                       example: "branch-uuid-123"
+ *                     pickupDate:
+ *                       type: string
+ *                       example: "2026-03-15"
+ *                     pickupTime:
+ *                       type: string
+ *                       example: "14:00"
+ *                     available:
+ *                       type: boolean
+ *                       example: true
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/pickup-locations/check-availability", customerTransactionController.checkTerminalAvailability);
+
+/**
+ * @swagger
+ * /api/customer/transactions/pickup-locations/availability-slots:
+ *   get:
+ *     summary: Get available time slots for a terminal
+ *     description: Returns all available time slots for a specific terminal on a given date
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: terminalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Terminal/Branch ID
+ *         example: "branch-uuid-123"
+ *       - in: query
+ *         name: pickupDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Desired pickup date (ISO 8601 format)
+ *         example: 2026-03-15
+ *     responses:
+ *       200:
+ *         description: Available time slots
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     terminalId:
+ *                       type: string
+ *                       example: "branch-uuid-123"
+ *                     pickupDate:
+ *                       type: string
+ *                       example: "2026-03-15"
+ *                     slots:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           time:
+ *                             type: string
+ *                             example: "14:00"
+ *                           available:
+ *                             type: boolean
+ *                             example: true
+ *                           spotsLeft:
+ *                             type: number
+ *                             example: 7
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/pickup-locations/availability-slots", customerTransactionController.getTerminalAvailabilitySlots);
 
 export default router;

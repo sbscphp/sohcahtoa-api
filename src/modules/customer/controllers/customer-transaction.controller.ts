@@ -225,6 +225,158 @@ class CustomerTransactionController {
       next(error);
     }
   };
+
+  /**
+   * Get all available states where pickup terminals are located
+   */
+  getPickupStates = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const states = await customerTransactionService.getPickupStates();
+      return res.json(successResponse({ states }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Get cities in a specific state where pickup terminals are located
+   */
+  getPickupCities = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { state } = req.query;
+
+      if (!state || typeof state !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'State parameter is required',
+        });
+      }
+
+      const cities = await customerTransactionService.getPickupCities(state);
+      return res.json(successResponse({ state, cities }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Get available pickup terminals filtered by state, city, date, and time
+   */
+  getPickupTerminals = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { state, city, pickupDate, pickupTime } = req.query;
+
+      if (!state || typeof state !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'State parameter is required',
+        });
+      }
+
+      if (!city || typeof city !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'City parameter is required',
+        });
+      }
+
+      const terminals = await customerTransactionService.getPickupTerminals({
+        state,
+        city,
+        pickupDate: pickupDate as string,
+        pickupTime: pickupTime as string,
+      });
+
+      return res.json(successResponse({ terminals }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Check if a terminal is available at a specific date and time
+   */
+  checkTerminalAvailability = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { terminalId, pickupDate, pickupTime } = req.query;
+
+      if (!terminalId || typeof terminalId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Terminal ID is required',
+        });
+      }
+
+      if (!pickupDate || typeof pickupDate !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Pickup date is required',
+        });
+      }
+
+      if (!pickupTime || typeof pickupTime !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Pickup time is required (HH:mm format)',
+        });
+      }
+
+      const available = await customerTransactionService.checkTerminalAvailability(
+        terminalId,
+        pickupDate,
+        pickupTime
+      );
+
+      return res.json(
+        successResponse({
+          terminalId,
+          pickupDate,
+          pickupTime,
+          available,
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Get available time slots for a terminal on a specific date
+   */
+  getTerminalAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { terminalId, pickupDate } = req.query;
+
+      if (!terminalId || typeof terminalId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Terminal ID is required',
+        });
+      }
+
+      if (!pickupDate || typeof pickupDate !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Pickup date is required',
+        });
+      }
+
+      const slots = await customerTransactionService.getTerminalAvailabilitySlots(
+        terminalId,
+        pickupDate
+      );
+
+      return res.json(
+        successResponse({
+          terminalId,
+          pickupDate,
+          slots,
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export default new CustomerTransactionController();
