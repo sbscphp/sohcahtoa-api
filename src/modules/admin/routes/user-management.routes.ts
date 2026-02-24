@@ -40,6 +40,82 @@ const UserManagementRouter: Router = Router();
 UserManagementRouter.get("/users", authenticate, userManagementController.getAllUsers);
 /**
  * @swagger
+ * /api/admin/management/users/{id}:
+ *   get:
+ *     summary: Get admin user by ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Admin user retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.get("/users/:id", authenticate, userManagementController.getUser);
+/**
+ * @swagger
+ * /api/admin/management/users/{id}/activities:
+ *   get:
+ *     summary: Get admin user activities
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *     responses:
+ *       200:
+ *         description: Activities retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/users/:id/activities", authenticate, userManagementController.getUserActivities);
+/**
+ * @swagger
+ * /api/admin/management/lookups:
+ *   get:
+ *     summary: List roles and departments (unpaginated)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *           enum: [role, department]
+ *         description: Return only roles or only departments
+ *     responses:
+ *       200:
+ *         description: Lookups retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/lookups", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getLookups);
+/**
+ * @swagger
  * /api/admin/management/users/stats:
  *   get:
  *     summary: User counters

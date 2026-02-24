@@ -206,14 +206,6 @@ export class AdminService {
   }
 
   async getPendingApprovals(adminId: string, page = 1, limit = 20) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "PENDING_APPROVALS_VIEW",
-      resourceType: "QUEUE",
-      resourceId: "PENDING_APPROVALS",
-      metadata: { page, limit },
-    });
-
     const skip = (page - 1) * limit;
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
