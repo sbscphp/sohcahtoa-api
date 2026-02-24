@@ -252,7 +252,7 @@ class RegulatoryService {
       currency: tx.currency,
       amount: Number(tx.foreignAmount || 0),
       purpose: tx.purpose,
-      destinationCountry: tx.destinationCountry,
+      destinationCountry: tx.destinationCountry || "",
       supportingDocuments: (tx.documents || []).map((d: any) => ({ documentType: String(d.documentType), documentUrl: d.fileUrl })),
     };
     const result = await trmsClient.submitFormA(payload);

@@ -18,7 +18,7 @@ interface CreateCustomerTransactionPayload {
   currency: string;
   amount: number;
   purpose: string;
-  destinationCountry: string;
+  destinationCountry?: string;
 
   // Personal info
   bvn?: string;
@@ -142,7 +142,7 @@ export class CustomerTransactionService {
         status: initialStatus as any,
         currentStep: initialStep as any,
         purpose,
-        destinationCountry,
+        destinationCountry: destinationCountry || null,
         currency,
         foreignAmount: amount as any,
         formAId,

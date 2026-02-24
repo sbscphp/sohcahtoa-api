@@ -58,7 +58,6 @@ router.use(authenticate);
  *               - currency
  *               - amount
  *               - purpose
- *               - destinationCountry
  *             properties:
  *               type:
  *                 type: string

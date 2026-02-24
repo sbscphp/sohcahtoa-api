@@ -461,6 +461,8 @@ model AdminUser {
   tokens         Token[]
   assignedTickets Ticket[]        @relation("TicketAssignedAgent")
   ticketComments  TicketComment[] @relation("TicketCommentAdmin")
+  createdWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateCreator")
+  workflowAssignees WorkflowAssignee[]
 
   @@index([email])
   @@index([roleId])
@@ -483,6 +485,7 @@ model Department {
   users           AdminUser[]
   actions         AdminAction[]
   roles           Role[]
+  workflowTemplates WorkflowTemplate[]
 
   @@map("departments")
 }
@@ -705,7 +708,7 @@ model Transaction {
   status              TransactionStatus   @default(DRAFT)
   currentStep         TransactionStep     @default(PERSONAL_INFO)
   purpose             String
-  destinationCountry  String
+  destinationCountry  String?
   currency            String
   foreignAmount       Decimal?            @db.Decimal(18, 2)
   formAId             String?
@@ -1556,7 +1559,7 @@ model WorkflowTemplate {
   hasPtaRequest     Boolean                 @default(false)
   status            WorkflowTemplateStatus  @default(ACTIVE)
   createdBy         String
-  creator           AdminUser               @relation(fields: [createdBy], references: [id])
+  creator           AdminUser               @relation("WorkflowTemplateCreator", fields: [createdBy], references: [id])
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
