@@ -1476,6 +1476,24 @@ export class AuthService {
       throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
     }
 
+    // Get user details for email notification
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        profile: {
+          select: {
+            firstName: true
+          }
+        }
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
     // Consume the token immediately to prevent reuse
     await redis.del(resetKey);
 
@@ -1492,6 +1510,16 @@ export class AuthService {
       where: { userId, isActive: true },
       data: { isActive: false },
     });
+
+    // Send password reset confirmation email
+    try {
+      const firstName = user.profile?.firstName || 'User';
+      await emailService.sendPasswordResetConfirmationEmail(user.email, firstName);
+      logger.info('Password reset confirmation email sent', { userId });
+    } catch (error) {
+      logger.error('Failed to send password reset confirmation email', { userId, error });
+      // Don't fail the password reset if email fails
+    }
 
     logger.info('Password reset successfully', { userId });
 
