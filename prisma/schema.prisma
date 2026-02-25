@@ -814,8 +814,8 @@ model CashPickup {
   pickupState       String?
   pickupCity        String?
   pickupCode        String      @unique
-  recipientName     String
-  recipientPhone    String
+  recipientName     String?
+  recipientPhone    String?
   amount            Decimal     @db.Decimal(18, 2)
   currency          String
   status            String      @default("PENDING")

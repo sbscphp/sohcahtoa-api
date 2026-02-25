@@ -62,7 +62,7 @@ services:
       # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
       JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
-      JWT_ACCESS_EXPIRY: 15m
+      JWT_ACCESS_EXPIRY: 30m
       JWT_REFRESH_EXPIRY: 7d
 
       # SMTP Configuration (Optional - configure for email sending)
@@ -96,7 +96,6 @@ services:
       # CLOUDINARY_API_SECRET: your-api-secret
       MOBILE_ACCESS_TOKEN_EXPIRY: 1d
       ACCESS_TOKEN_EXPIRY: 1h
-      JWT_ACCESS_EXPIRY: 30m
 
     depends_on:
       postgres:
