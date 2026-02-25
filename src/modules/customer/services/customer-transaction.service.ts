@@ -2,8 +2,10 @@ import { getDatabase } from "../../../config/database";
 import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import auditService from "../../audit/services/audit.service";
+import { createLogger } from "../../../shared/utils/logger";
 
 const prisma = getDatabase();
+const logger = createLogger('customer-transaction-service');
 
 interface TransactionDocumentLink {
   documentType: string;
@@ -24,6 +26,7 @@ interface CreateCustomerTransactionPayload {
   bvn?: string;
   nin?: string;
   formAId?: string;
+  taxClearanceNumber?: string;
 
   // School fees specific fields
   admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
@@ -74,7 +77,19 @@ export class CustomerTransactionService {
    * Create a new transaction for a customer
    */
   async createTransaction(payload: CreateCustomerTransactionPayload) {
-    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
+    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, taxClearanceNumber, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
+
+    logger.info(`[createTransaction] Starting transaction creation for user: ${userId}`, {
+      userId,
+      type,
+      currency,
+      amount,
+      purpose,
+      destinationCountry,
+      hasDocuments: !!(documents && documents.length > 0),
+      hasBeneficiaryDetails: !!beneficiaryDetails,
+      hasPickupLocation: !!pickupLocation,
+    });
 
     // Validate user exists
     const user = await prisma.user.findUnique({
@@ -83,8 +98,15 @@ export class CustomerTransactionService {
     });
 
     if (!user) {
+      logger.error(`[createTransaction] User not found: ${userId}`);
       throw new NotFoundError("User not found");
     }
+
+    logger.debug(`[createTransaction] User validated successfully`, {
+      userId,
+      hasKyc: !!user.kyc,
+      hasProfile: !!user.profile,
+    });
 
     // Validate transaction type
     const validTypes = [
@@ -101,37 +123,65 @@ export class CustomerTransactionService {
     ];
 
     if (!validTypes.includes(type)) {
+      logger.error(`[createTransaction] Invalid transaction type: ${type}`, { userId, type });
       throw new ValidationError(`Invalid transaction type. Must be one of: ${validTypes.join(", ")}`);
     }
 
+    logger.debug(`[createTransaction] Transaction type validated: ${type}`, { userId, type });
+
     // Update KYC info if BVN or NIN provided
     if (bvn || nin) {
+      logger.info(`[createTransaction] Updating KYC information`, {
+        userId,
+        hasBvn: !!bvn,
+        hasNin: !!nin,
+        existingKyc: !!user.kyc,
+      });
+
       const kycData: any = {};
       if (bvn) kycData.bvn = bvn;
       if (nin) kycData.nin = nin;
 
-      if (user.kyc) {
-        await prisma.userKyc.update({
-          where: { id: user.kyc.id },
-          data: kycData,
-        });
-      } else {
-        await prisma.userKyc.create({
-          data: {
-            userId,
-            ...kycData,
-          },
-        });
+      try {
+        if (user.kyc) {
+          await prisma.userKyc.update({
+            where: { id: user.kyc.id },
+            data: kycData,
+          });
+          logger.debug(`[createTransaction] KYC updated successfully`, { userId, kycId: user.kyc.id });
+        } else {
+          const newKyc = await prisma.userKyc.create({
+            data: {
+              userId,
+              ...kycData,
+            },
+          });
+          logger.debug(`[createTransaction] KYC created successfully`, { userId, kycId: newKyc.id });
+        }
+      } catch (error) {
+        logger.error(`[createTransaction] Failed to update KYC`, { userId, error: error instanceof Error ? error.message : String(error) });
+        throw error;
       }
     }
 
     // Generate unique reference number
     const referenceNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    logger.debug(`[createTransaction] Generated reference number: ${referenceNumber}`, { userId, referenceNumber });
 
     // Determine initial status — if documents are provided upfront, submit for admin review immediately
     const hasDocuments = documents && documents.length > 0;
     const initialStatus = hasDocuments ? "AWAITING_VERIFICATION" : "DRAFT";
     const initialStep = hasDocuments ? "DOCUMENT_UPLOAD" : "PERSONAL_INFO";
+
+    logger.info(`[createTransaction] Creating transaction record`, {
+      userId,
+      referenceNumber,
+      type,
+      initialStatus,
+      initialStep,
+      hasDocuments,
+      disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null),
+    });
 
     // Create transaction
     const transaction = await prisma.transaction.create({
@@ -146,8 +196,15 @@ export class CustomerTransactionService {
         currency,
         foreignAmount: amount as any,
         formAId,
+        taxClearanceNumber,
         disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null) as any,
       },
+    });
+
+    logger.info(`[createTransaction] Transaction created successfully`, {
+      transactionId: transaction.id,
+      referenceNumber: transaction.referenceNumber,
+      userId,
     });
 
     // Log the first step
@@ -171,24 +228,44 @@ export class CustomerTransactionService {
     // Save any document links provided inline with the transaction
     if (documents && documents.length > 0) {
       const validDocumentTypes = [
-        "PASSPORT", "VISA", "TICKET", "RETURN_TICKET", "BVN", "NIN", "TIN",
+        "PASSPORT", "VISA", "TICKET", "RETURN_TICKET", "BVN", "NIN", "TIN", "TCC",
         "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER",
         "RECEIPT", "INVOICE", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER",
         "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "UTILITY_BILL",
+        "WORK_PERMIT",
       ];
 
+      const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
+      const invalidDocs = documents.filter((doc) => !validDocumentTypes.includes(doc.documentType));
+
+      if (invalidDocs.length > 0) {
+        logger.warn(`[createTransaction] Some documents have invalid types`, {
+          transactionId: transaction.id,
+          invalidDocTypes: invalidDocs.map(d => d.documentType),
+        });
+      }
+
+      logger.info(`[createTransaction] Saving ${validDocs.length} inline documents`, {
+        transactionId: transaction.id,
+        documentCount: validDocs.length,
+        documentTypes: validDocs.map(d => d.documentType),
+      });
+
       await prisma.transactionDocument.createMany({
-        data: documents
-          .filter((doc) => validDocumentTypes.includes(doc.documentType))
-          .map((doc) => ({
-            transactionId: transaction.id,
-            documentType: doc.documentType as any,
-            fileUrl: doc.fileUrl,
-            fileName: doc.fileName,
-            fileSize: doc.fileSize ?? 0,
-            verificationStatus: "PENDING" as any,
-            metadata: { source: "inline_upload", uploadedBy: userId },
-          })),
+        data: validDocs.map((doc) => ({
+          transactionId: transaction.id,
+          documentType: doc.documentType as any,
+          fileUrl: doc.fileUrl,
+          fileName: doc.fileName,
+          fileSize: doc.fileSize ?? 0,
+          verificationStatus: "PENDING" as any,
+          metadata: { source: "inline_upload", uploadedBy: userId },
+        })),
+      });
+
+      logger.debug(`[createTransaction] Documents saved successfully`, {
+        transactionId: transaction.id,
+        documentCount: validDocs.length,
       });
     }
 
@@ -198,26 +275,47 @@ export class CustomerTransactionService {
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30); // 30 days expiry
 
-      await prisma.cashPickup.create({
-        data: {
-          transactionId: transaction.id,
-          pickupLocation: pickupLocation.name,
-          pickupLocationId: pickupLocation.id || null,
-          pickupState: pickupLocation.state,
-          pickupCity: pickupLocation.city,
-          pickupCode,
-          recipientName: pickupLocation.recipientName || null,
-          recipientPhone: pickupLocation.recipientPhone || null,
-          amount: amount as any,
-          currency,
-          scheduledPickupDate: pickupLocation.scheduledPickupDate
-            ? new Date(pickupLocation.scheduledPickupDate)
-            : null,
-          scheduledPickupTime: pickupLocation.scheduledPickupTime || null,
-          expiryDate,
-          status: 'PENDING',
-        },
+      logger.info(`[createTransaction] Creating cash pickup record`, {
+        transactionId: transaction.id,
+        pickupCode,
+        pickupLocation: pickupLocation.name,
+        pickupState: pickupLocation.state,
+        pickupCity: pickupLocation.city,
+        expiryDate,
       });
+
+      try {
+        await prisma.cashPickup.create({
+          data: {
+            transactionId: transaction.id,
+            pickupLocation: pickupLocation.name,
+            pickupLocationId: pickupLocation.id || null,
+            pickupState: pickupLocation.state,
+            pickupCity: pickupLocation.city,
+            pickupCode,
+            recipientName: pickupLocation.recipientName || null,
+            recipientPhone: pickupLocation.recipientPhone || null,
+            amount: amount as any,
+            currency,
+            scheduledPickupDate: pickupLocation.scheduledPickupDate
+              ? new Date(pickupLocation.scheduledPickupDate)
+              : null,
+            scheduledPickupTime: pickupLocation.scheduledPickupTime || null,
+            expiryDate,
+            status: 'PENDING',
+          },
+        });
+        logger.debug(`[createTransaction] Cash pickup record created successfully`, {
+          transactionId: transaction.id,
+          pickupCode,
+        });
+      } catch (error) {
+        logger.error(`[createTransaction] Failed to create cash pickup record`, {
+          transactionId: transaction.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
 
     // Fetch any already-uploaded documents for this transaction
@@ -252,6 +350,14 @@ export class CustomerTransactionService {
       metadata: { type, referenceNumber: transaction.referenceNumber, hasDocuments },
     });
 
+    logger.info(`[createTransaction] Transaction creation completed successfully`, {
+      transactionId: transaction.id,
+      referenceNumber: transaction.referenceNumber,
+      userId,
+      status: transaction.status,
+      currentStep: transaction.currentStep,
+    });
+
     return result;
   }
 
@@ -260,6 +366,14 @@ export class CustomerTransactionService {
    */
   async uploadDocuments(payload: UploadDocumentPayload) {
     const { transactionId, userId, documentType, files } = payload;
+
+    logger.info(`[uploadDocuments] Starting document upload`, {
+      transactionId,
+      userId,
+      documentType,
+      fileCount: files.length,
+      fileSizes: files.map(f => f.size),
+    });
 
     // Validate transaction exists and belongs to user
     const transaction = await prisma.transaction.findFirst({
@@ -270,8 +384,20 @@ export class CustomerTransactionService {
     });
 
     if (!transaction) {
+      logger.error(`[uploadDocuments] Transaction not found or access denied`, {
+        transactionId,
+        userId,
+      });
       throw new NotFoundError("Transaction not found or does not belong to you");
     }
+
+    logger.debug(`[uploadDocuments] Transaction validated`, {
+      transactionId,
+      userId,
+      transactionType: transaction.type,
+      currentStatus: transaction.status,
+      currentStep: transaction.currentStep,
+    });
 
     // Validate document type
     const validDocumentTypes = [
@@ -282,6 +408,7 @@ export class CustomerTransactionService {
       "BVN",
       "NIN",
       "TIN",
+      "TCC",
       "FORM_A_DOCUMENT",
       "CORPORATE_BODY_LETTER",
       "PARTNER_INVITATION_LETTER",
@@ -293,16 +420,35 @@ export class CustomerTransactionService {
       "MEMBERSHIP_CARD",
       "SCHOOL_ADMISSION",
       "UTILITY_BILL",
+      "WORK_PERMIT",
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
+      logger.error(`[uploadDocuments] Invalid document type`, {
+        transactionId,
+        userId,
+        documentType,
+        validTypes: validDocumentTypes,
+      });
       throw new ValidationError(`Invalid document type. Must be one of: ${validDocumentTypes.join(", ")}`);
     }
+
+    logger.debug(`[uploadDocuments] Document type validated: ${documentType}`, {
+      transactionId,
+      documentType,
+    });
 
     const uploadedDocuments = [];
 
     // Upload each file to Cloudinary
     for (const file of files) {
+      logger.debug(`[uploadDocuments] Uploading file to Cloudinary`, {
+        transactionId,
+        fileName: file.originalname,
+        fileSize: file.size,
+        documentType,
+      });
+
       try {
         // Upload to cloudinary
         const result = await new Promise<any>((resolve, reject) => {
@@ -317,6 +463,13 @@ export class CustomerTransactionService {
             }
           );
           uploadStream.end(file.buffer);
+        });
+
+        logger.info(`[uploadDocuments] File uploaded to Cloudinary successfully`, {
+          transactionId,
+          fileName: file.originalname,
+          cloudinaryPublicId: result.public_id,
+          fileUrl: result.secure_url,
         });
 
         // Save document record
@@ -336,15 +489,37 @@ export class CustomerTransactionService {
           },
         });
 
+        logger.debug(`[uploadDocuments] Document record created in database`, {
+          transactionId,
+          documentId: document.id,
+          fileName: file.originalname,
+        });
+
         uploadedDocuments.push(document);
       } catch (error) {
-        console.error("Error uploading document:", error);
+        logger.error(`[uploadDocuments] Failed to upload document`, {
+          transactionId,
+          fileName: file.originalname,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
         throw new ValidationError(`Failed to upload document: ${file.originalname}`);
       }
     }
 
+    logger.info(`[uploadDocuments] All files uploaded successfully`, {
+      transactionId,
+      uploadedCount: uploadedDocuments.length,
+      documentIds: uploadedDocuments.map(d => d.id),
+    });
+
     // Update transaction step if not already done
     if (transaction.currentStep === "PERSONAL_INFO") {
+      logger.info(`[uploadDocuments] Updating transaction step to DOCUMENT_UPLOAD`, {
+        transactionId,
+        previousStep: transaction.currentStep,
+      });
+
       await prisma.transaction.update({
         where: { id: transactionId },
         data: { currentStep: "DOCUMENT_UPLOAD" },
@@ -358,6 +533,8 @@ export class CustomerTransactionService {
           data: { documentCount: uploadedDocuments.length },
         },
       });
+
+      logger.debug(`[uploadDocuments] Transaction step updated successfully`, { transactionId });
     }
 
     // Fetch all documents for this transaction (including previously uploaded ones)
@@ -373,11 +550,23 @@ export class CustomerTransactionService {
       },
     });
 
+    logger.debug(`[uploadDocuments] Fetched all transaction documents`, {
+      transactionId,
+      totalDocuments: allDocuments.length,
+    });
+
     auditService.logTransactionEvent({
       userId,
       transactionId,
       action: 'DOCUMENT_UPLOADED',
       metadata: { documentCount: uploadedDocuments.length, documentType },
+    });
+
+    logger.info(`[uploadDocuments] Document upload completed successfully`, {
+      transactionId,
+      userId,
+      documentType,
+      uploadedCount: uploadedDocuments.length,
     });
 
     return {
@@ -393,6 +582,11 @@ export class CustomerTransactionService {
    * @param toCurrency   - Optional: filter rates where this is the target currency
    */
   async getActiveRates(fromCurrency?: string, toCurrency?: string) {
+    logger.info(`[getActiveRates] Fetching active exchange rates`, {
+      fromCurrency,
+      toCurrency,
+    });
+
     const now = new Date();
     const where: any = {
       isActive: true,
@@ -418,6 +612,13 @@ export class CustomerTransactionService {
       orderBy: { updatedAt: "desc" },
     });
 
+    logger.info(`[getActiveRates] Found ${rates.length} active rates`, {
+      fromCurrency,
+      toCurrency,
+      rateCount: rates.length,
+      currencies: rates.map((r: any) => `${r.fromCurrency}/${r.toCurrency}`),
+    });
+
     return rates;
   }
 
@@ -429,6 +630,12 @@ export class CustomerTransactionService {
    * @param amount       - The amount in fromCurrency to convert
    */
   async calculateAmount(fromCurrency: string, toCurrency: string, amount: number) {
+    logger.info(`[calculateAmount] Calculating transaction amount`, {
+      fromCurrency,
+      toCurrency,
+      amount,
+    });
+
     const now = new Date();
     const client: any = prisma as any;
 
@@ -444,6 +651,10 @@ export class CustomerTransactionService {
     });
 
     if (!rate) {
+      logger.error(`[calculateAmount] No active exchange rate found`, {
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: toCurrency.toUpperCase(),
+      });
       throw new NotFoundError(
         `No active exchange rate found for ${fromCurrency.toUpperCase()} to ${toCurrency.toUpperCase()}`
       );
@@ -452,6 +663,16 @@ export class CustomerTransactionService {
     const sellRate = parseFloat(rate.sellRate);
     const buyRate = parseFloat(rate.buyRate);
     const convertedAmount = amount * sellRate;
+
+    logger.info(`[calculateAmount] Amount calculated successfully`, {
+      fromCurrency: rate.fromCurrency,
+      toCurrency: rate.toCurrency,
+      amount,
+      sellRate,
+      buyRate,
+      convertedAmount,
+      rateId: rate.id,
+    });
 
     return {
       fromCurrency: rate.fromCurrency,
@@ -468,6 +689,8 @@ export class CustomerTransactionService {
    * Get available pickup points/outlets
    */
   async getPickupPoints(): Promise<PickupPoint[]> {
+    logger.info(`[getPickupPoints] Fetching available pickup points`);
+
     const client: any = prisma as any;
 
     // Get all active outlets
@@ -483,6 +706,10 @@ export class CustomerTransactionService {
         branch: true,
       },
       orderBy: { name: "asc" },
+    });
+
+    logger.info(`[getPickupPoints] Found ${outlets.length} active pickup points`, {
+      outletCount: outlets.length,
     });
 
     return outlets;
@@ -576,6 +803,13 @@ export class CustomerTransactionService {
     page = 1,
     limit = 10
   ) {
+    logger.info(`[getCustomerTransactions] Fetching transactions for user`, {
+      userId,
+      filters,
+      page,
+      limit,
+    });
+
     const skip = (page - 1) * limit;
     const where = this.buildTransactionWhere(userId, filters);
 
@@ -592,6 +826,14 @@ export class CustomerTransactionService {
         ? filters.sortBy
         : "createdAt";
     const sortOrder = filters.sortOrder === "asc" ? "asc" : "desc";
+
+    logger.debug(`[getCustomerTransactions] Query parameters`, {
+      userId,
+      sortBy,
+      sortOrder,
+      skip,
+      limit,
+    });
 
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
@@ -633,6 +875,15 @@ export class CustomerTransactionService {
       prisma.transaction.count({ where }),
     ]);
 
+    logger.info(`[getCustomerTransactions] Transactions fetched successfully`, {
+      userId,
+      page,
+      limit,
+      transactionCount: transactions.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
+
     // Attach the transaction group label to each row
     const data = transactions.map((t) => ({
       ...t,
@@ -667,6 +918,11 @@ export class CustomerTransactionService {
       endDate?: string;
     } = {}
   ): Promise<string> {
+    logger.info(`[exportCustomerTransactions] Exporting transactions for user`, {
+      userId,
+      filters,
+    });
+
     const where = this.buildTransactionWhere(userId, filters);
 
     const transactions = await prisma.transaction.findMany({
@@ -689,6 +945,11 @@ export class CustomerTransactionService {
       },
       orderBy: { createdAt: "desc" },
       take: 10_000,
+    });
+
+    logger.info(`[exportCustomerTransactions] Transactions fetched for export`, {
+      userId,
+      transactionCount: transactions.length,
     });
 
     const headers = [
@@ -738,7 +999,15 @@ export class CustomerTransactionService {
         .join(",")
     );
 
-    return [headers.join(","), ...rows].join("\n");
+    const csvContent = [headers.join(","), ...rows].join("\n");
+
+    logger.info(`[exportCustomerTransactions] CSV export completed successfully`, {
+      userId,
+      transactionCount: transactions.length,
+      csvSize: csvContent.length,
+    });
+
+    return csvContent;
   }
 
   private resolveTransactionGroup(type: string): string {
@@ -754,6 +1023,11 @@ export class CustomerTransactionService {
    * Get a single transaction details
    */
   async getTransactionDetails(transactionId: string, userId: string) {
+    logger.info(`[getTransactionDetails] Fetching transaction details`, {
+      transactionId,
+      userId,
+    });
+
     const transaction = await prisma.transaction.findFirst({
       where: {
         id: transactionId,
@@ -781,8 +1055,22 @@ export class CustomerTransactionService {
     });
 
     if (!transaction) {
+      logger.error(`[getTransactionDetails] Transaction not found or access denied`, {
+        transactionId,
+        userId,
+      });
       throw new NotFoundError("Transaction not found");
     }
+
+    logger.info(`[getTransactionDetails] Transaction details fetched successfully`, {
+      transactionId,
+      userId,
+      referenceNumber: transaction.referenceNumber,
+      type: transaction.type,
+      status: transaction.status,
+      documentCount: transaction.documents.length,
+      stepCount: transaction.steps.length,
+    });
 
     return {
       transactionId: transaction.id,
@@ -853,26 +1141,17 @@ export class CustomerTransactionService {
    * Get required documents based on transaction type
    */
   private getRequiredDocuments(transactionType: string): string[] {
-    const documentRequirements: Record<string, string[]> = {
-      // Personal Travel Allowance - Requires NIN
-      PTA: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT"],
-
-      // Business Travel Allowance - Requires TIN instead of NIN + corporate documents
-      BTA: ["BVN", "TIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
-
-      // School Fees - Simplified: Only Form A documents required (bank details captured separately)
-      SCHOOL_FEES: ["FORM_A_DOCUMENT"],
-
-      // Medical - Same as PTA plus Utility Bill and Medical Letters (local + overseas) (bank details captured separately, no pickup location)
-      MEDICAL: ["BVN", "NIN", "PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER"],
-
-      // Professional Body - BVN, Form A, Utility Bill, Membership Card, Invoice (bank details captured separately)
-      PROFESSIONAL_BODY: ["BVN", "FORM_A_DOCUMENT", "UTILITY_BILL", "MEMBERSHIP_CARD", "INVOICE"],
-      TOURIST_FX: ["BVN", "NIN", "PASSPORT", "RETURN_TICKET", "FORM_A_DOCUMENT"],
-      RESIDENT_FX: ["BVN", "NIN", "PASSPORT", "FORM_A_DOCUMENT"],
-      EXPATRIATE_FX: ["PASSPORT", "VISA", "FORM_A_DOCUMENT"],
-      IMTO_REMITTANCE: ["BVN", "NIN", "FORM_A_DOCUMENT"],
-      CASH_REMITTANCE: ["BVN", "NIN", "FORM_A_DOCUMENT"],
+    const documentRequirements: Record<string, string[]> = {     
+      PTA: ["VISA", "RETURN_TICKET"],
+      BTA: ["TIN", "TCC",  "PASSPORT", "VISA", "RETURN_TICKET", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
+      SCHOOL_FEES: ["PASSPORT", "SCHOOL_ADMISSION", "INVOICE" ],
+      MEDICAL: ["PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER"],
+      PROFESSIONAL_BODY: ["MEMBERSHIP_CARD", "INVOICE"],
+      TOURIST_FX: ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"],
+      RESIDENT_FX: ["PASSPORT", "UTILITY_BILL"],
+      EXPATRIATE_FX: ["PASSPORT", "WORK_PERMIT", "UTILITY_BILL"],
+      IMTO_REMITTANCE: [],
+      CASH_REMITTANCE: [],
     };
 
     return documentRequirements[transactionType] || [];
@@ -882,6 +1161,8 @@ export class CustomerTransactionService {
    * Get all available states where pickup terminals are located
    */
   async getPickupStates(): Promise<string[]> {
+    logger.info(`[getPickupStates] Fetching available pickup states`);
+
     const states = await prisma.branch.findMany({
       where: {
         isActive: true,
@@ -896,6 +1177,11 @@ export class CustomerTransactionService {
       },
     });
 
+    logger.info(`[getPickupStates] Found ${states.length} states with pickup terminals`, {
+      stateCount: states.length,
+      states: states.map((s) => s.state),
+    });
+
     return states.map((s) => s.state);
   }
 
@@ -903,6 +1189,8 @@ export class CustomerTransactionService {
    * Get cities in a specific state where pickup terminals are located
    */
   async getPickupCities(state: string): Promise<string[]> {
+    logger.info(`[getPickupCities] Fetching cities in state: ${state}`, { state });
+
     // Since we don't have a separate city field, we'll extract from address
     // For now, return unique branch names as "cities" or use address parsing
     const branches = await prisma.branch.findMany({
@@ -920,6 +1208,11 @@ export class CustomerTransactionService {
       },
     });
 
+    logger.debug(`[getPickupCities] Found ${branches.length} branches in state`, {
+      state,
+      branchCount: branches.length,
+    });
+
     // Extract unique cities from addresses (assuming format like "City, State")
     // This is a simplified approach - adjust based on your address format
     const cities = new Set<string>();
@@ -932,7 +1225,14 @@ export class CustomerTransactionService {
       }
     });
 
-    return Array.from(cities).sort();
+    const cityList = Array.from(cities).sort();
+    logger.info(`[getPickupCities] Found ${cityList.length} unique cities`, {
+      state,
+      cityCount: cityList.length,
+      cities: cityList,
+    });
+
+    return cityList;
   }
 
   /**
@@ -945,6 +1245,13 @@ export class CustomerTransactionService {
     pickupTime?: string;
   }): Promise<any[]> {
     const { state, city, pickupDate, pickupTime } = params;
+
+    logger.info(`[getPickupTerminals] Fetching pickup terminals`, {
+      state,
+      city,
+      pickupDate,
+      pickupTime,
+    });
 
     // Get all branches in the specified state and city
     const branches = await prisma.branch.findMany({
@@ -971,8 +1278,19 @@ export class CustomerTransactionService {
       },
     });
 
+    logger.debug(`[getPickupTerminals] Found ${branches.length} branches`, {
+      state,
+      city,
+      branchCount: branches.length,
+    });
+
     // If date and time are provided, filter by availability
     if (pickupDate && pickupTime) {
+      logger.info(`[getPickupTerminals] Filtering by availability`, {
+        pickupDate,
+        pickupTime,
+      });
+
       const availableTerminals = [];
 
       for (const branch of branches) {
@@ -990,8 +1308,23 @@ export class CustomerTransactionService {
         }
       }
 
+      logger.info(`[getPickupTerminals] Found ${availableTerminals.length} available terminals`, {
+        state,
+        city,
+        pickupDate,
+        pickupTime,
+        availableCount: availableTerminals.length,
+        totalCount: branches.length,
+      });
+
       return availableTerminals;
     }
+
+    logger.info(`[getPickupTerminals] Returning all terminals without availability check`, {
+      state,
+      city,
+      terminalCount: branches.length,
+    });
 
     // Return all terminals with availability unknown
     return branches.map((branch) => ({
@@ -1008,6 +1341,12 @@ export class CustomerTransactionService {
     pickupDate: string,
     pickupTime: string
   ): Promise<boolean> {
+    logger.debug(`[checkTerminalAvailability] Checking availability`, {
+      terminalId,
+      pickupDate,
+      pickupTime,
+    });
+
     // Check if the branch exists and is active
     const branch = await prisma.branch.findFirst({
       where: {
@@ -1018,6 +1357,9 @@ export class CustomerTransactionService {
     });
 
     if (!branch) {
+      logger.warn(`[checkTerminalAvailability] Branch not found or inactive`, {
+        terminalId,
+      });
       return false;
     }
 
@@ -1036,7 +1378,18 @@ export class CustomerTransactionService {
 
     // Allow max 10 pickups per time slot (adjust as needed)
     const MAX_PICKUPS_PER_SLOT = 10;
-    return scheduledPickupsCount < MAX_PICKUPS_PER_SLOT;
+    const isAvailable = scheduledPickupsCount < MAX_PICKUPS_PER_SLOT;
+
+    logger.debug(`[checkTerminalAvailability] Availability check result`, {
+      terminalId,
+      pickupDate,
+      pickupTime,
+      scheduledPickupsCount,
+      maxPickupsPerSlot: MAX_PICKUPS_PER_SLOT,
+      isAvailable,
+    });
+
+    return isAvailable;
   }
 
   /**
