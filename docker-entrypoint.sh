@@ -131,7 +131,9 @@ else
       npx prisma migrate resolve --applied 20260206140753_init 2>&1 || true
       npx prisma migrate resolve --applied 20260213120640_unique_constraint_on_nin 2>&1 || true
       npx prisma migrate resolve --applied 20260216094318_add_actiontypes_ticket_relations 2>&1 || true
+      npx prisma migrate resolve --applied 20260224093423_make_destination_country_optional 2>&1 || true
       npx prisma migrate resolve --applied 20260216100845_ 2>&1 || true
+      npx prisma migrate resolve --applied 20260225_add_tax_clearance_and_document_types 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."

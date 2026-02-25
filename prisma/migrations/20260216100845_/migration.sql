@@ -54,8 +54,8 @@ END $$;
 -- DropForeignKey
 ALTER TABLE "admin_users" DROP CONSTRAINT "admin_users_departmentId_fkey";
 
--- DropIndex
-DROP INDEX "branches_name_idx";
+-- DropIndex (with IF EXISTS check)
+DROP INDEX IF EXISTS "branches_name_idx";
 
 -- AlterTable
 ALTER TABLE "admin_users" ALTER COLUMN "departmentId" DROP NOT NULL;
