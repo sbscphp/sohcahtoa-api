@@ -42,13 +42,13 @@ interface CreateCustomerTransactionPayload {
 
   // Pickup Location details
   pickupLocation?: {
-    id: string;
+    id?: string;
     name: string;
     address: string;
     state: string;
     city: string;
-    recipientName: string;
-    recipientPhone: string;
+    recipientName?: string;
+    recipientPhone?: string;
     scheduledPickupDate?: string;
     scheduledPickupTime?: string;
   };
@@ -202,12 +202,12 @@ export class CustomerTransactionService {
         data: {
           transactionId: transaction.id,
           pickupLocation: pickupLocation.name,
-          pickupLocationId: pickupLocation.id,
+          pickupLocationId: pickupLocation.id || null,
           pickupState: pickupLocation.state,
           pickupCity: pickupLocation.city,
           pickupCode,
-          recipientName: pickupLocation.recipientName,
-          recipientPhone: pickupLocation.recipientPhone,
+          recipientName: pickupLocation.recipientName || null,
+          recipientPhone: pickupLocation.recipientPhone || null,
           amount: amount as any,
           currency,
           scheduledPickupDate: pickupLocation.scheduledPickupDate

@@ -39,6 +39,7 @@ enum OtpPurpose {
   REGISTRATION
   LOGIN
   PASSWORD_RESET
+  AGENT_SET_PASSWORD
   TRANSACTION_VERIFICATION
 }
 
@@ -543,6 +544,7 @@ model Agent {
   name        String
   email       String   @unique
   phoneNumber String   @unique
+  password    String?
   isActive    Boolean  @default(true)
   isApproved  Boolean  @default(false)
   branchId    String?
@@ -814,8 +816,8 @@ model CashPickup {
   pickupState       String?
   pickupCity        String?
   pickupCode        String      @unique
-  recipientName     String
-  recipientPhone    String
+  recipientName     String?
+  recipientPhone    String?
   amount            Decimal     @db.Decimal(18, 2)
   currency          String
   status            String      @default("PENDING")

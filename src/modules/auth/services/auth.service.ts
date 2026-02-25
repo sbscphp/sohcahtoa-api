@@ -8,6 +8,7 @@ import {
   generateRefreshToken,
   generateId,
   generateOtp,
+  getAccessTokenExpiry,
   UnauthorizedError,
   ValidationError,
   DuplicateError,
@@ -38,6 +39,10 @@ import {
   EventType,
   ServiceName,
   OtpPurpose,
+  CreateAgentPasswordRequest,
+  AgentPasswordPromptResponse,
+  AgentLoginOtpSentResponse,
+  VerifyAgentLoginRequest,
 } from '../../../shared/types';
 import bvnService from './bvn.service';
 import passportVerificationService from './passport-verification.service';
@@ -194,7 +199,9 @@ export class AuthService {
       sessionId,
     };
 
-    const accessToken = generateAccessToken(tokenPayload);
+    // Use longer expiration for mobile devices (1 hour instead of 15 minutes)
+    const tokenExpiry = getAccessTokenExpiry(userAgent);
+    const accessToken = generateAccessToken(tokenPayload, tokenExpiry);
     const refreshToken = generateRefreshToken(tokenPayload);
 
     // Create session
@@ -228,6 +235,264 @@ export class AuthService {
         createdAt: user.createdAt.toISOString(),
       },
     };
+  }
+
+  async loginAgent(
+    data: LoginRequest,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<LoginResponse | AgentPasswordPromptResponse | AgentLoginOtpSentResponse> {
+    const client = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!agent) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    if (!agent.isActive) {
+      throw new UnauthorizedError('Account is deactivated');
+    }
+
+    if (!agent.password) {
+      const otpResult = await this.sendOtp({
+        email: agent.email,
+        phoneNumber: agent.phoneNumber || '',
+        purpose: OtpPurpose.AGENT_SET_PASSWORD,
+      });
+
+      const response: AgentPasswordPromptResponse = {
+        message: 'Please set your password before attempting to log in using the OTP sent to your email',
+        requiresPasswordSet: true,
+      };
+
+      if (process.env.NODE_ENV !== 'production') {
+        response.otp = otpResult.otp;
+      }
+
+      return response;
+    }
+
+    const isPasswordValid = await comparePassword(data.password, agent.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    const otpResult = await this.sendOtp({
+      email: agent.email,
+      phoneNumber: agent.phoneNumber || '',
+      purpose: OtpPurpose.LOGIN,
+    });
+
+    const response: AgentLoginOtpSentResponse = {
+      message: 'OTP sent to your email',
+      requiresVerification: true,
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      response.otp = otpResult.otp;
+    }
+
+    return response;
+  }
+
+  async verifyAgentLogin(
+    data: VerifyAgentLoginRequest,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<LoginResponse> {
+    if (!data.email || !data.otp) {
+      throw new ValidationError('email and otp are required');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.LOGIN,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message || 'Invalid or expired OTP');
+    }
+
+    const client = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!agent) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    if (!agent.isActive) {
+      throw new UnauthorizedError('Account is deactivated');
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+      include: { profile: true, kyc: true },
+    });
+
+    let sessionUser: NonNullable<typeof existingUser>;
+    if (existingUser) {
+      sessionUser = existingUser;
+    } else {
+      const nameParts = (agent.name || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || agent.name || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      const created = await prisma.user.create({
+        data: {
+          email: agent.email,
+          phoneNumber: agent.phoneNumber,
+          role: UserRole.AGENT as any,
+          isActive: agent.isActive,
+          credentials: {
+            create: {
+              passwordHash: agent.password,
+            },
+          },
+          profile: {
+            create: {
+              firstName,
+              lastName,
+            },
+          },
+        },
+        include: { profile: true, kyc: true },
+      });
+      sessionUser = created as NonNullable<typeof existingUser>;
+    }
+
+    const sessionId = generateId();
+    const tokenPayload = {
+      userId: sessionUser.id,
+      email: sessionUser.email,
+      role: sessionUser.role as UserRole,
+      sessionId,
+    };
+
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken(tokenPayload);
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.session.create({
+      data: {
+        id: sessionId,
+        userId: sessionUser.id,
+        refreshToken,
+        userAgent,
+        ipAddress,
+        expiresAt,
+      },
+    });
+
+    auditService.logAuthEvent({
+      userId: sessionUser.id,
+      action: 'LOGIN',
+      success: true,
+      ipAddress,
+      userAgent,
+      metadata: { agentLogin: true, verifiedViaOtp: true },
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        firstName: sessionUser.profile?.firstName || '',
+        lastName: sessionUser.profile?.lastName || '',
+        phoneNumber: sessionUser.phoneNumber,
+        role: sessionUser.role as UserRole,
+        customerType: sessionUser.customerType as CustomerType | undefined,
+        kycStatus: sessionUser.kyc?.status as KycStatus || KycStatus.NOT_STARTED,
+        isActive: sessionUser.isActive,
+        createdAt: sessionUser.createdAt.toISOString(),
+      },
+    };
+  }
+
+  async createAgentPassword(data: CreateAgentPasswordRequest): Promise<{ message: string }> {
+    if (!data.email || !validateEmail(data.email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    if (!data.password || !data.confirmPassword) {
+      throw new ValidationError('password and confirmPassword are required');
+    }
+
+    if (data.password !== data.confirmPassword) {
+      throw new ValidationError('Passwords do not match');
+    }
+
+    if (data.password.length < 8 || data.password.length > 12) {
+      throw new ValidationError('Password must be between 8 and 12 characters long');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.password);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    const client: any = prisma as any;
+
+    const agent = await client.agent.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!agent) {
+      throw new UnauthorizedError('Agent not found');
+    }
+
+    if (!agent.isActive) {
+      throw new UnauthorizedError('Account is deactivated');
+    }
+
+    if (agent.password) {
+      throw new ValidationError('Password has already been set. Please use the login flow.');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.AGENT_SET_PASSWORD,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message || 'Invalid or expired OTP');
+    }
+
+    const hashed = await hashPassword(data.password);
+
+    await client.agent.update({
+      where: { id: agent.id },
+      data: { password: hashed },
+    });
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: agent.email },
+      include: { credentials: true },
+    });
+
+    if (existingUser) {
+      if (existingUser.credentials) {
+        await prisma.userCredential.update({
+          where: { id: existingUser.credentials.id },
+          data: { passwordHash: hashed },
+        });
+      } else {
+        await prisma.userCredential.create({
+          data: {
+            userId: existingUser.id,
+            passwordHash: hashed,
+          },
+        });
+      }
+    }
+
+    return { message: 'Password set successfully' };
   }
 
   // STEP 1: Verify BVN and return ONLY verification token
@@ -1090,7 +1355,7 @@ export class AuthService {
         email: data.email,
         phoneNumber: data.phoneNumber,
         otp,
-        purpose: data.purpose,
+        purpose: data.purpose as any,
         expiresAt,
       },
     });
@@ -1155,7 +1420,7 @@ export class AuthService {
         await prisma.otpLog.updateMany({
           where: {
             otp: data.otp,
-            purpose: data.purpose,
+            purpose: data.purpose as any,
             isUsed: false,
           },
           data: {
@@ -1184,7 +1449,7 @@ export class AuthService {
         await prisma.otpLog.updateMany({
           where: {
             email: email,
-            purpose: data.purpose,
+            purpose: data.purpose as any,
             otp: data.otp,
             isUsed: false,
           },
@@ -1214,7 +1479,7 @@ export class AuthService {
 
     // Check database - build where clause based on available data
     const whereClause: any = {
-      purpose: data.purpose,
+      purpose: data.purpose as any,
       otp: data.otp,
       isUsed: false,
       expiresAt: { gt: new Date() },
@@ -1232,7 +1497,7 @@ export class AuthService {
     if (!otpLog) {
       // Increment attempts
       const updateWhereClause: any = {
-        purpose: data.purpose,
+        purpose: data.purpose as any,
         otp: data.otp,
       };
       if (email) {
@@ -1287,7 +1552,9 @@ export class AuthService {
       sessionId: session.id,
     };
 
-    const accessToken = generateAccessToken(tokenPayload);
+    // Use longer expiration for mobile devices (1 hour instead of 15 minutes)
+    const tokenExpiry = getAccessTokenExpiry(session.userAgent || undefined);
+    const accessToken = generateAccessToken(tokenPayload, tokenExpiry);
 
     return { accessToken };
   }

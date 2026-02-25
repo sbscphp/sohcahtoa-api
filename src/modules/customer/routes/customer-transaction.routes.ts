@@ -149,17 +149,14 @@ router.use(authenticate);
  *                 type: object
  *                 description: Required for CASH_REMITTANCE transactions. Sets disbursementMethod to CASH_PICKUP.
  *                 required:
- *                   - id
  *                   - name
  *                   - address
  *                   - state
  *                   - city
- *                   - recipientName
- *                   - recipientPhone
  *                 properties:
  *                   id:
  *                     type: string
- *                     description: Terminal/Branch ID (from GET /customer/transactions/pickup-locations/terminals)
+ *                     description: Optional Terminal/Branch ID (from GET /customer/transactions/pickup-locations/terminals)
  *                   name:
  *                     type: string
  *                     description: Terminal name
@@ -176,10 +173,10 @@ router.use(authenticate);
  *                     example: Ikeja
  *                   recipientName:
  *                     type: string
- *                     description: Full name of the person picking up the cash
+ *                     description: Optional - Full name of the person picking up the cash (can be provided later)
  *                   recipientPhone:
  *                     type: string
- *                     description: Phone number of the person picking up the cash
+ *                     description: Optional - Phone number of the person picking up the cash (can be provided later)
  *                   scheduledPickupDate:
  *                     type: string
  *                     format: date
