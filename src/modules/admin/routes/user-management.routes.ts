@@ -11,6 +11,22 @@ const UserManagementRouter: Router = Router();
  *   name: Admin
  *   description: Admin endpoints
  */
+
+/**
+ * @swagger
+ * /api/admin/management/users/stats:
+ *   get:
+ *     summary: User counters
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User stats retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/users/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getUserStats);
 /**
  * @swagger
  * /api/admin/management/users:
@@ -179,21 +195,7 @@ UserManagementRouter.get("/users/export", authenticate, authorize(UserRole.SUPER
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 UserManagementRouter.get("/lookups", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getLookups);
-/**
- * @swagger
- * /api/admin/management/users/stats:
- *   get:
- *     summary: User counters
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User stats retrieved
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-UserManagementRouter.get("/users/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getUserStats);
+
 /**
  * @swagger
  * /api/admin/management/profile:
@@ -479,6 +481,8 @@ UserManagementRouter.get("/roles/:id", authenticate, authorize(UserRole.SUPER_AD
  *         $ref: '#/components/responses/NotFoundError'
  */
 UserManagementRouter.get("/roles/:id/permissions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getRolePermissions);
+
+UserManagementRouter.get("/permissions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getPermissions);
 /**
  * @swagger
  * /api/admin/management/roles/{id}:

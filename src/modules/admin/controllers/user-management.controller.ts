@@ -172,10 +172,11 @@ class UserManagementController {
     exportUserActivitiesCsv = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const rows = await adminService.getAdminActionsAll(id);
-        const headers = ["id","performedAt","actionLabel","actionType","resourceType","resourceId","status"];
-        const csv =
-            headers.join(",") + "\n" +
-            rows.map((r: any) => [
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="admin-user-${id}-activities.csv"`);
+        res.write(["id","performedAt","actionLabel","actionType","resourceType","resourceId","status"].join(",") + "\n");
+        for (const r of rows as any[]) {
+            const line = [
                 r.id,
                 new Date(r.performedAt).toISOString(),
                 r.actionLabel ? `"${String(r.actionLabel).replace(/"/g, '""')}"` : "",
@@ -183,10 +184,10 @@ class UserManagementController {
                 r.resourceType,
                 r.resourceId,
                 r.status
-            ].join(",")).join("\n");
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename="admin-user-${id}-activities.csv"`);
-        res.send(csv);
+            ].join(",");
+            res.write(line + "\n");
+        }
+        res.end();
     });
 
     getLookups = asyncHandler(async (req: Request, res: Response) => {
@@ -200,10 +201,11 @@ class UserManagementController {
 
     exportUsersCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportUsers();
-        const headers = ["id","fullName","email","phoneNumber","roleName","departmentName","isActive","createdAt"];
-        const csv =
-            headers.join(",") + "\n" +
-            rows.map((r: any) => [
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-users.csv"');
+        res.write(["id","fullName","email","phoneNumber","roleName","departmentName","isActive","createdAt"].join(",") + "\n");
+        for (const r of rows as any[]) {
+            const line = [
                 r.id,
                 `"${(r.fullName || "").replace(/"/g, '""')}"`,
                 r.email,
@@ -212,18 +214,19 @@ class UserManagementController {
                 r.departmentName || "",
                 r.isActive ? "true" : "false",
                 new Date(r.createdAt).toISOString()
-            ].join(",")).join("\n");
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-users.csv"');
-        res.send(csv);
+            ].join(",");
+            res.write(line + "\n");
+        }
+        res.end();
     });
 
     exportRolesCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportRoles();
-        const headers = ["id","name","description","branch","departmentName","createdBy","createdById","isDefault","isActive","createdAt"];
-        const csv =
-            headers.join(",") + "\n" +
-            rows.map((r: any) => [
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-roles.csv"');
+        res.write(["id","name","description","branch","departmentName","createdBy","createdById","isDefault","isActive","createdAt"].join(",") + "\n");
+        for (const r of rows as any[]) {
+            const line = [
                 r.id,
                 `"${(r.name || "").replace(/"/g, '""')}"`,
                 `"${(r.description || "").replace(/"/g, '""')}"`,
@@ -234,18 +237,19 @@ class UserManagementController {
                 r.isDefault ? "true" : "false",
                 r.isActive ? "true" : "false",
                 new Date(r.createdAt).toISOString()
-            ].join(",")).join("\n");
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-roles.csv"');
-        res.send(csv);
+            ].join(",");
+            res.write(line + "\n");
+        }
+        res.end();
     });
 
     exportDepartmentsCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportDepartments();
-        const headers = ["id","name","departmentEmail","description","branch","createdBy","createdById","isActive","createdAt"];
-        const csv =
-            headers.join(",") + "\n" +
-            rows.map((r: any) => [
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-departments.csv"');
+        res.write(["id","name","departmentEmail","description","branch","createdBy","createdById","isActive","createdAt"].join(",") + "\n");
+        for (const r of rows as any[]) {
+            const line = [
                 r.id,
                 `"${(r.name || "").replace(/"/g, '""')}"`,
                 r.departmentEmail || "",
@@ -255,10 +259,10 @@ class UserManagementController {
                 r.createdById || "",
                 r.isActive ? "true" : "false",
                 new Date(r.createdAt).toISOString()
-            ].join(",")).join("\n");
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-departments.csv"');
-        res.send(csv);
+            ].join(",");
+            res.write(line + "\n");
+        }
+        res.end();
     });
 
     createDepartment = asyncHandler(async (req: Request, res: Response) => {
@@ -326,6 +330,18 @@ class UserManagementController {
     });
     getDepartmentStats = asyncHandler(async (_req: Request, res: Response) => {
         const result = await userManagementService.getDepartmentStats();
+        res.json(successResponse(result));
+    });
+
+    getPermissions = asyncHandler(async (req: Request, res: Response) => {
+        const query = {
+            search: req.query.search as string,
+            module: req.query.module as string,
+            featureKey: req.query.featureKey as string,
+            action: req.query.action as string,
+            isActive: req.query.isActive as any,
+        };
+        const result = await userManagementService.getAllPermissions(query);
         res.json(successResponse(result));
     });
 }
