@@ -8,6 +8,7 @@ import {
   generateRefreshToken,
   generateId,
   generateOtp,
+  getAccessTokenExpiry,
   UnauthorizedError,
   ValidationError,
   DuplicateError,
@@ -194,7 +195,9 @@ export class AuthService {
       sessionId,
     };
 
-    const accessToken = generateAccessToken(tokenPayload);
+    // Use longer expiration for mobile devices (1 hour instead of 15 minutes)
+    const tokenExpiry = getAccessTokenExpiry(userAgent);
+    const accessToken = generateAccessToken(tokenPayload, tokenExpiry);
     const refreshToken = generateRefreshToken(tokenPayload);
 
     // Create session
@@ -1287,7 +1290,9 @@ export class AuthService {
       sessionId: session.id,
     };
 
-    const accessToken = generateAccessToken(tokenPayload);
+    // Use longer expiration for mobile devices (1 hour instead of 15 minutes)
+    const tokenExpiry = getAccessTokenExpiry(session.userAgent || undefined);
+    const accessToken = generateAccessToken(tokenPayload, tokenExpiry);
 
     return { accessToken };
   }

@@ -4,11 +4,12 @@ import { JwtPayload } from '../types';
 const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-secret-key';
 const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
 const ACCESS_TOKEN_EXPIRY = process.env.JWT_ACCESS_EXPIRY || '15m';
+const MOBILE_ACCESS_TOKEN_EXPIRY = process.env.JWT_MOBILE_ACCESS_EXPIRY || '1h';
 const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
 
-export const generateAccessToken = (payload: JwtPayload): string => {
+export const generateAccessToken = (payload: JwtPayload, expiresIn?: string): string => {
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, {
-    expiresIn: ACCESS_TOKEN_EXPIRY,
+    expiresIn: expiresIn || ACCESS_TOKEN_EXPIRY,
   } as SignOptions);
 };
 
@@ -40,4 +41,31 @@ export const decodeToken = (token: string): JwtPayload | null => {
   } catch (error) {
     return null;
   }
+};
+
+/**
+ * Detect if the user agent indicates a mobile device
+ */
+export const isMobileDevice = (userAgent?: string): boolean => {
+  if (!userAgent) return false;
+
+  const mobilePatterns = [
+    /Android/i,
+    /webOS/i,
+    /iPhone/i,
+    /iPad/i,
+    /iPod/i,
+    /BlackBerry/i,
+    /Windows Phone/i,
+    /Mobile/i,
+  ];
+
+  return mobilePatterns.some(pattern => pattern.test(userAgent));
+};
+
+/**
+ * Get the appropriate access token expiry based on device type
+ */
+export const getAccessTokenExpiry = (userAgent?: string): string => {
+  return isMobileDevice(userAgent) ? MOBILE_ACCESS_TOKEN_EXPIRY : ACCESS_TOKEN_EXPIRY;
 };

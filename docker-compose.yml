@@ -94,6 +94,9 @@ services:
 
       # CLOUDINARY_API_KEY: your-api-key
       # CLOUDINARY_API_SECRET: your-api-secret
+      MOBILE_ACCESS_TOKEN_EXPIRY: 1d
+      ACCESS_TOKEN_EXPIRY: 1h
+      JWT_ACCESS_EXPIRY: 30m
 
     depends_on:
       postgres:
