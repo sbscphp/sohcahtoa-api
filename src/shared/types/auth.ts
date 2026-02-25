@@ -84,12 +84,37 @@ export enum OtpPurpose {
   LOGIN = 'LOGIN',
   PASSWORD_RESET = 'PASSWORD_RESET',
   TRANSACTION_VERIFICATION = 'TRANSACTION_VERIFICATION',
+  AGENT_SET_PASSWORD = 'AGENT_SET_PASSWORD',
 }
 
 export interface OtpValidationRequest {
   email?: string;
   otp: string;
   purpose: OtpPurpose;
+}
+
+export interface CreateAgentPasswordRequest {
+  email: string;
+  otp: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface AgentPasswordPromptResponse {
+  message: string;
+  requiresPasswordSet: true;
+  otp?: string;
+}
+
+export interface AgentLoginOtpSentResponse {
+  message: string;
+  requiresVerification: true;
+  otp?: string;
+}
+
+export interface VerifyAgentLoginRequest {
+  email: string;
+  otp: string;
 }
 
 export interface UserProfile {

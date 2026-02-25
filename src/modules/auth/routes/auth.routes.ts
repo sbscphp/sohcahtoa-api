@@ -1187,6 +1187,124 @@ router.post('/login', authController.login);
 
 /**
  * @swagger
+ * /api/auth/agent/login:
+ *   post:
+ *     summary: Agent login
+ *     description: Login endpoint specifically for agents (users with customerType = AGENT).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: agent@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: SecurePass123!
+ *     responses:
+ *       200:
+ *         description: Login successful (agent)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     accessToken:
+ *                       type: string
+ *                     refreshToken:
+ *                       type: string
+ *                     user:
+ *                       type: object
+ *       401:
+ *         description: Invalid credentials or user is not an agent
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/agent/login', authController.loginAgent);
+
+/**
+ * @swagger
+ * /api/auth/agent/verify-login:
+ *   post:
+ *     summary: Verify OTP and complete agent login (2FA)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful, returns accessToken, refreshToken, and user
+ *       400:
+ *         description: Invalid or expired OTP
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/agent/verify-login', authController.verifyAgentLogin);
+
+/**
+ * @swagger
+ * /api/auth/agent/create-password:
+ *   post:
+ *     summary: Create or set password for an agent using OTP
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *               - password
+ *               - confirmPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *               confirmPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password set successfully
+ *       400:
+ *         description: Validation error
+ */
+router.post('/agent/create-password', authController.createAgentPassword);
+
+/**
+ * @swagger
  * /api/auth/otp/send:
  *   post:
  *     summary: Send OTP to user
@@ -1210,7 +1328,7 @@ router.post('/login', authController.login);
  *                 example: user@example.com
  *               purpose:
  *                 type: string
- *                 enum: [REGISTRATION, LOGIN, PASSWORD_RESET, TRANSACTION_VERIFICATION]
+ *                 enum: [REGISTRATION, LOGIN, PASSWORD_RESET, TRANSACTION_VERIFICATION, AGENT_SET_PASSWORD]
  *                 description: Purpose of the OTP
  *                 example: REGISTRATION
  *     responses:
