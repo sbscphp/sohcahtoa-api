@@ -42,11 +42,18 @@ class AuditTrailService {
       return client.adminAction.create({ data });
     } catch (error: any) {
       const msg = String(error?.message || "");
-      if (msg.includes("Invalid value for argument `actionType`")) {
+      if (
+        msg.includes("Invalid value for argument `actionType`") ||
+        msg.includes('invalid input value for enum "ActionType"') ||
+        msg.includes('enum "ActionType"')
+      ) {
         if (data.actionType === "AGENT_APPROVE" || data.actionType === "AGENT_DEACTIVATE") {
           data.actionType = "AGENT_UPDATE_STATUS";
           return client.adminAction.create({ data });
         }
+        data.actionLabel = data.actionLabel || String(payload.actionType || "");
+        data.actionType = "REPORT_GENERATE";
+        return client.adminAction.create({ data });
       }
       throw error;
     }

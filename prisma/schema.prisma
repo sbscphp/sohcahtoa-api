@@ -39,6 +39,7 @@ enum OtpPurpose {
   REGISTRATION
   LOGIN
   PASSWORD_RESET
+  AGENT_SET_PASSWORD
   TRANSACTION_VERIFICATION
 }
 
@@ -70,6 +71,16 @@ enum ActionType {
   RATE_UPDATE
   RATE_DEACTIVATE
   REPORT_GENERATE
+  ADMIN_USER_CREATE
+  ADMIN_USER_UPDATE
+  ADMIN_USER_ACTIVATE
+  ADMIN_USER_SUSPEND
+  ROLE_CREATE
+  ROLE_UPDATE
+  ROLE_DELETE
+  DEPARTMENT_CREATE
+  DEPARTMENT_UPDATE
+  DEPARTMENT_DELETE
 }
 
 enum TokenType {
@@ -401,7 +412,8 @@ model Role {
 
   users        AdminUser[]
   rolePermissions RolePermission[]
-
+  createdBy    String?
+  createdById  String?
   @@index([departmentId])
   @@map("roles")
 }
@@ -437,6 +449,7 @@ model RolePermission {
   @@index([permissionId])
   @@map("role_permissions")
 }
+
 model AdminUser {
   id             String     @id @default(uuid())
   email          String     @unique
@@ -484,6 +497,9 @@ model Department {
   isActive        Boolean    @default(true)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+
+  createdBy    String?
+  createdById  String?
 
   users           AdminUser[]
   actions         AdminAction[]
@@ -546,6 +562,7 @@ model Agent {
   name        String
   email       String   @unique
   phoneNumber String   @unique
+  password    String?
   isActive    Boolean  @default(true)
   isApproved  Boolean  @default(false)
   branchId    String?
