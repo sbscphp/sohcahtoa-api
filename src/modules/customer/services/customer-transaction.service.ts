@@ -706,28 +706,34 @@ export class CustomerTransactionService {
   async getPickupPoints(): Promise<PickupPoint[]> {
     logger.info(`[getPickupPoints] Fetching available pickup points`);
 
-    const client: any = prisma as any;
-
-    // Get all active outlets
-    const outlets = await client.outlet.findMany({
+    // Get all active branches as pickup points
+    const branches = await prisma.branch.findMany({
       where: {
         isActive: true,
+        status: 'Active',
       },
       select: {
         id: true,
         name: true,
-        location: true,
+        state: true,
         address: true,
-        branch: true,
+        branchManager: true,
       },
       orderBy: { name: "asc" },
     });
 
-    logger.info(`[getPickupPoints] Found ${outlets.length} active pickup points`, {
-      outletCount: outlets.length,
+    logger.info(`[getPickupPoints] Found ${branches.length} active pickup points`, {
+      branchCount: branches.length,
     });
 
-    return outlets;
+    // Transform branches to PickupPoint format
+    return branches.map(branch => ({
+      id: branch.id,
+      name: branch.name,
+      location: branch.state,
+      address: branch.address,
+      branch: branch.branchManager,
+    }));
   }
 
   // ── Transaction groups ────────────────────────────────────────────────────
