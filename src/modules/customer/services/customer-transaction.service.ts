@@ -231,8 +231,8 @@ export class CustomerTransactionService {
         "PASSPORT", "VISA", "TICKET", "RETURN_TICKET", "BVN", "NIN", "TIN", "TCC",
         "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER",
         "RECEIPT", "INVOICE", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER",
-        "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "UTILITY_BILL",
-        "WORK_PERMIT",
+        "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "STATEMENT_OF_RESULT",
+        "DEGREE", "UTILITY_BILL", "WORK_PERMIT",
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -336,7 +336,7 @@ export class CustomerTransactionService {
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
       currentStep: transaction.currentStep,
-      requiredDocuments: this.buildDocumentStatus(type, existingDocuments),
+      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType),
       message: hasDocuments
         ? "Transaction submitted successfully and is awaiting admin review."
         : "Transaction initiated successfully. Please upload required documents to proceed.",
@@ -381,6 +381,14 @@ export class CustomerTransactionService {
         id: transactionId,
         userId,
       },
+      include: {
+        steps: {
+          where: {
+            step: "PERSONAL_INFO",
+          },
+          take: 1,
+        },
+      },
     });
 
     if (!transaction) {
@@ -419,6 +427,8 @@ export class CustomerTransactionService {
       "PROFESSIONAL_BODY_LETTER",
       "MEMBERSHIP_CARD",
       "SCHOOL_ADMISSION",
+      "STATEMENT_OF_RESULT",
+      "DEGREE",
       "UTILITY_BILL",
       "WORK_PERMIT",
     ];
@@ -569,9 +579,14 @@ export class CustomerTransactionService {
       uploadedCount: uploadedDocuments.length,
     });
 
+    // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
+    const admissionType = transaction.type === "SCHOOL_FEES" && transaction.steps?.[0]?.data
+      ? (transaction.steps[0].data as any).admissionType
+      : null;
+
     return {
       message: "Documents uploaded successfully",
-      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType),
     };
   }
 
@@ -1072,6 +1087,12 @@ export class CustomerTransactionService {
       stepCount: transaction.steps.length,
     });
 
+    // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
+    const personalInfoStep = transaction.steps.find(s => s.step === "PERSONAL_INFO");
+    const admissionType = transaction.type === "SCHOOL_FEES" && personalInfoStep?.data
+      ? (personalInfoStep.data as any).admissionType
+      : null;
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -1091,7 +1112,7 @@ export class CustomerTransactionService {
             rejectedAt: transaction.rejectedAt,
           }
         : null,
-      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
       steps: transaction.steps,
@@ -1114,9 +1135,10 @@ export class CustomerTransactionService {
       verificationNotes?: string | null;
       uploadedAt: Date;
       verifiedAt?: Date | null;
-    }[]
+    }[],
+    admissionType?: string | null
   ) {
-    const required = this.getRequiredDocuments(transactionType);
+    const required = this.getRequiredDocuments(transactionType, admissionType);
 
     return required.map((docType) => {
       const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
@@ -1138,10 +1160,10 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Get required documents based on transaction type
+   * Get required documents based on transaction type and admission type (for SCHOOL_FEES)
    */
-  private getRequiredDocuments(transactionType: string): string[] {
-    const documentRequirements: Record<string, string[]> = {     
+  private getRequiredDocuments(transactionType: string, admissionType?: string | null): string[] {
+    const documentRequirements: Record<string, string[]> = {
       PTA: ["VISA", "RETURN_TICKET"],
       BTA: ["TIN", "TCC",  "PASSPORT", "VISA", "RETURN_TICKET", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
       SCHOOL_FEES: ["PASSPORT", "SCHOOL_ADMISSION", "INVOICE" ],
@@ -1154,7 +1176,14 @@ export class CustomerTransactionService {
       CASH_REMITTANCE: [],
     };
 
-    return documentRequirements[transactionType] || [];
+    let required = documentRequirements[transactionType] || [];
+
+    // Add postgraduate-specific documents for school fees
+    if (transactionType === "SCHOOL_FEES" && admissionType === "POSTGRADUATE") {
+      required = [...required, "STATEMENT_OF_RESULT", "DEGREE"];
+    }
+
+    return required;
   }
 
   /**

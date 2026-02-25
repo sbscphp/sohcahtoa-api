@@ -278,7 +278,7 @@ export const checkSupportingDocuments = (
   next: NextFunction
 ): void => {
   try {
-    const { type, documents } = req.body;
+    const { type, documents, admissionType } = req.body;
 
     if (!type) {
       return next();
@@ -298,8 +298,14 @@ export const checkSupportingDocuments = (
       CASH_REMITTANCE: [],
     };
 
-    const required = requiredDocuments[type];
-    if (!required || !required.length) {
+    let required = requiredDocuments[type] || [];
+
+    // Add postgraduate-specific documents for school fees
+    if (type === 'SCHOOL_FEES' && admissionType === 'POSTGRADUATE') {
+      required = [...required, 'STATEMENT_OF_RESULT', 'DEGREE'];
+    }
+
+    if (!required.length) {
       return next();
     }
 
