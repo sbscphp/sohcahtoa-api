@@ -131,8 +131,17 @@ else
       npx prisma migrate resolve --applied 20260206140753_init 2>&1 || true
       npx prisma migrate resolve --applied 20260213120640_unique_constraint_on_nin 2>&1 || true
       npx prisma migrate resolve --applied 20260216094318_add_actiontypes_ticket_relations 2>&1 || true
-      npx prisma migrate resolve --applied 20260224093423_make_destination_country_optional 2>&1 || true
       npx prisma migrate resolve --applied 20260216100845_ 2>&1 || true
+      npx prisma migrate resolve --applied 20260219221933_ 2>&1 || true
+      npx prisma migrate resolve --applied 20260220081045_add_push_notifications 2>&1 || true
+      npx prisma migrate resolve --applied 20260222000000_add_pickup_scheduling_fields 2>&1 || true
+      npx prisma migrate resolve --applied 20260222120000_add_workflow_models 2>&1 || true
+      npx prisma migrate resolve --applied 20260223161333_add_agent_password_hash 2>&1 || true
+      npx prisma migrate resolve --applied 20260223165352_add_agent_otp_purpose 2>&1 || true
+      npx prisma migrate resolve --applied 20260224093423_make_destination_country_optional 2>&1 || true
+      npx prisma migrate resolve --applied 20260225085543_make_cash_pickup_recipient_optional 2>&1 || true
+      npx prisma migrate resolve --applied 20260225113000_add_created_by_to_role_department 2>&1 || true
+      npx prisma migrate resolve --applied 20260225_add_admin_action_types 2>&1 || true
       npx prisma migrate resolve --applied 20260225_add_tax_clearance_and_document_types 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
