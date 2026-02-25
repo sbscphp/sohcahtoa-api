@@ -153,6 +153,48 @@ fi
 echo "✅ Migration process completed"
 echo ""
 
+# Ensure critical schema changes are applied (fallback for migration issues)
+echo "🔧 Verifying critical schema changes..."
+npx prisma db execute --stdin <<'EOF'
+-- Ensure taxClearanceNumber column exists
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
+
+-- Ensure new document types exist
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'TCC';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'STATEMENT_OF_RESULT';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'DEGREE';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'MEMBERSHIP_CARD';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'WORK_PERMIT';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+EOF
+
+echo "✅ Schema verification completed"
+echo ""
+
+# Regenerate Prisma Client to ensure it's in sync
+echo "🔧 Regenerating Prisma Client..."
+npx prisma generate --silent
+echo "✅ Prisma Client regenerated"
+echo ""
+
 # Start the application
 echo "🚀 Starting application..."
 exec "$@"
