@@ -105,17 +105,11 @@ else
   if check_failed_migration; then
     echo "🔍 Found failed migration. Attempting to resolve..."
 
-    # List of migrations that might fail
-    MIGRATIONS_TO_RESOLVE=(
-      "20260216100845_"
-      "20260223161333_add_agent_password_hash"
-      "20260223165352_add_agent_otp_purpose"
-      "20260224093423_make_destination_country_optional"
-      "20260225113000_add_created_by_to_role_department"
-    )
+    # List of migrations that might fail (space-separated for POSIX sh compatibility)
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225113000_add_created_by_to_role_department"
 
     # Try to mark each potentially failed migration as rolled back
-    for migration in "${MIGRATIONS_TO_RESOLVE[@]}"; do
+    for migration in $MIGRATIONS_TO_RESOLVE; do
       echo "⚙️  Attempting to resolve migration: $migration"
       npx prisma migrate resolve --rolled-back "$migration" 2>&1 || true
     done
@@ -126,7 +120,7 @@ else
     else
       echo "⚠️  Still having issues. Marking all migrations as applied..."
       # If database already has the schema changes, mark all as applied
-      for migration in "${MIGRATIONS_TO_RESOLVE[@]}"; do
+      for migration in $MIGRATIONS_TO_RESOLVE; do
         npx prisma migrate resolve --applied "$migration" 2>&1 || true
       done
       echo "⚠️  Continuing with application start..."
