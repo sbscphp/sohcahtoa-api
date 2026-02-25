@@ -141,8 +141,8 @@ else
       npx prisma migrate resolve --applied 20260224093423_make_destination_country_optional 2>&1 || true
       npx prisma migrate resolve --applied 20260225085543_make_cash_pickup_recipient_optional 2>&1 || true
       npx prisma migrate resolve --applied 20260225113000_add_created_by_to_role_department 2>&1 || true
-      npx prisma migrate resolve --applied 20260225_add_admin_action_types 2>&1 || true
-      npx prisma migrate resolve --applied 20260225_add_tax_clearance_and_document_types 2>&1 || true
+      npx prisma migrate resolve --applied 20260225150000_add_admin_action_types 2>&1 || true
+      npx prisma migrate resolve --applied 20260225160000_add_tax_clearance_and_document_types 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."
