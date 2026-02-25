@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { userManagementController } from "../controllers/user-management.controller";
-import { addUserValidationStore, validate } from "../validations/user-management.validation";
 import { authenticate, authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 
@@ -251,6 +250,95 @@ UserManagementRouter.get("/profile", authenticate, userManagementController.getP
  *         $ref: '#/components/responses/ValidationError'
  */
 UserManagementRouter.post("/add-user", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.addUser);
+/**
+ * @swagger
+ * /api/admin/management/users/{id}/status:
+ *   patch:
+ *     summary: Toggle admin user active status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *               reason:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Admin user status updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch("/users/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.toggleUserActive);
+/**
+ * @swagger
+ * /api/admin/management/users/{id}:
+ *   patch:
+ *     summary: Update an admin user
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               fullName:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *               position:
+ *                 type: string
+ *               altPhoneNumber:
+ *                 type: string
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Admin user updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch("/users/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.updateUser);
 
 //SEARCH AND FILTER
 

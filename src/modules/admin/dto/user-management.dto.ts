@@ -56,3 +56,15 @@ export class DepartmentQueryDto {
     search?: string;
     isActive?: boolean;
 }
+
+export class UpdateAdminUserDto {
+    email?: string;
+    fullName?: string;
+    phoneNumber?: string;
+    department?: string;
+    branch?: string;
+    role?: string;
+    position?: string;
+    altPhoneNumber?: string;
+    isActive?: boolean;
+}

@@ -4,10 +4,7 @@ import { PrismaClient, AdminUser, Prisma } from "@prisma/client";
 import { CreateAdminUserDto, CreateRoleDto, UpdateRoleDto, RoleQueryDto, CreateDepartmentDto, DepartmentQueryDto, UpdateDepartmentDto } from "../dto/user-management.dto";
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import {
-    hashPassword, comparePassword, generateAccessToken, generateRefreshToken, generateId, generateOtp, UnauthorizedError, ValidationError,
-    DuplicateError, NotFoundError, BadRequestError, paginate
-} from '../../../shared/utils';
+import { generateId, DuplicateError, NotFoundError, BadRequestError, paginate } from '../../../shared/utils';
 import { emailService } from '../../../shared/utils';
 
 
@@ -124,7 +121,7 @@ class UserManagementService {
             }
             const { password: _password, ...userWithoutPassword } = user;
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
-            return { user: userWithoutPassword, rolePermissions };
+            return { ...userWithoutPassword, rolePermissions };
         } catch (error) {
             logger.error("Failed to get admin profile", {
                 userId,
@@ -147,20 +144,89 @@ class UserManagementService {
                 },
                 { page, limit },
                 async (users: any[]) => {
-                    const enriched = await Promise.all(users.map(async (user) => {
+                    return users.map((user) => {
                         const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user;
-                        const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
                         const roleName = user.role?.name || null;
                         const departmentName = user.department?.name || null;
-                        return { user: { ...userWithoutPassword, roleName, departmentName }, rolePermissions };
-                    }));
-                    return enriched;
+                        return { ...userWithoutPassword, roleName, departmentName };
+                    });
                 }
             );
         } catch (error) {
             logger.error("Failed to get all admin users", {
                 message: (error as Error).message,
             });
+            throw error;
+        }
+    };
+
+    updateUser = async (id: string, data: import("../dto/user-management.dto").UpdateAdminUserDto) => {
+        try {
+            const existing = await this.prisma.adminUser.findUnique({ where: { id } });
+            if (!existing) {
+                throw new NotFoundError("User not found");
+            }
+            if (data.email && data.email !== existing.email) {
+                const byEmail = await this.prisma.adminUser.findUnique({ where: { email: data.email } });
+                if (byEmail) throw new DuplicateError("Admin user with this email already exists");
+            }
+            if (data.phoneNumber && data.phoneNumber !== existing.phoneNumber) {
+                const byPhone = await this.prisma.adminUser.findFirst({ where: { phoneNumber: data.phoneNumber } });
+                if (byPhone) throw new DuplicateError("Admin user with this phone number already exists");
+            }
+            let roleId: string | undefined = undefined;
+            if (data.role) {
+                const role = await this.prisma.role.findFirst({
+                    where: { name: { equals: data.role, mode: "insensitive" }, isActive: true },
+                });
+                if (!role) throw new NotFoundError(`Role '${data.role}' not found`);
+                roleId = role.id;
+            }
+            let departmentId: string | undefined = undefined;
+            if (data.department) {
+                const department = await this.prisma.department.findFirst({
+                    where: { name: { equals: data.department, mode: "insensitive" }, isActive: true },
+                });
+                if (!department) throw new NotFoundError(`Department '${data.department}' not found`);
+                departmentId = department.id;
+            }
+            const updated = await this.prisma.adminUser.update({
+                where: { id },
+                data: {
+                    email: data.email ?? undefined,
+                    fullName: data.fullName ?? undefined,
+                    phoneNumber: data.phoneNumber ?? undefined,
+                    branch: data.branch ?? undefined,
+                    position: data.position ?? undefined,
+                    altPhoneNumber: data.altPhoneNumber ?? undefined,
+                    isActive: typeof data.isActive === "boolean" ? data.isActive : undefined,
+                    roleId: roleId ?? undefined,
+                    departmentId: departmentId ?? undefined,
+                },
+            });
+            const rolePermissions = await this.getRolePermissions(updated.roleId, "grouped");
+            const result: any = { user: updated, rolePermissions };
+            return result;
+        } catch (error) {
+            logger.error("Failed to update admin user", { id, error });
+            throw error;
+        }
+    };
+
+    toggleUserActive = async (id: string, isActive: boolean) => {
+        try {
+            const existing = await this.prisma.adminUser.findUnique({ where: { id } });
+            if (!existing) {
+                throw new NotFoundError("User not found");
+            }
+            const updated = await this.prisma.adminUser.update({
+                where: { id },
+                data: { isActive },
+            });
+            const rolePermissions = await this.getRolePermissions(updated.roleId, "grouped");
+            return { user: updated, rolePermissions };
+        } catch (error) {
+            logger.error("Failed to toggle admin user active status", { id, isActive, error });
             throw error;
         }
     };
@@ -201,7 +267,7 @@ class UserManagementService {
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
             const roleName = (user as any).role?.name || null;
             const departmentName = (user as any).department?.name || null;
-            return { user: { ...userWithoutPassword, roleName, departmentName }, rolePermissions };
+            return { ...userWithoutPassword, roleName, departmentName, rolePermissions };
         } catch (error) {
             logger.error("Failed to get admin user", {
                 id,
@@ -265,6 +331,8 @@ class UserManagementService {
             description: r.description || "",
             branch: r.branch || "",
             departmentName: r.department?.name || "",
+            createdBy: r.createdBy || "",
+            createdById: r.createdById || null,
             isDefault: !!r.isDefault,
             isActive: !!r.isActive,
             createdAt: r.createdAt,
@@ -281,6 +349,8 @@ class UserManagementService {
             departmentEmail: d.departmentEmail || "",
             description: d.description || "",
             branch: d.branch || "",
+            createdBy: d.createdBy || "",
+            createdById: d.createdById || null,
             isActive: !!d.isActive,
             createdAt: d.createdAt,
         }));
@@ -288,7 +358,7 @@ class UserManagementService {
 
     // --- Role Management ---
 
-    createRole = async (data: CreateRoleDto) => {
+    createRole = async (data: CreateRoleDto, adminId: string) => {
         try {
             const existing = await this.prisma.role.findUnique({ where: { name: data.name } });
             if (existing) {
@@ -352,6 +422,8 @@ class UserManagementService {
 
             const permissionsJson = normalizePermissions(data.permissions as any);
 
+            const adminUser = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
+
             const role = await this.prisma.$transaction(async (tx) => {
                 const created = await tx.role.create({
                     data: ({
@@ -359,6 +431,8 @@ class UserManagementService {
                         description: data.description,
                         permissions: permissionsJson as any,
                         branch: data.branch,
+                        createdBy: adminUser?.fullName,
+                        createdById: adminId,
                         department: departmentConnect,
                         isDefault: data.isDefault,
                     } as any),
@@ -431,6 +505,8 @@ class UserManagementService {
                 }
                 return 0;
             };
+
+            console.log("here")
 
             return await paginate(
                 this.prisma.role,
@@ -621,18 +697,23 @@ class UserManagementService {
 
     // --- Department Management ---
 
-    createDepartment = async (data: CreateDepartmentDto) => {
+    createDepartment = async (data: CreateDepartmentDto, adminId: string) => {
         try {
             const existing = await this.prisma.department.findUnique({ where: { name: data.name } });
             if (existing) {
                 throw new DuplicateError("Department with this name already exists");
             }
 
+            const adminUser = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
+            const createdBy = adminUser?.fullName || "System";
+
             return await this.prisma.department.create({
-                data: {
+                data: ({
                     ...data,
+                    createdBy,
+                    createdById: adminId,
                     branch: data.branch || "Head Office",
-                },
+                } as any),
             });
         } catch (error) {
             logger.error("Failed to create department", { error });
