@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { userManagementController } from "../controllers/user-management.controller";
-import { addUserValidationStore, validate } from "../validations/user-management.validation";
 import { authenticate, authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 
@@ -94,9 +93,75 @@ UserManagementRouter.get("/users/:id", authenticate, userManagementController.ge
 UserManagementRouter.get("/users/:id/activities", authenticate, userManagementController.getUserActivities);
 /**
  * @swagger
+ * /api/admin/management/users/{id}/activities/export:
+ *   get:
+ *     summary: Export admin user activities as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/users/:id/activities/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportUserActivitiesCsv);
+/**
+ * @swagger
+ * /api/admin/management/roles/export:
+ *   get:
+ *     summary: Export roles as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/roles/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportRolesCsv);
+/**
+ * @swagger
+ * /api/admin/management/departments/export:
+ *   get:
+ *     summary: Export departments as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/departments/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportDepartmentsCsv);
+/**
+ * @swagger
+ * /api/admin/management/users/export:
+ *   get:
+ *     summary: Export admin users as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/users/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportUsersCsv);
+/**
+ * @swagger
  * /api/admin/management/lookups:
  *   get:
- *     summary: List roles and departments (unpaginated)
+ *     summary: List roles, branches and departments (unpaginated)
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
@@ -105,8 +170,8 @@ UserManagementRouter.get("/users/:id/activities", authenticate, userManagementCo
  *         name: query
  *         schema:
  *           type: string
- *           enum: [role, department]
- *         description: Return only roles or only departments
+ *           enum: [role, department, branch]
+ *         description: Return only roles, departments, or branches
  *     responses:
  *       200:
  *         description: Lookups retrieved successfully
@@ -147,7 +212,7 @@ UserManagementRouter.get("/profile", authenticate, userManagementController.getP
 
 /**
  * @swagger
- * /api/admin/management/users:
+ * /api/admin/management/add-user:
  *   post:
  *     summary: Create a new admin user
  *     tags: [Admin]
@@ -157,17 +222,27 @@ UserManagementRouter.get("/profile", authenticate, userManagementController.getP
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, fullName, role, department]
+ *             required: [email, fullName, phoneNumber, department, branch, role]
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
  *               fullName:
  *                 type: string
+ *               phoneNumber:
+ *                 type: string
  *               role:
  *                 type: string
  *               department:
  *                 type: string
+ *               branch:
+ *                 type: string
+ *               position:
+ *                 type: string
+ *                 nullable: true
+ *               altPhoneNumber:
+ *                 type: string
+ *                 nullable: true
  *     responses:
  *       200:
  *         description: Admin user created
@@ -175,6 +250,95 @@ UserManagementRouter.get("/profile", authenticate, userManagementController.getP
  *         $ref: '#/components/responses/ValidationError'
  */
 UserManagementRouter.post("/add-user", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.addUser);
+/**
+ * @swagger
+ * /api/admin/management/users/{id}/status:
+ *   patch:
+ *     summary: Toggle admin user active status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *               reason:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Admin user status updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch("/users/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.toggleUserActive);
+/**
+ * @swagger
+ * /api/admin/management/users/{id}:
+ *   patch:
+ *     summary: Update an admin user
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               fullName:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *               position:
+ *                 type: string
+ *               altPhoneNumber:
+ *                 type: string
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Admin user updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch("/users/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.updateUser);
 
 //SEARCH AND FILTER
 
