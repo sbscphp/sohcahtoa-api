@@ -192,7 +192,7 @@ echo ""
 
 # Regenerate Prisma Client to ensure it's in sync
 echo "🔧 Regenerating Prisma Client..."
-npx prisma generate --silent
+npx prisma generate > /dev/null 2>&1
 echo "✅ Prisma Client regenerated"
 echo ""
 
