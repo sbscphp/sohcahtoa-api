@@ -37,6 +37,28 @@ class AdminTransactionsController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  exportCsv = asyncHandler(async (req: Request, res: Response) => {
+    const result = await adminTransactionsService.listTransactions(req.query, 1, 10000);
+    const rows = result.data || [];
+    const headers = ["id","reference","date","customerName","transactionType","transactionStage","workflowStage","transactionValue","status"];
+    const csv =
+      headers.join(",") + "\n" +
+      rows.map((r: any) => [
+        r.id,
+        r.dateAndId?.reference || "",
+        r.dateAndId?.date ? new Date(r.dateAndId.date).toISOString() : "",
+        r.customerName || "",
+        r.transactionType || "",
+        r.transactionStage || "",
+        r.workflowStage || "",
+        typeof r.transactionValue === "number" ? r.transactionValue : "",
+        r.status || ""
+      ].map((v) => typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v).join(",")).join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
+    res.send(csv);
+  });
+
   get = asyncHandler(async (req: Request, res: Response) => {
     const result = await adminTransactionsService.getTransaction(req.params.id);
     res.json(successResponse(result));

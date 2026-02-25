@@ -82,6 +82,57 @@ TransactionRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, Us
 TransactionRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.list);
 /**
  * @swagger
+ * /api/admin/transactions/export:
+ *   get:
+ *     summary: Export transactions as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminTransactionsController.exportCsv);
+/**
+ * @swagger
  * /api/admin/transactions/buy:
  *   get:
  *     summary: List Buy FX transactions

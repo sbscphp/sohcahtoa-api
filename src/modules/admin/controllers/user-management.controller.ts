@@ -130,13 +130,92 @@ class UserManagementController {
         res.json(successResponse(result));
     });
 
+    exportUserActivitiesCsv = asyncHandler(async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const rows = await adminService.getAdminActionsAll(id);
+        const headers = ["id","performedAt","actionLabel","actionType","resourceType","resourceId","status"];
+        const csv =
+            headers.join(",") + "\n" +
+            rows.map((r: any) => [
+                r.id,
+                new Date(r.performedAt).toISOString(),
+                r.actionLabel ? `"${String(r.actionLabel).replace(/"/g, '""')}"` : "",
+                r.actionType,
+                r.resourceType,
+                r.resourceId,
+                r.status
+            ].join(",")).join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="admin-user-${id}-activities.csv"`);
+        res.send(csv);
+    });
+
     getLookups = asyncHandler(async (req: Request, res: Response) => {
         const typeParam = (req.query.type as string | undefined)?.toLowerCase();
         const queryParam = (req.query.query as string | undefined)?.toLowerCase();
         const selected = queryParam || typeParam;
-        const type = selected === "role" ? "role" : selected === "department" ? "department" : undefined;
+        const type = selected === "role" ? "role" : selected === "department" ? "department" : selected === "branch" ? "branch" : undefined;
         const result = await userManagementService.getLookups(type as any);
         res.json(successResponse(result));
+    });
+
+    exportUsersCsv = asyncHandler(async (_req: Request, res: Response) => {
+        const rows = await userManagementService.exportUsers();
+        const headers = ["id","fullName","email","phoneNumber","roleName","departmentName","isActive","createdAt"];
+        const csv =
+            headers.join(",") + "\n" +
+            rows.map((r: any) => [
+                r.id,
+                `"${(r.fullName || "").replace(/"/g, '""')}"`,
+                r.email,
+                r.phoneNumber,
+                r.roleName || "",
+                r.departmentName || "",
+                r.isActive ? "true" : "false",
+                new Date(r.createdAt).toISOString()
+            ].join(",")).join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-users.csv"');
+        res.send(csv);
+    });
+
+    exportRolesCsv = asyncHandler(async (_req: Request, res: Response) => {
+        const rows = await userManagementService.exportRoles();
+        const headers = ["id","name","description","branch","departmentName","isDefault","isActive","createdAt"];
+        const csv =
+            headers.join(",") + "\n" +
+            rows.map((r: any) => [
+                r.id,
+                `"${(r.name || "").replace(/"/g, '""')}"`,
+                `"${(r.description || "").replace(/"/g, '""')}"`,
+                r.branch || "",
+                r.departmentName || "",
+                r.isDefault ? "true" : "false",
+                r.isActive ? "true" : "false",
+                new Date(r.createdAt).toISOString()
+            ].join(",")).join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-roles.csv"');
+        res.send(csv);
+    });
+
+    exportDepartmentsCsv = asyncHandler(async (_req: Request, res: Response) => {
+        const rows = await userManagementService.exportDepartments();
+        const headers = ["id","name","departmentEmail","description","branch","isActive","createdAt"];
+        const csv =
+            headers.join(",") + "\n" +
+            rows.map((r: any) => [
+                r.id,
+                `"${(r.name || "").replace(/"/g, '""')}"`,
+                r.departmentEmail || "",
+                `"${(r.description || "").replace(/"/g, '""')}"`,
+                r.branch || "",
+                r.isActive ? "true" : "false",
+                new Date(r.createdAt).toISOString()
+            ].join(",")).join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="admin-departments.csv"');
+        res.send(csv);
     });
 
     createDepartment = asyncHandler(async (req: Request, res: Response) => {
