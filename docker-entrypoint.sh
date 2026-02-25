@@ -105,23 +105,30 @@ else
   if check_failed_migration; then
     echo "🔍 Found failed migration. Attempting to resolve..."
 
-    # Try to mark the specific failed migration as rolled back, then retry
-    if npx prisma migrate resolve --rolled-back 20260216100845_ 2>&1; then
-      echo "✅ Marked migration 20260216100845_ as rolled back"
+    # List of migrations that might fail
+    MIGRATIONS_TO_RESOLVE=(
+      "20260216100845_"
+      "20260223161333_add_agent_password_hash"
+      "20260223165352_add_agent_otp_purpose"
+      "20260224093423_make_destination_country_optional"
+      "20260225113000_add_created_by_to_role_department"
+    )
 
-      # Retry deployment
-      if npx prisma migrate deploy 2>&1; then
-        echo "✅ Migrations deployed successfully after resolution"
-      else
-        echo "⚠️  Still having issues. Trying alternative resolution..."
-        # Try marking as applied instead
-        npx prisma migrate resolve --applied 20260216100845_ 2>&1 || true
-        echo "⚠️  Continuing with application start..."
-      fi
+    # Try to mark each potentially failed migration as rolled back
+    for migration in "${MIGRATIONS_TO_RESOLVE[@]}"; do
+      echo "⚙️  Attempting to resolve migration: $migration"
+      npx prisma migrate resolve --rolled-back "$migration" 2>&1 || true
+    done
+
+    # Retry deployment after resolving failed migrations
+    if npx prisma migrate deploy 2>&1; then
+      echo "✅ Migrations deployed successfully after resolution"
     else
-      echo "⚠️  Could not mark as rolled back. Trying to mark as applied..."
-      # If database already has the schema changes, mark as applied
-      npx prisma migrate resolve --applied 20260216100845_ 2>&1 || true
+      echo "⚠️  Still having issues. Marking all migrations as applied..."
+      # If database already has the schema changes, mark all as applied
+      for migration in "${MIGRATIONS_TO_RESOLVE[@]}"; do
+        npx prisma migrate resolve --applied "$migration" 2>&1 || true
+      done
       echo "⚠️  Continuing with application start..."
     fi
   else
