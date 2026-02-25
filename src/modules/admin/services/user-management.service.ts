@@ -211,7 +211,7 @@ class UserManagementService {
         }
     };
 
-    getLookups = async (type?: "role" | "department") => {
+    getLookups = async (type?: "role" | "department" | "branch") => {
         const roleWhere: any = { isActive: true };
         const deptWhere: any = { isActive: true };
         if (type === "role") {
@@ -222,11 +222,68 @@ class UserManagementService {
             const departments = await this.prisma.department.findMany({ where: deptWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } });
             return { departments };
         }
+        if (type === "branch") {
+            const branches = await this.prisma.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } });
+            return { branches };
+        }
         const [roles, departments] = await Promise.all([
             this.prisma.role.findMany({ where: roleWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } }),
             this.prisma.department.findMany({ where: deptWhere, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } }),
         ]);
-        return { roles, departments };
+        const branches = await this.prisma.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } });
+        return { roles, departments, branches };
+    };
+
+    exportUsers = async () => {
+        const users = await this.prisma.adminUser.findMany({
+            orderBy: { createdAt: "desc" },
+            include: {
+                role: { select: { name: true } },
+                department: { select: { name: true } },
+            },
+        });
+        return (users || []).map((u: any) => ({
+            id: u.id,
+            fullName: u.fullName,
+            email: u.email,
+            phoneNumber: u.phoneNumber,
+            roleName: u.role?.name || null,
+            departmentName: u.department?.name || null,
+            isActive: u.isActive,
+            createdAt: u.createdAt,
+        }));
+    };
+
+    exportRoles = async () => {
+        const roles = await this.prisma.role.findMany({
+            orderBy: { createdAt: "desc" },
+            include: { department: { select: { name: true } } },
+        });
+        return (roles || []).map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            description: r.description || "",
+            branch: r.branch || "",
+            departmentName: r.department?.name || "",
+            isDefault: !!r.isDefault,
+            isActive: !!r.isActive,
+            createdAt: r.createdAt,
+        }));
+    };
+
+    exportDepartments = async () => {
+        const depts = await this.prisma.department.findMany({
+            orderBy: { createdAt: "desc" },
+        });
+        return (depts || []).map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            departmentEmail: d.departmentEmail || "",
+            description: d.description || "",
+            branch: d.branch || "",
+            isActive: !!d.isActive,
+            createdAt: d.createdAt,
+        }));
     };
 
     // --- Role Management ---

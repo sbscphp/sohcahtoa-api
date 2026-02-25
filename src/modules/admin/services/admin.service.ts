@@ -247,6 +247,23 @@ export class AdminService {
     };
   }
 
+  async getAdminActionsAll(adminId: string) {
+    const actions = await prisma.adminAction.findMany({
+      where: { adminId },
+      orderBy: { performedAt: "desc" },
+      select: {
+        id: true,
+        performedAt: true,
+        actionLabel: true,
+        actionType: true,
+        resourceType: true,
+        resourceId: true,
+        status: true,
+      },
+    } as any);
+    return actions;
+  }
+
   async getAuditLog(filters: any, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
     const where: any = {};
