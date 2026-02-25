@@ -106,7 +106,7 @@ else
     echo "🔍 Found failed migration. Attempting to resolve..."
 
     # List of migrations that might fail (space-separated for POSIX sh compatibility)
-    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225113000_add_created_by_to_role_department"
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department"
 
     # Try to mark each potentially failed migration as rolled back
     for migration in $MIGRATIONS_TO_RESOLVE; do
@@ -159,6 +159,28 @@ echo "🔧 Verifying critical schema changes..."
 npx prisma db execute --stdin <<'EOF'
 -- Ensure taxClearanceNumber column exists
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
+
+-- Ensure cash_pickup recipient fields are nullable
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'cash_pickup'
+    AND column_name = 'recipientName'
+    AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE "cash_pickup" ALTER COLUMN "recipientName" DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'cash_pickup'
+    AND column_name = 'recipientPhone'
+    AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE "cash_pickup" ALTER COLUMN "recipientPhone" DROP NOT NULL;
+  END IF;
+END $$;
 
 -- Ensure new document types exist
 DO $$ BEGIN
