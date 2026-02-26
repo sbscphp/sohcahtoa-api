@@ -300,6 +300,33 @@ class UserManagementService {
         return { roles, departments, branches };
     };
 
+    getAllPermissions = async (query: { search?: string; module?: string; featureKey?: string; action?: string; isActive?: any }) => {
+        try {
+            const { search, module, featureKey, action, isActive } = query || {};
+            const where: any = {};
+            if (search) {
+                where.OR = [
+                    { module: { contains: search, mode: "insensitive" } },
+                    { featureKey: { contains: search, mode: "insensitive" } },
+                    { action: { contains: search, mode: "insensitive" } },
+                ];
+            }
+            if (module) where.module = { contains: module, mode: "insensitive" };
+            if (featureKey) where.featureKey = { contains: featureKey, mode: "insensitive" };
+            if (action) where.action = { contains: action, mode: "insensitive" };
+            if (isActive !== undefined) {
+                where.isActive = typeof isActive === "string" ? isActive === "true" : Boolean(isActive);
+            }
+            return await this.prisma.permission.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+            });
+        } catch (error) {
+            logger.error("Failed to get all permissions", { error });
+            throw error;
+        }
+    };
+
     exportUsers = async () => {
         const users = await this.prisma.adminUser.findMany({
             orderBy: { createdAt: "desc" },
