@@ -55,6 +55,21 @@ UserManagementRouter.get("/users/stats", authenticate, authorize(UserRole.SUPER_
 UserManagementRouter.get("/users", authenticate, userManagementController.getAllUsers);
 /**
  * @swagger
+ * /api/admin/management/users/export:
+ *   get:
+ *     summary: Export admin users as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get("/users/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportUsersCsv);
+/**
+ * @swagger
  * /api/admin/management/users/{id}:
  *   get:
  *     summary: Get admin user by ID
@@ -158,21 +173,6 @@ UserManagementRouter.get("/roles/export", authenticate, authorize(UserRole.SUPER
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 UserManagementRouter.get("/departments/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportDepartmentsCsv);
-/**
- * @swagger
- * /api/admin/management/users/export:
- *   get:
- *     summary: Export admin users as CSV
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: CSV file
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-UserManagementRouter.get("/users/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.exportUsersCsv);
 /**
  * @swagger
  * /api/admin/management/lookups:
