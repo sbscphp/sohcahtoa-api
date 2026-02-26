@@ -129,13 +129,12 @@ export class CustomerTransactionService {
 
     logger.debug(`[createTransaction] Transaction type validated: ${type}`, { userId, type });
 
-    // Update KYC info if BVN or NIN provided
-    if (bvn || nin) {
-      logger.info(`[createTransaction] Updating KYC information`, {
+    // Update KYC info if BVN or NIN provided and user doesn't have KYC yet
+    if ((bvn || nin) && !user.kyc) {
+      logger.info(`[createTransaction] Creating KYC information for new user`, {
         userId,
         hasBvn: !!bvn,
         hasNin: !!nin,
-        existingKyc: !!user.kyc,
       });
 
       const kycData: any = {};
@@ -143,25 +142,24 @@ export class CustomerTransactionService {
       if (nin) kycData.nin = nin;
 
       try {
-        if (user.kyc) {
-          await prisma.userKyc.update({
-            where: { id: user.kyc.id },
-            data: kycData,
-          });
-          logger.debug(`[createTransaction] KYC updated successfully`, { userId, kycId: user.kyc.id });
-        } else {
-          const newKyc = await prisma.userKyc.create({
-            data: {
-              userId,
-              ...kycData,
-            },
-          });
-          logger.debug(`[createTransaction] KYC created successfully`, { userId, kycId: newKyc.id });
-        }
+        const newKyc = await prisma.userKyc.create({
+          data: {
+            userId,
+            ...kycData,
+          },
+        });
+        logger.debug(`[createTransaction] KYC created successfully`, { userId, kycId: newKyc.id });
       } catch (error) {
-        logger.error(`[createTransaction] Failed to update KYC`, { userId, error: error instanceof Error ? error.message : String(error) });
-        throw error;
+        logger.error(`[createTransaction] Failed to create KYC`, { userId, error: error instanceof Error ? error.message : String(error) });
+        throw new ValidationError('Failed to create KYC information. The BVN or NIN may already be registered to another account.');
       }
+    } else if ((bvn || nin) && user.kyc) {
+      logger.debug(`[createTransaction] User already has KYC data, using existing information`, {
+        userId,
+        kycId: user.kyc.id,
+        hasExistingBvn: !!user.kyc.bvn,
+        hasExistingNin: !!user.kyc.nin,
+      });
     }
 
     // Generate unique reference number
