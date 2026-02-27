@@ -39,7 +39,7 @@ TransactionRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, Us
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -90,8 +90,8 @@ TransactionRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRol
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
- *         schema:
+ *         name: search
+ *         schema:  
  *           type: string
  *       - in: query
  *         name: status
@@ -149,7 +149,7 @@ TransactionRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN, U
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -208,7 +208,7 @@ TransactionRouter.get("/buy", authenticate, authorize(UserRole.SUPER_ADMIN, User
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -267,7 +267,7 @@ TransactionRouter.get("/sell", authenticate, authorize(UserRole.SUPER_ADMIN, Use
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query

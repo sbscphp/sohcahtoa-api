@@ -38,7 +38,7 @@ OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADM
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -193,7 +193,7 @@ OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.S
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query

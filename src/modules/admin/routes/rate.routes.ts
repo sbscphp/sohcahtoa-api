@@ -43,7 +43,7 @@ RateRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *         description: Search query for currency codes

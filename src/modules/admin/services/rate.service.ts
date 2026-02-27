@@ -25,13 +25,13 @@ class RateService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const q = (filters.q || "").toString().trim();
+    const search = (filters.search || "").toString().trim();
     const status = (filters.status || "all").toString();
     const where: any = {};
-    if (q) {
+    if (search) {
       where.OR = [
-        { fromCurrency: { contains: q, mode: "insensitive" } },
-        { toCurrency: { contains: q, mode: "insensitive" } },
+        { fromCurrency: { contains: search, mode: "insensitive" } },
+        { toCurrency: { contains: search, mode: "insensitive" } },
       ];
     }
     if (status === "active") Object.assign(where, this.isActiveWhere());

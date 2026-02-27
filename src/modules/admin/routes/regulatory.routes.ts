@@ -29,7 +29,7 @@ RegulatoryRouter.get("/compliance/dashboard", authenticate, authorize(UserRole.S
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -81,7 +81,7 @@ RegulatoryRouter.get("/compliance/reports/:id", authenticate, authorize(UserRole
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -116,7 +116,7 @@ RegulatoryRouter.get("/trms/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -200,7 +200,7 @@ RegulatoryRouter.get("/trms/status/:formNumber", authenticate, authorize(UserRol
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -235,7 +235,7 @@ RegulatoryRouter.get("/cbn-fn/stats", authenticate, authorize(UserRole.SUPER_ADM
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -318,7 +318,7 @@ RegulatoryRouter.get("/cbn-fn/rates/:base/:quote", authenticate, authorize(UserR
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: severity
@@ -367,7 +367,7 @@ RegulatoryRouter.get("/logs/audit/:id", authenticate, authorize(UserRole.SUPER_A
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
