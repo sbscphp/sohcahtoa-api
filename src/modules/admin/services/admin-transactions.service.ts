@@ -65,6 +65,7 @@ export class AdminTransactionsService {
     if (filters.status) where.status = filters.status;
     if (filters.step) where.currentStep = filters.step;
     if (filters.type) where.type = filters.type;
+    if (filters.userId) where.userId = filters.userId;
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
@@ -76,12 +77,12 @@ export class AdminTransactionsService {
     if (filters.tab === "sell") {
       where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] } as any;
     }
-    const q = (filters.q || "").toString().trim();
-    if (q) {
+    const search = (filters.search || "").toString().trim();
+    if (search) {
       where.OR = [
-        { referenceNumber: { contains: q, mode: "insensitive" } },
-        { user: { profile: { firstName: { contains: q, mode: "insensitive" } } } },
-        { user: { profile: { lastName: { contains: q, mode: "insensitive" } } } },
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        { user: { profile: { firstName: { contains: search, mode: "insensitive" } } } },
+        { user: { profile: { lastName: { contains: search, mode: "insensitive" } } } },
       ];
     }
     const orderBy: any = {};

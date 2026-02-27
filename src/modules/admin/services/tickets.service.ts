@@ -38,15 +38,15 @@ export class TicketsService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const q = (filters.q || "").toString().trim();
+    const search = (filters.search || "").toString().trim();
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.category) where.caseType = filters.category;
     if (filters.priority) where.priority = filters.priority;
-    if (q) {
+    if (search) {
       where.OR = [
-        { caseType: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
+        { caseType: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
       ];
     }
     const skip = (page - 1) * limit;

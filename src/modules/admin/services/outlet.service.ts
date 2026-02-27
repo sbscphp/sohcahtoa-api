@@ -83,7 +83,7 @@ class OutletService {
     const limit = parseInt((query.limit || "20") as string);
     const skip = (page - 1) * limit;
     const where: any = {};
-    if (query.q) where.OR = [{ name: { contains: query.q, mode: "insensitive" } }, { address: { contains: query.q, mode: "insensitive" } }];
+    if (query.search) where.OR = [{ name: { contains: query.search, mode: "insensitive" } }, { address: { contains: query.search, mode: "insensitive" } }];
     if (query.status) where.status = query.status;
 
     const [rows, total] = await Promise.all([
@@ -168,7 +168,7 @@ class OutletService {
     const limit = parseInt((query.limit || "20") as string);
     const skip = (page - 1) * limit;
     const where: any = {};
-    if (query.q) where.OR = [{ name: { contains: query.q, mode: "insensitive" } }, { address: { contains: query.q, mode: "insensitive" } }];
+    if (query.search) where.OR = [{ name: { contains: query.search, mode: "insensitive" } }, { address: { contains: query.search, mode: "insensitive" } }];
     if (query.status) where.status = query.status;
 
     const [rows, total] = await Promise.all([

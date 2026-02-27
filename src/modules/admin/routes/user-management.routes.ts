@@ -615,6 +615,39 @@ UserManagementRouter.get("/departments", authenticate, authorize(UserRole.SUPER_
 UserManagementRouter.get("/departments/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.getDepartmentStats);
 /**
  * @swagger
+ * /api/admin/management/departments/{id}/status:
+ *   patch:
+ *     summary: Toggle department active status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Department status updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch("/departments/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), userManagementController.toggleDepartmentActive);
+/**
+ * @swagger
  * /api/admin/management/departments/{id}:
  *   get:
  *     summary: Get department by ID

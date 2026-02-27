@@ -15,8 +15,8 @@ class RegulatoryController {
     const status = (req.query.status as string) || "ALL";
     const fileType = (req.query.fileType as string) || undefined;
     const channel = (req.query.channel as string) || undefined;
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.complianceReportsList({ status, fileType, channel, q }, page, limit);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.complianceReportsList({ status, fileType, channel, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -34,8 +34,8 @@ class RegulatoryController {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const status = (req.query.status as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.trmsList({ status, q }, page, limit);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.trmsList({ status, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -57,8 +57,8 @@ class RegulatoryController {
   exportSubmissions = asyncHandler(async (req: Request, res: Response) => {
     const user = (req as any).user;
     const status = (req.query.status as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.exportSubmissions({ status, q }, user?.userId);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.exportSubmissions({ status, search }, user?.userId);
     res.json(successResponse(result));
   });
 
@@ -82,8 +82,8 @@ class RegulatoryController {
     const limit = parseInt(req.query.limit as string) || 20;
     const status = (req.query.status as string) || "ALL";
     const reportType = (req.query.reportType as string) || undefined;
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.cbnFnReportsList({ status, reportType, q }, page, limit);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.cbnFnReportsList({ status, reportType, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -97,8 +97,8 @@ class RegulatoryController {
     const limit = parseInt(req.query.limit as string) || 20;
     const severity = (req.query.severity as string) || "ALL";
     const category = (req.query.category as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.auditLogsList({ severity, category, q }, page, limit);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.auditLogsList({ severity, category, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -111,8 +111,8 @@ class RegulatoryController {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const status = (req.query.status as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await regulatoryService.regulatoryLogsList({ status, q }, page, limit);
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.regulatoryLogsList({ status, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 

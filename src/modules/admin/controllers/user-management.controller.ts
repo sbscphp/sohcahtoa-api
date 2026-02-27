@@ -333,6 +333,22 @@ class UserManagementController {
         res.json(successResponse(result));
     });
 
+    toggleDepartmentActive = asyncHandler(async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const isActiveRaw = (req.body?.isActive ?? req.query?.isActive) as any;
+        const isActive = typeof isActiveRaw === "boolean" ? isActiveRaw : String(isActiveRaw) === "true";
+        const result = await userManagementService.toggleDepartmentActive(id, isActive);
+        const adminId = (req as any).user?.userId as string;
+        await auditTrailService.logAction({
+            adminId,
+            actionType: "DEPARTMENT_UPDATE",
+            actionLabel: isActive ? "Activate Department" : "Deactivate Department",
+            resourceType: "DEPARTMENT",
+            resourceId: id,
+            metadata: { previous: !isActive, new: isActive },
+        });
+        res.json(successResponse(result));
+    });
     getPermissions = asyncHandler(async (req: Request, res: Response) => {
         const query = {
             search: req.query.search as string,

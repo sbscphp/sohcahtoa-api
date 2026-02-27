@@ -42,7 +42,7 @@ AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *           type: integer
  *           default: 20
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query

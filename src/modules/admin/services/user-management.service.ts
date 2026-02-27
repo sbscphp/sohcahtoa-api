@@ -840,6 +840,23 @@ class UserManagementService {
         }
     };
 
+    toggleDepartmentActive = async (id: string, isActive: boolean) => {
+        try {
+            const existing = await this.prisma.department.findUnique({ where: { id } });
+            if (!existing) {
+                throw new NotFoundError("Department not found");
+            }
+            const updated = await this.prisma.department.update({
+                where: { id },
+                data: { isActive },
+            });
+            return updated;
+        } catch (error) {
+            logger.error("Failed to toggle department active status", { id, isActive, error });
+            throw error;
+        }
+    };
+
     getDepartmentStats = async () => {
         try {
             const [totalDepartments, activeDepartments, inactiveDepartments] = await this.prisma.$transaction([

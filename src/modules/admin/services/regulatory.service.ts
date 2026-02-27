@@ -76,7 +76,7 @@ class RegulatoryService {
     };
   }
 
-  async trmsList(filters: { q?: string; status?: string }, page = 1, limit = 20) {
+  async trmsList(filters: { search?: string; status?: string }, page = 1, limit = 20) {
     const where: any = { type: { in: this.formATypes } };
     if (filters.status && filters.status !== "ALL") {
       if (filters.status === "BUSY") {
@@ -89,10 +89,10 @@ class RegulatoryService {
         where.status = filters.status;
       }
     }
-    if (filters.q) {
+    if (filters.search) {
       where.OR = [
-        { referenceNumber: { contains: filters.q, mode: "insensitive" } },
-        { purpose: { contains: filters.q, mode: "insensitive" } },
+        { referenceNumber: { contains: filters.search, mode: "insensitive" } },
+        { purpose: { contains: filters.search, mode: "insensitive" } },
       ];
     }
     const [rows, total] = await Promise.all([
@@ -141,11 +141,11 @@ class RegulatoryService {
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
-  async complianceReportsList(filters: { q?: string; status?: string; fileType?: string; channel?: string }, page = 1, limit = 20) {
+  async complianceReportsList(filters: { search?: string; status?: string; fileType?: string; channel?: string }, page = 1, limit = 20) {
     const where: any = {};
     if (filters.status && filters.status !== "ALL") where.status = filters.status;
     if (filters.fileType) where.format = filters.fileType;
-    if (filters.q) where.metadata = { path: "$", string_contains: filters.q } as any;
+    if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
     const modules = ["TRANSACTION", "RATE", "INCIDENT"];
     where.module = { in: modules };
     const [jobs, total] = await Promise.all([
@@ -268,7 +268,7 @@ class RegulatoryService {
     return result;
   }
 
-  async exportSubmissions(filters: { status?: string; q?: string }, requestedBy: string) {
+  async exportSubmissions(filters: { status?: string; search?: string }, requestedBy: string) {
     const job = await prisma.reportJob.create({
       data: {
         module: "TRANSACTION",
@@ -307,10 +307,10 @@ class RegulatoryService {
     return res;
   }
 
-  async cbnFnReportsList(filters: { q?: string; status?: string; reportType?: string }, page = 1, limit = 20) {
+  async cbnFnReportsList(filters: { search?: string; status?: string; reportType?: string }, page = 1, limit = 20) {
     const where: any = { module: "RATE" };
     if (filters.status && filters.status !== "ALL") where.status = filters.status;
-    if (filters.q) where.metadata = { path: "$", string_contains: filters.q } as any;
+    if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
     const [jobs, total] = await Promise.all([
       prisma.reportJob.findMany({
         where,
@@ -356,15 +356,15 @@ class RegulatoryService {
     };
   }
 
-  async auditLogsList(filters: { q?: string; severity?: string; category?: string }, page = 1, limit = 20) {
+  async auditLogsList(filters: { search?: string; severity?: string; category?: string }, page = 1, limit = 20) {
     const where: any = {};
     if (filters.severity && filters.severity !== "ALL") where.severity = filters.severity;
     if (filters.category && filters.category !== "ALL") where.category = filters.category;
-    if (filters.q) {
+    if (filters.search) {
       where.OR = [
-        { eventType: { contains: filters.q, mode: "insensitive" } },
-        { action: { contains: filters.q, mode: "insensitive" } },
-        { source: { contains: filters.q, mode: "insensitive" } },
+        { eventType: { contains: filters.search, mode: "insensitive" } },
+        { action: { contains: filters.search, mode: "insensitive" } },
+        { source: { contains: filters.search, mode: "insensitive" } },
       ];
     }
     const [events, total] = await Promise.all([
@@ -420,10 +420,10 @@ class RegulatoryService {
     };
   }
 
-  async regulatoryLogsList(filters: { q?: string; status?: string }, page = 1, limit = 20) {
+  async regulatoryLogsList(filters: { search?: string; status?: string }, page = 1, limit = 20) {
     const whereJob: any = {};
     if (filters.status && filters.status !== "ALL") whereJob.status = filters.status;
-    if (filters.q) whereJob.metadata = { path: "$", string_contains: filters.q } as any;
+    if (filters.search) whereJob.metadata = { path: "$", string_contains: filters.search } as any;
     const [jobs, jobsTotal] = await Promise.all([
       prisma.reportJob.findMany({
         where: whereJob,

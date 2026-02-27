@@ -17,7 +17,7 @@ class AgentService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const q = (filters.q || "").toString().trim();
+    const search = (filters.search).toString().trim();
     const where: any = {};
     if (filters.isActive !== undefined) where.isActive = filters.isActive === "true";
     const fromDateRaw = (filters.fromDate || "").toString().trim();
@@ -34,11 +34,11 @@ class AgentService {
     if (createdRange.gte || createdRange.lte) {
       where.createdAt = createdRange;
     }
-    if (q) {
+    if (search) {
       where.OR = [
-        { name: { contains: q, mode: "insensitive" } },
-        { email: { contains: q, mode: "insensitive" } },
-        { phoneNumber: { contains: q, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
       ];
     }
     const skip = (page - 1) * limit;

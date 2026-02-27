@@ -60,14 +60,14 @@ class AuditTrailService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const q = (filters.q || "").toString().trim();
+    const search = (filters.search || "").toString().trim();
     const where: any = {};
-    if (q) {
+    if (search) {
       where.OR = [
-        { actionLabel: { contains: q, mode: "insensitive" } },
-        { resourceType: { contains: q, mode: "insensitive" } },
-        { resourceId: { contains: q, mode: "insensitive" } },
-        { status: { contains: q, mode: "insensitive" } },
+        { actionLabel: { contains: search, mode: "insensitive" } },
+        { resourceType: { contains: search, mode: "insensitive" } },
+        { resourceId: { contains: search, mode: "insensitive" } },
+        { status: { contains: search, mode: "insensitive" } },
       ];
     }
     if (filters.module) where.resourceType = filters.module;

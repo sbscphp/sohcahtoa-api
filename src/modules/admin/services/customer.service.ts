@@ -194,6 +194,22 @@ export class CustomerService {
     return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
   }
 
+  async toggleCustomerActive(userId: string, isActive: boolean, adminId?: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== "CUSTOMER") {
+      throw new NotFoundError("Customer not found");
+    }
+    if (user.isActive === isActive) {
+      return { id: user.id, status: user.isActive ? "ACTIVE" : "DEACTIVATED" };
+    }
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isActive },
+      select: { id: true, isActive: true },
+    });
+    return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
+  }
+
   // --------------------
   // Flags (stored in admin-service DB)
   // --------------------

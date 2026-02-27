@@ -25,7 +25,7 @@ const AuditRouter: Router = Router();
  *           type: integer
  *           default: 20
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query

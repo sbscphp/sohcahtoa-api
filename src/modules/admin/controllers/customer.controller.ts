@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import customerService from "../services/customer.service";
 import { successResponse, paginatedResponse } from "../../../shared/utils";
+import { adminTransactionsService } from "../services/admin-transactions.service";
 
 class CustomerController {
   // Read-only views
@@ -8,7 +9,7 @@ class CustomerController {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
-      const q = (req.query.q as string) || undefined;
+      const q = (req.query.search as string) || undefined;
 
       const result = await customerService.listCustomers(page, limit, q);
       res.json(successResponse(result.data, { pagination: result.meta }));
@@ -85,6 +86,32 @@ class CustomerController {
       const adminId = (req as any).user?.userId as string;
       const result = await customerService.deactivateCustomer(req.params.userId, adminId);
       res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  toggleActiveStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const isActiveRaw = (req.body?.isActive ?? req.query?.isActive) as any;
+      const isActive = typeof isActiveRaw === "boolean" ? isActiveRaw : String(isActiveRaw) === "true";
+      const adminId = (req as any).user?.userId as string;
+      const result = await customerService.toggleCustomerActive(userId, isActive, adminId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCustomerTransactions = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const result = await adminTransactionsService.listTransactions({ ...req.query, userId }, page, limit);
+      res.json(successResponse(result.data, { pagination: result.meta }));
     } catch (error) {
       next(error);
     }

@@ -137,6 +137,40 @@ router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN
 
 /**
  * @swagger
+ * /api/admin/customers/{userId}/status:
+ *   patch:
+ *     summary: Toggle customer active status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Customer status updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.patch("/:userId/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.toggleActiveStatus);
+
+/**
+ * @swagger
  * /api/admin/customers/{userId}/flags:
  *   post:
  *     summary: Create a flag for a customer
@@ -174,5 +208,45 @@ router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.createFlag);
+
+/**
+ * @swagger
+ * /api/admin/customers/{userId}/transactions:
+ *   get:
+ *     summary: Get transactions for a specific customer
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.get("/:userId/transactions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomerTransactions);
 
 export default router;
