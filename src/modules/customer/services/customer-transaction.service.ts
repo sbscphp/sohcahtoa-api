@@ -17,6 +17,7 @@ interface TransactionDocumentLink {
 interface CreateCustomerTransactionPayload {
   userId: string;
   type: string;
+  mode?: "BUY" | "SELL"; // Transaction mode: BUY (touring) or SELL (tourist)
   currency: string;
   amount: number;
   purpose: string;
@@ -77,11 +78,12 @@ export class CustomerTransactionService {
    * Create a new transaction for a customer
    */
   async createTransaction(payload: CreateCustomerTransactionPayload) {
-    const { userId, type, currency, amount, purpose, destinationCountry, bvn, nin, formAId, taxClearanceNumber, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
+    const { userId, type, mode, currency, amount, purpose, destinationCountry, bvn, nin, formAId, taxClearanceNumber, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
 
     logger.info(`[createTransaction] Starting transaction creation for user: ${userId}`, {
       userId,
       type,
+      mode,
       currency,
       amount,
       purpose,
@@ -187,6 +189,7 @@ export class CustomerTransactionService {
         userId,
         referenceNumber,
         type: type as any,
+        mode: mode as any || null,
         status: initialStatus as any,
         currentStep: initialStep as any,
         purpose,
@@ -334,7 +337,7 @@ export class CustomerTransactionService {
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
       currentStep: transaction.currentStep,
-      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType),
+      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType, mode),
       message: hasDocuments
         ? "Transaction submitted successfully and is awaiting admin review."
         : "Transaction initiated successfully. Please upload required documents to proceed.",
@@ -582,9 +585,12 @@ export class CustomerTransactionService {
       ? (transaction.steps[0].data as any).admissionType
       : null;
 
+    // Get transaction mode (cast to any to avoid TypeScript error until Prisma types are regenerated)
+    const transactionMode = (transaction as any).mode || null;
+
     return {
       message: "Documents uploaded successfully",
-      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType, transactionMode),
     };
   }
 
@@ -735,12 +741,13 @@ export class CustomerTransactionService {
   }
 
   // ── Transaction groups ────────────────────────────────────────────────────
-  // BUY  : PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY
-  // SELL : TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX
+  // BUY  : PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX (when mode=BUY)
+  // SELL : TOURIST_FX (when mode=SELL), RESIDENT_FX, EXPATRIATE_FX
   // REMITTANCE: IMTO_REMITTANCE, CASH_REMITTANCE
+  // NOTE: TOURIST_FX can be in either BUY or SELL group depending on transaction mode
   private static readonly TRANSACTION_GROUPS: Record<string, string[]> = {
     BUY: ["PTA", "BTA", "SCHOOL_FEES", "MEDICAL", "PROFESSIONAL_BODY"],
-    SELL: ["TOURIST_FX", "RESIDENT_FX", "EXPATRIATE_FX"],
+    SELL: ["RESIDENT_FX", "EXPATRIATE_FX"],
     REMITTANCE: ["IMTO_REMITTANCE", "CASH_REMITTANCE"],
   };
 
@@ -861,6 +868,7 @@ export class CustomerTransactionService {
           id: true,
           referenceNumber: true,
           type: true,
+          mode: true,
           status: true,
           currentStep: true,
           purpose: true,
@@ -906,7 +914,7 @@ export class CustomerTransactionService {
     // Attach the transaction group label to each row
     const data = transactions.map((t) => ({
       ...t,
-      group: this.resolveTransactionGroup(t.type as string),
+      group: this.resolveTransactionGroup(t.type as string, (t as any).mode),
     }));
 
     return {
@@ -949,6 +957,7 @@ export class CustomerTransactionService {
       select: {
         referenceNumber: true,
         type: true,
+        mode: true,
         status: true,
         purpose: true,
         destinationCountry: true,
@@ -999,7 +1008,7 @@ export class CustomerTransactionService {
     const rows = transactions.map((t) =>
       [
         t.referenceNumber,
-        this.resolveTransactionGroup(t.type as string),
+        this.resolveTransactionGroup(t.type as string, (t as any).mode),
         t.type,
         t.status,
         t.purpose,
@@ -1029,7 +1038,16 @@ export class CustomerTransactionService {
     return csvContent;
   }
 
-  private resolveTransactionGroup(type: string): string {
+  private resolveTransactionGroup(type: string, mode?: string | null): string {
+    // Special handling for TOURIST_FX based on mode
+    if (type === "TOURIST_FX") {
+      if (mode === "BUY") return "BUY";   // TOURING (buying FX)
+      if (mode === "SELL") return "SELL"; // TOURIST (selling FX)
+      // Default to SELL if no mode specified (backward compatibility)
+      return "SELL";
+    }
+
+    // For all other transaction types, use the static mapping
     for (const [group, types] of Object.entries(
       CustomerTransactionService.TRANSACTION_GROUPS
     )) {
@@ -1091,16 +1109,32 @@ export class CustomerTransactionService {
       stepCount: transaction.steps.length,
     });
 
+    // Fetch user's KYC data to include BVN and NIN
+    const userKyc = await prisma.userKyc.findUnique({
+      where: { userId },
+      select: {
+        bvn: true,
+        nin: true,
+      },
+    });
+
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
     const personalInfoStep = transaction.steps.find(s => s.step === "PERSONAL_INFO");
     const admissionType = transaction.type === "SCHOOL_FEES" && personalInfoStep?.data
       ? (personalInfoStep.data as any).admissionType
       : null;
 
+    // Extract personal info details from the step data
+    const personalInfoData = personalInfoStep?.data as any;
+
+    // Get transaction mode (cast to any to avoid TypeScript error until Prisma types are regenerated)
+    const transactionMode = (transaction as any).mode || null;
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
       type: transaction.type,
+      mode: transactionMode,
       status: transaction.status,
       currentStep: transaction.currentStep,
       purpose: transaction.purpose,
@@ -1110,13 +1144,26 @@ export class CustomerTransactionService {
       nairaEquivalent: transaction.nairaEquivalent,
       exchangeRate: transaction.exchangeRate,
       disbursementMethod: transaction.disbursementMethod,
+      formAId: transaction.formAId,
+      taxClearanceNumber: transaction.taxClearanceNumber,
+
+      // Personal info used during creation
+      personalInfo: {
+        bvn: userKyc?.bvn ? `***${userKyc.bvn.slice(-4)}` : null,
+        nin: userKyc?.nin ? `***${userKyc.nin.slice(-4)}` : null,
+        admissionType: admissionType,
+      },
+
+      // Beneficiary details from step data
+      beneficiaryDetails: personalInfoData?.beneficiaryDetails || null,
+
       rejection: transaction.rejectionReason
         ? {
             reason: transaction.rejectionReason,
             rejectedAt: transaction.rejectedAt,
           }
         : null,
-      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType, transactionMode),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
       steps: transaction.steps,
@@ -1140,9 +1187,10 @@ export class CustomerTransactionService {
       uploadedAt: Date;
       verifiedAt?: Date | null;
     }[],
-    admissionType?: string | null
+    admissionType?: string | null,
+    transactionMode?: string | null
   ) {
-    const required = this.getRequiredDocuments(transactionType, admissionType);
+    const required = this.getRequiredDocuments(transactionType, admissionType, transactionMode);
 
     return required.map((docType) => {
       const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
@@ -1164,9 +1212,9 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Get required documents based on transaction type and admission type (for SCHOOL_FEES)
+   * Get required documents based on transaction type, admission type (for SCHOOL_FEES), and transaction mode (for TOURIST_FX)
    */
-  private getRequiredDocuments(transactionType: string, admissionType?: string | null): string[] {
+  private getRequiredDocuments(transactionType: string, admissionType?: string | null, transactionMode?: string | null): string[] {
     const documentRequirements: Record<string, string[]> = {
       PTA: ["VISA", "RETURN_TICKET"],
       BTA: ["TIN", "TCC",  "PASSPORT", "VISA", "RETURN_TICKET", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
@@ -1181,6 +1229,17 @@ export class CustomerTransactionService {
     };
 
     let required = documentRequirements[transactionType] || [];
+
+    // For TOURIST_FX, differentiate based on transaction mode
+    if (transactionType === "TOURIST_FX") {
+      if (transactionMode === "BUY") {
+        // TOURING (buying FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
+        required = ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"];
+      } else if (transactionMode === "SELL") {
+        // TOURIST (selling FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
+        required = ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"];
+      }
+    }
 
     // Add postgraduate-specific documents for school fees
     if (transactionType === "SCHOOL_FEES" && admissionType === "POSTGRADUATE") {

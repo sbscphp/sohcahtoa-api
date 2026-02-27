@@ -64,6 +64,14 @@ router.use(authenticate);
  *                 enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
  *                 description: Type of foreign exchange transaction
  *                 example: PTA
+ *               mode:
+ *                 type: string
+ *                 enum: [BUY, SELL]
+ *                 description: |
+ *                   Transaction mode - required for TOURIST_FX to differentiate between:
+ *                   - BUY: Touring (buying foreign currency)
+ *                   - SELL: Tourist (selling foreign currency)
+ *                 example: BUY
  *               currency:
  *                 type: string
  *                 description: Foreign currency code
@@ -397,9 +405,11 @@ router.post("/transactions/:transactionId/documents", uploadMultipleDocuments, c
  *       search, and sorting support.
  *
  *       **Transaction groups:**
- *       - `BUY` – PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY
- *       - `SELL` – TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX
+ *       - `BUY` – PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX (when mode=BUY)
+ *       - `SELL` – TOURIST_FX (when mode=SELL), RESIDENT_FX, EXPATRIATE_FX
  *       - `REMITTANCE` – IMTO_REMITTANCE, CASH_REMITTANCE
+ *
+ *       **Note:** TOURIST_FX transactions can be in either BUY or SELL group depending on the transaction mode.
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -503,6 +513,11 @@ router.post("/transactions/:transactionId/documents", uploadMultipleDocuments, c
  *                         type: string
  *                         enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
  *                         example: PTA
+ *                       mode:
+ *                         type: string
+ *                         enum: [BUY, SELL]
+ *                         nullable: true
+ *                         description: Transaction mode (BUY for touring, SELL for tourist). Only relevant for TOURIST_FX transactions.
  *                       status:
  *                         type: string
  *                         enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
@@ -904,6 +919,11 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                       type: string
  *                       enum: [PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX, RESIDENT_FX, EXPATRIATE_FX, IMTO_REMITTANCE, CASH_REMITTANCE]
  *                       example: PTA
+ *                     mode:
+ *                       type: string
+ *                       enum: [BUY, SELL]
+ *                       nullable: true
+ *                       description: Transaction mode (BUY for touring, SELL for tourist). Only relevant for TOURIST_FX transactions.
  *                     status:
  *                       type: string
  *                       enum: [DRAFT, AWAITING_VERIFICATION, VERIFICATION_IN_PROGRESS, VERIFICATION_COMPLETED, AWAITING_DEPOSIT, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, COMPLIANCE_REVIEW, ADMIN_APPROVAL_PENDING, APPROVED, DISBURSEMENT_IN_PROGRESS, COMPLETED, REJECTED, CANCELLED]
