@@ -732,7 +732,7 @@ model Transaction {
   userId              String
   referenceNumber     String              @unique
   type                TransactionType
-  mode                TransactionMode?
+  transactionMode     TransactionMode?    @map("transaction_mode")
   status              TransactionStatus   @default(DRAFT)
   currentStep         TransactionStep     @default(PERSONAL_INFO)
   purpose             String
@@ -761,7 +761,7 @@ model Transaction {
   @@index([referenceNumber])
   @@index([status])
   @@index([type])
-  @@index([mode])
+  @@index([transactionMode])
   @@map("transactions")
 }
 

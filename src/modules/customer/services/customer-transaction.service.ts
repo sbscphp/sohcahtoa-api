@@ -189,7 +189,7 @@ export class CustomerTransactionService {
         userId,
         referenceNumber,
         type: type as any,
-        mode: mode as any || null,
+        transactionMode: mode as any || null,
         status: initialStatus as any,
         currentStep: initialStep as any,
         purpose,
@@ -585,8 +585,8 @@ export class CustomerTransactionService {
       ? (transaction.steps[0].data as any).admissionType
       : null;
 
-    // Get transaction mode (cast to any to avoid TypeScript error until Prisma types are regenerated)
-    const transactionMode = (transaction as any).mode || null;
+    // Get transaction mode
+    const transactionMode = transaction.transactionMode || null;
 
     return {
       message: "Documents uploaded successfully",
@@ -868,7 +868,7 @@ export class CustomerTransactionService {
           id: true,
           referenceNumber: true,
           type: true,
-          mode: true,
+          transactionMode: true,
           status: true,
           currentStep: true,
           purpose: true,
@@ -914,7 +914,7 @@ export class CustomerTransactionService {
     // Attach the transaction group label to each row
     const data = transactions.map((t) => ({
       ...t,
-      group: this.resolveTransactionGroup(t.type as string, (t as any).mode),
+      group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
     }));
 
     return {
@@ -957,7 +957,7 @@ export class CustomerTransactionService {
       select: {
         referenceNumber: true,
         type: true,
-        mode: true,
+        transactionMode: true,
         status: true,
         purpose: true,
         destinationCountry: true,
@@ -1008,7 +1008,7 @@ export class CustomerTransactionService {
     const rows = transactions.map((t) =>
       [
         t.referenceNumber,
-        this.resolveTransactionGroup(t.type as string, (t as any).mode),
+        this.resolveTransactionGroup(t.type as string, t.transactionMode),
         t.type,
         t.status,
         t.purpose,
@@ -1127,8 +1127,8 @@ export class CustomerTransactionService {
     // Extract personal info details from the step data
     const personalInfoData = personalInfoStep?.data as any;
 
-    // Get transaction mode (cast to any to avoid TypeScript error until Prisma types are regenerated)
-    const transactionMode = (transaction as any).mode || null;
+    // Get transaction mode
+    const transactionMode = transaction.transactionMode || null;
 
     return {
       transactionId: transaction.id,
