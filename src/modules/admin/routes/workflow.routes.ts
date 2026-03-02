@@ -41,7 +41,7 @@ WorkflowRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserR
  *         name: module
  *         schema: { type: string, enum: ["Transaction", "Outlet Management", "Agent"] }
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *     responses:
  *       200:
@@ -223,7 +223,7 @@ WorkflowRouter.get("/management/stats", authenticate, authorize(UserRole.SUPER_A
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -288,7 +288,7 @@ WorkflowRouter.post("/templates/:id/deactivate", authenticate, authorize(UserRol
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status

@@ -9,6 +9,7 @@ type WorkflowModule = "Transaction" | "Outlet Management" | "Agent";
 type ListFilters = {
   status?: WorkflowStatus | "ALL";
   q?: string;
+  search?: string;
   module?: WorkflowModule;
 };
 
@@ -58,7 +59,7 @@ export class WorkflowService {
 
   async list(filters: ListFilters = {}, page = 1, limit = 20) {
     const status = ((filters.status || "PENDING").toString().toUpperCase()) as WorkflowStatus | "ALL";
-    const q = (filters.q || "").toString().trim();
+    const search = ((((filters as any) || {}).search ?? (filters.q || "") ) as string).toString().trim();
     const moduleFilter = (filters.module || "").toString();
 
     const client: any = prisma as any;
@@ -176,8 +177,8 @@ export class WorkflowService {
       }))
     );
 
-    if (q) {
-      const qLower = q.toLowerCase();
+    if (search) {
+      const qLower = search.toLowerCase();
       items = items.filter(
         (it) =>
           (it.title && it.title.toLowerCase().includes(qLower)) ||
@@ -380,16 +381,17 @@ export class WorkflowService {
     };
   }
 
-  async managementList(filters: { q?: string; status?: string }, page = 1, limit = 20) {
+  async managementList(filters: { q?: string; status?: string; search?: string }, page = 1, limit = 20) {
     const client: any = prisma as any;
     const where: any = {};
     if (filters.status && filters.status !== "ALL") {
       if (filters.status === "DEACTIVATED") where.status = "ARCHIVED";
       else where.status = filters.status;
     }
-    if (filters.q) {
+    const s = ((((filters as any) || {}).search ?? (filters.q || "") ) as string).toString().trim();
+    if (s) {
       where.OR = [
-        { name: { contains: filters.q, mode: "insensitive" } },
+        { name: { contains: s, mode: "insensitive" } },
       ];
     }
     const [templates, total] = await Promise.all([
@@ -438,7 +440,7 @@ export class WorkflowService {
     return { id, status };
   }
 
-  async exportTemplates(filters: { status?: string; q?: string }, requestedBy: string) {
+  async exportTemplates(filters: { status?: string; q?: string; search?: string }, requestedBy: string) {
     const client: any = prisma as any;
     const job = await client.reportJob.create({
       data: {

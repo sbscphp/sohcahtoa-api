@@ -60,8 +60,8 @@ class WorkflowController {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const status = (req.query.status as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await workflowService.managementList({ status, q }, page, limit);
+    const search = (req.query.search as string) || (req.query.q as string) || "";
+    const result = await workflowService.managementList({ status, search }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -78,8 +78,8 @@ class WorkflowController {
   exportTemplates = asyncHandler(async (req: Request, res: Response) => {
     const user = (req as any).user;
     const status = (req.query.status as string) || "ALL";
-    const q = (req.query.q as string) || "";
-    const result = await workflowService.exportTemplates({ status, q }, user?.userId);
+    const search = (req.query.search as string) || (req.query.q as string) || "";
+    const result = await workflowService.exportTemplates({ status, search }, user?.userId);
     res.json(successResponse(result));
   });
 }
