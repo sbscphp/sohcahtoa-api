@@ -79,10 +79,21 @@ export class AdminTransactionsService {
     }
     const search = (filters.search || "").toString().trim();
     if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
       where.OR = [
         { referenceNumber: { contains: search, mode: "insensitive" } },
-        { user: { profile: { firstName: { contains: search, mode: "insensitive" } } } },
-        { user: { profile: { lastName: { contains: search, mode: "insensitive" } } } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
       ];
     }
     const orderBy: any = {};
@@ -93,10 +104,6 @@ export class AdminTransactionsService {
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
-        include: { 
-          // @ts-ignore
-          user: { include: { profile: true } } 
-        },
         orderBy,
         skip,
         take: limit,
@@ -104,10 +111,24 @@ export class AdminTransactionsService {
       prisma.transaction.count({ where }),
     ]);
 
+    const uniqueUserIds = Array.from(new Set(items.map((t) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     const data = items.map((t: any) => {
-      const name = t.user?.profile
-        ? `${t.user.profile.firstName || ""} ${t.user.profile.lastName || ""}`.trim()
-        : undefined;
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
       return {
         id: t.id,
@@ -132,8 +153,6 @@ export class AdminTransactionsService {
       {
         where: { id },
         include: {
-          // @ts-ignore
-          user: { include: { profile: true, kyc: true } },
           steps: true,
           documents: true,
           history: true,
@@ -143,10 +162,15 @@ export class AdminTransactionsService {
       } as any
     );
     if (!trx) return null;
-    const name = (trx as any).user?.profile
-      ? `${(trx as any).user.profile.firstName || ""} ${(trx as any).user.profile.lastName || ""}`.trim()
-      : undefined;
-    const bvn = (trx as any).user?.kyc?.bvn || null;
+    const user = await prisma.user.findUnique({
+      where: { id: (trx as any).userId },
+      include: { profile: true, kyc: true },
+    });
+    const name =
+      user?.profile
+        ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
+        : undefined;
+    const bvn = user?.kyc?.bvn || null;
     const maskedBvn = bvn ? `${bvn.slice(0, 2)}********* ${bvn.slice(-3)}` : null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
     const pickup = (trx as any).cashPickup || null;
@@ -168,7 +192,7 @@ export class AdminTransactionsService {
       date: trx.createdAt,
       time: trx.createdAt,
       customerName: name,
-      customerType: (trx as any).user?.customerType || null,
+      customerType: user?.customerType || null,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,

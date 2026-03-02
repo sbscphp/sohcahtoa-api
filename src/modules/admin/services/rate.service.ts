@@ -25,7 +25,7 @@ class RateService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const search = (filters.search || "").toString().trim();
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
     const status = (filters.status || "all").toString();
     const where: any = {};
     if (search) {

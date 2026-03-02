@@ -17,7 +17,7 @@ class AgentService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const search = (filters.search).toString().trim();
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
     const where: any = {};
     if (filters.isActive !== undefined) where.isActive = filters.isActive === "true";
     const fromDateRaw = (filters.fromDate || "").toString().trim();
