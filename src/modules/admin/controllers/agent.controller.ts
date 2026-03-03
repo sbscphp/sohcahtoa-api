@@ -5,6 +5,7 @@ import { agentService } from "../services/agent.service";
 import { uploadToCloudinary } from "../../../shared/utils/cloudinary";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
+import { ActionType } from "../../../shared/types/action-type";
 
 class AgentController {
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -44,7 +45,7 @@ class AgentController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "AGENT_CREATE",
+        actionType: ActionType.AGENT_CREATE,
         actionLabel: "Agent created",
         resourceType: "AGENT",
         resourceId: created.id,
@@ -80,7 +81,7 @@ class AgentController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "AGENT_UPDATE_STATUS",
+        actionType: ActionType.AGENT_UPDATE_STATUS,
         actionLabel: "Agent status updated",
         resourceType: "AGENT",
         resourceId: updated.id,
@@ -100,7 +101,7 @@ class AgentController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "AGENT_APPROVE",
+        actionType: ActionType.AGENT_APPROVE,
         actionLabel: "Agent approval updated",
         resourceType: "AGENT",
         resourceId: updated.id,
@@ -125,7 +126,7 @@ class AgentController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "AGENT_UPDATE_STATUS",
+        actionType: ActionType.AGENT_UPDATE_STATUS,
         actionLabel: "Agent details updated",
         resourceType: "AGENT",
         resourceId: updated.id,
@@ -145,7 +146,7 @@ class AgentController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "AGENT_DEACTIVATE",
+        actionType: ActionType.AGENT_DEACTIVATE,
         actionLabel: "Agent deactivated",
         resourceType: "AGENT",
         resourceId: updated.id,
