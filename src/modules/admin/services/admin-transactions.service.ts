@@ -2,7 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
-import auditService from "../../audit/services/audit.service";
+import { auditTrailService } from "../services/audit-trail.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -19,25 +19,25 @@ type SettlePayload = {
 
 export class AdminTransactionsService {
 
-  private async logAdminAction(params: {
-    adminId: string;
-    actionType: any;
-    resourceType: string;
-    resourceId: string;
-    reason?: string;
-    metadata?: any;
-  }) {
-    return prisma.adminAction.create({
-      data: {
-        adminId: params.adminId,
-        actionType: params.actionType,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId,
-        reason: params.reason,
-        metadata: params.metadata,
-      },
-    });
-  }
+  // private async logAdminAction(params: {
+  //   adminId: string;
+  //   actionType: any;
+  //   resourceType: string;
+  //   resourceId: string;
+  //   reason?: string;
+  //   metadata?: any;
+  // }) {
+  //   return prisma.adminAction.create({
+  //     data: {
+  //       adminId: params.adminId,
+  //       actionType: String(params.actionType) as any,
+  //       resourceType: params.resourceType,
+  //       resourceId: params.resourceId,
+  //       reason: params.reason,
+  //       metadata: params.metadata,
+  //     },
+  //   });
+  // }
 
   async getTransactionStats() {
     const [underReviewA, underReviewB, rejected, approved, reqInfoGroup] = await Promise.all([
@@ -211,7 +211,7 @@ export class AdminTransactionsService {
   }
 
   async requestInformation(transactionId: string, adminId: string, payload: { notes?: string; fields?: string[] }) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "COMPLIANCE_REVIEW",
       resourceType: "TRANSACTION",
@@ -233,7 +233,7 @@ export class AdminTransactionsService {
   }
 
   async reviewTransaction(transactionId: string, adminId: string, payload: ReviewPayload) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_REVIEW",
       resourceType: "TRANSACTION",
@@ -270,11 +270,11 @@ export class AdminTransactionsService {
       } as any,
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_REVIEW",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_REVIEWED',
       metadata: { notes: payload?.notes, riskLevel: payload?.riskLevel },
     });
 
@@ -282,7 +282,7 @@ export class AdminTransactionsService {
   }
 
   async approveTransaction(transactionId: string, adminId: string, reason?: string) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_APPROVE",
       resourceType: "TRANSACTION",
@@ -321,11 +321,11 @@ export class AdminTransactionsService {
       },
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_APPROVE",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_APPROVED',
       reason,
     });
 
@@ -333,7 +333,7 @@ export class AdminTransactionsService {
   }
 
   async rejectTransaction(transactionId: string, adminId: string, reason: string) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_REJECT",
       resourceType: "TRANSACTION",
@@ -361,11 +361,11 @@ export class AdminTransactionsService {
       },
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_REJECT",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_REJECTED',
       reason,
     });
 
@@ -373,7 +373,7 @@ export class AdminTransactionsService {
   }
 
   async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({ 
       adminId,
       actionType: "TRANSACTION_SETTLE",
       resourceType: "TRANSACTION",

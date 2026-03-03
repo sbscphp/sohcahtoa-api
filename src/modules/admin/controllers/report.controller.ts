@@ -4,6 +4,7 @@ import { successResponse } from "../../../shared/utils";
 import { reportService } from "../services/report.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
+import { ActionType } from "../../../shared/types/action-type";
 
 class ReportController {
   modules = asyncHandler(async (_req: Request, res: Response) => {
@@ -40,7 +41,7 @@ class ReportController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "REPORT_GENERATE",
+        actionType: ActionType.REPORT_GENERATE,
         actionLabel: "Generated report",
         resourceType: "REPORT",
         resourceId: job.id,

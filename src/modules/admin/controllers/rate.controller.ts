@@ -4,6 +4,7 @@ import { successResponse } from "../../../shared/utils";
 import { rateService } from "../services/rate.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
+import { ActionType } from "../../../shared/types/action-type";
 
 class RateController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -36,7 +37,7 @@ class RateController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "RATE_CREATE",
+        actionType: ActionType.RATE_CREATE,
         actionLabel: "Created rates",
         resourceType: "RATE",
         resourceId: created.id,
@@ -61,7 +62,7 @@ class RateController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "RATE_UPDATE",
+        actionType: ActionType.RATE_UPDATE,
         actionLabel: "Rate updated",
         resourceType: "RATE",
         resourceId: updated.id,
@@ -81,7 +82,7 @@ class RateController {
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
-        actionType: "RATE_DEACTIVATE",
+        actionType: ActionType.RATE_DEACTIVATE,
         actionLabel: "Rate deactivated",
         resourceType: "RATE",
         resourceId: updated.id,
