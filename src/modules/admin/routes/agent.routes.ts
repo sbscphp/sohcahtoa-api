@@ -2,9 +2,16 @@ import { Router } from "express";
 import { authenticate, authorize } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 import { agentController } from "../controllers/agent.controller";
-import { uploadSingleImage } from "../../../shared/middleware/upload";
+import { createUploadMiddleware } from "../../../shared/middleware/upload";
 
 const AgentRouter: Router = Router();
+
+// Accept 'attachment' field for agent creation (matches Swagger docs)
+const uploadAgentAttachment = createUploadMiddleware({
+  fieldName: "attachment",
+  maxSize: 2 * 1024 * 1024, // 2MB to align with controller validation
+  allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "application/pdf"],
+});
 
 /**
  * @swagger
@@ -110,7 +117,13 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMI
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadSingleImage, agentController.create);
+AgentRouter.post(
+  "/",
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  uploadAgentAttachment,
+  agentController.create
+);
 
 /**
  * @swagger

@@ -13,6 +13,11 @@ export enum TransactionType {
   CASH_REMITTANCE = 'CASH_REMITTANCE',
 }
 
+export enum TransactionMode {
+  BUY = 'BUY',   // Buying foreign currency (e.g., touring)
+  SELL = 'SELL', // Selling foreign currency (e.g., tourist)
+}
+
 export enum TransactionStatus {
   DRAFT = 'DRAFT',
   AWAITING_VERIFICATION = 'AWAITING_VERIFICATION',
