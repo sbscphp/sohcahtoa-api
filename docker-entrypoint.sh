@@ -163,6 +163,16 @@ ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
 -- Ensure agents.password column exists
 ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "password" TEXT;
 
+-- Ensure TransactionMode enum and transactions.transaction_mode column exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMode') THEN
+    CREATE TYPE "TransactionMode" AS ENUM ('BUY', 'SELL');
+  END IF;
+END $$;
+
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "transaction_mode" "TransactionMode";
+CREATE INDEX IF NOT EXISTS "transactions_transaction_mode_idx" ON "transactions"("transaction_mode");
+
 -- Ensure admin_actions.actionType is TEXT (convert from enum if necessary)
 DO $$
 DECLARE
