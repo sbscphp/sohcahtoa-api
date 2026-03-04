@@ -64,7 +64,18 @@ export class AdminTransactionsService {
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.step) where.currentStep = filters.step;
-    if (filters.type) where.type = filters.type;
+
+    // Normalize friendly type labels from UI to proper filters
+    const rawType = (filters.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      // Assume it's a TransactionType enum value (e.g., PTA, BTA, etc.)
+      where.type = (filters.type as string).toUpperCase();
+    }
+
     if (filters.userId) where.userId = filters.userId;
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
@@ -75,7 +86,11 @@ export class AdminTransactionsService {
       where.disbursementMethod = "IMTO";
     }
     if (filters.tab === "sell") {
+      where.transactionMode = "SELL" as any;
       where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] } as any;
+    }
+    if (filters.tab === "buy") {
+      where.transactionMode = "BUY" as any;
     }
     const search = (filters.search || "").toString().trim();
     if (search) {

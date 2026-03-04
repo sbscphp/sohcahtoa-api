@@ -40,6 +40,7 @@ export class CreateDepartmentDto {
     departmentEmail?: string;
     description?: string;
     branch?: string;
+    isDefault: boolean = false;
 }
 
 export class UpdateDepartmentDto {
@@ -47,6 +48,7 @@ export class UpdateDepartmentDto {
     departmentEmail?: string;
     description?: string;
     branch?: string;
+    isDefault?: boolean;
     isActive?: boolean;
 }
 

@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { settlementController } from "../controllers/settlement.controller";
 
 const SettlementRouter: Router = Router();
@@ -19,7 +18,12 @@ const SettlementRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-SettlementRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), settlementController.stats);
+SettlementRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.stats
+);
 
 /**
  * @swagger
@@ -40,7 +44,12 @@ SettlementRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, Use
  *       200:
  *         description: Discrepancies retrieved
  */
-SettlementRouter.get("/discrepancies", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), settlementController.discrepancies);
+SettlementRouter.get(
+  "/discrepancies",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.discrepancies
+);
 
 /**
  * @swagger
@@ -61,7 +70,12 @@ SettlementRouter.get("/discrepancies", authenticate, authorize(UserRole.SUPER_AD
  *       200:
  *         description: Pending reconciliations retrieved
  */
-SettlementRouter.get("/pending-reconciliations", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), settlementController.pendingReconciliations);
+SettlementRouter.get(
+  "/pending-reconciliations",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.pendingReconciliations
+);
 
 /**
  * @swagger
@@ -75,7 +89,12 @@ SettlementRouter.get("/pending-reconciliations", authenticate, authorize(UserRol
  *       200:
  *         description: Escrow accounts retrieved
  */
-SettlementRouter.get("/escrow-accounts", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), settlementController.escrowAccounts);
+SettlementRouter.get(
+  "/escrow-accounts",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.escrowAccounts
+);
 
 /**
  * @swagger
@@ -96,6 +115,11 @@ SettlementRouter.get("/escrow-accounts", authenticate, authorize(UserRole.SUPER_
  *       200:
  *         description: Funding transactions retrieved
  */
-SettlementRouter.get("/funding-transactions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), settlementController.fundingTransactions);
+SettlementRouter.get(
+  "/funding-transactions",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.fundingTransactions
+);
 
 export default SettlementRouter;

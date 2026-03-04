@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { auditController } from "../controllers/audit.controller";
 
 const AuditRouter: Router = Router();
@@ -52,7 +51,12 @@ const AuditRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AuditRouter.get("/trail", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), auditController.list);
+AuditRouter.get(
+  "/trail",
+  authenticate,
+  requirePermission({ module: "AUDIT", feature: "MODULE", action: "view" }),
+  auditController.list
+);
 
 
 export default AuditRouter;

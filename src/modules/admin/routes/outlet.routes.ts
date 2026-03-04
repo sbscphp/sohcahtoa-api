@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { outletController } from "../controllers/outlet.controller";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 
 const OutletRouter: Router = Router();
 
@@ -19,7 +18,12 @@ const OutletRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.franchiseStats);
+OutletRouter.get(
+  "/franchises/stats",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "view" }),
+  outletController.franchiseStats
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -51,7 +55,12 @@ OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADM
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.listFranchises);
+OutletRouter.get(
+  "/franchises",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "view" }),
+  outletController.listFranchises
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -89,7 +98,12 @@ OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, Us
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.createFranchise);
+OutletRouter.post(
+  "/franchises",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "create" }),
+  outletController.createFranchise
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/status:
@@ -121,7 +135,12 @@ OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN, U
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.updateFranchiseStatus);
+OutletRouter.patch(
+  "/franchises/:id/status",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "edit" }),
+  outletController.updateFranchiseStatus
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/approve:
@@ -142,7 +161,12 @@ OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SU
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.approveFranchise);
+OutletRouter.patch(
+  "/franchises/:id/approve",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "edit" }),
+  outletController.approveFranchise
+);
 // /**
 //  * @swagger
 //  * /api/admin/outlet/franchises/export:
@@ -206,7 +230,12 @@ OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.S
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.listBranches);
+OutletRouter.get(
+  "/branches",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.listBranches
+);
 
 /**
  * @swagger
@@ -222,7 +251,12 @@ OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, User
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.branchStats);
+OutletRouter.get(
+  "/branches/stats",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.branchStats
+);
 
 /**
  * @swagger
@@ -269,7 +303,12 @@ OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.createBranch);
+OutletRouter.post(
+  "/branches",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "create" }),
+  outletController.createBranch
+);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}:
@@ -292,7 +331,12 @@ OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN, Use
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.getBranch);
+OutletRouter.get(
+  "/branches/:id",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.getBranch
+);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/status:
@@ -324,7 +368,12 @@ OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN, 
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.updateBranchStatus);
+OutletRouter.patch(
+  "/branches/:id/status",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "edit" }),
+  outletController.updateBranchStatus
+);
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/agents:
@@ -356,7 +405,12 @@ OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPE
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.addAgents);
+OutletRouter.post(
+  "/branches/:id/agents",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "edit" }),
+  outletController.addAgents
+);
 // /**
 //  * @swagger
 //  * /api/admin/outlet/branches/export:

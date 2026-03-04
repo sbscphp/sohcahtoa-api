@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { reportController } from "../controllers/report.controller";
 
 const ReportRouter: Router = Router();
@@ -19,7 +18,12 @@ const ReportRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-ReportRouter.get("/modules", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.modules);
+ReportRouter.get(
+  "/modules",
+  authenticate,
+  requirePermission({ module: "REPORTS", feature: "MODULE", action: "view" }),
+  reportController.modules
+);
 
 // /**
 //  * @swagger
@@ -139,6 +143,11 @@ ReportRouter.get("/modules", authenticate, authorize(UserRole.SUPER_ADMIN, UserR
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-ReportRouter.post("/generate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), reportController.generate);
+ReportRouter.post(
+  "/generate",
+  authenticate,
+  requirePermission({ module: "REPORTS", feature: "MODULE", action: "create" }),
+  reportController.generate
+);
 
 export default ReportRouter;
