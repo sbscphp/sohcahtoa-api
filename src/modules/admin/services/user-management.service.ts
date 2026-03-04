@@ -775,17 +775,28 @@ class UserManagementService {
             if (existing) {
                 throw new DuplicateError("Department with this name already exists");
             }
+            const branchName = (data.branch || "Head Office").trim();
+            const branch = await this.prisma.branch.findFirst({
+                where: { name: { equals: branchName, mode: "insensitive" } },
+                select: { id: true },
+            });
+            if (!branch) {
+                throw new NotFoundError("Branch not found");
+            }
 
             const adminUser = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
             const createdBy = adminUser?.fullName || "System";
 
             return await this.prisma.department.create({
-                data: ({
-                    ...data,
+                data: {
+                    name: data.name,
+                    departmentEmail: data.departmentEmail,
+                    description: data.description,
+                    branch: branchName,
+                    isDefault: data.isDefault,
                     createdBy,
                     createdById: adminId,
-                    branch: data.branch || "Head Office",
-                } as any),
+                },
             });
         } catch (error) {
             logger.error("Failed to create department", { error });
@@ -860,10 +871,27 @@ class UserManagementService {
                 const existing = await this.prisma.department.findUnique({ where: { name: data.name } });
                 if (existing) throw new DuplicateError("Department with this name already exists");
             }
+            if (typeof data.branch === "string" && data.branch.trim()) {
+                const branchName = data.branch.trim();
+                const branch = await this.prisma.branch.findFirst({
+                    where: { name: { equals: branchName, mode: "insensitive" } },
+                    select: { id: true },
+                });
+                if (!branch) {
+                    throw new NotFoundError("Branch not found");
+                }
+            }
 
             return await this.prisma.department.update({
                 where: { id },
-                data,
+                data: {
+                    name: data.name,
+                    departmentEmail: data.departmentEmail,
+                    description: data.description,
+                    branch: data.branch,
+                    isActive: data.isActive,
+                    isDefault: data.isDefault,
+                },
             });
         } catch (error) {
             logger.error("Failed to update department", { id, error });

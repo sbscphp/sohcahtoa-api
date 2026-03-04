@@ -70,6 +70,23 @@ class AgentController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  getTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const filters = {
+      status: req.query.status,
+      dateFrom: req.query.dateFrom,
+      dateTo: req.query.dateTo,
+    };
+    const result = await agentService.transactions(req.params.id, filters, page, limit);
+    res.json(successResponse(result.data, { pagination: result.meta }));
+  });
+
+  getTransaction = asyncHandler(async (req: Request, res: Response) => {
+    const result = await agentService.transaction(req.params.id, req.params.transactionId);
+    res.json(successResponse(result));
+  });
+
   get = asyncHandler(async (req: Request, res: Response) => {
     const agent = await agentService.get(req.params.id);
     res.json(successResponse(agent));
@@ -139,6 +156,22 @@ class AgentController {
       }
     }
     const before = await agentService.get(req.params.id);
+    let attachment;
+    if (req.file) {
+      if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
+        throw new ValidationError("Attachment exceeds 2MB limit");
+      }
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: "agents",
+        resourceType: "auto",
+      });
+      attachment = {
+        fileUrl: result.secureUrl,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+      };
+    }
     const updated = await agentService.update(req.params.id, {
       name: req.body.name,
       email: req.body.email,
@@ -146,6 +179,7 @@ class AgentController {
       branch: req.body.branch,
       attachment,
     });
+    const enriched = await agentService.get(req.params.id);
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
@@ -154,13 +188,13 @@ class AgentController {
         resourceType: "AGENT",
         resourceId: updated.id,
         previousState: before,
-        newState: updated,
+        newState: enriched,
         status: "SUCCESS",
         userAgent: req.headers["user-agent"] as string,
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
       });
     }
-    res.json(successResponse(updated));
+    res.json(successResponse(enriched));
   });
 
   deactivate = asyncHandler(async (req: AuthRequest, res: Response) => {
