@@ -179,13 +179,99 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *                 type: string
  *               branch:
  *                 type: string
+ *               attachment:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
  *         description: Agent updated successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.update);
+AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadAgentAttachment, agentController.update);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions:
+ *   get:
+ *     summary: Get transactions handled by the agent's branch (cash pickups)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           description: Cash pickup status filter (e.g., PENDING, COMPLETED)
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Agent transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get("/:id/transactions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.getTransactions);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions/{transactionId}:
+ *   get:
+ *     summary: Get single agent transaction details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agent transaction details retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/:transactionId",
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  agentController.getTransaction
+);
 
 /**
  * @swagger

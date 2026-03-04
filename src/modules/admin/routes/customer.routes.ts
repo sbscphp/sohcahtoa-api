@@ -239,6 +239,8 @@ router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, User
  *         name: type
  *         schema:
  *           type: string
+ *           enum: [buyfx, sellfx]
+ *           description: "Filter by type. Accepts 'buyfx' or 'sellfx' to filter by transaction mode, or a TransactionType value like PTA, BTA. Case-insensitive."
  *     responses:
  *       200:
  *         description: Transactions retrieved successfully
