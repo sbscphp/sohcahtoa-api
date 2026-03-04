@@ -156,22 +156,6 @@ class AgentController {
       }
     }
     const before = await agentService.get(req.params.id);
-    let attachment;
-    if (req.file) {
-      if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
-        throw new ValidationError("Attachment exceeds 2MB limit");
-      }
-      const result = await uploadToCloudinary(req.file.buffer, {
-        folder: "agents",
-        resourceType: "auto",
-      });
-      attachment = {
-        fileUrl: result.secureUrl,
-        fileName: req.file.originalname,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-      };
-    }
     const updated = await agentService.update(req.params.id, {
       name: req.body.name,
       email: req.body.email,

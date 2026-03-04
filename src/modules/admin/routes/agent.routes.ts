@@ -257,7 +257,12 @@ AgentRouter.patch(
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AgentRouter.get("/:id/transactions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.getTransactions);
+AgentRouter.get(
+  "/:id/transactions",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.getTransactions
+);
 
 /**
  * @swagger
@@ -289,7 +294,7 @@ AgentRouter.get("/:id/transactions", authenticate, authorize(UserRole.SUPER_ADMI
 AgentRouter.get(
   "/:id/transactions/:transactionId",
   authenticate,
-  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
   agentController.getTransaction
 );
 
