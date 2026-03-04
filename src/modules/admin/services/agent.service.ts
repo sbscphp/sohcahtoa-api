@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
-import { ValidationError } from "../../../shared/utils/errors";
+import { ValidationError, NotFoundError } from "../../../shared/utils/errors";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -66,7 +66,7 @@ class AgentService {
 
   async get(id: string) {
     const client: any = prisma as any;
-    return client.agent.findUnique({
+    const agent = await client.agent.findUnique({
       where: { id },
       select: {
         id: true,
@@ -77,11 +77,50 @@ class AgentService {
         isApproved: true,
         createdAt: true,
         updatedAt: true,
+        branchId: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            state: true,
+            address: true,
+            email: true,
+            phoneNumber: true,
+            branchManager: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            fileUrl: true,
+            fileName: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+          },
+        },
       },
     });
+    if (!agent) return null;
+    const branchId = agent.branchId || null;
+    let where: any = {};
+    if (branchId) {
+      where = { pickupLocationId: branchId };
+    } else if (agent.branch?.name) {
+      where = { pickupLocation: agent.branch.name };
+    } else {
+      return { ...agent, totalTransactions: 0, transactionValue: 0 };
+    }
+    const [totalTransactions, sumAgg] = await Promise.all([
+      client.cashPickup.count({ where }),
+      client.cashPickup.aggregate({ where, _sum: { amount: true } }),
+    ]);
+    const transactionValue = Number((sumAgg as any)?._sum?.amount || 0);
+    const { branchId: _omit, ...rest } = agent as any;
+    return { ...rest, totalTransactions, transactionValue };
   }
 
-  async update(id: string, data: { name?: string; email?: string; phoneNumber?: string; branch?: string }) {
+  async update(id: string, data: { name?: string; email?: string; phoneNumber?: string; branch?: string; attachment?: { fileUrl: string; fileName?: string; fileSize?: number; mimeType?: string } }) {
     if (!data || (!data.name && !data.email && !data.phoneNumber && !data.branch)) {
       throw new ValidationError("No update fields provided");
     }
@@ -122,6 +161,18 @@ class AgentService {
         email: data.email,
         phoneNumber: data.phoneNumber,
         ...branchIdUpdate,
+        ...(data.attachment
+          ? {
+              attachments: {
+                create: {
+                  fileUrl: data.attachment.fileUrl,
+                  fileName: data.attachment.fileName,
+                  fileSize: typeof data.attachment.fileSize === "number" ? Math.floor(data.attachment.fileSize) : null,
+                  mimeType: data.attachment.mimeType || null,
+                },
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -219,6 +270,175 @@ class AgentService {
       include: { attachments: true, branch: true },
     });
     return created;
+  }
+
+  async transactions(agentId: string, filters: any = {}, page = 1, limit = 20) {
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { id: agentId },
+      select: {
+        id: true,
+        branchId: true,
+        branch: { select: { id: true, name: true } },
+      },
+    });
+    if (!agent) {
+      throw new NotFoundError("Agent not found");
+    }
+    const orClause: any[] = [];
+    if (agent.branchId) orClause.push({ pickupLocationId: agent.branchId });
+    if (agent.branch?.name) orClause.push({ pickupLocation: agent.branch.name });
+    if (!orClause.length) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
+    const where: any = { OR: orClause };
+    if (filters.status) where.status = filters.status;
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+    const skip = (page - 1) * limit;
+    const [rows, total] = await Promise.all([
+      client.cashPickup.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          transactionId: true,
+          pickupLocation: true,
+          pickupLocationId: true,
+          pickupCode: true,
+          status: true,
+          amount: true,
+          currency: true,
+          createdAt: true,
+          updatedAt: true,
+          transaction: {
+            select: {
+              id: true,
+              referenceNumber: true,
+              type: true,
+              status: true,
+              currentStep: true,
+              currency: true,
+              nairaEquivalent: true,
+              foreignAmount: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+      client.cashPickup.count({ where }),
+    ]);
+    const data = rows.map((r: any) => {
+      const t = r.transaction || {};
+      const value = Number(t.nairaEquivalent || t.foreignAmount || r.amount || 0);
+      return {
+        transactionId: t.id || r.transactionId,
+        referenceNumber: t.referenceNumber || null,
+        type: t.type || null,
+        status: t.status || null,
+        stage: t.currentStep || null,
+        value,
+        currency: t.currency || r.currency || null,
+        pickup: {
+          id: r.id,
+          location: r.pickupLocation,
+          locationId: r.pickupLocationId,
+          code: r.pickupCode,
+          status: r.status,
+          createdAt: r.createdAt,
+        },
+        createdAt: t.createdAt || r.createdAt,
+      };
+    });
+    return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async transaction(agentId: string, transactionId: string) {
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { id: agentId },
+      select: {
+        id: true,
+        branchId: true,
+        branch: { select: { id: true, name: true } },
+      },
+    });
+    if (!agent) throw new NotFoundError("Agent not found");
+    const orClause: any[] = [];
+    if (agent.branchId) orClause.push({ pickupLocationId: agent.branchId });
+    if (agent.branch?.name) orClause.push({ pickupLocation: agent.branch.name });
+    if (!orClause.length) {
+      throw new NotFoundError("No associated branch for agent");
+    }
+    const row = await client.cashPickup.findFirst({
+      where: { OR: orClause, transactionId },
+      select: {
+        id: true,
+        transactionId: true,
+        pickupLocation: true,
+        pickupLocationId: true,
+        pickupCode: true,
+        status: true,
+        amount: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
+        transaction: {
+          select: {
+            id: true,
+            referenceNumber: true,
+            type: true,
+            status: true,
+            currentStep: true,
+            currency: true,
+            nairaEquivalent: true,
+            foreignAmount: true,
+            destinationCountry: true,
+            createdAt: true,
+            userId: true,
+            documents: {
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundError("Transaction not found for this agent");
+    const t = (row as any).transaction || {};
+    const value = Number(t.nairaEquivalent || t.foreignAmount || row.amount || 0);
+    const docCount = Array.isArray(t.documents) ? t.documents.length : 0;
+    return {
+      transactionId: t.id || row.transactionId,
+      referenceNumber: t.referenceNumber || null,
+      type: t.type || null,
+      status: t.status || null,
+      stage: t.currentStep || null,
+      currency: t.currency || row.currency || null,
+      amounts: {
+        nairaEquivalent: Number(t.nairaEquivalent || 0),
+        foreignAmount: Number(t.foreignAmount || 0),
+        pickupAmount: Number(row.amount || 0),
+        value,
+      },
+      pickup: {
+        id: row.id,
+        location: row.pickupLocation,
+        locationId: row.pickupLocationId,
+        code: row.pickupCode,
+        status: row.status,
+        createdAt: row.createdAt,
+      },
+      meta: {
+        documents: { count: docCount },
+        destinationCountry: t.destinationCountry || null,
+      },
+      createdAt: t.createdAt || row.createdAt,
+    };
   }
 }
 

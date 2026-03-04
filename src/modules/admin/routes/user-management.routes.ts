@@ -559,6 +559,13 @@ UserManagementRouter.delete("/roles/:id", authenticate, authorize(UserRole.SUPER
  *                 type: string
  *               branch:
  *                 type: string
+ *               departmentEmail:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               isDefault:
+ *                 type: boolean
+ *                 description: Mark as default department
  *     responses:
  *       200:
  *         description: Department created
@@ -633,6 +640,17 @@ UserManagementRouter.get("/departments/stats", authenticate, authorize(UserRole.
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *               departmentEmail:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               isDefault:
+ *                 type: boolean
  *             required: [isActive]
  *             properties:
  *               isActive:
