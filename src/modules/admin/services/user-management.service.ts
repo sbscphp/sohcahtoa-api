@@ -409,8 +409,14 @@ class UserManagementService {
                 departmentConnect = { connect: { id: dept.id } };
             }
 
-            const normalizePermissions = (perms?: string[]) => {
+            const normalizePermissions = (perms?: string[] | Record<string, Record<string, string[]>>) => {
                 const allowed = new Set(["view", "edit", "create", "update", "delete", "export"]);
+                const sanitize = (value: string): string | null => {
+                    const v = (value || "").toString().trim().toLowerCase()
+                        .replace(/^can[ ._:-]?/g, ""); // supports 'can.view', 'can view', 'can_view'
+                    const mapped = v === "update" ? "edit" : v; // treat update as edit
+                    return allowed.has(mapped) ? mapped : null;
+                };
                 if (!perms) return {};
                 if (Array.isArray(perms)) {
                     const result: Record<string, Record<string, string[]>> = {};
@@ -420,9 +426,8 @@ class UserManagementService {
                         if (parts.length < 3) continue;
                         const module = parts[0];
                         const feature = parts[1];
-                        const actionRaw = parts[2].toLowerCase();
-                        const action = actionRaw.replace("can ", "");
-                        if (!allowed.has(action)) continue;
+                        const action = sanitize(parts[2]);
+                        if (!action) continue;
                         result[module] = result[module] || {};
                         result[module][feature] = result[module][feature] || [];
                         if (!result[module][feature].includes(action)) {
@@ -431,17 +436,21 @@ class UserManagementService {
                     }
                     return result;
                 }
-                const obj = perms as any;
+                const obj = perms as Record<string, Record<string, string[]>>;
                 const result: Record<string, Record<string, string[]>> = {};
                 for (const module of Object.keys(obj)) {
                     const features = obj[module] || {};
                     result[module] = {};
                     for (const feature of Object.keys(features)) {
                         const actions = Array.isArray(features[feature]) ? features[feature] : [];
-                        const clean = actions
-                            .map(a => a?.toString().toLowerCase())
-                            .filter(a => a && allowed.has(a));
-                        result[module][feature] = Array.from(new Set(clean));
+                        const clean = Array.from(
+                            new Set(
+                                actions
+                                    .map(a => sanitize(a as any))
+                                    .filter((a): a is string => !!a)
+                            )
+                        );
+                        result[module][feature] = clean;
                     }
                 }
                 return result;
@@ -596,15 +605,51 @@ class UserManagementService {
                 });
             }
 
-            const normalizePermissions = (perms?: string[]) => {
-                if (!Array.isArray(perms)) return undefined;
-                return perms.map((p) => {
-                    const name = (p || "").toString();
-                    const lower = name.toLowerCase();
-                    const canView = lower.includes("view");
-                    const canEdit = lower.includes("edit");
-                    return { name, canView, canEdit };
-                });
+            const normalizePermissions = (perms?: string[] | Record<string, Record<string, string[]>>) => {
+                const allowed = new Set(["view", "edit", "create", "update", "delete", "export"]);
+                const sanitize = (value: string): string | null => {
+                    const v = (value || "").toString().trim().toLowerCase()
+                        .replace(/^can[ ._:-]?/g, "");
+                    const mapped = v === "update" ? "edit" : v;
+                    return allowed.has(mapped) ? mapped : null;
+                };
+                if (!perms) return undefined;
+                if (Array.isArray(perms)) {
+                    const result: Record<string, Record<string, string[]>> = {};
+                    for (const p of perms) {
+                        const s = (p || "").toString();
+                        const parts = s.split(" - ").map(x => x.trim());
+                        if (parts.length < 3) continue;
+                        const module = parts[0];
+                        const feature = parts[1];
+                        const action = sanitize(parts[2]);
+                        if (!action) continue;
+                        result[module] = result[module] || {};
+                        result[module][feature] = result[module][feature] || [];
+                        if (!result[module][feature].includes(action)) {
+                            result[module][feature].push(action);
+                        }
+                    }
+                    return result;
+                }
+                const obj = perms as Record<string, Record<string, string[]>>;
+                const result: Record<string, Record<string, string[]>> = {};
+                for (const module of Object.keys(obj)) {
+                    const features = obj[module] || {};
+                    result[module] = {};
+                    for (const feature of Object.keys(features)) {
+                        const actions = Array.isArray(features[feature]) ? features[feature] : [];
+                        const clean = Array.from(
+                            new Set(
+                                actions
+                                    .map(a => sanitize(a as any))
+                                    .filter((a): a is string => !!a)
+                            )
+                        );
+                        result[module][feature] = clean;
+                    }
+                }
+                return result;
             };
 
             const updated = await this.prisma.$transaction(async (tx) => {

@@ -5,3 +5,4 @@ export * from './request-logger';
 export * from './validator';
 export * from './cbn-compliance';
 export * from './upload';
+export * from './permissions';

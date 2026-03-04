@@ -184,8 +184,20 @@ class AgentService {
         updatedAt: true,
       },
     });
+    if (data.attachment) {
+      await client.agentAttachment.create({
+        data: {
+          agentId: id,
+          fileUrl: data.attachment.fileUrl,
+          fileName: data.attachment.fileName || null,
+          fileSize: typeof data.attachment.fileSize === "number" ? Math.floor(data.attachment.fileSize) : null,
+          mimeType: data.attachment.mimeType || null,
+        },
+      });
+    }
     return updated;
   }
+  
   async updateStatus(id: string, isActive: boolean) {
     const client: any = prisma as any;
     return client.agent.update({

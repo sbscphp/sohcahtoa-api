@@ -1,7 +1,6 @@
 import { Router } from "express";
 import customerController from "../controllers/customer.controller";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 
 const router:Router = Router();
 
@@ -42,7 +41,12 @@ const router:Router = Router();
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Read-only admin view
-router.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listCustomers);
+router.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.listCustomers
+);
 
 /**
  * @swagger
@@ -58,11 +62,26 @@ router.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), c
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get("/counts", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomerCounts);
+router.get(
+  "/counts",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.getCustomerCounts
+);
 
 // Global flags view and flag status updates should precede dynamic :userId routes
-router.get("/flags/all", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listAllFlags);
-router.patch("/flags/:flagId/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.updateFlagStatus);
+router.get(
+  "/flags/all",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.listAllFlags
+);
+router.patch(
+  "/flags/:flagId/status",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "edit" }),
+  customerController.updateFlagStatus
+);
 
 /**
  * @swagger
@@ -86,7 +105,12 @@ router.patch("/flags/:flagId/status", authenticate, authorize(UserRole.SUPER_ADM
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.get("/:userId", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomer);
+router.get(
+  "/:userId",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.getCustomer
+);
 
 /**
  * @swagger
@@ -109,7 +133,12 @@ router.get("/:userId", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.AD
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 // Flags
-router.get("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.listCustomerFlags);
+router.get(
+  "/:userId/flags",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.listCustomerFlags
+);
 
 /**
  * @swagger
@@ -133,7 +162,12 @@ router.get("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserR
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.deactivateCustomer);
+router.patch(
+  "/:userId/deactivate",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "edit" }),
+  customerController.deactivateCustomer
+);
 
 /**
  * @swagger
@@ -167,7 +201,12 @@ router.patch("/:userId/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.patch("/:userId/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.toggleActiveStatus);
+router.patch(
+  "/:userId/status",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "edit" }),
+  customerController.toggleActiveStatus
+);
 
 /**
  * @swagger
@@ -207,7 +246,12 @@ router.patch("/:userId/status", authenticate, authorize(UserRole.SUPER_ADMIN, Us
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.createFlag);
+router.post(
+  "/:userId/flags",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "create" }),
+  customerController.createFlag
+);
 
 /**
  * @swagger
@@ -249,6 +293,11 @@ router.post("/:userId/flags", authenticate, authorize(UserRole.SUPER_ADMIN, User
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-router.get("/:userId/transactions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), customerController.getCustomerTransactions);
+router.get(
+  "/:userId/transactions",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.getCustomerTransactions
+);
 
 export default router;

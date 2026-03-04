@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { ticketsController } from "../controllers/tickets.controller";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { createUploadMiddleware } from "../../../shared/middleware/upload";
 
 const TicketsRouter: Router = Router();
@@ -25,7 +24,12 @@ const uploadTicketAttachment = createUploadMiddleware({
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.stats);
+TicketsRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.stats
+);
 
 /**
  * @swagger
@@ -69,7 +73,12 @@ TicketsRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRo
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.list);
+TicketsRouter.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.list
+);
 
 /**
  * @swagger
@@ -107,7 +116,13 @@ TicketsRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.AD
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-TicketsRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadTicketAttachment, ticketsController.create);
+TicketsRouter.post(
+  "/",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "create" }),
+  uploadTicketAttachment,
+  ticketsController.create
+);
 
 /**
  * @swagger
@@ -131,7 +146,12 @@ TicketsRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.get);
+TicketsRouter.get(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.get
+);
 
 /**
  * @swagger
@@ -168,7 +188,12 @@ TicketsRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.updateStatus);
+TicketsRouter.patch(
+  "/:id/status",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "edit" }),
+  ticketsController.updateStatus
+);
 
 /**
  * @swagger
@@ -192,7 +217,12 @@ TicketsRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN,
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.post("/:id/assign", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), ticketsController.assign);
+TicketsRouter.post(
+  "/:id/assign",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "edit" }),
+  ticketsController.assign
+);
 
 /**
  * @swagger
@@ -226,6 +256,11 @@ TicketsRouter.post("/:id/assign", authenticate, authorize(UserRole.SUPER_ADMIN, 
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-TicketsRouter.post("/:id/comments", authenticate, authorize(UserRole.SUPER_ADMIN), ticketsController.comment);
+TicketsRouter.post(
+  "/:id/comments",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "create" }),
+  ticketsController.comment
+);
 
 export default TicketsRouter;
