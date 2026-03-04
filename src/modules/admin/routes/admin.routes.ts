@@ -1,7 +1,6 @@
 import { Router } from "express";
 import adminController from "../controllers/admin.controller";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { AdminAuthRouter } from "./admin-auth.routes";
 import UserManagementRouter from "./user-management.routes";
 import CustomerRouter from "./customer.routes";
@@ -96,7 +95,12 @@ router.get("/pending-approvals", adminController.getPendingApprovals);
  *         description: Forbidden - Super Admin only
  */
 // Audit log (Super Admin only)
-router.get("/audit-log", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), adminController.getAuditLog);
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission({ module: "AUDIT", feature: "MODULE", action: "view" }),
+  adminController.getAuditLog
+);
 
 /**
  * @swagger

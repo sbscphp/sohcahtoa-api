@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { rateController } from "../controllers/rate.controller";
 
 const RateRouter: Router = Router();
@@ -17,7 +16,12 @@ const RateRouter: Router = Router();
  *       200:
  *         description: Statistics retrieved successfully
  */
-RateRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.stats);
+RateRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "view" }),
+  rateController.stats
+);
 
 /**
  * @swagger
@@ -31,7 +35,12 @@ RateRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.
  *       200:
  *         description: Export URL generated
  */
-RateRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.export);
+RateRouter.get(
+  "/export",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "export" }),
+  rateController.export
+);
 
 /**
  * @swagger
@@ -64,7 +73,12 @@ RateRouter.get("/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       200:
  *         description: Rates retrieved successfully
  */
-RateRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.list);
+RateRouter.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "view" }),
+  rateController.list
+);
 
 /**
  * @swagger
@@ -84,7 +98,12 @@ RateRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN
  *       200:
  *         description: Rate retrieved successfully
  */
-RateRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.get);
+RateRouter.get(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "view" }),
+  rateController.get
+);
 
 /**
  * @swagger
@@ -120,7 +139,12 @@ RateRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.AD
  *       201:
  *         description: Rate created successfully
  */
-RateRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.create);
+RateRouter.post(
+  "/",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "create" }),
+  rateController.create
+);
 
 /**
  * @swagger
@@ -159,7 +183,12 @@ RateRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMI
  *       200:
  *         description: Rate updated successfully
  */
-RateRouter.put("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.update);
+RateRouter.put(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "edit" }),
+  rateController.update
+);
 
 /**
  * @swagger
@@ -179,6 +208,11 @@ RateRouter.put("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.AD
  *       200:
  *         description: Rate deactivated successfully
  */
-RateRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), rateController.deactivate);
+RateRouter.patch(
+  "/:id/deactivate",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "edit" }),
+  rateController.deactivate
+);
 
 export default RateRouter;

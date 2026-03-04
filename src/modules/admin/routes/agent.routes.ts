@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { agentController } from "../controllers/agent.controller";
 import { createUploadMiddleware } from "../../../shared/middleware/upload";
 
@@ -27,7 +26,12 @@ const uploadAgentAttachment = createUploadMiddleware({
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.stats);
+AgentRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.stats
+);
 
 /**
  * @swagger
@@ -81,7 +85,12 @@ AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.list);
+AgentRouter.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.list
+);
 
 /**
  * @swagger
@@ -120,7 +129,7 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMI
 AgentRouter.post(
   "/",
   authenticate,
-  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "create" }),
   uploadAgentAttachment,
   agentController.create
 );
@@ -147,7 +156,12 @@ AgentRouter.post(
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.get);
+AgentRouter.get(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.get
+);
 
 /**
  * @swagger
@@ -166,7 +180,7 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -179,13 +193,23 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *                 type: string
  *               branch:
  *                 type: string
+ *               attachment:
+ *                 type: string
+ *                 format: binary
+ *             description: "Provide at least one field to update. Optional file 'attachment' supports jpg, jpeg, png, pdf up to 2MB."
  *     responses:
  *       200:
  *         description: Agent updated successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.update);
+AgentRouter.patch(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  uploadAgentAttachment,
+  agentController.update
+);
 
 /**
  * @swagger
@@ -217,7 +241,12 @@ AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateStatus);
+AgentRouter.patch(
+  "/:id/status",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.updateStatus
+);
 
 /**
  * @swagger
@@ -239,7 +268,12 @@ AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, U
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.deactivate);
+AgentRouter.patch(
+  "/:id/deactivate",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.deactivate
+);
 
 /**
  * @swagger
@@ -271,6 +305,11 @@ AgentRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMI
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/approval", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateApproval);
+AgentRouter.patch(
+  "/:id/approval",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.updateApproval
+);
 
 export default AgentRouter;

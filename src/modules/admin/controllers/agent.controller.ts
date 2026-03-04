@@ -116,12 +116,35 @@ class AgentController {
   });
 
   update = asyncHandler(async (req: AuthRequest, res: Response) => {
+    let attachment;
+    if (req.file) {
+      if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
+        throw new ValidationError("Attachment exceeds 2MB limit");
+      }
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: "agents",
+          resourceType: "auto",
+          allowedFormats: ["jpg", "jpeg", "png", "pdf"],
+          maxFileSize: 2 * 1024 * 1024,
+        });
+        attachment = {
+          fileUrl: result.secureUrl,
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype,
+        };
+      } catch (err: any) {
+        throw new ValidationError(`Attachment upload failed: ${err?.message || "Unknown error"}`);
+      }
+    }
     const before = await agentService.get(req.params.id);
     const updated = await agentService.update(req.params.id, {
       name: req.body.name,
       email: req.body.email,
       phoneNumber: req.body.phoneNumber,
       branch: req.body.branch,
+      attachment,
     });
     if (req.user) {
       await auditTrailService.logAction({

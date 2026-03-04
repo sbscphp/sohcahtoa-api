@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { regulatoryController } from "../controllers/regulatory.controller";
 
 const RegulatoryRouter: Router = Router();
@@ -17,7 +16,12 @@ const RegulatoryRouter: Router = Router();
  *       200:
  *         description: Compliance dashboard data retrieved
  */
-RegulatoryRouter.get("/compliance/dashboard", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.complianceDashboard);
+RegulatoryRouter.get(
+  "/compliance/dashboard",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.complianceDashboard
+);
 
 /**
  * @swagger
@@ -50,7 +54,12 @@ RegulatoryRouter.get("/compliance/dashboard", authenticate, authorize(UserRole.S
  *       200:
  *         description: Compliance reports retrieved
  */
-RegulatoryRouter.get("/compliance/reports", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.complianceReportsList);
+RegulatoryRouter.get(
+  "/compliance/reports",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.complianceReportsList
+);
 
 /**
  * @swagger
@@ -69,7 +78,12 @@ RegulatoryRouter.get("/compliance/reports", authenticate, authorize(UserRole.SUP
  *       200:
  *         description: Compliance report details retrieved
  */
-RegulatoryRouter.get("/compliance/reports/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.complianceReportDetails);
+RegulatoryRouter.get(
+  "/compliance/reports/:id",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.complianceReportDetails
+);
 
 /**
  * @swagger
@@ -90,7 +104,12 @@ RegulatoryRouter.get("/compliance/reports/:id", authenticate, authorize(UserRole
  *       200:
  *         description: Export job queued
  */
-RegulatoryRouter.post("/compliance/reports/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.exportSubmissions);
+RegulatoryRouter.post(
+  "/compliance/reports/export",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
+  regulatoryController.exportSubmissions
+);
 
 /**
  * @swagger
@@ -104,7 +123,12 @@ RegulatoryRouter.post("/compliance/reports/export", authenticate, authorize(User
  *       200:
  *         description: Stats retrieved
  */
-RegulatoryRouter.get("/trms/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.trmsStats);
+RegulatoryRouter.get(
+  "/trms/stats",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.trmsStats
+);
 
 /**
  * @swagger
@@ -131,7 +155,12 @@ RegulatoryRouter.get("/trms/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *       200:
  *         description: Submissions retrieved
  */
-RegulatoryRouter.get("/trms/list", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.trmsList);
+RegulatoryRouter.get(
+  "/trms/list",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.trmsList
+);
 
 /**
  * @swagger
@@ -150,7 +179,12 @@ RegulatoryRouter.get("/trms/list", authenticate, authorize(UserRole.SUPER_ADMIN,
  *       200:
  *         description: Details retrieved
  */
-RegulatoryRouter.get("/trms/details/:transactionId", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.trmsDetails);
+RegulatoryRouter.get(
+  "/trms/details/:transactionId",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.trmsDetails
+);
 
 /**
  * @swagger
@@ -169,7 +203,12 @@ RegulatoryRouter.get("/trms/details/:transactionId", authenticate, authorize(Use
  *       200:
  *         description: Submission successful
  */
-RegulatoryRouter.post("/trms/submit/:transactionId", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.trmsSubmit);
+RegulatoryRouter.post(
+  "/trms/submit/:transactionId",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "create" }),
+  regulatoryController.trmsSubmit
+);
 
 /**
  * @swagger
@@ -188,7 +227,12 @@ RegulatoryRouter.post("/trms/submit/:transactionId", authenticate, authorize(Use
  *       200:
  *         description: Status retrieved
  */
-RegulatoryRouter.get("/trms/status/:formNumber", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.trmsCheckStatus);
+RegulatoryRouter.get(
+  "/trms/status/:formNumber",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.trmsCheckStatus
+);
 
 /**
  * @swagger
@@ -209,7 +253,12 @@ RegulatoryRouter.get("/trms/status/:formNumber", authenticate, authorize(UserRol
  *       200:
  *         description: Export job queued
  */
-RegulatoryRouter.post("/trms/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.exportSubmissions);
+RegulatoryRouter.post(
+  "/trms/export",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
+  regulatoryController.exportSubmissions
+);
 
 /**
  * @swagger
@@ -223,7 +272,12 @@ RegulatoryRouter.post("/trms/export", authenticate, authorize(UserRole.SUPER_ADM
  *       200:
  *         description: FN Window stats retrieved
  */
-RegulatoryRouter.get("/cbn-fn/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.fnWindowStats);
+RegulatoryRouter.get(
+  "/cbn-fn/stats",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.fnWindowStats
+);
 
 /**
  * @swagger
@@ -250,7 +304,12 @@ RegulatoryRouter.get("/cbn-fn/stats", authenticate, authorize(UserRole.SUPER_ADM
  *       200:
  *         description: FN Window reports retrieved
  */
-RegulatoryRouter.get("/cbn-fn/reports", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.cbnFnReportsList);
+RegulatoryRouter.get(
+  "/cbn-fn/reports",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.cbnFnReportsList
+);
 
 /**
  * @swagger
@@ -269,7 +328,12 @@ RegulatoryRouter.get("/cbn-fn/reports", authenticate, authorize(UserRole.SUPER_A
  *       200:
  *         description: FN Window report details retrieved
  */
-RegulatoryRouter.get("/cbn-fn/reports/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.cbnFnReportDetails);
+RegulatoryRouter.get(
+  "/cbn-fn/reports/:id",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.cbnFnReportDetails
+);
 
 /**
  * @swagger
@@ -283,7 +347,12 @@ RegulatoryRouter.get("/cbn-fn/reports/:id", authenticate, authorize(UserRole.SUP
  *       200:
  *         description: Rates retrieved
  */
-RegulatoryRouter.get("/cbn-fn/rates", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.fnWindowRates);
+RegulatoryRouter.get(
+  "/cbn-fn/rates",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.fnWindowRates
+);
 
 /**
  * @swagger
@@ -306,7 +375,12 @@ RegulatoryRouter.get("/cbn-fn/rates", authenticate, authorize(UserRole.SUPER_ADM
  *       200:
  *         description: Rate retrieved
  */
-RegulatoryRouter.get("/cbn-fn/rates/:base/:quote", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.fnWindowRate);
+RegulatoryRouter.get(
+  "/cbn-fn/rates/:base/:quote",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.fnWindowRate
+);
 
 /**
  * @swagger
@@ -336,7 +410,12 @@ RegulatoryRouter.get("/cbn-fn/rates/:base/:quote", authenticate, authorize(UserR
  *       200:
  *         description: Audit logs retrieved
  */
-RegulatoryRouter.get("/logs/audit", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.auditLogsList);
+RegulatoryRouter.get(
+  "/logs/audit",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.auditLogsList
+);
 
 /**
  * @swagger
@@ -355,7 +434,12 @@ RegulatoryRouter.get("/logs/audit", authenticate, authorize(UserRole.SUPER_ADMIN
  *       200:
  *         description: Audit log details retrieved
  */
-RegulatoryRouter.get("/logs/audit/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.auditLogDetails);
+RegulatoryRouter.get(
+  "/logs/audit/:id",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.auditLogDetails
+);
 
 /**
  * @swagger
@@ -382,7 +466,12 @@ RegulatoryRouter.get("/logs/audit/:id", authenticate, authorize(UserRole.SUPER_A
  *       200:
  *         description: Regulatory logs retrieved
  */
-RegulatoryRouter.get("/logs/regulatory", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.regulatoryLogsList);
+RegulatoryRouter.get(
+  "/logs/regulatory",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.regulatoryLogsList
+);
 
 /**
  * @swagger
@@ -401,6 +490,11 @@ RegulatoryRouter.get("/logs/regulatory", authenticate, authorize(UserRole.SUPER_
  *       200:
  *         description: Regulatory log details retrieved
  */
-RegulatoryRouter.get("/logs/regulatory/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), regulatoryController.regulatoryLogDetails);
+RegulatoryRouter.get(
+  "/logs/regulatory/:id",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
+  regulatoryController.regulatoryLogDetails
+);
 
 export default RegulatoryRouter;
