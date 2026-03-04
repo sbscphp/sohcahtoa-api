@@ -303,7 +303,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
       },
     });
 
-    if (emailService.isReady()) {
+    if (process.env.NODE_ENV !== "development" && emailService.isReady()) {
       emailService
         .sendOtpEmail(user.email, otp, "LOGIN")
         .catch((err: Error) => logger.warn("Login OTP email failed", { userId: user.id, message: err.message }));

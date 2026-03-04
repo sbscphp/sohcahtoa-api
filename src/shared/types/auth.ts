@@ -1,3 +1,4 @@
+import { TransactionType } from "./transaction";
 export interface JwtPayload {
   userId: string;
   email: string;
@@ -135,4 +136,25 @@ export interface KycVerificationRequest {
   bvn?: string;
   tin?: string;
   passportNumber?: string;
+}
+
+export interface AgentCustomerSummary {
+  userId: string;
+  fullName: string;
+  customerType?: CustomerType;
+  lastTransactionType?: TransactionType | null;
+  registeredAt: string;
+  kycStatus?: KycStatus;
+}
+
+export interface AgentCustomerListMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AgentCustomerListResponse {
+  items: AgentCustomerSummary[];
+  meta: AgentCustomerListMeta;
 }
