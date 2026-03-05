@@ -1,14 +1,14 @@
--- DropForeignKey
-ALTER TABLE "departments" DROP CONSTRAINT "departments_createdById_fkey";
+-- DropForeignKey (if exists)
+ALTER TABLE "departments" DROP CONSTRAINT IF EXISTS "departments_createdById_fkey";
 
--- DropForeignKey
-ALTER TABLE "roles" DROP CONSTRAINT "roles_createdById_fkey";
+-- DropForeignKey (if exists)
+ALTER TABLE "roles" DROP CONSTRAINT IF EXISTS "roles_createdById_fkey";
 
--- DropIndex
-DROP INDEX "departments_createdById_idx";
+-- DropIndex (if exists)
+DROP INDEX IF EXISTS "departments_createdById_idx";
 
--- DropIndex
-DROP INDEX "roles_createdById_idx";
+-- DropIndex (if exists)
+DROP INDEX IF EXISTS "roles_createdById_idx";
 
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN     "createdByAgentId" TEXT;

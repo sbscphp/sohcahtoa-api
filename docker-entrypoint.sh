@@ -145,6 +145,8 @@ else
       npx prisma migrate resolve --applied 20260225150000_add_admin_action_types 2>&1 || true
       npx prisma migrate resolve --applied 20260225160000_add_tax_clearance_and_document_types 2>&1 || true
       npx prisma migrate resolve --applied 20260303131500_add_department_is_default 2>&1 || true
+      npx prisma migrate resolve --applied 20260227112539_add_user_created_by_agent 2>&1 || true
+      npx prisma migrate resolve --applied 20260305094327_add_transaction_mode 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."
