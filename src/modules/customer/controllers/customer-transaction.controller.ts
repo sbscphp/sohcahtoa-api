@@ -377,6 +377,52 @@ class CustomerTransactionController {
       return next(error);
     }
   };
+
+  /**
+   * Get transaction totals by group (BUY, SELL, REMITTANCE)
+   * All amounts converted to USD by default, with optional custom rates for unsupported currencies
+   */
+  getTransactionTotals = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
+
+      // Parse custom rates from request body if provided
+      const customRates = req.body?.customRates as { currency: string; rate: number }[] | undefined;
+
+      // Validate custom rates if provided
+      if (customRates) {
+        if (!Array.isArray(customRates)) {
+          return res.status(400).json({
+            success: false,
+            message: 'customRates must be an array of objects with currency and rate properties',
+          });
+        }
+
+        for (const customRate of customRates) {
+          if (!customRate.currency || typeof customRate.currency !== 'string') {
+            return res.status(400).json({
+              success: false,
+              message: 'Each custom rate must have a currency property (string)',
+            });
+          }
+
+          if (!customRate.rate || typeof customRate.rate !== 'number' || customRate.rate <= 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'Each custom rate must have a rate property (positive number)',
+            });
+          }
+        }
+      }
+
+      const totals = await customerTransactionService.getTotalsByGroup(userId, customRates);
+
+      return res.json(successResponse(totals));
+    } catch (error) {
+      return next(error);
+    }
+  };
 }
 
 export default new CustomerTransactionController();
