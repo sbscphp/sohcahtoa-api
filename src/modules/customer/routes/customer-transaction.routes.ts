@@ -1391,6 +1391,20 @@ router.get("/transactions/pickup-locations/availability-slots", customerTransact
  *                 data:
  *                   type: object
  *                   properties:
+ *                     all:
+ *                       type: object
+ *                       properties:
+ *                         totalAmount:
+ *                           type: number
+ *                           description: Total amount in USD for all transactions combined
+ *                           example: 245001.25
+ *                         currency:
+ *                           type: string
+ *                           example: USD
+ *                         transactionCount:
+ *                           type: integer
+ *                           description: Total number of completed transactions
+ *                           example: 43
  *                     buy:
  *                       type: object
  *                       properties:

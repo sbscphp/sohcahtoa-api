@@ -1540,6 +1540,7 @@ export class CustomerTransactionService {
     userId: string,
     customRates?: { currency: string; rate: number }[]
   ): Promise<{
+    all: { totalAmount: number; currency: string; transactionCount: number };
     buy: { totalAmount: number; currency: string; transactionCount: number };
     sell: { totalAmount: number; currency: string; transactionCount: number };
     remittance: { totalAmount: number; currency: string; transactionCount: number };
@@ -1620,6 +1621,7 @@ export class CustomerTransactionService {
 
     // Group transactions and calculate totals
     const totals = {
+      all: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
       buy: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
       sell: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
       remittance: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
@@ -1659,6 +1661,10 @@ export class CustomerTransactionService {
         }
       }
 
+      // Add to all total
+      totals.all.totalAmount += amountInUSD;
+      totals.all.transactionCount += 1;
+
       // Add to appropriate group
       if (group === 'BUY') {
         totals.buy.totalAmount += amountInUSD;
@@ -1673,12 +1679,14 @@ export class CustomerTransactionService {
     }
 
     // Round to 2 decimal places
+    totals.all.totalAmount = Math.round(totals.all.totalAmount * 100) / 100;
     totals.buy.totalAmount = Math.round(totals.buy.totalAmount * 100) / 100;
     totals.sell.totalAmount = Math.round(totals.sell.totalAmount * 100) / 100;
     totals.remittance.totalAmount = Math.round(totals.remittance.totalAmount * 100) / 100;
 
     logger.info(`[getTotalsByGroup] Transaction totals calculated successfully`, {
       userId,
+      all: totals.all,
       buy: totals.buy,
       sell: totals.sell,
       remittance: totals.remittance,
