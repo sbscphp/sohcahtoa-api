@@ -23,6 +23,7 @@ async function main() {
         name: departmentName,
         description: "Default administration department",
         branch: branchName,
+        isDefault: true,
         isActive: true,
       },
     }));

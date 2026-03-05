@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { workflowController } from "../controllers/workflow.controller";
 
 const WorkflowRouter: Router = Router();
@@ -17,7 +16,12 @@ const WorkflowRouter: Router = Router();
  *       200:
  *         description: Stats retrieved
  */
-WorkflowRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.stats);
+WorkflowRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.stats
+);
 
 /**
  * @swagger
@@ -41,13 +45,18 @@ WorkflowRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserR
  *         name: module
  *         schema: { type: string, enum: ["Transaction", "Outlet Management", "Agent"] }
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Actions retrieved
  */
-WorkflowRouter.get("/actions", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.actions);
+WorkflowRouter.get(
+  "/actions",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.actions
+);
 
 /**
  * @swagger
@@ -86,7 +95,12 @@ WorkflowRouter.get("/actions", authenticate, authorize(UserRole.SUPER_ADMIN, Use
  *       200:
  *         description: Workflow created
  */
-WorkflowRouter.post("/templates", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.createTemplate);
+WorkflowRouter.post(
+  "/templates",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "create" }),
+  workflowController.createTemplate
+);
 
 /**
  * @swagger
@@ -110,7 +124,12 @@ WorkflowRouter.post("/templates", authenticate, authorize(UserRole.SUPER_ADMIN, 
  *       200:
  *         description: Draft saved
  */
-WorkflowRouter.post("/templates/draft", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.saveDraft);
+WorkflowRouter.post(
+  "/templates/draft",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "create" }),
+  workflowController.saveDraft
+);
 
 /**
  * @swagger
@@ -134,7 +153,12 @@ WorkflowRouter.post("/templates/draft", authenticate, authorize(UserRole.SUPER_A
  *       200:
  *         description: Templates retrieved
  */
-WorkflowRouter.get("/templates", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.listTemplates);
+WorkflowRouter.get(
+  "/templates",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.listTemplates
+);
 
 /**
  * @swagger
@@ -153,7 +177,12 @@ WorkflowRouter.get("/templates", authenticate, authorize(UserRole.SUPER_ADMIN, U
  *       200:
  *         description: Template retrieved
  */
-WorkflowRouter.get("/templates/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.getTemplate);
+WorkflowRouter.get(
+  "/templates/:id",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.getTemplate
+);
 
 /**
  * @swagger
@@ -178,7 +207,12 @@ WorkflowRouter.get("/templates/:id", authenticate, authorize(UserRole.SUPER_ADMI
  *       200:
  *         description: Template updated
  */
-WorkflowRouter.patch("/templates/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.updateTemplate);
+WorkflowRouter.patch(
+  "/templates/:id",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  workflowController.updateTemplate
+);
 
 /**
  * @swagger
@@ -197,7 +231,12 @@ WorkflowRouter.patch("/templates/:id", authenticate, authorize(UserRole.SUPER_AD
  *       200:
  *         description: Template published
  */
-WorkflowRouter.post("/templates/:id/publish", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.publishTemplate);
+WorkflowRouter.post(
+  "/templates/:id/publish",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  workflowController.publishTemplate
+);
 
 /**
  * @swagger
@@ -211,7 +250,12 @@ WorkflowRouter.post("/templates/:id/publish", authenticate, authorize(UserRole.S
  *       200:
  *         description: Management stats retrieved
  */
-WorkflowRouter.get("/management/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.managementStats);
+WorkflowRouter.get(
+  "/management/stats",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.managementStats
+);
 
 /**
  * @swagger
@@ -223,7 +267,7 @@ WorkflowRouter.get("/management/stats", authenticate, authorize(UserRole.SUPER_A
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -238,7 +282,12 @@ WorkflowRouter.get("/management/stats", authenticate, authorize(UserRole.SUPER_A
  *       200:
  *         description: Management list retrieved
  */
-WorkflowRouter.get("/management/list", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.managementList);
+WorkflowRouter.get(
+  "/management/list",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.managementList
+);
 
 /**
  * @swagger
@@ -257,7 +306,12 @@ WorkflowRouter.get("/management/list", authenticate, authorize(UserRole.SUPER_AD
  *       200:
  *         description: Template activated
  */
-WorkflowRouter.post("/templates/:id/activate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.activateTemplate);
+WorkflowRouter.post(
+  "/templates/:id/activate",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  workflowController.activateTemplate
+);
 
 /**
  * @swagger
@@ -276,7 +330,12 @@ WorkflowRouter.post("/templates/:id/activate", authenticate, authorize(UserRole.
  *       200:
  *         description: Template deactivated
  */
-WorkflowRouter.post("/templates/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.deactivateTemplate);
+WorkflowRouter.post(
+  "/templates/:id/deactivate",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  workflowController.deactivateTemplate
+);
 
 /**
  * @swagger
@@ -288,7 +347,7 @@ WorkflowRouter.post("/templates/:id/deactivate", authenticate, authorize(UserRol
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: q
+ *         name: search
  *         schema: { type: string }
  *       - in: query
  *         name: status
@@ -297,6 +356,11 @@ WorkflowRouter.post("/templates/:id/deactivate", authenticate, authorize(UserRol
  *       200:
  *         description: Export job queued
  */
-WorkflowRouter.post("/templates/export", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), workflowController.exportTemplates);
+WorkflowRouter.post(
+  "/templates/export",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "export" }),
+  workflowController.exportTemplates
+);
 
 export default WorkflowRouter;

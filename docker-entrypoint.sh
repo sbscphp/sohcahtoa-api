@@ -106,7 +106,7 @@ else
     echo "🔍 Found failed migration. Attempting to resolve..."
 
     # List of migrations that might fail (space-separated for POSIX sh compatibility)
-    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department"
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default"
 
     # Try to mark each potentially failed migration as rolled back
     for migration in $MIGRATIONS_TO_RESOLVE; do
@@ -144,6 +144,7 @@ else
       npx prisma migrate resolve --applied 20260225113000_add_created_by_to_role_department 2>&1 || true
       npx prisma migrate resolve --applied 20260225150000_add_admin_action_types 2>&1 || true
       npx prisma migrate resolve --applied 20260225160000_add_tax_clearance_and_document_types 2>&1 || true
+      npx prisma migrate resolve --applied 20260303131500_add_department_is_default 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."
@@ -159,6 +160,73 @@ echo "🔧 Verifying critical schema changes..."
 npx prisma db execute --stdin <<'EOF'
 -- Ensure taxClearanceNumber column exists
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
+
+-- Ensure agents.password column exists
+ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "password" TEXT;
+
+-- Ensure departments.isDefault exists
+ALTER TABLE "departments" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;
+
+-- Seed a default USD->NGN exchange rate if none exist
+DO $$
+DECLARE
+  rate_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO rate_count FROM "exchange_rates";
+  IF rate_count = 0 THEN
+    INSERT INTO "exchange_rates"(
+      "id","fromCurrency","toCurrency","rate","buyRate","sellRate","source","validFrom","validUntil","createdAt","updatedAt","isActive"
+    ) VALUES (
+      gen_random_uuid(), 'USD', 'NGN', 1500.000000, 1490.000000, 1500.000000, 'SEED',
+      NOW() - INTERVAL '1 hour',
+      NOW() + INTERVAL '30 days',
+      NOW(), NOW(), true
+    );
+  END IF;
+END $$;
+
+-- Ensure TransactionMode enum and transactions.transaction_mode column exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMode') THEN
+    CREATE TYPE "TransactionMode" AS ENUM ('BUY', 'SELL');
+  END IF;
+END $$;
+
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "transaction_mode" "TransactionMode";
+CREATE INDEX IF NOT EXISTS "transactions_transaction_mode_idx" ON "transactions"("transaction_mode");
+
+-- Ensure admin_actions.actionType is TEXT (convert from enum if necessary)
+DO $$
+DECLARE
+  col_data_type TEXT;
+  col_udt_name TEXT;
+BEGIN
+  SELECT data_type, udt_name
+  INTO col_data_type, col_udt_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'admin_actions'
+    AND column_name = 'actionType';
+
+  IF col_data_type = 'USER-DEFINED' AND col_udt_name = 'ActionType' THEN
+    IF EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'admin_actions_actionType_idx'
+    ) THEN
+      EXECUTE 'DROP INDEX "admin_actions_actionType_idx"';
+    END IF;
+
+    ALTER TABLE "admin_actions" ADD COLUMN IF NOT EXISTS "actionType_text" TEXT;
+    UPDATE "admin_actions"
+      SET "actionType_text" = "actionType"::text
+      WHERE "actionType" IS NOT NULL;
+
+    ALTER TABLE "admin_actions" DROP COLUMN "actionType";
+    ALTER TABLE "admin_actions" RENAME COLUMN "actionType_text" TO "actionType";
+    CREATE INDEX IF NOT EXISTS "admin_actions_actionType_idx" ON "admin_actions"("actionType");
+  END IF;
+END $$;
 
 -- Ensure cash_pickup recipient fields are nullable
 DO $$

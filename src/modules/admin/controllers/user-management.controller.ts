@@ -6,6 +6,7 @@ import { asyncHandler } from "../../../shared/middleware";
 import adminService from "../services/admin.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { UpdateAdminUserDto } from "../dto/user-management.dto";
+import { ActionType } from "../../../shared/types/action-type";
 
 class UserManagementController {
     addUser = asyncHandler(async (req: Request, res: Response) => {
@@ -14,7 +15,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "ADMIN_USER_CREATE",
+            actionType: ActionType.ADMIN_USER_CREATE,
             actionLabel: "Create Admin User",
             resourceType: "ADMIN_USER",
             resourceId: result.user.id,
@@ -31,7 +32,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "ADMIN_USER_UPDATE",
+            actionType: ActionType.ADMIN_USER_UPDATE,
             actionLabel: "Update Admin User",
             resourceType: "ADMIN_USER",
             resourceId: id,
@@ -50,7 +51,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: isActive ? "ADMIN_USER_ACTIVATE" : "ADMIN_USER_SUSPEND",
+            actionType: isActive ? ActionType.ADMIN_USER_ACTIVATE : ActionType.ADMIN_USER_SUSPEND,
             actionLabel: isActive ? "Activate Admin User" : "Suspend Admin User",
             resourceType: "ADMIN_USER",
             resourceId: id,
@@ -86,7 +87,7 @@ class UserManagementController {
         
         await auditTrailService.logAction({
             adminId,
-            actionType: "ROLE_CREATE",
+            actionType: ActionType.ROLE_CREATE,
             actionLabel: "Create Role",
             resourceType: "ROLE",
             resourceId: result.id,
@@ -125,7 +126,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "ROLE_UPDATE",
+            actionType: ActionType.ROLE_UPDATE,
             actionLabel: "Update Role",
             resourceType: "ROLE",
             resourceId: id,
@@ -140,7 +141,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "ROLE_DELETE",
+            actionType: ActionType.ROLE_DELETE,
             actionLabel: "Delete Role",
             resourceType: "ROLE",
             resourceId: id,
@@ -272,7 +273,7 @@ class UserManagementController {
         
         await auditTrailService.logAction({
             adminId,
-            actionType: "DEPARTMENT_CREATE",
+            actionType: ActionType.DEPARTMENT_CREATE,
             actionLabel: "Create Department",
             resourceType: "DEPARTMENT",
             resourceId: result.id,
@@ -306,7 +307,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "DEPARTMENT_UPDATE",
+            actionType: ActionType.DEPARTMENT_UPDATE,
             actionLabel: "Update Department",
             resourceType: "DEPARTMENT",
             resourceId: id,
@@ -321,7 +322,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "DEPARTMENT_DELETE",
+            actionType: ActionType.DEPARTMENT_DELETE,
             actionLabel: "Delete Department",
             resourceType: "DEPARTMENT",
             resourceId: id,
@@ -341,7 +342,7 @@ class UserManagementController {
         const adminId = (req as any).user?.userId as string;
         await auditTrailService.logAction({
             adminId,
-            actionType: "DEPARTMENT_UPDATE",
+            actionType: ActionType.DEPARTMENT_UPDATE,
             actionLabel: isActive ? "Activate Department" : "Deactivate Department",
             resourceType: "DEPARTMENT",
             resourceId: id,

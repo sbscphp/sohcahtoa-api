@@ -3,29 +3,10 @@ const prisma = getDatabase();
 import { createLogger, ForbiddenError, NotFoundError } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared/types";
 import { hashPassword } from "../../../shared/utils/password";
+import { auditTrailService } from "../services/audit-trail.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
-
-  private async logAdminAction(params: {
-    adminId: string;
-    actionType: any;  // ActionType enum from Prisma
-    resourceType: string;
-    resourceId: string;
-    reason?: string;
-    metadata?: any;
-  }) {
-    return prisma.adminAction.create({
-      data: {
-        adminId: params.adminId,
-        actionType: params.actionType,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId,
-        reason: params.reason,
-        metadata: params.metadata,
-      },
-    });
-  }
 
   async getDashboard() {
     const now = new Date();
@@ -144,7 +125,7 @@ export class AdminService {
   }
 
   async confirmDeposit(transactionId: string, adminId: string, paymentReference: string, proofOfPayment?: string) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "DEPOSIT_CONFIRM",
       resourceType: "TRANSACTION",
@@ -317,6 +298,7 @@ export class AdminService {
           name: departmentName,
           description: "Default administration department",
           branch: branchName,
+          isDefault: true,
           isActive: true,
         },
       }));

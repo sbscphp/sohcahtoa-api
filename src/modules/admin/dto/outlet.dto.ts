@@ -11,6 +11,7 @@ export class CreateFranchiseDto {
 export class FranchiseQueryDto {
   page?: number;
   limit?: number;
+  q?: string;
   search?: string;
   status?: string;
 }

@@ -10,6 +10,7 @@ import authRoutes from './modules/auth/routes/auth.routes';
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
 import customerTransactionRoutes from './modules/customer/routes/customer-transaction.routes';
+import AgentCustomerRouter from './modules/agents/routes/agent-customer.routes';
 import customerSupportRoutes from './modules/customer/routes/customer-support.routes';
 import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
@@ -85,6 +86,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/customer', customerTransactionRoutes);
   logger.info('Customer transaction routes registered');
+
+  app.use('/api/agent', AgentCustomerRouter);
+  logger.info('Agent customer routes registered');
 
   app.use('/api/customer/support', customerSupportRoutes);
   logger.info('Customer support routes registered');

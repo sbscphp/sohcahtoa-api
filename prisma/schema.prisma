@@ -272,87 +272,90 @@ enum Severity {
 // ========================================
 
 model User {
-  id            String        @id @default(uuid())
-  email         String        @unique
-  phoneNumber   String        @unique
-  role          UserRole      @default(CUSTOMER)
-  customerType  CustomerType?
-  isActive      Boolean       @default(true)
-  emailVerified Boolean       @default(false)
-  phoneVerified Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               String        @id @default(uuid())
+  email            String        @unique
+  phoneNumber      String        @unique
+  role             UserRole      @default(CUSTOMER)
+  customerType     CustomerType?
+  createdByAgentId String?
+  isActive         Boolean       @default(true)
+  emailVerified    Boolean       @default(false)
+  phoneVerified    Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  credentials   UserCredential?
-  profile       UserProfile?
-  kyc           UserKyc?
-  sessions      Session[]
-  otpLogs       OtpLog[]
-  tickets       Ticket[]       @relation("TicketCustomer")
+  credentials    UserCredential?
+  profile        UserProfile?
+  kyc            UserKyc?
+  sessions       Session[]
+  otpLogs        OtpLog[]
+  tickets        Ticket[]        @relation("TicketCustomer")
+  createdByAgent Agent?          @relation("AgentCreatedCustomers", fields: [createdByAgentId], references: [id])
 
   @@index([email])
   @@index([phoneNumber])
   @@index([customerType])
+  @@index([createdByAgentId])
   @@map("users")
 }
 
 model UserCredential {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  passwordHash String
-  lastPasswordChange DateTime @default(now())
-  failedAttempts Int   @default(0)
-  lockedUntil  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  passwordHash       String
+  lastPasswordChange DateTime  @default(now())
+  failedAttempts     Int       @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_credentials")
 }
 
 model UserProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
+  id          String    @id @default(uuid())
+  userId      String    @unique
   firstName   String
   lastName    String
   dateOfBirth DateTime?
   address     String?
   city        String?
   state       String?
-  country     String   @default("Nigeria")
+  country     String    @default("Nigeria")
   postalCode  String?
   avatar      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_profiles")
 }
 
 model UserKyc {
-  id                  String      @id @default(uuid())
-  userId              String      @unique
-  status              KycStatus   @default(NOT_STARTED)
-  bvn                 String?     @unique
-  nin                 String?     @unique
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  status              KycStatus @default(NOT_STARTED)
+  bvn                 String?   @unique
+  nin                 String?   @unique
   tin                 String?
   passportNumber      String?
   passportDocumentUrl String?
-  bvnVerified         Boolean     @default(false)
-  ninVerified         Boolean     @default(false)
-  tinVerified         Boolean     @default(false)
-  passportVerified    Boolean     @default(false)
+  bvnVerified         Boolean   @default(false)
+  ninVerified         Boolean   @default(false)
+  tinVerified         Boolean   @default(false)
+  passportVerified    Boolean   @default(false)
   verificationNotes   String?
   verifiedAt          DateTime?
   verifiedBy          String?
   rejectedAt          DateTime?
   rejectionReason     String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([bvn])
   @@index([nin])
@@ -369,7 +372,7 @@ model Session {
   expiresAt    DateTime
   createdAt    DateTime @default(now())
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([refreshToken])
@@ -377,19 +380,19 @@ model Session {
 }
 
 model OtpLog {
-  id          String      @id @default(uuid())
+  id          String     @id @default(uuid())
   userId      String?
   email       String?
   phoneNumber String?
   otp         String
   purpose     OtpPurpose
-  isUsed      Boolean     @default(false)
-  attempts    Int         @default(0)
+  isUsed      Boolean    @default(false)
+  attempts    Int        @default(0)
   expiresAt   DateTime
   usedAt      DateTime?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime   @default(now())
 
-  user        User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([phoneNumber])
@@ -402,44 +405,45 @@ model OtpLog {
 // ========================================
 
 model Role {
-  id           String     @id @default(uuid())
-  name         String     @unique
-  description  String?
-  permissions  Json       @default("[]")
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  permissions Json    @default("[]")
 
-  branch        String?
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id])
+  branch       String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  isDefault    Boolean    @default(false)
-  isActive     Boolean    @default(true)
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users        AdminUser[]
+  users           AdminUser[]
   rolePermissions RolePermission[]
-  createdBy    String?
-  createdById  String?
+  createdBy       String?
+  createdById     String?
+
   @@index([departmentId])
   @@map("roles")
 }
 
 model Permission {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   module     String
   featureKey String
-  action     String   // e.g. VIEW | EDIT | CREATE | UPDATE | DELETE | EXPORT
+  action     String // e.g. VIEW | EDIT | CREATE | UPDATE | DELETE | EXPORT
   label      String?
-  isActive   Boolean  @default(true)
+  isActive   Boolean @default(true)
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  roleLinks  RolePermission[]
+  roleLinks RolePermission[]
 
-  @@index([module, featureKey, action])
   @@unique([module, featureKey, action])
+  @@index([module, featureKey, action])
   @@map("permissions")
 }
 
@@ -447,10 +451,10 @@ model RolePermission {
   roleId       String
   permissionId String
 
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  createdAt    DateTime   @default(now())
+  createdAt DateTime @default(now())
 
   @@id([roleId, permissionId])
   @@index([permissionId])
@@ -458,8 +462,8 @@ model RolePermission {
 }
 
 model AdminUser {
-  id             String     @id @default(uuid())
-  email          String     @unique
+  id             String  @id @default(uuid())
+  email          String  @unique
   fullName       String
   phoneNumber    String
   altPhoneNumber String?
@@ -467,25 +471,25 @@ model AdminUser {
   branch         String
   password       String?
 
-  roleId         String
-  role           Role       @relation(fields: [roleId], references: [id])
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
 
-  departmentId   String?
-  department     Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  permissions    Json?
-  isActive       Boolean    @default(true)
+  permissions Json?
+  isActive    Boolean @default(true)
 
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  actions        AdminAction[]
-  assignments    TaskAssignment[]
-  tokens         Token[]
-  assignedTickets Ticket[]        @relation("TicketAssignedAgent")
-  ticketComments  TicketComment[] @relation("TicketCommentAdmin")
+  actions                  AdminAction[]
+  assignments              TaskAssignment[]
+  tokens                   Token[]
+  assignedTickets          Ticket[]           @relation("TicketAssignedAgent")
+  ticketComments           TicketComment[]    @relation("TicketCommentAdmin")
   createdWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateCreator")
-  workflowAssignees WorkflowAssignee[]
+  workflowAssignees        WorkflowAssignee[]
 
   @@index([email])
   @@index([roleId])
@@ -493,44 +497,44 @@ model AdminUser {
   @@map("admin_users")
 }
 
-
 model Department {
-  id              String     @id @default(uuid())
-  name            String     @unique
+  id              String  @id @default(uuid())
+  name            String  @unique
   departmentEmail String?
   description     String?
   branch          String
 
+  isDefault       Boolean    @default(false)
   isActive        Boolean    @default(true)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  createdBy    String?
-  createdById  String?
+  createdBy   String?
+  createdById String?
 
-  users           AdminUser[]
-  actions         AdminAction[]
-  roles           Role[]
+  users             AdminUser[]
+  actions           AdminAction[]
+  roles             Role[]
   workflowTemplates WorkflowTemplate[]
 
   @@map("departments")
 }
 
 model Franchise {
-  id                 String   @id @default(uuid())
-  name               String
-  state              String
-  address            String
-  contactPersonName  String
-  email              String
-  phoneNumber        String
-  altPhoneNumber     String?
-  status             String   @default("PENDING")
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(uuid())
+  name              String
+  state             String
+  address           String
+  contactPersonName String
+  email             String
+  phoneNumber       String
+  altPhoneNumber    String?
+  status            String   @default("PENDING")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  branches           Branch[]
+  branches Branch[]
 
   @@index([name])
   @@index([status])
@@ -538,29 +542,29 @@ model Franchise {
 }
 
 model Branch {
-  id                String   @id @default(uuid())
-  franchiseId       String?
-  name              String
-  branchEmail       String?
-  state             String
-  address           String
-  branchManager     String
-  email             String
-  phoneNumber       String
-  agentName         String?
-  agentEmail        String?
-  agentPhoneNumber  String?
-  status            String   @default("PENDING")
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(uuid())
+  franchiseId      String?
+  name             String
+  branchEmail      String?
+  state            String
+  address          String
+  branchManager    String
+  email            String
+  phoneNumber      String
+  agentName        String?
+  agentEmail       String?
+  agentPhoneNumber String?
+  status           String   @default("PENDING")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  franchise         Franchise? @relation(fields: [franchiseId], references: [id])
-  agents            Agent[]
+  franchise Franchise? @relation(fields: [franchiseId], references: [id])
+  agents    Agent[]
 
+  @@unique([franchiseId, name])
   @@index([franchiseId])
   @@index([status])
-  @@unique([franchiseId, name])
   @@map("branches")
 }
 
@@ -577,7 +581,8 @@ model Agent {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  attachments AgentAttachment[]
+  attachments      AgentAttachment[]
+  createdCustomers User[]            @relation("AgentCreatedCustomers")
 
   @@index([branchId])
   @@index([name])
@@ -593,32 +598,32 @@ model AgentAttachment {
   mimeType  String?
   createdAt DateTime @default(now())
 
-  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([agentId])
   @@map("agent_attachments")
 }
 
 model AdminAction {
-  id              String     @id @default(uuid())
-  adminId         String
-  actionType      ActionType
-  actionLabel     String?
-  resourceType    String
-  resourceId      String
-  previousState   Json?
-  newState        Json?
-  reason          String?
-  metadata        Json?
-  performedAt     DateTime   @default(now())
-  ipAddress       String?
-  userAgent       String?
-  status          String     @default("SUCCESS")
+  id            String     @id @default(uuid())
+  adminId       String
+  actionType    ActionType
+  actionLabel   String?
+  resourceType  String
+  resourceId    String
+  previousState Json?
+  newState      Json?
+  reason        String?
+  metadata      Json?
+  performedAt   DateTime   @default(now())
+  ipAddress     String?
+  userAgent     String?
+  status        String     @default("SUCCESS")
 
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
-  admin           AdminUser  @relation(fields: [adminId], references: [id])
+  admin AdminUser @relation(fields: [adminId], references: [id])
 
   @@index([adminId])
   @@index([resourceType, resourceId])
@@ -627,17 +632,17 @@ model AdminAction {
 }
 
 model TaskAssignment {
-  id            String      @id @default(uuid())
-  adminId       String
-  taskType      String
-  taskId        String
-  priority      Int         @default(1)
-  status        String      @default("PENDING")
-  assignedAt    DateTime    @default(now())
-  completedAt   DateTime?
-  notes         String?
+  id          String    @id @default(uuid())
+  adminId     String
+  taskType    String
+  taskId      String
+  priority    Int       @default(1)
+  status      String    @default("PENDING")
+  assignedAt  DateTime  @default(now())
+  completedAt DateTime?
+  notes       String?
 
-  admin         AdminUser   @relation(fields: [adminId], references: [id])
+  admin AdminUser @relation(fields: [adminId], references: [id])
 
   @@index([adminId])
   @@index([status])
@@ -662,15 +667,15 @@ model Dashboard {
 }
 
 model OutboxEvent {
-  id            String   @id
-  eventType     String
-  source        String
-  aggregateId   String
-  payload       Json
-  status        String   @default("PENDING")
-  retryCount    Int      @default(0)
-  createdAt     DateTime @default(now())
-  publishedAt   DateTime?
+  id          String    @id
+  eventType   String
+  source      String
+  aggregateId String
+  payload     Json
+  status      String    @default("PENDING")
+  retryCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
 
   @@map("outbox_events")
 }
@@ -688,7 +693,7 @@ model Token {
   metadata    Json?
   createdAt   DateTime  @default(now())
 
-  user        AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
@@ -698,22 +703,22 @@ model Token {
 }
 
 model CustomerFlag {
-  id          String             @id @default(uuid())
-  userId      String
-  type        AmlFlagType
-  severity    AmlFlagSeverity
-  status      CustomerFlagStatus @default(OPEN)
+  id       String             @id @default(uuid())
+  userId   String
+  type     AmlFlagType
+  severity AmlFlagSeverity
+  status   CustomerFlagStatus @default(OPEN)
 
   title       String?
   description String
   details     Json?
 
-  createdBy   String
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  resolvedAt  DateTime?
-  resolvedBy  String?
+  resolvedAt      DateTime?
+  resolvedBy      String?
   resolutionNotes String?
 
   @@index([status])
@@ -728,34 +733,33 @@ model CustomerFlag {
 // ========================================
 
 model Transaction {
-  id                  String              @id @default(uuid())
-  userId              String
-  referenceNumber     String              @unique
-  type                TransactionType
-  transactionMode     TransactionMode?    @map("transaction_mode")
-  status              TransactionStatus   @default(DRAFT)
-  currentStep         TransactionStep     @default(PERSONAL_INFO)
-  purpose             String
-  destinationCountry  String?
-  currency            String
-  foreignAmount       Decimal?            @db.Decimal(18, 2)
-  formAId             String?
-  nairaEquivalent     Decimal?            @db.Decimal(18, 2)
-  exchangeRate        Decimal?            @db.Decimal(18, 6)
-  disbursementMethod  DisbursementMethod?
-  taxClearanceNumber  String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  completedAt         DateTime?
-  rejectedAt          DateTime?
-  rejectionReason     String?
+  id                 String              @id @default(uuid())
+  userId             String
+  referenceNumber    String              @unique
+  type               TransactionType
+  status             TransactionStatus   @default(DRAFT)
+  currentStep        TransactionStep     @default(PERSONAL_INFO)
+  purpose            String
+  destinationCountry String?
+  currency           String
+  foreignAmount      Decimal?            @db.Decimal(18, 2)
+  formAId            String?
+  nairaEquivalent    Decimal?            @db.Decimal(18, 2)
+  exchangeRate       Decimal?            @db.Decimal(18, 6)
+  disbursementMethod DisbursementMethod?
+  taxClearanceNumber String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  completedAt        DateTime?
+  rejectedAt         DateTime?
+  rejectionReason    String?
 
-  steps               TransactionStepLog[]
-  documents           TransactionDocument[]
-  history             TransactionHistory[]
-  cashPickup          CashPickup?
-  prepaidCard         PrepaidCard?
-  receipt             Receipt?
+  steps       TransactionStepLog[]
+  documents   TransactionDocument[]
+  history     TransactionHistory[]
+  cashPickup  CashPickup?
+  prepaidCard PrepaidCard?
+  receipt     Receipt?
 
   @@index([userId])
   @@index([referenceNumber])
@@ -774,7 +778,7 @@ model TransactionStepLog {
   completedAt   DateTime?
   createdAt     DateTime        @default(now())
 
-  transaction   Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId])
   @@map("transaction_steps")
@@ -794,7 +798,7 @@ model TransactionDocument {
   uploadedAt         DateTime           @default(now())
   metadata           Json?
 
-  transaction        Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId])
   @@index([verificationStatus])
@@ -802,17 +806,17 @@ model TransactionDocument {
 }
 
 model TransactionHistory {
-  id            String       @id @default(uuid())
+  id            String   @id @default(uuid())
   transactionId String
   action        String
   previousValue String?
   newValue      String?
   performedBy   String?
   notes         String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime @default(now())
   metadata      Json?
 
-  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId])
   @@map("transaction_history")
@@ -837,26 +841,26 @@ model TransactionLimit {
 }
 
 model CashPickup {
-  id                String      @id @default(uuid())
-  transactionId     String      @unique
-  pickupLocation    String
-  pickupLocationId  String?
-  pickupState       String?
-  pickupCity        String?
-  pickupCode        String      @unique
-  recipientName     String?
-  recipientPhone    String?
-  amount            Decimal     @db.Decimal(18, 2)
-  currency          String
-  status            String      @default("PENDING")
+  id                  String    @id @default(uuid())
+  transactionId       String    @unique
+  pickupLocation      String
+  pickupLocationId    String?
+  pickupState         String?
+  pickupCity          String?
+  pickupCode          String    @unique
+  recipientName       String?
+  recipientPhone      String?
+  amount              Decimal   @db.Decimal(18, 2)
+  currency            String
+  status              String    @default("PENDING")
   scheduledPickupDate DateTime?
   scheduledPickupTime String?
-  expiryDate        DateTime
-  pickedUpAt        DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  expiryDate          DateTime
+  pickedUpAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([pickupCode])
   @@index([status])
@@ -866,35 +870,35 @@ model CashPickup {
 }
 
 model PrepaidCard {
-  id               String      @id @default(uuid())
-  transactionId    String      @unique
-  cardNumber       String      @unique
+  id               String    @id @default(uuid())
+  transactionId    String    @unique
+  cardNumber       String    @unique
   cardType         String
-  amount           Decimal     @db.Decimal(18, 2)
+  amount           Decimal   @db.Decimal(18, 2)
   currency         String
   expiryDate       DateTime
   cvv              String
-  activationStatus String      @default("PENDING")
+  activationStatus String    @default("PENDING")
   activatedAt      DateTime?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  transaction      Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([cardNumber])
   @@map("prepaid_cards")
 }
 
 model Receipt {
-  id              String      @id @default(uuid())
-  transactionId   String      @unique
-  receiptNumber   String      @unique
-  qrCode          String
-  pdfUrl          String?
-  generatedAt     DateTime    @default(now())
-  metadata        Json?
+  id            String   @id @default(uuid())
+  transactionId String   @unique
+  receiptNumber String   @unique
+  qrCode        String
+  pdfUrl        String?
+  generatedAt   DateTime @default(now())
+  metadata      Json?
 
-  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([receiptNumber])
   @@map("receipts")
@@ -905,22 +909,22 @@ model Receipt {
 // ========================================
 
 model Settlement {
-  id                String        @id @default(uuid())
-  transactionId     String        @unique
-  amount            Decimal       @db.Decimal(18, 2)
-  currency          String        @default("NGN")
-  status            PaymentStatus @default(PENDING)
-  paymentMethod     PaymentMethod
-  paymentReference  String?
-  depositedAt       DateTime?
-  confirmedAt       DateTime?
-  confirmedBy       String?
-  proofOfPayment    String?
-  notes             String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id               String        @id @default(uuid())
+  transactionId    String        @unique
+  amount           Decimal       @db.Decimal(18, 2)
+  currency         String        @default("NGN")
+  status           PaymentStatus @default(PENDING)
+  paymentMethod    PaymentMethod
+  paymentReference String?
+  depositedAt      DateTime?
+  confirmedAt      DateTime?
+  confirmedBy      String?
+  proofOfPayment   String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  bankDetails       BankDetail?
+  bankDetails BankDetail?
 
   @@index([transactionId])
   @@index([status])
@@ -928,37 +932,37 @@ model Settlement {
 }
 
 model BankDetail {
-  id            String     @id @default(uuid())
-  settlementId  String     @unique
+  id            String   @id @default(uuid())
+  settlementId  String   @unique
   bankName      String
   accountNumber String
   accountName   String
-  reference     String     @unique
-  createdAt     DateTime   @default(now())
+  reference     String   @unique
+  createdAt     DateTime @default(now())
 
-  settlement    Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
 
   @@map("bank_details")
 }
 
 model PayoutInstruction {
-  id              String   @id @default(uuid())
-  transactionId   String
-  amount          Decimal  @db.Decimal(18, 2)
-  currency        String
-  method          String
-  status          String   @default("PENDING")
-  recipientName   String
-  recipientBank   String?
+  id               String    @id @default(uuid())
+  transactionId    String
+  amount           Decimal   @db.Decimal(18, 2)
+  currency         String
+  method           String
+  status           String    @default("PENDING")
+  recipientName    String
+  recipientBank    String?
   recipientAccount String?
-  swiftCode       String?
-  iban            String?
-  phoneNumber     String?
-  address         String?
-  processedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  metadata        Json?
+  swiftCode        String?
+  iban             String?
+  phoneNumber      String?
+  address          String?
+  processedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  metadata         Json?
 
   @@index([transactionId])
   @@index([status])
@@ -966,15 +970,15 @@ model PayoutInstruction {
 }
 
 model PaymentReceipt {
-  id            String   @id @default(uuid())
+  id            String        @id @default(uuid())
   transactionId String
   settlementId  String
-  receiptNumber String   @unique
-  amount        Decimal  @db.Decimal(18, 2)
+  receiptNumber String        @unique
+  amount        Decimal       @db.Decimal(18, 2)
   currency      String
   paymentMethod PaymentMethod
   pdfUrl        String?
-  generatedAt   DateTime @default(now())
+  generatedAt   DateTime      @default(now())
   metadata      Json?
 
   @@index([transactionId])
@@ -983,18 +987,18 @@ model PaymentReceipt {
 }
 
 model ExchangeRate {
-  id              String   @id @default(uuid())
-  fromCurrency    String
-  toCurrency      String
-  rate            Decimal  @db.Decimal(18, 6)
-  buyRate         Decimal? @db.Decimal(18, 6)
-  sellRate        Decimal? @db.Decimal(18, 6)
-  source          String   @default("MANUAL")
-  validFrom       DateTime @default(now())
-  validUntil      DateTime
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  isActive        Boolean  @default(true)
+  id           String   @id @default(uuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Decimal  @db.Decimal(18, 6)
+  buyRate      Decimal? @db.Decimal(18, 6)
+  sellRate     Decimal? @db.Decimal(18, 6)
+  source       String   @default("MANUAL")
+  validFrom    DateTime @default(now())
+  validUntil   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  isActive     Boolean  @default(true)
 
   @@index([fromCurrency, toCurrency, isActive])
   @@map("exchange_rates")
@@ -1005,22 +1009,22 @@ model ExchangeRate {
 // ========================================
 
 model AmlCheck {
-  id              String          @id @default(uuid())
+  id              String         @id @default(uuid())
   transactionId   String
   userId          String
-  amount          Decimal         @db.Decimal(18, 2)
+  amount          Decimal        @db.Decimal(18, 2)
   currency        String
   transactionType String
   sourceOfFunds   String?
-  status          AmlCheckStatus  @default(PENDING)
-  riskScore       Int             @default(0)
+  status          AmlCheckStatus @default(PENDING)
+  riskScore       Int            @default(0)
   recommendations Json?
   checkedAt       DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  flags           AmlFlag[]
-  reviews         ComplianceReview[]
+  flags   AmlFlag[]
+  reviews ComplianceReview[]
 
   @@index([transactionId])
   @@index([userId])
@@ -1029,15 +1033,15 @@ model AmlCheck {
 }
 
 model AmlFlag {
-  id          String           @id @default(uuid())
+  id          String          @id @default(uuid())
   checkId     String
   type        AmlFlagType
   severity    AmlFlagSeverity
   description String
   details     Json?
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime        @default(now())
 
-  check       AmlCheck         @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  check AmlCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
 
   @@index([checkId])
   @@index([severity])
@@ -1045,18 +1049,18 @@ model AmlFlag {
 }
 
 model ComplianceReview {
-  id          String                  @id @default(uuid())
-  checkId     String
+  id            String                 @id @default(uuid())
+  checkId       String
   transactionId String
-  reviewerId  String
-  status      ComplianceReviewStatus  @default(PENDING)
-  notes       String?
-  decision    String?
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  reviewedAt  DateTime?
+  reviewerId    String
+  status        ComplianceReviewStatus @default(PENDING)
+  notes         String?
+  decision      String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  reviewedAt    DateTime?
 
-  check       AmlCheck                @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  check AmlCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
 
   @@index([checkId])
   @@index([transactionId])
@@ -1066,15 +1070,15 @@ model ComplianceReview {
 }
 
 model WatchList {
-  id          String   @id @default(uuid())
-  name        String
-  type        String
-  reason      String
-  source      String
-  addedAt     DateTime @default(now())
-  expiresAt   DateTime?
-  isActive    Boolean  @default(true)
-  metadata    Json?
+  id        String    @id @default(uuid())
+  name      String
+  type      String
+  reason    String
+  source    String
+  addedAt   DateTime  @default(now())
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  metadata  Json?
 
   @@index([name])
   @@index([type])
@@ -1104,21 +1108,21 @@ model NfiuReport {
 // ========================================
 
 model VerificationRequest {
-  id                String             @id @default(uuid())
-  transactionId     String
-  userId            String
-  documentId        String
-  verificationType  VerificationType
-  documentUrl       String
-  status            VerificationStatus @default(PENDING)
-  priority          Int                @default(1)
-  automatedChecks   Json?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  completedAt       DateTime?
+  id               String             @id @default(uuid())
+  transactionId    String
+  userId           String
+  documentId       String
+  verificationType VerificationType
+  documentUrl      String
+  status           VerificationStatus @default(PENDING)
+  priority         Int                @default(1)
+  automatedChecks  Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  completedAt      DateTime?
 
-  results           VerificationResult[]
-  reviews           AdminReview[]
+  results VerificationResult[]
+  reviews AdminReview[]
 
   @@index([transactionId])
   @@index([status])
@@ -1144,22 +1148,22 @@ enum TicketPriority {
 }
 
 model Ticket {
-  id               String         @id @default(uuid())
-  reference        String         @unique
-  customerId       String
-  caseType         String
-  description      String
-  priority         TicketPriority @default(MEDIUM)
-  status           TicketStatus   @default(OPEN)
-  assignedAgentId  String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  reference       String         @unique
+  customerId      String
+  caseType        String
+  description     String
+  priority        TicketPriority @default(MEDIUM)
+  status          TicketStatus   @default(OPEN)
+  assignedAgentId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  customer         User           @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  assignedAgent    AdminUser?     @relation("TicketAssignedAgent", fields: [assignedAgentId], references: [id])
+  customer      User       @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  assignedAgent AdminUser? @relation("TicketAssignedAgent", fields: [assignedAgentId], references: [id])
 
-  attachments      TicketAttachment[]
-  comments         TicketComment[]
+  attachments TicketAttachment[]
+  comments    TicketComment[]
 
   @@index([customerId])
   @@index([status, priority])
@@ -1167,63 +1171,64 @@ model Ticket {
 }
 
 model TicketAttachment {
-  id         String   @id @default(uuid())
-  ticketId   String
-  fileUrl    String
-  fileName   String?
-  fileSize   Int?
-  mimeType   String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  ticketId  String
+  fileUrl   String
+  fileName  String?
+  fileSize  Int?
+  mimeType  String
+  createdAt DateTime @default(now())
 
-  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@map("ticket_attachments")
 }
 
 model TicketComment {
-  id         String     @id @default(uuid())
-  ticketId   String
-  adminId    String?
-  message    String
-  createdAt  DateTime   @default(now())
+  id        String   @id @default(uuid())
+  ticketId  String
+  adminId   String?
+  message   String
+  createdAt DateTime @default(now())
 
-  ticket     Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  admin      AdminUser? @relation("TicketCommentAdmin", fields: [adminId], references: [id])
+  ticket Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  admin  AdminUser? @relation("TicketCommentAdmin", fields: [adminId], references: [id])
 
   @@index([ticketId])
   @@map("ticket_comments")
 }
-model VerificationResult {
-  id                  String              @id @default(uuid())
-  requestId           String
-  verificationType    VerificationType
-  status              VerificationStatus
-  provider            String
-  apiResponse         Json?
-  extractedData       Json?
-  confidenceScore     Decimal?            @db.Decimal(5, 2)
-  flags               Json?
-  notes               String?
-  verifiedAt          DateTime            @default(now())
 
-  request             VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+model VerificationResult {
+  id               String             @id @default(uuid())
+  requestId        String
+  verificationType VerificationType
+  status           VerificationStatus
+  provider         String
+  apiResponse      Json?
+  extractedData    Json?
+  confidenceScore  Decimal?           @db.Decimal(5, 2)
+  flags            Json?
+  notes            String?
+  verifiedAt       DateTime           @default(now())
+
+  request VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@map("verification_results")
 }
 
 model AdminReview {
-  id            String              @id @default(uuid())
-  requestId     String
-  reviewerId    String
-  status        VerificationStatus
-  decision      String
-  comments      String?
-  reviewedAt    DateTime            @default(now())
-  metadata      Json?
+  id         String             @id @default(uuid())
+  requestId  String
+  reviewerId String
+  status     VerificationStatus
+  decision   String
+  comments   String?
+  reviewedAt DateTime           @default(now())
+  metadata   Json?
 
-  request       VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@index([reviewerId])
@@ -1231,16 +1236,16 @@ model AdminReview {
 }
 
 model ExternalApiLog {
-  id            String   @id @default(uuid())
-  provider      String
-  endpoint      String
-  requestData   Json?
-  responseData  Json?
-  statusCode    Int
-  duration      Int
-  success       Boolean
-  errorMessage  String?
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  provider     String
+  endpoint     String
+  requestData  Json?
+  responseData Json?
+  statusCode   Int
+  duration     Int
+  success      Boolean
+  errorMessage String?
+  createdAt    DateTime @default(now())
 
   @@index([provider])
   @@index([success])
@@ -1252,24 +1257,24 @@ model ExternalApiLog {
 // ========================================
 
 model AuditEvent {
-  id              String        @id @default(uuid())
-  eventId         String        @unique
-  eventType       String
-  category        EventCategory
-  severity        Severity      @default(INFO)
-  source          String
-  userId          String?
-  resourceType    String?
-  resourceId      String?
-  action          String?
-  previousState   Json?
-  newState        Json?
-  metadata        Json?
-  ipAddress       String?
-  userAgent       String?
-  correlationId   String?
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+  id            String        @id @default(uuid())
+  eventId       String        @unique
+  eventType     String
+  category      EventCategory
+  severity      Severity      @default(INFO)
+  source        String
+  userId        String?
+  resourceType  String?
+  resourceId    String?
+  action        String?
+  previousState Json?
+  newState      Json?
+  metadata      Json?
+  ipAddress     String?
+  userAgent     String?
+  correlationId String?
+  timestamp     DateTime      @default(now())
+  createdAt     DateTime      @default(now())
 
   @@index([eventType])
   @@index([category])
@@ -1281,19 +1286,19 @@ model AuditEvent {
 }
 
 model LogTrace {
-  id              String    @id @default(uuid())
-  traceId         String
-  spanId          String
-  parentSpanId    String?
-  serviceName     String
-  operation       String
-  startTime       DateTime
-  endTime         DateTime?
-  duration        Int?
-  status          String    @default("SUCCESS")
-  tags            Json?
-  logs            Json?
-  createdAt       DateTime  @default(now())
+  id           String    @id @default(uuid())
+  traceId      String
+  spanId       String
+  parentSpanId String?
+  serviceName  String
+  operation    String
+  startTime    DateTime
+  endTime      DateTime?
+  duration     Int?
+  status       String    @default("SUCCESS")
+  tags         Json?
+  logs         Json?
+  createdAt    DateTime  @default(now())
 
   @@index([traceId])
   @@index([serviceName])
@@ -1302,14 +1307,14 @@ model LogTrace {
 }
 
 model SystemMetric {
-  id              String    @id @default(uuid())
-  serviceName     String
-  metricType      String
-  metricName      String
-  value           Decimal   @db.Decimal(18, 6)
-  unit            String?
-  tags            Json?
-  timestamp       DateTime  @default(now())
+  id          String   @id @default(uuid())
+  serviceName String
+  metricType  String
+  metricName  String
+  value       Decimal  @db.Decimal(18, 6)
+  unit        String?
+  tags        Json?
+  timestamp   DateTime @default(now())
 
   @@index([serviceName])
   @@index([metricType])
@@ -1318,18 +1323,18 @@ model SystemMetric {
 }
 
 model SecurityEvent {
-  id              String    @id @default(uuid())
-  eventType       String
-  severity        Severity
-  userId          String?
-  ipAddress       String?
-  userAgent       String?
-  description     String
-  details         Json?
-  resolved        Boolean   @default(false)
-  resolvedAt      DateTime?
-  resolvedBy      String?
-  createdAt       DateTime  @default(now())
+  id          String    @id @default(uuid())
+  eventType   String
+  severity    Severity
+  userId      String?
+  ipAddress   String?
+  userAgent   String?
+  description String
+  details     Json?
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
 
   @@index([eventType])
   @@index([severity])
@@ -1355,17 +1360,17 @@ enum ReportModule {
 }
 
 model ReportJob {
-  id            String        @id @default(uuid())
-  module        ReportModule
-  format        ReportFormat
-  startDate     DateTime
-  endDate       DateTime
-  requestedBy   String
-  status        String        @default("PENDING")
-  generatedUrl  String?
-  createdAt     DateTime      @default(now())
-  completedAt   DateTime?
-  metadata      Json?
+  id           String       @id @default(uuid())
+  module       ReportModule
+  format       ReportFormat
+  startDate    DateTime
+  endDate      DateTime
+  requestedBy  String
+  status       String       @default("PENDING")
+  generatedUrl String?
+  createdAt    DateTime     @default(now())
+  completedAt  DateTime?
+  metadata     Json?
 
   @@index([module])
   @@index([status])
@@ -1414,17 +1419,17 @@ enum DevicePlatform {
 }
 
 model DeviceToken {
-  id          String         @id @default(uuid())
-  userId      String
-  token       String         @unique
-  platform    DevicePlatform
-  deviceId    String?
-  deviceName  String?
-  appVersion  String?
-  isActive    Boolean        @default(true)
-  lastUsedAt  DateTime       @default(now())
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id         String         @id @default(uuid())
+  userId     String
+  token      String         @unique
+  platform   DevicePlatform
+  deviceId   String?
+  deviceName String?
+  appVersion String?
+  isActive   Boolean        @default(true)
+  lastUsedAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@index([userId])
   @@index([token])
@@ -1433,78 +1438,78 @@ model DeviceToken {
 }
 
 model NotificationPreference {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
+  id     String @id @default(uuid())
+  userId String @unique
 
   // Email preferences
-  emailEnabled          Boolean  @default(true)
-  emailTransactional    Boolean  @default(true)
-  emailMarketing        Boolean  @default(false)
-  emailSecurity         Boolean  @default(true)
+  emailEnabled       Boolean @default(true)
+  emailTransactional Boolean @default(true)
+  emailMarketing     Boolean @default(false)
+  emailSecurity      Boolean @default(true)
 
   // SMS preferences
-  smsEnabled            Boolean  @default(true)
-  smsTransactional      Boolean  @default(true)
-  smsMarketing          Boolean  @default(false)
-  smsSecurity           Boolean  @default(true)
+  smsEnabled       Boolean @default(true)
+  smsTransactional Boolean @default(true)
+  smsMarketing     Boolean @default(false)
+  smsSecurity      Boolean @default(true)
 
   // Push preferences
-  pushEnabled           Boolean  @default(true)
-  pushTransactional     Boolean  @default(true)
-  pushMarketing         Boolean  @default(false)
-  pushSecurity          Boolean  @default(true)
+  pushEnabled       Boolean @default(true)
+  pushTransactional Boolean @default(true)
+  pushMarketing     Boolean @default(false)
+  pushSecurity      Boolean @default(true)
 
   // In-app preferences
-  inAppEnabled          Boolean  @default(true)
+  inAppEnabled Boolean @default(true)
 
   // Quiet hours
-  quietHoursEnabled     Boolean  @default(false)
-  quietHoursStart       String?  // Format: "22:00"
-  quietHoursEnd         String?  // Format: "08:00"
+  quietHoursEnabled Boolean @default(false)
+  quietHoursStart   String? // Format: "22:00"
+  quietHoursEnd     String? // Format: "08:00"
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("notification_preferences")
 }
 
 model Notification {
-  id              String               @id @default(uuid())
-  userId          String
-  type            NotificationType
-  channel         NotificationChannel
-  priority        NotificationPriority @default(NORMAL)
-  status          NotificationStatus   @default(PENDING)
+  id       String               @id @default(uuid())
+  userId   String
+  type     NotificationType
+  channel  NotificationChannel
+  priority NotificationPriority @default(NORMAL)
+  status   NotificationStatus   @default(PENDING)
 
-  title           String
-  body            String
-  data            Json?
+  title String
+  body  String
+  data  Json?
 
   // Template info
-  template        String?
-  templateData    Json?
+  template     String?
+  templateData Json?
 
   // Delivery tracking
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  readAt          DateTime?
-  failedAt        DateTime?
-  errorMessage    String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  failedAt     DateTime?
+  errorMessage String?
 
   // Retry logic
-  retryCount      Int                  @default(0)
-  maxRetries      Int                  @default(3)
+  retryCount Int @default(0)
+  maxRetries Int @default(3)
 
   // Related entities
-  transactionId   String?
-  ticketId        String?
+  transactionId String?
+  ticketId      String?
 
   // Metadata
-  metadata        Json?
-  expiresAt       DateTime?
+  metadata  Json?
+  expiresAt DateTime?
 
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -1515,25 +1520,25 @@ model Notification {
 }
 
 model PushNotificationLog {
-  id              String             @id @default(uuid())
-  notificationId  String
-  deviceToken     String
-  platform        DevicePlatform
+  id             String         @id @default(uuid())
+  notificationId String
+  deviceToken    String
+  platform       DevicePlatform
 
-  title           String
-  body            String
-  data            Json?
+  title String
+  body  String
+  data  Json?
 
-  status          NotificationStatus @default(PENDING)
-  fcmResponse     Json?
+  status      NotificationStatus @default(PENDING)
+  fcmResponse Json?
 
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  failedAt        DateTime?
-  errorMessage    String?
-  errorCode       String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  failedAt     DateTime?
+  errorMessage String?
+  errorCode    String?
 
-  createdAt       DateTime           @default(now())
+  createdAt DateTime @default(now())
 
   @@index([notificationId])
   @@index([deviceToken])
@@ -1543,24 +1548,24 @@ model PushNotificationLog {
 }
 
 model InAppNotification {
-  id              String             @id @default(uuid())
-  userId          String
-  notificationId  String?
+  id             String  @id @default(uuid())
+  userId         String
+  notificationId String?
 
-  title           String
-  body            String
-  icon            String?
-  actionUrl       String?
-  data            Json?
+  title     String
+  body      String
+  icon      String?
+  actionUrl String?
+  data      Json?
 
-  isRead          Boolean            @default(false)
-  readAt          DateTime?
+  isRead Boolean   @default(false)
+  readAt DateTime?
 
-  priority        NotificationPriority @default(NORMAL)
-  expiresAt       DateTime?
+  priority  NotificationPriority @default(NORMAL)
+  expiresAt DateTime?
 
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([isRead])
@@ -1580,20 +1585,20 @@ enum WorkflowTemplateStatus {
 }
 
 model WorkflowTemplate {
-  id                String                  @id @default(uuid())
+  id                String                 @id @default(uuid())
   name              String
   type              WorkflowType
   departmentId      String?
-  department        Department?             @relation(fields: [departmentId], references: [id])
-  escalationMinutes Int                     @default(0)
-  hasPtaRequest     Boolean                 @default(false)
-  status            WorkflowTemplateStatus  @default(ACTIVE)
+  department        Department?            @relation(fields: [departmentId], references: [id])
+  escalationMinutes Int                    @default(0)
+  hasPtaRequest     Boolean                @default(false)
+  status            WorkflowTemplateStatus @default(ACTIVE)
   createdBy         String
-  creator           AdminUser               @relation("WorkflowTemplateCreator", fields: [createdBy], references: [id])
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  creator           AdminUser              @relation("WorkflowTemplateCreator", fields: [createdBy], references: [id])
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  stages            WorkflowStage[]
+  stages WorkflowStage[]
 
   @@index([status])
   @@index([departmentId])
@@ -1609,7 +1614,7 @@ model WorkflowStage {
   escalationMinutes Int              @default(0)
   createdAt         DateTime         @default(now())
 
-  assignees         WorkflowAssignee[]
+  assignees WorkflowAssignee[]
 
   @@index([templateId])
   @@index([order])
@@ -1617,15 +1622,15 @@ model WorkflowStage {
 }
 
 model WorkflowAssignee {
-  id        String     @id @default(uuid())
+  id        String        @id @default(uuid())
   stageId   String
   stage     WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
   adminId   String
-  admin     AdminUser  @relation(fields: [adminId], references: [id])
-  createdAt DateTime   @default(now())
+  admin     AdminUser     @relation(fields: [adminId], references: [id])
+  createdAt DateTime      @default(now())
 
+  @@unique([stageId, adminId])
   @@index([stageId])
   @@index([adminId])
-  @@unique([stageId, adminId])
   @@map("workflow_assignees")
 }

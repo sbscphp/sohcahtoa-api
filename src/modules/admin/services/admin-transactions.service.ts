@@ -2,7 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
-import auditService from "../../audit/services/audit.service";
+import { auditTrailService } from "../services/audit-trail.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -19,25 +19,25 @@ type SettlePayload = {
 
 export class AdminTransactionsService {
 
-  private async logAdminAction(params: {
-    adminId: string;
-    actionType: any;
-    resourceType: string;
-    resourceId: string;
-    reason?: string;
-    metadata?: any;
-  }) {
-    return prisma.adminAction.create({
-      data: {
-        adminId: params.adminId,
-        actionType: params.actionType,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId,
-        reason: params.reason,
-        metadata: params.metadata,
-      },
-    });
-  }
+  // private async logAdminAction(params: {
+  //   adminId: string;
+  //   actionType: any;
+  //   resourceType: string;
+  //   resourceId: string;
+  //   reason?: string;
+  //   metadata?: any;
+  // }) {
+  //   return prisma.adminAction.create({
+  //     data: {
+  //       adminId: params.adminId,
+  //       actionType: String(params.actionType) as any,
+  //       resourceType: params.resourceType,
+  //       resourceId: params.resourceId,
+  //       reason: params.reason,
+  //       metadata: params.metadata,
+  //     },
+  //   });
+  // }
 
   async getTransactionStats() {
     const [underReviewA, underReviewB, rejected, approved, reqInfoGroup] = await Promise.all([
@@ -64,7 +64,18 @@ export class AdminTransactionsService {
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.step) where.currentStep = filters.step;
-    if (filters.type) where.type = filters.type;
+
+    // Normalize friendly type labels from UI to proper filters
+    const rawType = (filters.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      // Assume it's a TransactionType enum value (e.g., PTA, BTA, etc.)
+      where.type = (filters.type as string).toUpperCase();
+    }
+
     if (filters.userId) where.userId = filters.userId;
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
@@ -75,14 +86,29 @@ export class AdminTransactionsService {
       where.disbursementMethod = "IMTO";
     }
     if (filters.tab === "sell") {
+      where.transactionMode = "SELL" as any;
       where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] } as any;
+    }
+    if (filters.tab === "buy") {
+      where.transactionMode = "BUY" as any;
     }
     const search = (filters.search || "").toString().trim();
     if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
       where.OR = [
         { referenceNumber: { contains: search, mode: "insensitive" } },
-        { user: { profile: { firstName: { contains: search, mode: "insensitive" } } } },
-        { user: { profile: { lastName: { contains: search, mode: "insensitive" } } } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
       ];
     }
     const orderBy: any = {};
@@ -93,10 +119,6 @@ export class AdminTransactionsService {
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
-        include: { 
-          // @ts-ignore
-          user: { include: { profile: true } } 
-        },
         orderBy,
         skip,
         take: limit,
@@ -104,10 +126,24 @@ export class AdminTransactionsService {
       prisma.transaction.count({ where }),
     ]);
 
+    const uniqueUserIds = Array.from(new Set(items.map((t) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     const data = items.map((t: any) => {
-      const name = t.user?.profile
-        ? `${t.user.profile.firstName || ""} ${t.user.profile.lastName || ""}`.trim()
-        : undefined;
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
       return {
         id: t.id,
@@ -132,8 +168,6 @@ export class AdminTransactionsService {
       {
         where: { id },
         include: {
-          // @ts-ignore
-          user: { include: { profile: true, kyc: true } },
           steps: true,
           documents: true,
           history: true,
@@ -143,10 +177,15 @@ export class AdminTransactionsService {
       } as any
     );
     if (!trx) return null;
-    const name = (trx as any).user?.profile
-      ? `${(trx as any).user.profile.firstName || ""} ${(trx as any).user.profile.lastName || ""}`.trim()
-      : undefined;
-    const bvn = (trx as any).user?.kyc?.bvn || null;
+    const user = await prisma.user.findUnique({
+      where: { id: (trx as any).userId },
+      include: { profile: true, kyc: true },
+    });
+    const name =
+      user?.profile
+        ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
+        : undefined;
+    const bvn = user?.kyc?.bvn || null;
     const maskedBvn = bvn ? `${bvn.slice(0, 2)}********* ${bvn.slice(-3)}` : null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
     const pickup = (trx as any).cashPickup || null;
@@ -168,7 +207,7 @@ export class AdminTransactionsService {
       date: trx.createdAt,
       time: trx.createdAt,
       customerName: name,
-      customerType: (trx as any).user?.customerType || null,
+      customerType: user?.customerType || null,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,
@@ -187,7 +226,7 @@ export class AdminTransactionsService {
   }
 
   async requestInformation(transactionId: string, adminId: string, payload: { notes?: string; fields?: string[] }) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "COMPLIANCE_REVIEW",
       resourceType: "TRANSACTION",
@@ -209,7 +248,7 @@ export class AdminTransactionsService {
   }
 
   async reviewTransaction(transactionId: string, adminId: string, payload: ReviewPayload) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_REVIEW",
       resourceType: "TRANSACTION",
@@ -246,11 +285,11 @@ export class AdminTransactionsService {
       } as any,
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_REVIEW",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_REVIEWED',
       metadata: { notes: payload?.notes, riskLevel: payload?.riskLevel },
     });
 
@@ -258,7 +297,7 @@ export class AdminTransactionsService {
   }
 
   async approveTransaction(transactionId: string, adminId: string, reason?: string) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_APPROVE",
       resourceType: "TRANSACTION",
@@ -297,11 +336,11 @@ export class AdminTransactionsService {
       },
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_APPROVE",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_APPROVED',
       reason,
     });
 
@@ -309,7 +348,7 @@ export class AdminTransactionsService {
   }
 
   async rejectTransaction(transactionId: string, adminId: string, reason: string) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({
       adminId,
       actionType: "TRANSACTION_REJECT",
       resourceType: "TRANSACTION",
@@ -337,11 +376,11 @@ export class AdminTransactionsService {
       },
     });
 
-    auditService.logAdminEvent({
+    auditTrailService.logAction({
       adminId,
-      resourceType: 'TRANSACTION',
+      actionType: "TRANSACTION_REJECT",
+      resourceType: "TRANSACTION",
       resourceId: transactionId,
-      action: 'TRANSACTION_REJECTED',
       reason,
     });
 
@@ -349,7 +388,7 @@ export class AdminTransactionsService {
   }
 
   async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
-    await this.logAdminAction({
+    await auditTrailService.logAction({ 
       adminId,
       actionType: "TRANSACTION_SETTLE",
       resourceType: "TRANSACTION",

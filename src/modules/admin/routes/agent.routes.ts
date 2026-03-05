@@ -1,10 +1,16 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { agentController } from "../controllers/agent.controller";
-import { uploadSingleImage } from "../../../shared/middleware/upload";
+import { createUploadMiddleware } from "../../../shared/middleware/upload";
 
 const AgentRouter: Router = Router();
+
+// Accept 'attachment' field for agent creation (matches Swagger docs)
+const uploadAgentAttachment = createUploadMiddleware({
+  fieldName: "attachment",
+  maxSize: 2 * 1024 * 1024, // 2MB to align with controller validation
+  allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "application/pdf"],
+});
 
 /**
  * @swagger
@@ -20,7 +26,12 @@ const AgentRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.stats);
+AgentRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.stats
+);
 
 /**
  * @swagger
@@ -74,7 +85,12 @@ AgentRouter.get("/stats", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.list);
+AgentRouter.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.list
+);
 
 /**
  * @swagger
@@ -110,7 +126,13 @@ AgentRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMI
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), uploadSingleImage, agentController.create);
+AgentRouter.post(
+  "/",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "create" }),
+  uploadAgentAttachment,
+  agentController.create
+);
 
 /**
  * @swagger
@@ -134,7 +156,12 @@ AgentRouter.post("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADM
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.get);
+AgentRouter.get(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.get
+);
 
 /**
  * @swagger
@@ -153,7 +180,7 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
@@ -166,13 +193,110 @@ AgentRouter.get("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.A
  *                 type: string
  *               branch:
  *                 type: string
+ *               attachment:
+ *                 type: string
+ *                 format: binary
  *     responses:
  *       200:
  *         description: Agent updated successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.update);
+AgentRouter.patch(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  uploadAgentAttachment,
+  uploadAgentAttachment, agentController.update
+);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions:
+ *   get:
+ *     summary: Get transactions handled by the agent's branch (cash pickups)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           description: Cash pickup status filter (e.g., PENDING, COMPLETED)
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Agent transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.getTransactions
+);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions/{transactionId}:
+ *   get:
+ *     summary: Get single agent transaction details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agent transaction details retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/:transactionId",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.getTransaction
+);
 
 /**
  * @swagger
@@ -204,7 +328,12 @@ AgentRouter.patch("/:id", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateStatus);
+AgentRouter.patch(
+  "/:id/status",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.updateStatus
+);
 
 /**
  * @swagger
@@ -226,7 +355,12 @@ AgentRouter.patch("/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN, U
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.deactivate);
+AgentRouter.patch(
+  "/:id/deactivate",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.deactivate
+);
 
 /**
  * @swagger
@@ -258,6 +392,11 @@ AgentRouter.patch("/:id/deactivate", authenticate, authorize(UserRole.SUPER_ADMI
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AgentRouter.patch("/:id/approval", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), agentController.updateApproval);
+AgentRouter.patch(
+  "/:id/approval",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
+  agentController.updateApproval
+);
 
 export default AgentRouter;
