@@ -169,6 +169,27 @@ ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "password" TEXT;
 -- Ensure departments.isDefault exists
 ALTER TABLE "departments" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;
 
+-- Ensure AGENT_SET_PASSWORD exists in OtpPurpose enum
+DO $$ BEGIN
+  ALTER TYPE "OtpPurpose" ADD VALUE IF NOT EXISTS 'AGENT_SET_PASSWORD';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Ensure users.createdByAgentId column exists
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
+
+-- Create index for createdByAgentId if it doesn't exist
+CREATE INDEX IF NOT EXISTS "users_createdByAgentId_idx" ON "users"("createdByAgentId");
+
+-- Add foreign key constraint if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_createdByAgentId_fkey') THEN
+    ALTER TABLE "users"
+      ADD CONSTRAINT "users_createdByAgentId_fkey"
+      FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$
 DECLARE
