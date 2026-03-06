@@ -47,6 +47,36 @@ router.get(
   requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
   customerController.listCustomers
 );
+/**
+ * @swagger
+ * /api/admin/customers/export:
+ *   get:
+ *     summary: Export customers as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Active, Deactivated]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get(
+  "/export",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "export" }),
+  customerController.exportCustomersCsv
+);
 
 /**
  * @swagger

@@ -152,8 +152,42 @@ class OutletService {
     return updated;
   }
 
-  async exportFranchises() {
-    return { message: "Export generated", url: "/exports/franchises.csv" };
+  async exportFranchises(filters: { search?: string; status?: string } = {}) {
+    const where: any = {};
+    const search = (filters.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { contactPersonName: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (filters.status) where.status = filters.status;
+    const rows = await db.franchise.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        contactPersonName: true,
+        email: true,
+        phoneNumber: true,
+        address: true,
+        status: true,
+      },
+    });
+    return (rows || []).map((f: any) => ({
+      franchiseName: f.name,
+      franchiseId: f.id,
+      contactPerson: f.contactPersonName,
+      contactEmail: f.email,
+      contactPhone: f.phoneNumber,
+      address: f.address,
+      status: f.status,
+    }));
   }
 
   async getBranchStats() {

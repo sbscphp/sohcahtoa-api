@@ -633,6 +633,13 @@ UserManagementRouter.get(
   userManagementController.getRolePermissions
 );
 
+UserManagementRouter.patch(
+  "/roles/:id/status",
+  authenticate,
+  requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "edit" }),
+  userManagementController.toggleRoleActive
+);
+
 /**
  * @swagger
  * /api/admin/management/permissions:
@@ -732,6 +739,11 @@ UserManagementRouter.get(
   authenticate,
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "view" }),
   userManagementController.getPermissions
+);
+
+UserManagementRouter.get(
+  "/modules",
+  userManagementController.getPermissionModules
 );
 
 /**

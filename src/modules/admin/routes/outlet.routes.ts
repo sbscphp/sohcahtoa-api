@@ -167,21 +167,35 @@ OutletRouter.patch(
   requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "edit" }),
   outletController.approveFranchise
 );
-// /**
-//  * @swagger
-//  * /api/admin/outlet/franchises/export:
-//  *   get:
-//  *     summary: Export franchises
-//  *     tags: [Admin]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Export generated
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// OutletRouter.get("/franchises/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportFranchises);
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/export:
+ *   get:
+ *     summary: Export franchises as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/franchises/export",
+  authenticate,
+  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "export" }),
+  outletController.exportFranchises
+);
 
 /**
  * @swagger

@@ -63,6 +63,70 @@ class AgentService {
     ]);
     return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
+  
+  async export(filters: any = {}) {
+    const where: any = {};
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
+    if (filters.isActive !== undefined) where.isActive = String(filters.isActive) === "true";
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    const sortOrder = ((filters.sort || "").toString().toLowerCase() === "asc" ? "asc" : "desc") as "asc" | "desc";
+    const client: any = prisma as any;
+    const agents = await client.agent.findMany({
+      where,
+      orderBy: { createdAt: sortOrder },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        isActive: true,
+        branchId: true,
+        branch: { select: { name: true } },
+      },
+    });
+    const results = await Promise.all(
+      (agents || []).map(async (a: any) => {
+        let pickupWhere: any = {};
+        if (a.branchId) {
+          pickupWhere = { pickupLocationId: a.branchId };
+        } else if (a.branch?.name) {
+          pickupWhere = { pickupLocation: a.branch.name };
+        } else {
+          return {
+            agentName: a.name,
+            agentId: a.id,
+            contactPhone: a.phoneNumber,
+            contactEmail: a.email,
+            totalTransactions: 0,
+            transactionVolume: 0,
+            status: a.isActive ? "Active" : "Deactivated",
+          };
+        }
+        const [count, sumAgg] = await Promise.all([
+          client.cashPickup.count({ where: pickupWhere }),
+          client.cashPickup.aggregate({ where: pickupWhere, _sum: { amount: true } }),
+        ]);
+        const vol = Number((sumAgg as any)?._sum?.amount || 0);
+        return {
+          agentName: a.name,
+          agentId: a.id,
+          contactPhone: a.phoneNumber,
+          contactEmail: a.email,
+          totalTransactions: count,
+          transactionVolume: vol,
+          status: a.isActive ? "Active" : "Deactivated",
+        };
+      })
+    );
+    return results;
+  }
 
   async get(id: string) {
     const client: any = prisma as any;

@@ -60,6 +60,7 @@ export class TicketsService {
         take: limit,
         select: {
           id: true,
+          reference: true,
           createdAt: true,
           status: true,
           priority: true,
@@ -228,6 +229,88 @@ private validateAttachment(attachment: {
       data: { ticketId: id, adminId, message },
     });
     return comment;
+  }
+
+  async export(filters: any = {}) {
+    const search = (filters.search || "").toString().trim();
+    const where: any = {};
+    if (filters.status) where.status = filters.status;
+    if (filters.category) where.caseType = filters.category;
+    if (filters.priority) where.priority = filters.priority;
+    if (search) {
+      where.OR = [
+        { caseType: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    const client: any = prisma as any;
+    const items = await client.ticket.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        reference: true,
+        createdAt: true,
+        status: true,
+        priority: true,
+        assignedAgentId: true,
+        customerId: true,
+      },
+    });
+    const customerIds = Array.from(new Set(items.map((t: any) => t.customerId).filter(Boolean)));
+    const agentIds = Array.from(new Set(items.map((t: any) => t.assignedAgentId).filter(Boolean)));
+    const [customers, agents] = await Promise.all([
+      customerIds.length
+        ? client.user.findMany({
+            where: { id: { in: customerIds } },
+            include: { profile: true },
+            select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } },
+          })
+        : [],
+      agentIds.length
+        ? client.adminUser.findMany({
+            where: { id: { in: agentIds } },
+            include: { role: { select: { name: true } }, department: { select: { name: true } } },
+            select: { id: true, fullName: true, role: { select: { name: true } } as any, department: { select: { name: true } } as any },
+          })
+        : [],
+    ]);
+    const userMap = new Map<string, any>();
+    for (const u of customers as any[]) userMap.set(u.id, u);
+    const agentMap = new Map<string, any>();
+    for (const a of agents as any[]) agentMap.set(a.id, a);
+    const titleCase = (s: string | null | undefined) => {
+      if (!s) return "";
+      const up = String(s).toUpperCase();
+      if (up === "LOW") return "Low";
+      if (up === "MEDIUM") return "Medium";
+      if (up === "HIGH") return "High";
+      if (up === "OPEN") return "Open";
+      if (up === "IN_PROGRESS") return "In progress";
+      if (up === "RESOLVED") return "Resolved";
+      if (up === "CLOSED") return "Closed";
+      return s;
+    };
+    return (items || []).map((t: any) => {
+      const u = userMap.get(t.customerId);
+      const name =
+        u && u.profile
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : "";
+      const email = u?.email || "";
+      const a = agentMap.get(t.assignedAgentId);
+      const roleOrDept = a?.role?.name || a?.department?.name || "";
+      const assignedTo = a ? `${a.fullName}${roleOrDept ? `\n${roleOrDept}` : ""}` : "";
+      return {
+        incidentId: t.reference ? `ID: ${t.reference}` : `ID: ${t.id}`,
+        customer: [name, email].filter(Boolean).join("\n"),
+        date: t.createdAt,
+        assignedTo,
+        status: titleCase(t.status),
+        priority: titleCase(t.priority),
+      };
+    });
   }
 }
 

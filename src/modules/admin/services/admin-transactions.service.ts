@@ -226,13 +226,6 @@ export class AdminTransactionsService {
   }
 
   async requestInformation(transactionId: string, adminId: string, payload: { notes?: string; fields?: string[] }) {
-    await auditTrailService.logAction({
-      adminId,
-      actionType: "COMPLIANCE_REVIEW",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
-    });
 
     await prisma.transaction.update({
       where: { id: transactionId },
@@ -248,13 +241,6 @@ export class AdminTransactionsService {
   }
 
   async reviewTransaction(transactionId: string, adminId: string, payload: ReviewPayload) {
-    await auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_REVIEW",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
-    });
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -285,25 +271,12 @@ export class AdminTransactionsService {
       } as any,
     });
 
-    auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_REVIEW",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: { notes: payload?.notes, riskLevel: payload?.riskLevel },
-    });
+    
 
     return { message: "Transaction reviewed successfully" };
   }
 
   async approveTransaction(transactionId: string, adminId: string, reason?: string) {
-    await auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_APPROVE",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
 
     await prisma.transaction.update({
       where: { id: transactionId },
@@ -336,25 +309,12 @@ export class AdminTransactionsService {
       },
     });
 
-    auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_APPROVE",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
+    
 
     return { message: "Transaction approved successfully" };
   }
 
   async rejectTransaction(transactionId: string, adminId: string, reason: string) {
-    await auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_REJECT",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -376,25 +336,12 @@ export class AdminTransactionsService {
       },
     });
 
-    auditTrailService.logAction({
-      adminId,
-      actionType: "TRANSACTION_REJECT",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
+    
 
     return { message: "Transaction rejected successfully" };
   }
 
   async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
-    await auditTrailService.logAction({ 
-      adminId,
-      actionType: "TRANSACTION_SETTLE",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
-    });
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
