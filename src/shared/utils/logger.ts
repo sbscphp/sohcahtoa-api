@@ -22,7 +22,17 @@ winston.addColors(colors);
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.colorize({ all: true }),
-  winston.format.printf((info) => `${info.timestamp} ${info.level}: ${info.message}`)
+  winston.format.printf((info) => {
+    const { timestamp, level, message, service, ...metadata } = info;
+    let log = `${timestamp} ${level}: ${message}`;
+
+    // Add metadata if present
+    if (Object.keys(metadata).length > 0) {
+      log += ` ${JSON.stringify(metadata)}`;
+    }
+
+    return log;
+  })
 );
 
 export const createLogger = (serviceName: ServiceName | string) => {
