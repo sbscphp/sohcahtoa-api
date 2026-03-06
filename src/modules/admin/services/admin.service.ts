@@ -125,13 +125,6 @@ export class AdminService {
   }
 
   async confirmDeposit(transactionId: string, adminId: string, paymentReference: string, proofOfPayment?: string) {
-    await auditTrailService.logAction({
-      adminId,
-      actionType: "DEPOSIT_CONFIRM",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: { paymentReference, proofOfPayment },
-    });
 
     const settlement = await prisma.settlement.upsert({
       where: { transactionId },

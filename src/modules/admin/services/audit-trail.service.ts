@@ -101,7 +101,9 @@ class AuditTrailService {
         { status: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (filters.module) where.resourceType = filters.module;
+    if (filters.module) {
+      where.resourceType = filters.module;
+    }
     if (filters.status) where.status = filters.status;
     if (filters.dateFrom || filters.dateTo) {
       where.performedAt = {};
@@ -131,6 +133,108 @@ class AuditTrailService {
     ]);
     return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
-}
 
+  async export(filters: any = {}) {
+    const search = (filters.search || "").toString().trim();
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { actionLabel: { contains: search, mode: "insensitive" } },
+        { resourceType: { contains: search, mode: "insensitive" } },
+        { resourceId: { contains: search, mode: "insensitive" } },
+        { status: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (filters.module) {
+      where.resourceType = filters.module;
+    }
+    if (filters.status) where.status = filters.status;
+    if (filters.dateFrom || filters.dateTo) {
+      where.performedAt = {};
+      if (filters.dateFrom) where.performedAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.performedAt.lte = new Date(filters.dateTo);
+    }
+    const client: any = prisma as any;
+    const items = await client.adminAction.findMany({
+      where,
+      orderBy: { performedAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        performedAt: true,
+        actionLabel: true,
+        actionType: true,
+        resourceType: true,
+        resourceId: true,
+        status: true,
+        previousState: true,
+        newState: true,
+        metadata: true,
+        admin: { select: { id: true, fullName: true, email: true, departmentId: true } },
+      },
+    });
+    const deptIds = Array.from(new Set((items || []).map((i: any) => i.admin?.departmentId).filter(Boolean))) as string[];
+    const departments = deptIds.length
+      ? await client.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } })
+      : [];
+    const deptMap = new Map<string, string>();
+    for (const d of departments as any[]) deptMap.set(d.id, d.name);
+    const toTitle = (s: string | null | undefined) => {
+      if (!s) return "";
+      const up = String(s).toUpperCase();
+      if (up === "SUCCESS") return "Success";
+      if (up === "FAILED") return "Failed";
+      if (up === "PENDING") return "Pending";
+      return s;
+    };
+    const formatAffected = (i: any) => {
+      const type = String(i.resourceType || "").toUpperCase();
+      const ns = i.newState || i.previousState || {};
+      if (type === "RATE") {
+        const from = ns.fromCurrency || i.metadata?.fromCurrency;
+        const to = ns.toCurrency || i.metadata?.toCurrency;
+        if (from && to) return `${from}-${to} Rates`;
+      } else if (type === "TRANSACTION") {
+        if (i.metadata?.referenceNumber) return `Transaction ${i.metadata.referenceNumber}`;
+        return `Transaction #${i.resourceId}`;
+      } else if (type === "INCIDENCE") {
+        return `Ticket #${i.resourceId}`;
+      } else if (type === "AGENT") {
+        const name = ns.name || i.metadata?.name;
+        if (name) return `Agent: ${name}`;
+        return `Agent #${i.resourceId}`;
+      } else if (type === "OUTLET") {
+        const name = ns.name || i.metadata?.name;
+        if (name) return `Franchise: ${name}`;
+        return `Franchise #${i.resourceId}`;
+      } else if (type === "BRANCH") {
+        const name = ns.name || i.metadata?.branchName || i.metadata?.name;
+        if (name) return `Branch: ${name}`;
+        return `Branch #${i.resourceId}`;
+      } else if (type === "USER_MANAGEMENT") {
+        const role = i.metadata?.name;
+        const fullName = i.metadata?.fullName;
+        const email = i.metadata?.email;
+        if (role) return `Role: ${role}`;
+        if (fullName) return `Admin: ${fullName}`;
+        if (email) return `Admin: ${email}`;
+        return `User Management #${i.resourceId}`;
+      }
+      return i.resourceId || "";
+    };
+    return (items || []).map((i: any) => {
+      const dept = i.admin?.departmentId ? deptMap.get(i.admin.departmentId) : "";
+      const actionBy = [i.admin?.fullName || "", dept || ""].filter(Boolean).join("\n");
+      return {
+        timeStamp: i.performedAt,
+        actionBy,
+        moduleAffected: i.resourceType || "",
+        actionTaken: i.actionLabel || "",
+        affectedSystem: formatAffected(i),
+        status: toTitle(i.status),
+      };
+    });
+  }
+}
+  
 export const auditTrailService = new AuditTrailService();

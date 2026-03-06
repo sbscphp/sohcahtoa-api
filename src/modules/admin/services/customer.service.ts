@@ -178,6 +178,65 @@ export class CustomerService {
     return { totalCustomer, activeCustomer, deactivatedCustomer };
   }
 
+  async exportCustomers(filters: { search?: string; status?: string } = {}) {
+    const where: any = { role: "CUSTOMER" };
+    const q = (filters.search || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { email: { contains: q, mode: "insensitive" } },
+        { phoneNumber: { contains: q, mode: "insensitive" } },
+        { profile: { firstName: { contains: q, mode: "insensitive" } } } as any,
+        { profile: { lastName: { contains: q, mode: "insensitive" } } } as any,
+      ];
+    }
+    if (filters.status) {
+      const s = String(filters.status).toUpperCase();
+      if (s === "ACTIVE") where.isActive = true;
+      if (s === "DEACTIVATED") where.isActive = false;
+    }
+    const users = await prisma.user.findMany({
+      where,
+      include: { profile: true },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+    const userIds = users.map((u: any) => u.id);
+    const txAgg =
+      userIds.length === 0
+        ? []
+        : await prisma.transaction.groupBy({
+            by: ["userId"],
+            where: { userId: { in: userIds } },
+            _count: { _all: true },
+            _sum: { nairaEquivalent: true, foreignAmount: true },
+          });
+    const aggByUser: Record<string, { totalTransactions: number; transactionVolume: number }> = {};
+    for (const row of txAgg as any[]) {
+      const count = row._count?._all || 0;
+      const nairaSum = Number(row._sum?.nairaEquivalent || 0);
+      const foreignSum = Number(row._sum?.foreignAmount || 0);
+      const volume = nairaSum || foreignSum || 0;
+      aggByUser[row.userId] = { totalTransactions: count, transactionVolume: volume };
+    }
+    return (users || []).map((u: any) => {
+      const name =
+        u.profile && (u.profile.firstName || u.profile.lastName)
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
+      const agg = aggByUser[u.id] || { totalTransactions: 0, transactionVolume: 0 };
+      return {
+        id: u.id,
+        name,
+        phoneNumber: u.phoneNumber,
+        email: u.email,
+        dateJoined: u.createdAt?.toISOString?.() || u.createdAt,
+        totalTransactions: agg.totalTransactions,
+        transactionVolume: agg.transactionVolume,
+        status: u.isActive ? "Active" : "Deactivated",
+      };
+    });
+  }
+
   async deactivateCustomer(userId: string, adminId?: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.role !== "CUSTOMER") {

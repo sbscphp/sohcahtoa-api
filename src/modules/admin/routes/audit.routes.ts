@@ -58,5 +58,49 @@ AuditRouter.get(
   auditController.list
 );
 
+/**
+ * @swagger
+ * /api/admin/audit/trail/export:
+ *   get:
+ *     summary: Export audit trail as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: module
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [SUCCESS, PENDING, FAILED]
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AuditRouter.get(
+  "/trail/export",
+  authenticate,
+  requirePermission({ module: "AUDIT", feature: "MODULE", action: "export" }),
+  auditController.export
+);
 
 export default AuditRouter;

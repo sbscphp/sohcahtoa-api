@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, streamCsv } from "../../../shared/utils";
 import { rateService } from "../services/rate.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
@@ -97,8 +97,19 @@ class RateController {
   });
 
   export = asyncHandler(async (req: Request, res: Response) => {
-    const result = await rateService.export(req.query);
-    res.json(successResponse(result));
+    const rows = await rateService.export(req.query);
+    streamCsv(
+      res,
+      "rates.csv",
+      [
+        { header: "Date and time", select: (r: any) => r.dateTime },
+        { header: "Currency pair", select: (r: any) => r.currencyPair },
+        { header: "We buy at", select: (r: any) => r.weBuyAt },
+        { header: "We sell at", select: (r: any) => r.weSellAt },
+        { header: "Last updated", select: (r: any) => r.lastUpdated },
+      ],
+      rows as any[]
+    );
   });
 }
 
