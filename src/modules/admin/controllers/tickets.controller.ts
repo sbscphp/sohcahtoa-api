@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, streamCsv } from "../../../shared/utils";
 import { CreateTicketPayload, ticketsService } from "../services/tickets.service";
+import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
-import { PrismaClientRustPanicError } from "@prisma/client/runtime/library";
 
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -52,7 +52,15 @@ class TicketsController {
     };
 
       const created = await ticketsService.create(payload);
-
+      const adminId = (req as any).user?.userId as string;
+      await auditTrailService.logAction({
+        adminId,
+        actionType: "INCIDENCE_CREATE",
+        actionLabel: "Create ticket",
+        resourceType: "INCIDENCE",
+        resourceId: created.id,
+        newState: created,
+      });
       return res.status(201).json(successResponse(created));
     } catch (error) {
       // Prevent orphaned uploads if DB fails
@@ -70,19 +78,65 @@ class TicketsController {
   updateStatus = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const updated = await ticketsService.updateStatus(req.params.id, req.body.status, req.body?.notes, adminId);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "INCIDENCE_UPDATE",
+      actionLabel: "Update ticket status",
+      resourceType: "INCIDENCE",
+      resourceId: req.params.id,
+      metadata: { status: req.body.status, notes: req.body?.notes },
+    });
     res.json(successResponse(updated));
   });
 
   assign = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const updated = await ticketsService.assignAgent(req.params.id, adminId);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "INCIDENCE_ASSIGN",
+      actionLabel: "Assign ticket",
+      resourceType: "INCIDENCE",
+      resourceId: req.params.id,
+      metadata: { assignedAgentId: adminId },
+    });
     res.json(successResponse(updated));
   });
 
   comment = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const comment = await ticketsService.addComment(req.params.id, adminId, req.body.message);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "INCIDENCE_COMMENT",
+      actionLabel: "Comment on ticket",
+      resourceType: "INCIDENCE",
+      resourceId: req.params.id,
+      metadata: { message: req.body.message },
+    });
     res.status(201).json(successResponse(comment));
+  });
+
+  exportCsv = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await ticketsService.export({
+      search: (req.query.search as string) || (req.query.q as string) || "",
+      status: (req.query.status as string) || undefined,
+      category: (req.query.category as string) || undefined,
+      priority: (req.query.priority as string) || undefined,
+    });
+    streamCsv(
+      res,
+      "tickets.csv",
+      [
+        { header: "Incident ID", select: (r: any) => r.incidentId },
+        { header: "Customer", select: (r: any) => r.customer },
+        { header: "Date", select: (r: any) => r.date },
+        { header: "Assigned to", select: (r: any) => r.assignedTo },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Priority", select: (r: any) => r.priority },
+      ],
+      rows as any[]
+    );
   });
 }
 

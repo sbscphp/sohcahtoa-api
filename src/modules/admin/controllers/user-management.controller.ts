@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { userManagementService } from "../services/user-management.service";
 import { successResponse } from "../../../shared/utils";
+import { streamCsv, toCsvValue } from "../../../shared/utils";
 import { CreateAdminUserDto, CreateDepartmentDto, CreateRoleDto, DepartmentQueryDto, RoleQueryDto, UpdateDepartmentDto, UpdateRoleDto } from "../dto/user-management.dto";
 import { asyncHandler } from "../../../shared/middleware";
 import adminService from "../services/admin.service";
@@ -17,7 +18,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.ADMIN_USER_CREATE,
             actionLabel: "Create Admin User",
-            resourceType: "ADMIN_USER",
+            resourceType: "USER_MANAGEMENT",
             resourceId: result.user.id,
             departmentId: result.user.departmentId || undefined,
             metadata: { email: result.user.email, fullName: result.user.fullName },
@@ -34,7 +35,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.ADMIN_USER_UPDATE,
             actionLabel: "Update Admin User",
-            resourceType: "ADMIN_USER",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
             departmentId: result.user.departmentId || undefined,
             metadata: body,
@@ -53,7 +54,7 @@ class UserManagementController {
             adminId,
             actionType: isActive ? ActionType.ADMIN_USER_ACTIVATE : ActionType.ADMIN_USER_SUSPEND,
             actionLabel: isActive ? "Activate Admin User" : "Suspend Admin User",
-            resourceType: "ADMIN_USER",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
             departmentId: result.user.departmentId || undefined,
             reason: reason || undefined,
@@ -89,7 +90,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.ROLE_CREATE,
             actionLabel: "Create Role",
-            resourceType: "ROLE",
+            resourceType: "USER_MANAGEMENT",
             resourceId: result.id,
             metadata: { name: result.name },
         });
@@ -128,9 +129,26 @@ class UserManagementController {
             adminId,
             actionType: ActionType.ROLE_UPDATE,
             actionLabel: "Update Role",
-            resourceType: "ROLE",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
             metadata: body,
+        });
+        res.json(successResponse(result));
+    });
+
+    toggleRoleActive = asyncHandler(async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const isActiveRaw = (req.body?.isActive ?? req.query?.isActive) as any;
+        const isActive = typeof isActiveRaw === "boolean" ? isActiveRaw : String(isActiveRaw) === "true";
+        const result = await userManagementService.toggleRoleActive(id, isActive);
+        const adminId = (req as any).user?.userId as string;
+        await auditTrailService.logAction({
+            adminId,
+            actionType: ActionType.ROLE_UPDATE,
+            actionLabel: isActive ? "Activate Role" : "Deactivate Role",
+            resourceType: "USER_MANAGEMENT",
+            resourceId: id,
+            metadata: { previous: !isActive, new: isActive },
         });
         res.json(successResponse(result));
     });
@@ -143,7 +161,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.ROLE_DELETE,
             actionLabel: "Delete Role",
-            resourceType: "ROLE",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
         });
         res.json(successResponse(result));
@@ -173,22 +191,20 @@ class UserManagementController {
     exportUserActivitiesCsv = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const rows = await adminService.getAdminActionsAll(id);
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename="admin-user-${id}-activities.csv"`);
-        res.write(["id","performedAt","actionLabel","actionType","resourceType","resourceId","status"].join(",") + "\n");
-        for (const r of rows as any[]) {
-            const line = [
-                r.id,
-                new Date(r.performedAt).toISOString(),
-                r.actionLabel ? `"${String(r.actionLabel).replace(/"/g, '""')}"` : "",
-                r.actionType,
-                r.resourceType,
-                r.resourceId,
-                r.status
-            ].join(",");
-            res.write(line + "\n");
-        }
-        res.end();
+        streamCsv(
+            res,
+            `admin-user-${id}-activities.csv`,
+            [
+                { header: "id", select: (r: any) => r.id },
+                { header: "performedAt", select: (r: any) => r.performedAt },
+                { header: "actionLabel", select: (r: any) => r.actionLabel },
+                { header: "actionType", select: (r: any) => r.actionType },
+                { header: "resourceType", select: (r: any) => r.resourceType },
+                { header: "resourceId", select: (r: any) => r.resourceId },
+                { header: "status", select: (r: any) => r.status },
+            ],
+            rows as any[]
+        );
     });
 
     getLookups = asyncHandler(async (req: Request, res: Response) => {
@@ -202,68 +218,62 @@ class UserManagementController {
 
     exportUsersCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportUsers();
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-users.csv"');
-        res.write(["id","fullName","email","phoneNumber","roleName","departmentName","isActive","createdAt"].join(",") + "\n");
-        for (const r of rows as any[]) {
-            const line = [
-                r.id,
-                `"${(r.fullName || "").replace(/"/g, '""')}"`,
-                r.email,
-                r.phoneNumber,
-                r.roleName || "",
-                r.departmentName || "",
-                r.isActive ? "true" : "false",
-                new Date(r.createdAt).toISOString()
-            ].join(",");
-            res.write(line + "\n");
-        }
-        res.end();
+        streamCsv(
+            res,
+            "admin-users.csv",
+            [
+                { header: "id", select: (r: any) => r.id },
+                { header: "fullName", select: (r: any) => r.fullName },
+                { header: "email", select: (r: any) => r.email },
+                { header: "phoneNumber", select: (r: any) => r.phoneNumber },
+                { header: "roleName", select: (r: any) => r.roleName },
+                { header: "departmentName", select: (r: any) => r.departmentName },
+                { header: "isActive", select: (r: any) => r.isActive },
+                { header: "createdAt", select: (r: any) => r.createdAt },
+            ],
+            rows as any[]
+        );
     });
 
     exportRolesCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportRoles();
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-roles.csv"');
-        res.write(["id","name","description","branch","departmentName","createdBy","createdById","isDefault","isActive","createdAt"].join(",") + "\n");
-        for (const r of rows as any[]) {
-            const line = [
-                r.id,
-                `"${(r.name || "").replace(/"/g, '""')}"`,
-                `"${(r.description || "").replace(/"/g, '""')}"`,
-                r.branch || "",
-                r.departmentName || "",
-                `"${(r.createdBy || "").replace(/"/g, '""')}"`,
-                r.createdById || "",
-                r.isDefault ? "true" : "false",
-                r.isActive ? "true" : "false",
-                new Date(r.createdAt).toISOString()
-            ].join(",");
-            res.write(line + "\n");
-        }
-        res.end();
+        streamCsv(
+            res,
+            "admin-roles.csv",
+            [
+                { header: "id", select: (r: any) => r.id },
+                { header: "name", select: (r: any) => r.name },
+                { header: "description", select: (r: any) => r.description },
+                { header: "branch", select: (r: any) => r.branch },
+                { header: "departmentName", select: (r: any) => r.departmentName },
+                { header: "createdBy", select: (r: any) => r.createdBy },
+                { header: "createdById", select: (r: any) => r.createdById },
+                { header: "isDefault", select: (r: any) => r.isDefault },
+                { header: "isActive", select: (r: any) => r.isActive },
+                { header: "createdAt", select: (r: any) => r.createdAt },
+            ],
+            rows as any[]
+        );
     });
 
     exportDepartmentsCsv = asyncHandler(async (_req: Request, res: Response) => {
         const rows = await userManagementService.exportDepartments();
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", 'attachment; filename="admin-departments.csv"');
-        res.write(["id","name","departmentEmail","description","branch","createdBy","createdById","isActive","createdAt"].join(",") + "\n");
-        for (const r of rows as any[]) {
-            const line = [
-                r.id,
-                `"${(r.name || "").replace(/"/g, '""')}"`,
-                r.departmentEmail || "",
-                `"${(r.description || "").replace(/"/g, '""')}"`,
-                r.branch || "",
-                `"${(r.createdBy || "").replace(/"/g, '""')}"`,
-                r.createdById || "",
-                r.isActive ? "true" : "false",
-                new Date(r.createdAt).toISOString()
-            ].join(",");
-            res.write(line + "\n");
-        }
-        res.end();
+        streamCsv(
+            res,
+            "admin-departments.csv",
+            [
+                { header: "id", select: (r: any) => r.id },
+                { header: "name", select: (r: any) => r.name },
+                { header: "departmentEmail", select: (r: any) => r.departmentEmail },
+                { header: "description", select: (r: any) => r.description },
+                { header: "branch", select: (r: any) => r.branch },
+                { header: "createdBy", select: (r: any) => r.createdBy },
+                { header: "createdById", select: (r: any) => r.createdById },
+                { header: "isActive", select: (r: any) => r.isActive },
+                { header: "createdAt", select: (r: any) => r.createdAt },
+            ],
+            rows as any[]
+        );
     });
 
     createDepartment = asyncHandler(async (req: Request, res: Response) => {
@@ -275,7 +285,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.DEPARTMENT_CREATE,
             actionLabel: "Create Department",
-            resourceType: "DEPARTMENT",
+            resourceType: "USER_MANAGEMENT",
             resourceId: result.id,
             metadata: { name: result.name },
         });
@@ -309,7 +319,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.DEPARTMENT_UPDATE,
             actionLabel: "Update Department",
-            resourceType: "DEPARTMENT",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
             metadata: body,
         });
@@ -324,11 +334,12 @@ class UserManagementController {
             adminId,
             actionType: ActionType.DEPARTMENT_DELETE,
             actionLabel: "Delete Department",
-            resourceType: "DEPARTMENT",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
         });
         res.json(successResponse(result));
     });
+
     getDepartmentStats = asyncHandler(async (_req: Request, res: Response) => {
         const result = await userManagementService.getDepartmentStats();
         res.json(successResponse(result));
@@ -344,7 +355,7 @@ class UserManagementController {
             adminId,
             actionType: ActionType.DEPARTMENT_UPDATE,
             actionLabel: isActive ? "Activate Department" : "Deactivate Department",
-            resourceType: "DEPARTMENT",
+            resourceType: "USER_MANAGEMENT",
             resourceId: id,
             metadata: { previous: !isActive, new: isActive },
         });
@@ -360,6 +371,23 @@ class UserManagementController {
         };
         const result = await userManagementService.getAllPermissions(query);
         res.json(successResponse(result));
+    });
+
+    getPermissionModules = asyncHandler(async (_req: Request, res: Response) => {
+        const modules = [
+            "TRANSACTION",
+            "CUSTOMER",
+            "OUTLET",
+            "SETTLEMENT",
+            "WORKFLOW",
+            "INCIDENCE",
+            "RATE",
+            "USER_ANAGEMENT",
+            "REGULATORY",    
+            "REPORTS",
+            "AUDIT_TRAIL",
+        ];
+        res.json(successResponse({ modules }));
     });
 }
 

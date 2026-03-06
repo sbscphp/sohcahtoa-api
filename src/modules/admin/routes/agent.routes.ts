@@ -94,6 +94,41 @@ AgentRouter.get(
 
 /**
  * @swagger
+ * /api/admin/agent/export:
+ *   get:
+ *     summary: Export agents as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.get(
+  "/export",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "export" }),
+  agentController.exportCsv
+);
+
+/**
+ * @swagger
  * /api/admin/agent:
  *   post:
  *     summary: Create agent

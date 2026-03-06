@@ -94,8 +94,39 @@ class RateService {
   }
 
   async export(filters: any = {}) {
-    const result = await this.list(filters, 1, 1000);
-    return { url: "/exports/rates.csv", count: result.meta.total };
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
+    const status = (filters.status || "all").toString();
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { fromCurrency: { contains: search, mode: "insensitive" } },
+        { toCurrency: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (status === "active") Object.assign(where, this.isActiveWhere());
+    if (status === "schedule") Object.assign(where, this.isScheduledWhere());
+    const client: any = prisma as any;
+    const items = await client.exchangeRate.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        fromCurrency: true,
+        toCurrency: true,
+        buyRate: true,
+        sellRate: true,
+        validFrom: true,
+        updatedAt: true,
+      },
+    });
+    return (items || []).map((r: any) => ({
+      dateTime: r.validFrom,
+      currencyPair: `${r.fromCurrency}-${r.toCurrency}`,
+      weBuyAt: Number(r.buyRate || 0),
+      weSellAt: Number(r.sellRate || 0),
+      lastUpdated: r.updatedAt,
+    }));
   }
 }
 

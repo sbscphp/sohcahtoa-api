@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import customerService from "../services/customer.service";
 import { successResponse, paginatedResponse } from "../../../shared/utils";
+import { streamCsv } from "../../../shared/utils";
 import { adminTransactionsService } from "../services/admin-transactions.service";
 
 class CustomerController {
@@ -112,6 +113,38 @@ class CustomerController {
       
       const result = await adminTransactionsService.listTransactions({ ...req.query, userId }, page, limit);
       res.json(successResponse(result.data, { pagination: result.meta }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportCustomersCsv = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const rows = await customerService.exportCustomers({
+        search: (req.query.search as string) || (req.query.q as string) || "",
+        status: (req.query.status as string) || undefined,
+      });
+      streamCsv(
+        res,
+        "customers.csv",
+        [
+          { header: "Customer", select: (r: any) => {
+            const name = r.name || "";
+            const id = r.id || "";
+            return id ? `${name}\nID:${id}` : name;
+          }},
+          { header: "Contact", select: (r: any) => {
+            const phone = r.phoneNumber || "";
+            const email = r.email || "";
+            return [phone, email].filter(Boolean).join(" ");
+          }},
+          { header: "Date joined", select: (r: any) => r.dateJoined },
+          { header: "Total Transactions", select: (r: any) => r.totalTransactions },
+          { header: "Transaction Volume", select: (r: any) => r.transactionVolume },
+          { header: "Status", select: (r: any) => r.status },
+        ],
+        rows as any[]
+      );
     } catch (error) {
       next(error);
     }
