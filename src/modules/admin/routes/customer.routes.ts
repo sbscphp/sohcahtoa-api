@@ -49,6 +49,31 @@ router.get(
 );
 /**
  * @swagger
+ * /api/admin/customers/all:
+ *   get:
+ *     summary: List all customers without pagination
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Customers retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get(
+  "/all",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.listAllCustomers
+);
+/**
+ * @swagger
  * /api/admin/customers/export:
  *   get:
  *     summary: Export customers as CSV

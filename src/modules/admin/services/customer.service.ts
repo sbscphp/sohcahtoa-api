@@ -178,6 +178,42 @@ export class CustomerService {
     return { totalCustomer, activeCustomer, deactivatedCustomer };
   }
 
+  async listCustomersAll(q?: string) {
+    const where: any = { role: "CUSTOMER" };
+    const query = (q || "").toString().trim();
+    if (query.length > 0) {
+      where.OR = [
+        { email: { contains: query, mode: "insensitive" } },
+        { phoneNumber: { contains: query, mode: "insensitive" } },
+        { profile: { firstName: { contains: query, mode: "insensitive" } } } as any,
+        { profile: { lastName: { contains: query, mode: "insensitive" } } } as any,
+      ];
+    }
+    const users = await prisma.user.findMany({
+      where,
+      include: { profile: true, kyc: true },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+    const items = users.map((u: any) => {
+      const name =
+        u.profile && (u.profile.firstName || u.profile.lastName)
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
+      return {
+        id: u.id,
+        name,
+        email: u.email,
+      };
+    });
+    items.sort((a: any, b: any) => {
+      const an = (a.name || "").toString();
+      const bn = (b.name || "").toString();
+      return an.localeCompare(bn, undefined, { sensitivity: "base" });
+    });
+    return items;
+  }
+
   async exportCustomers(filters: { search?: string; status?: string } = {}) {
     const where: any = { role: "CUSTOMER" };
     const q = (filters.search || "").toString().trim();

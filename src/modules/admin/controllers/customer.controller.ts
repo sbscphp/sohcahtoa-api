@@ -19,6 +19,16 @@ class CustomerController {
     }
   };
 
+  listAllCustomers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const q = ((req.query.search as string) || "").toString();
+      const items = await customerService.listCustomersAll(q);
+      res.json(successResponse(items));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getCustomerCounts = async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await customerService.getCustomerCounts();
