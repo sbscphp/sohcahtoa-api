@@ -8,7 +8,7 @@ import {
 } from "../../../shared/types";
 
 class AgentCustomerController {
-  async createNigerianCustomerAccount(req: AuthRequest, res: Response, next: NextFunction) {
+  async createCustomerAccount(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;
       if (!authUser) {
