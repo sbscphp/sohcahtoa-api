@@ -221,6 +221,26 @@ class OutletService {
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
+  async listBranchesAll(search?: string) {
+    const where: any = {};
+    const q = (search || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { address: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    const rows = await db.branch.findMany({
+      where,
+      orderBy: { name: "asc" },
+      take: 10_000,
+      select: { id: true, name: true },
+    });
+    const items = rows.map((b: any) => ({ id: b.id, name: b.name }));
+    items.sort((a: any, b: any) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+    return items;
+  }
+
   async createBranch(payload: CreateBranchDto) {
     const { branchName, branchEmail, state, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {
@@ -282,6 +302,49 @@ class OutletService {
 
   async addAgentsToBranch(id: string, agentIds: string[]) {
     return { message: "Agents added", branchId: id, count: agentIds?.length || 0 };
+  }
+
+  async listNigeriaStates() {
+    const states = [
+      "Abia",
+      "Adamawa",
+      "Akwa Ibom",
+      "Anambra",
+      "Bauchi",
+      "Bayelsa",
+      "Benue",
+      "Borno",
+      "Cross River",
+      "Delta",
+      "Ebonyi",
+      "Edo",
+      "Ekiti",
+      "Enugu",
+      "Gombe",
+      "Imo",
+      "Jigawa",
+      "Kaduna",
+      "Kano",
+      "Katsina",
+      "Kebbi",
+      "Kogi",
+      "Kwara",
+      "Lagos",
+      "Nasarawa",
+      "Niger",
+      "Ogun",
+      "Ondo",
+      "Osun",
+      "Oyo",
+      "Plateau",
+      "Rivers",
+      "Sokoto",
+      "Taraba",
+      "Yobe",
+      "Zamfara",
+      "Abuja",
+    ];
+    return states.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }
 }
 

@@ -101,6 +101,12 @@ class OutletController {
     res.json(successResponse(data));
   });
 
+  listAllBranches = asyncHandler(async (req: Request, res: Response) => {
+    const q = ((req.query.search as string) || "").toString();
+    const data = await outletService.listBranchesAll(q);
+    res.json(successResponse(data));
+  });
+
   createBranch = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.createBranch(req.body as CreateBranchDto);
     const adminId = (req as any).user?.userId as string;
@@ -118,6 +124,11 @@ class OutletController {
   getBranch = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.getBranch(req.params.id);
     res.json(successResponse(data));
+  });
+
+  listNigeriaStates = asyncHandler(async (_req: Request, res: Response) => {
+    const states = await outletService.listNigeriaStates();
+    res.json(successResponse({ states }));
   });
 
   updateBranchStatus = asyncHandler(async (req: Request, res: Response) => {
