@@ -11,6 +11,7 @@ import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
 import customerTransactionRoutes from './modules/customer/routes/customer-transaction.routes';
 import AgentCustomerRouter from './modules/agents/routes/agent-customer.routes';
+import AgentCustomerAuthRouter from './modules/agents/routes/agent-customer-auth.routes';
 import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
 import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
@@ -74,6 +75,9 @@ export const createApp = async (): Promise<Application> => {
   }
 
   // Module routes - all routes will be registered here
+  app.use('/api/agent/customer-auth', AgentCustomerAuthRouter);
+  logger.info('Agent customer auth routes registered');
+
   app.use('/api/auth', authRoutes);
   logger.info('Auth routes registered');
 

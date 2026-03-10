@@ -17,53 +17,6 @@ AgentCustomerRouter.use(authenticate, authorize(UserRole.AGENT));
 
 /**
  * @swagger
- * /api/agent/signup/nigerian/create-account:
- *   post:
- *     summary: Create Nigerian customer account under an agent
- *     description: |
- *       Agent-initiated account creation after BVN verification and OTP validation.
- *       Uses the same verification token from the Nigerian signup flow but links
- *       the created customer to the authenticated agent.
- *     tags: [Agent Customers]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *               - password
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from BVN verification (Step 1)
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 description: Customer's chosen password
- *               customerType:
- *                 type: string
- *                 enum: [NIGERIAN_CITIZEN, TOURIST, EXPATRIATE]
- *                 description: Optional customer type override (defaults to NIGERIAN_CITIZEN)
- *     responses:
- *       201:
- *         description: Customer account created successfully under the agent
- *       400:
- *         description: Validation error or expired verification token
- *       401:
- *         description: Unauthorized (not authenticated as an agent)
- */
-AgentCustomerRouter.post(
-  "/signup/nigerian/create-account",
-  agentCustomerController.createNigerianCustomerAccount,
-);
-
-/**
- * @swagger
  * /api/agent/customers:
  *   get:
  *     summary: List customers created by the authenticated agent
