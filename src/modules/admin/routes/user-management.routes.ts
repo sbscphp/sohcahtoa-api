@@ -513,6 +513,7 @@ UserManagementRouter.post(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "create" }),
   userManagementController.createRole
 );
+
 /**
  * @swagger
  * /api/admin/management/roles:
@@ -550,6 +551,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "view" }),
   userManagementController.getRoles
 );
+
 /**
  * @swagger
  * /api/admin/management/roles/stats:
@@ -570,6 +572,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "view" }),
   userManagementController.getRoleStats
 );
+
 /**
  * @swagger
  * /api/admin/management/roles/{id}:
@@ -598,6 +601,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "view" }),
   userManagementController.getRole
 );
+
 /**
  * @swagger
  * /api/admin/management/roles/{id}/permissions:
@@ -633,6 +637,38 @@ UserManagementRouter.get(
   userManagementController.getRolePermissions
 );
 
+/**
+ * @swagger
+ * /api/admin/management/roles/{id}/status:
+ *   patch:
+ *     summary: Toggle role active status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Role status updated
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 UserManagementRouter.patch(
   "/roles/:id/status",
   authenticate,
@@ -741,6 +777,16 @@ UserManagementRouter.get(
   userManagementController.getPermissions
 );
 
+/**
+ * @swagger
+ * /api/admin/management/modules:
+ *   get:
+ *     summary: List available permission modules
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Modules retrieved successfully
+ */
 UserManagementRouter.get(
   "/modules",
   userManagementController.getPermissionModules
