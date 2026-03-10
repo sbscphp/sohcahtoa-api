@@ -21,7 +21,7 @@ const OutletRouter: Router = Router();
 OutletRouter.get(
   "/franchises/stats",
   authenticate,
-  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.franchiseStats
 );
 /**
@@ -58,7 +58,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/franchises",
   authenticate,
-  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listFranchises
 );
 /**
@@ -101,9 +101,10 @@ OutletRouter.get(
 OutletRouter.post(
   "/franchises",
   authenticate,
-  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "create" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
   outletController.createFranchise
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/status:
@@ -138,9 +139,10 @@ OutletRouter.post(
 OutletRouter.patch(
   "/franchises/:id/status",
   authenticate,
-  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "edit" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.updateFranchiseStatus
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/approve:
@@ -164,24 +166,39 @@ OutletRouter.patch(
 OutletRouter.patch(
   "/franchises/:id/approve",
   authenticate,
-  requirePermission({ module: "FRANCHISE", feature: "MODULE", action: "edit" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.approveFranchise
 );
-// /**
-//  * @swagger
-//  * /api/admin/outlet/franchises/export:
-//  *   get:
-//  *     summary: Export franchises
-//  *     tags: [Admin]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Export generated
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// OutletRouter.get("/franchises/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportFranchises);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/export:
+ *   get:
+ *     summary: Export franchises as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/franchises/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportFranchises
+);
 
 /**
  * @swagger
@@ -239,6 +256,82 @@ OutletRouter.get(
 
 /**
  * @swagger
+ * /api/admin/outlet/branches/all:
+ *   get:
+ *     summary: List all branches (unpaginated)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *     responses:
+ *       200:
+ *         description: Branches retrieved successfully (id and name only)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "br_123"
+ *                       name:
+ *                         type: string
+ *                         example: "Ikeja"
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/all",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listAllBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/states:
+ *   get:
+ *     summary: List Nigerian states
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: States retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     states:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Abia", "Adamawa", "Akwa Ibom", "Lagos", "Abuja"]
+ */
+OutletRouter.get(
+  "/states",
+  outletController.listNigeriaStates
+);
+
+/**
+ * @swagger
  * /api/admin/outlet/branches/stats:
  *   get:
  *     summary: Get branch counters
@@ -254,7 +347,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/branches/stats",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.branchStats
 );
 
@@ -306,7 +399,7 @@ OutletRouter.get(
 OutletRouter.post(
   "/branches",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "create" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
   outletController.createBranch
 );
 /**
@@ -334,7 +427,7 @@ OutletRouter.post(
 OutletRouter.get(
   "/branches/:id",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.getBranch
 );
 /**
@@ -371,7 +464,7 @@ OutletRouter.get(
 OutletRouter.patch(
   "/branches/:id/status",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "edit" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.updateBranchStatus
 );
 /**
@@ -408,7 +501,7 @@ OutletRouter.patch(
 OutletRouter.post(
   "/branches/:id/agents",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "edit" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.addAgents
 );
 // /**

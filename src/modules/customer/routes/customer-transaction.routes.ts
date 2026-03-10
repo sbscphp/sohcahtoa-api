@@ -1330,4 +1330,128 @@ router.get("/transactions/pickup-locations/check-availability", customerTransact
  */
 router.get("/transactions/pickup-locations/availability-slots", customerTransactionController.getTerminalAvailabilitySlots);
 
+/**
+ * @swagger
+ * /api/customer/transactions/totals:
+ *   post:
+ *     summary: Get transaction totals by group (BUY, SELL, REMITTANCE)
+ *     description: |
+ *       Returns the total amount for each transaction group (BUY, SELL, REMITTANCE) for the authenticated customer.
+ *       All amounts are converted to USD by default using active exchange rates.
+ *
+ *       **Transaction Groups:**
+ *       - **BUY**: PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY, TOURIST_FX (when mode=BUY)
+ *       - **SELL**: TOURIST_FX (when mode=SELL), RESIDENT_FX, EXPATRIATE_FX
+ *       - **REMITTANCE**: IMTO_REMITTANCE, CASH_REMITTANCE
+ *
+ *       **Currency Conversion:**
+ *       - By default, uses active USD exchange rates from the database
+ *       - If a currency doesn't have a USD rate, you can provide a custom rate in the request body
+ *       - Transactions with currencies that have no rate (either from DB or custom) will be skipped
+ *
+ *       **Only COMPLETED transactions are included in the totals**
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               customRates:
+ *                 type: array
+ *                 description: Optional custom exchange rates for currencies without USD rates in the database
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - currency
+ *                     - rate
+ *                   properties:
+ *                     currency:
+ *                       type: string
+ *                       description: Currency code (e.g., EUR, GBP)
+ *                       example: EUR
+ *                     rate:
+ *                       type: number
+ *                       description: Exchange rate to USD (e.g., if 1 EUR = 1.10 USD, rate is 1.10)
+ *                       example: 1.10
+ *     responses:
+ *       200:
+ *         description: Transaction totals retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     all:
+ *                       type: object
+ *                       properties:
+ *                         totalAmount:
+ *                           type: number
+ *                           description: Total amount in USD for all transactions combined
+ *                           example: 245001.25
+ *                         currency:
+ *                           type: string
+ *                           example: USD
+ *                         transactionCount:
+ *                           type: integer
+ *                           description: Total number of completed transactions
+ *                           example: 43
+ *                     buy:
+ *                       type: object
+ *                       properties:
+ *                         totalAmount:
+ *                           type: number
+ *                           description: Total amount in USD for BUY transactions
+ *                           example: 125000.50
+ *                         currency:
+ *                           type: string
+ *                           example: USD
+ *                         transactionCount:
+ *                           type: integer
+ *                           description: Number of completed BUY transactions
+ *                           example: 15
+ *                     sell:
+ *                       type: object
+ *                       properties:
+ *                         totalAmount:
+ *                           type: number
+ *                           description: Total amount in USD for SELL transactions
+ *                           example: 45000.75
+ *                         currency:
+ *                           type: string
+ *                           example: USD
+ *                         transactionCount:
+ *                           type: integer
+ *                           description: Number of completed SELL transactions
+ *                           example: 8
+ *                     remittance:
+ *                       type: object
+ *                       properties:
+ *                         totalAmount:
+ *                           type: number
+ *                           description: Total amount in USD for REMITTANCE transactions
+ *                           example: 75000.00
+ *                         currency:
+ *                           type: string
+ *                           example: USD
+ *                         transactionCount:
+ *                           type: integer
+ *                           description: Number of completed REMITTANCE transactions
+ *                           example: 20
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post("/transactions/totals", customerTransactionController.getTransactionTotals);
+
 export default router;

@@ -1528,6 +1528,172 @@ export class CustomerTransactionService {
 
     return availabilitySlots;
   }
+
+  /**
+   * Get total amounts grouped by transaction type (BUY, SELL, REMITTANCE)
+   * All amounts are converted to USD by default, or uses a custom rate provided in the payload
+   *
+   * @param userId - The customer ID
+   * @param customRates - Optional custom exchange rates for currencies without USD rates
+   */
+  async getTotalsByGroup(
+    userId: string,
+    customRates?: { currency: string; rate: number }[]
+  ): Promise<{
+    all: { totalAmount: number; currency: string; transactionCount: number };
+    buy: { totalAmount: number; currency: string; transactionCount: number };
+    sell: { totalAmount: number; currency: string; transactionCount: number };
+    remittance: { totalAmount: number; currency: string; transactionCount: number };
+  }> {
+    logger.info(`[getTotalsByGroup] Fetching transaction totals by group for user`, {
+      userId,
+      hasCustomRates: !!customRates && customRates.length > 0,
+    });
+
+    // Fetch all completed transactions for the customer
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+        status: 'COMPLETED',
+        foreignAmount: { not: null },
+      },
+      select: {
+        id: true,
+        type: true,
+        transactionMode: true,
+        currency: true,
+        foreignAmount: true,
+      },
+    });
+
+    logger.debug(`[getTotalsByGroup] Found ${transactions.length} completed transactions`, {
+      userId,
+      transactionCount: transactions.length,
+    });
+
+    // Get all active USD exchange rates
+    const now = new Date();
+    const client: any = prisma as any;
+    const usdRates = await client.exchangeRate.findMany({
+      where: {
+        toCurrency: 'USD',
+        isActive: true,
+        validFrom: { lte: now },
+        validUntil: { gt: now },
+      },
+      select: {
+        fromCurrency: true,
+        rate: true,
+        buyRate: true,
+        sellRate: true,
+      },
+    });
+
+    logger.debug(`[getTotalsByGroup] Found ${usdRates.length} active USD exchange rates`, {
+      userId,
+      rateCount: usdRates.length,
+      currencies: usdRates.map((r: any) => r.fromCurrency),
+    });
+
+    // Create a map of currency to USD rate
+    const rateMap = new Map<string, number>();
+    usdRates.forEach((r: any) => {
+      rateMap.set(r.fromCurrency, parseFloat(r.rate || r.sellRate || r.buyRate));
+    });
+
+    // Add custom rates if provided
+    if (customRates && customRates.length > 0) {
+      customRates.forEach((customRate) => {
+        const currency = customRate.currency.toUpperCase();
+        if (!rateMap.has(currency)) {
+          rateMap.set(currency, customRate.rate);
+          logger.debug(`[getTotalsByGroup] Using custom rate for ${currency}`, {
+            userId,
+            currency,
+            rate: customRate.rate,
+          });
+        }
+      });
+    }
+
+    // USD is 1:1
+    rateMap.set('USD', 1);
+
+    // Group transactions and calculate totals
+    const totals = {
+      all: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
+      buy: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
+      sell: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
+      remittance: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
+    };
+
+    for (const transaction of transactions) {
+      const group = this.resolveTransactionGroup(
+        transaction.type as string,
+        transaction.transactionMode
+      );
+      const currency = transaction.currency.toUpperCase();
+      const foreignAmount = parseFloat(transaction.foreignAmount?.toString() || '0');
+
+      // Convert to USD
+      let amountInUSD = foreignAmount;
+      if (currency !== 'USD') {
+        const rate = rateMap.get(currency);
+        if (rate) {
+          amountInUSD = foreignAmount / rate;
+          logger.debug(`[getTotalsByGroup] Converting ${currency} to USD`, {
+            userId,
+            transactionId: transaction.id,
+            currency,
+            foreignAmount,
+            rate,
+            amountInUSD,
+          });
+        } else {
+          logger.warn(`[getTotalsByGroup] No exchange rate found for ${currency}`, {
+            userId,
+            transactionId: transaction.id,
+            currency,
+            foreignAmount,
+          });
+          // Skip this transaction if no rate is available
+          continue;
+        }
+      }
+
+      // Add to all total
+      totals.all.totalAmount += amountInUSD;
+      totals.all.transactionCount += 1;
+
+      // Add to appropriate group
+      if (group === 'BUY') {
+        totals.buy.totalAmount += amountInUSD;
+        totals.buy.transactionCount += 1;
+      } else if (group === 'SELL') {
+        totals.sell.totalAmount += amountInUSD;
+        totals.sell.transactionCount += 1;
+      } else if (group === 'REMITTANCE') {
+        totals.remittance.totalAmount += amountInUSD;
+        totals.remittance.transactionCount += 1;
+      }
+    }
+
+    // Round to 2 decimal places
+    totals.all.totalAmount = Math.round(totals.all.totalAmount * 100) / 100;
+    totals.buy.totalAmount = Math.round(totals.buy.totalAmount * 100) / 100;
+    totals.sell.totalAmount = Math.round(totals.sell.totalAmount * 100) / 100;
+    totals.remittance.totalAmount = Math.round(totals.remittance.totalAmount * 100) / 100;
+
+    logger.info(`[getTotalsByGroup] Transaction totals calculated successfully`, {
+      userId,
+      all: totals.all,
+      buy: totals.buy,
+      sell: totals.sell,
+      remittance: totals.remittance,
+    });
+
+    return totals;
+  }
 }
 
 export default new CustomerTransactionService();

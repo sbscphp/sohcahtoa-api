@@ -79,6 +79,45 @@ TicketsRouter.get(
   requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
   ticketsController.list
 );
+/**
+ * @swagger
+ * /api/admin/tickets/export:
+ *   get:
+ *     summary: Export tickets as CSV
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           type: string
+ *           enum: [LOW, MEDIUM, HIGH]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TicketsRouter.get(
+  "/export",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "export" }),
+  ticketsController.exportCsv
+);
 
 /**
  * @swagger

@@ -88,7 +88,7 @@ class UserManagementService {
 
         if (emailService.isReady()) {
             const resetPasswordUrl =
-                `${process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000"}/reset-password`;
+                `${process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000"}/admin/reset-password`;
 
             emailService
                 .sendAdminWelcomeEmail(result.email, result.fullName, resetPasswordUrl)
@@ -727,6 +727,23 @@ class UserManagementService {
             };
         } catch (error) {
             logger.error("Failed to get role summary", { error });
+            throw error;
+        }
+    };
+
+    toggleRoleActive = async (id: string, isActive: boolean) => {
+        try {
+            const role = await this.prisma.role.findUnique({ where: { id } });
+            if (!role) {
+                throw new NotFoundError("Role not found");
+            }
+            const updated = await this.prisma.role.update({
+                where: { id },
+                data: { isActive },
+            });
+            return updated;
+        } catch (error) {
+            logger.error("Failed to toggle role active status", { id, isActive, error });
             throw error;
         }
     };
