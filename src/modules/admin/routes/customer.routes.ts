@@ -16,7 +16,7 @@ const router:Router = Router();
  * /api/admin/customers:
  *   get:
  *     summary: List all customers
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -52,7 +52,7 @@ router.get(
  * /api/admin/customers/all:
  *   get:
  *     summary: List all customers without pagination
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -77,7 +77,7 @@ router.get(
  * /api/admin/customers/export:
  *   get:
  *     summary: Export customers as CSV
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -108,7 +108,7 @@ router.get(
  * /api/admin/customers/counts:
  *   get:
  *     summary: Get customer counts
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -143,7 +143,7 @@ router.patch(
  * /api/admin/customers/{userId}:
  *   get:
  *     summary: Get customer details by ID
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -172,7 +172,7 @@ router.get(
  * /api/admin/customers/{userId}/flags:
  *   get:
  *     summary: List flags for a specific customer
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -200,7 +200,7 @@ router.get(
  * /api/admin/customers/{userId}/deactivate:
  *   patch:
  *     summary: Deactivate a customer
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -229,7 +229,7 @@ router.patch(
  * /api/admin/customers/{userId}/status:
  *   patch:
  *     summary: Toggle customer active status
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -268,7 +268,7 @@ router.patch(
  * /api/admin/customers/{userId}/flags:
  *   post:
  *     summary: Create a flag for a customer
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -313,7 +313,7 @@ router.post(
  * /api/admin/customers/{userId}/transactions:
  *   get:
  *     summary: Get transactions for a specific customer
- *     tags: [Admin]
+ *     tags: [admin-customers]
  *     security:
  *       - bearerAuth: []
  *     parameters:

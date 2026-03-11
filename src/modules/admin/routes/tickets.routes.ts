@@ -15,7 +15,7 @@ const uploadTicketAttachment = createUploadMiddleware({
  * /api/admin/tickets/stats:
  *   get:
  *     summary: Get ticket counters
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -33,10 +33,31 @@ TicketsRouter.get(
 
 /**
  * @swagger
+ * /api/admin/tickets/case-types:
+ *   get:
+ *     summary: List available ticket case types
+ *     tags: [admin-tickets]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Case types retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TicketsRouter.get(
+  "/case-types",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.caseTypes
+);
+
+/**
+ * @swagger
  * /api/admin/tickets:
  *   get:
  *     summary: List tickets
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -79,12 +100,13 @@ TicketsRouter.get(
   requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
   ticketsController.list
 );
+
 /**
  * @swagger
  * /api/admin/tickets/export:
  *   get:
  *     summary: Export tickets as CSV
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -124,7 +146,7 @@ TicketsRouter.get(
  * /api/admin/tickets:
  *   post:
  *     summary: Create a ticket
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -139,6 +161,7 @@ TicketsRouter.get(
  *                 type: string
  *               caseType:
  *                 type: string
+ *                 enum: [Transaction Dispute, Onboarding, Document Approval, Customer Account]
  *               priorityLevel:
  *                 type: string
  *                 enum: [LOW, MEDIUM, HIGH]
@@ -168,7 +191,7 @@ TicketsRouter.post(
  * /api/admin/tickets/{id}:
  *   get:
  *     summary: Get ticket by ID
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -197,7 +220,7 @@ TicketsRouter.get(
  * /api/admin/tickets/{id}/status:
  *   patch:
  *     summary: Update ticket status
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -238,8 +261,8 @@ TicketsRouter.patch(
  * @swagger
  * /api/admin/tickets/{id}/assign:
  *   post:
- *     summary: Assign ticket to current admin
- *     tags: [Admin]
+  *     summary: Assign ticket to admin
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -248,6 +271,16 @@ TicketsRouter.patch(
  *         required: true
  *         schema:
  *           type: string
+  *     requestBody:
+  *       required: true
+  *       content:
+  *         application/json:
+  *           schema:
+  *             type: object
+  *             required: [adminId]
+  *             properties:
+  *               adminId:
+  *                 type: string
  *     responses:
  *       200:
  *         description: Ticket assigned
@@ -260,7 +293,7 @@ TicketsRouter.post(
   "/:id/assign",
   authenticate,
   requirePermission({ module: "TICKETS", feature: "MODULE", action: "edit" }),
-  ticketsController.assign
+  ticketsController.assignTo
 );
 
 /**
@@ -268,7 +301,7 @@ TicketsRouter.post(
  * /api/admin/tickets/{id}/comments:
  *   post:
  *     summary: Add comment to ticket
- *     tags: [Admin]
+ *     tags: [admin-tickets]
  *     security:
  *       - bearerAuth: []
  *     parameters:

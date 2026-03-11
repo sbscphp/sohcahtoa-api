@@ -9,7 +9,7 @@ const SettlementRouter: Router = Router();
  * /api/admin/settlement/stats:
  *   get:
  *     summary: Settlement dashboard stats
- *     tags: [Admin]
+ *     tags: [admin-settlement]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -30,7 +30,7 @@ SettlementRouter.get(
  * /api/admin/settlement/discrepancies:
  *   get:
  *     summary: List discrepancy reports
- *     tags: [Admin]
+ *     tags: [admin-settlement]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -56,7 +56,7 @@ SettlementRouter.get(
  * /api/admin/settlement/pending-reconciliations:
  *   get:
  *     summary: Pending reconciliations
- *     tags: [Admin]
+ *     tags: [admin-settlement]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -82,7 +82,7 @@ SettlementRouter.get(
  * /api/admin/settlement/escrow-accounts:
  *   get:
  *     summary: List escrow accounts
- *     tags: [Admin]
+ *     tags: [admin-settlement]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -101,7 +101,7 @@ SettlementRouter.get(
  * /api/admin/settlement/funding-transactions:
  *   get:
  *     summary: Recent funding transactions
- *     tags: [Admin]
+ *     tags: [admin-settlement]
  *     security:
  *       - bearerAuth: []
  *     parameters:

@@ -9,7 +9,7 @@ const ReportRouter: Router = Router();
  * /api/admin/reports/modules:
  *   get:
  *     summary: List available report modules
- *     tags: [Admin]
+ *     tags: [admin-reports]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -30,7 +30,7 @@ ReportRouter.get(
 //  * /api/admin/reports/stats:
 //  *   get:
 //  *     summary: Report job counters
-//  *     tags: [Admin]
+//  *     tags: [admin-reports]
 //  *     security:
 //  *       - bearerAuth: []
 //  *     responses:
@@ -46,7 +46,7 @@ ReportRouter.get(
  * /api/admin/reports/jobs:
  *   get:
  *     summary: List report jobs
- *     tags: [Admin]
+ *     tags: [admin-reports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -91,7 +91,7 @@ ReportRouter.get(
  * /api/admin/reports/jobs/{id}:
  *   get:
  *     summary: Get report job by ID
- *     tags: [Admin]
+ *     tags: [admin-reports]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -115,7 +115,7 @@ ReportRouter.get(
  * /api/admin/reports/generate:
  *   post:
  *     summary: Generate a report
- *     tags: [Admin]
+ *     tags: [admin-reports]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
