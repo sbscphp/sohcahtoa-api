@@ -9,7 +9,7 @@ const WorkflowRouter: Router = Router();
  * /api/admin/workflow/stats:
  *   get:
  *     summary: Workflow overview counters
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -28,7 +28,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/actions:
  *   get:
  *     summary: Aggregated workflow actions list
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -63,7 +63,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/templates:
  *   post:
  *     summary: Create new workflow template
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -107,7 +107,7 @@ WorkflowRouter.post(
  * /api/admin/workflow/templates/draft:
  *   post:
  *     summary: Save workflow template as draft
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -136,7 +136,7 @@ WorkflowRouter.post(
  * /api/admin/workflow/templates:
  *   get:
  *     summary: List workflow templates
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -165,7 +165,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/templates/{id}:
  *   get:
  *     summary: Get workflow template details
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -189,7 +189,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/templates/{id}:
  *   patch:
  *     summary: Update workflow template
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -219,7 +219,7 @@ WorkflowRouter.patch(
  * /api/admin/workflow/templates/{id}/publish:
  *   post:
  *     summary: Publish workflow template
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -243,7 +243,7 @@ WorkflowRouter.post(
  * /api/admin/workflow/management/stats:
  *   get:
  *     summary: Workflow management dashboard counters
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -262,7 +262,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/management/list:
  *   get:
  *     summary: Workflow management table
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -294,7 +294,7 @@ WorkflowRouter.get(
  * /api/admin/workflow/templates/{id}/activate:
  *   post:
  *     summary: Activate workflow template
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -318,7 +318,7 @@ WorkflowRouter.post(
  * /api/admin/workflow/templates/{id}/deactivate:
  *   post:
  *     summary: Deactivate workflow template
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -342,7 +342,7 @@ WorkflowRouter.post(
  * /api/admin/workflow/templates/export:
  *   post:
  *     summary: Export workflow templates (CSV)
- *     tags: [Admin]
+ *     tags: [admin-workflow]
  *     security:
  *       - bearerAuth: []
  *     parameters:

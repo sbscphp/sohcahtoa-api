@@ -9,7 +9,7 @@ const RateRouter: Router = Router();
  * /api/admin/rate/stats:
  *   get:
  *     summary: Get exchange rate statistics
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -28,7 +28,7 @@ RateRouter.get(
  * /api/admin/rate/export:
  *   get:
  *     summary: Export exchange rates as CSV
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -47,7 +47,7 @@ RateRouter.get(
  * /api/admin/rate:
  *   get:
  *     summary: List exchange rates
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -85,7 +85,7 @@ RateRouter.get(
  * /api/admin/rate/{id}:
  *   get:
  *     summary: Get specific exchange rate
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -110,7 +110,7 @@ RateRouter.get(
  * /api/admin/rate:
  *   post:
  *     summary: Create new exchange rate
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -151,7 +151,7 @@ RateRouter.post(
  * /api/admin/rate/{id}:
  *   put:
  *     summary: Update exchange rate
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -195,7 +195,7 @@ RateRouter.put(
  * /api/admin/rate/{id}/deactivate:
  *   patch:
  *     summary: Deactivate exchange rate
- *     tags: [Admin]
+ *     tags: [admin-rate]
  *     security:
  *       - bearerAuth: []
  *     parameters:

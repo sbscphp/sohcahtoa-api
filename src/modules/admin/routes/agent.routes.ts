@@ -17,7 +17,7 @@ const uploadAgentAttachment = createUploadMiddleware({
  * /api/admin/agent/stats:
  *   get:
  *     summary: Agent counters
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -38,7 +38,7 @@ AgentRouter.get(
  * /api/admin/agent:
  *   get:
  *     summary: List agents
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -97,7 +97,7 @@ AgentRouter.get(
  * /api/admin/agent/export:
  *   get:
  *     summary: Export agents as CSV
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -132,7 +132,7 @@ AgentRouter.get(
  * /api/admin/agent:
  *   post:
  *     summary: Create agent
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -174,7 +174,7 @@ AgentRouter.post(
  * /api/admin/agent/{id}:
  *   get:
  *     summary: Get agent by ID
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -203,7 +203,7 @@ AgentRouter.get(
  * /api/admin/agent/{id}:
  *   patch:
  *     summary: Update agent details
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -250,7 +250,7 @@ AgentRouter.patch(
  * /api/admin/agent/{id}/transactions:
  *   get:
  *     summary: Get transactions handled by the agent's branch (cash pickups)
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -304,7 +304,7 @@ AgentRouter.get(
  * /api/admin/agent/{id}/transactions/{transactionId}:
  *   get:
  *     summary: Get single agent transaction details
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -338,7 +338,7 @@ AgentRouter.get(
  * /api/admin/agent/{id}/status:
  *   patch:
  *     summary: Update agent active status
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -375,7 +375,7 @@ AgentRouter.patch(
  * /api/admin/agent/{id}/deactivate:
  *   patch:
  *     summary: Deactivate an agent
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -402,7 +402,7 @@ AgentRouter.patch(
  * /api/admin/agent/{id}/approval:
  *   patch:
  *     summary: Update agent approval state
- *     tags: [Admin]
+ *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
  *     parameters:

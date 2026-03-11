@@ -9,7 +9,7 @@ const RegulatoryRouter: Router = Router();
  * /api/admin/regulatory/compliance/dashboard:
  *   get:
  *     summary: Compliance dashboard counters and insights
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -28,7 +28,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/compliance/reports:
  *   get:
  *     summary: List compliance reports
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -66,7 +66,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/compliance/reports/{id}:
  *   get:
  *     summary: Get compliance report details
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -90,7 +90,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/compliance/reports/export:
  *   post:
  *     summary: Export compliance reports (CSV)
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -116,7 +116,7 @@ RegulatoryRouter.post(
  * /api/admin/regulatory/trms/stats:
  *   get:
  *     summary: TRMS submissions dashboard counters
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -135,7 +135,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/trms/list:
  *   get:
  *     summary: List TRMS submissions
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -167,7 +167,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/trms/details/{transactionId}:
  *   get:
  *     summary: View TRMS submission details
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -191,7 +191,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/trms/submit/{transactionId}:
  *   post:
  *     summary: Submit Form A to TRMS for a transaction
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -215,7 +215,7 @@ RegulatoryRouter.post(
  * /api/admin/regulatory/trms/status/{formNumber}:
  *   get:
  *     summary: Check TRMS form status
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -239,7 +239,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/trms/export:
  *   post:
  *     summary: Export TRMS submissions (CSV)
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -265,7 +265,7 @@ RegulatoryRouter.post(
  * /api/admin/regulatory/cbn-fn/stats:
  *   get:
  *     summary: CBN FN Window reporting counters
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -284,7 +284,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/cbn-fn/reports:
  *   get:
  *     summary: List CBN FN Window reports
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -316,7 +316,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/cbn-fn/reports/{id}:
  *   get:
  *     summary: Get FN Window report details
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -340,7 +340,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/cbn-fn/rates:
  *   get:
  *     summary: Get current NFEM window rates
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -359,7 +359,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/cbn-fn/rates/{base}/{quote}:
  *   get:
  *     summary: Get specific currency pair rate
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -387,7 +387,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/logs/audit:
  *   get:
  *     summary: List audit logs
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -422,7 +422,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/logs/audit/{id}:
  *   get:
  *     summary: Get audit log details
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -446,7 +446,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/logs/regulatory:
  *   get:
  *     summary: List regulatory logs (FN window, NFIU, exports)
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -478,7 +478,7 @@ RegulatoryRouter.get(
  * /api/admin/regulatory/logs/regulatory/{id}:
  *   get:
  *     summary: Get regulatory log details
- *     tags: [Admin]
+ *     tags: [admin-regulatory]
  *     security:
  *       - bearerAuth: []
  *     parameters:

@@ -8,8 +8,8 @@ export const AdminAuthRouter: Router = Router();
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin endpoints
+ *   name: admin-auth
+ *   description: Admin authentication endpoints
  */
 
 /**
@@ -17,7 +17,7 @@ export const AdminAuthRouter: Router = Router();
  * /api/admin/auth/login:
  *   post:
  *     summary: Initiate admin login (OTP)
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -44,7 +44,7 @@ AdminAuthRouter.post("/login", adminAuthController.login);
  * /api/admin/auth/verify-login:
  *   post:
  *     summary: Verify OTP and complete login
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -73,7 +73,7 @@ AdminAuthRouter.post("/verify-login",  adminAuthController.verifyLogin);
  * /api/admin/auth/forgot-password:
  *   post:
  *     summary: Request password reset OTP
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -98,7 +98,7 @@ AdminAuthRouter.post("/forgot-password",  adminAuthController.forgotPassword);
  * /api/admin/auth/forgot-password/resend:
  *   post:
  *     summary: Resend password reset OTP
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -120,7 +120,7 @@ AdminAuthRouter.post("/forgot-password",  adminAuthController.forgotPassword);
  * /api/admin/auth/otp/validate:
  *   post:
  *     summary: Validate OTP for admin password reset and receive resetToken
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -146,7 +146,7 @@ AdminAuthRouter.post("/otp/validate",  adminAuthController.validateResetOtp);
  * /api/admin/auth/reset-password:
  *   post:
  *     summary: Submit new admin password using resetToken
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -176,7 +176,7 @@ AdminAuthRouter.post("/forgot-password/resend", adminAuthController.resendForgot
  * /api/admin/auth/resend-otp:
  *   post:
  *     summary: Resend login OTP to admin email
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -201,7 +201,7 @@ AdminAuthRouter.post("/resend-otp", adminAuthController.resendOtp);
  * /api/admin/auth/logout:
  *   post:
  *     summary: Logout current admin session
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     security:
  *       - bearerAuth: []
  *     responses:

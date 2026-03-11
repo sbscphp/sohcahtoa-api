@@ -9,7 +9,7 @@ const OutletRouter: Router = Router();
  * /api/admin/outlet/franchises/stats:
  *   get:
  *     summary: Get franchise counters
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -29,7 +29,7 @@ OutletRouter.get(
  * /api/admin/outlet/franchises:
  *   get:
  *     summary: List franchises
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -66,7 +66,7 @@ OutletRouter.get(
  * /api/admin/outlet/franchises:
  *   post:
  *     summary: Create a new franchise
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -110,7 +110,7 @@ OutletRouter.post(
  * /api/admin/outlet/franchises/{id}/status:
  *   patch:
  *     summary: Update franchise status (activate/deactivate)
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -148,7 +148,7 @@ OutletRouter.patch(
  * /api/admin/outlet/franchises/{id}/approve:
  *   patch:
  *     summary: Approve a pending franchise
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -175,7 +175,7 @@ OutletRouter.patch(
  * /api/admin/outlet/franchises/export:
  *   get:
  *     summary: Export franchises as CSV
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -205,7 +205,7 @@ OutletRouter.get(
  * /api/admin/outlet:
  *   get:
  *     summary: List cash pickup outlets and activity
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -221,7 +221,7 @@ OutletRouter.get(
  * /api/admin/outlet/branches:
  *   get:
  *     summary: List branches
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -259,7 +259,7 @@ OutletRouter.get(
  * /api/admin/outlet/branches/all:
  *   get:
  *     summary: List all branches (unpaginated)
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -305,7 +305,7 @@ OutletRouter.get(
  * /api/admin/outlet/states:
  *   get:
  *     summary: List Nigerian states
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     responses:
  *       200:
  *         description: States retrieved successfully
@@ -335,7 +335,7 @@ OutletRouter.get(
  * /api/admin/outlet/branches/stats:
  *   get:
  *     summary: Get branch counters
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -356,7 +356,7 @@ OutletRouter.get(
  * /api/admin/outlet/branches:
  *   post:
  *     summary: Create a new branch
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -407,7 +407,7 @@ OutletRouter.post(
  * /api/admin/outlet/branches/{id}:
  *   get:
  *     summary: Get branch details
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -435,7 +435,7 @@ OutletRouter.get(
  * /api/admin/outlet/branches/{id}/status:
  *   patch:
  *     summary: Update branch status (activate/deactivate)
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -472,7 +472,7 @@ OutletRouter.patch(
  * /api/admin/outlet/branches/{id}/agents:
  *   post:
  *     summary: Assign agents to branch
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -509,7 +509,7 @@ OutletRouter.post(
 //  * /api/admin/outlet/branches/export:
 //  *   get:
 //  *     summary: Export branches
-//  *     tags: [Admin]
+//  *     tags: [admin-outlet]
 //  *     security:
 //  *       - bearerAuth: []
 //  *     responses:
@@ -525,7 +525,7 @@ OutletRouter.post(
  * /api/admin/outlet/{name}:
  *   get:
  *     summary: Get outlet details and recent pickups
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:

@@ -20,8 +20,34 @@ const router: Router = Router();
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin operations for transaction and deposit management
+ *   - name: admin-core
+ *     description: Core admin endpoints (dashboard, health, approvals)
+ *   - name: admin-auth
+ *     description: Admin authentication
+ *   - name: admin-user-management
+ *     description: Admin users, roles, permissions
+ *   - name: admin-customers
+ *     description: Customer management
+ *   - name: admin-transactions
+ *     description: Transaction management
+ *   - name: admin-agent
+ *     description: Agent management
+ *   - name: admin-outlet
+ *     description: Franchise and branches
+ *   - name: admin-settlement
+ *     description: Settlements and bank details
+ *   - name: admin-workflow
+ *     description: Workflows and templates
+ *   - name: admin-tickets
+ *     description: Support tickets
+ *   - name: admin-rate
+ *     description: Exchange rates
+ *   - name: admin-audit
+ *     description: Audit trail
+ *   - name: admin-reports
+ *     description: Reports and analytics
+ *   - name: admin-regulatory
+ *     description: Regulatory and compliance
  */
 
 /**
@@ -29,7 +55,7 @@ const router: Router = Router();
  * /api/admin/dashboard:
  *   get:
  *     summary: Get admin dashboard statistics
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -55,7 +81,7 @@ router.get("/dashboard", adminController.getDashboard);
  * /api/admin/pending-approvals:
  *   get:
  *     summary: Get all pending approvals
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -83,7 +109,7 @@ router.get("/pending-approvals", adminController.getPendingApprovals);
  * /api/admin/audit-log:
  *   get:
  *     summary: Get audit log (Super Admin only)
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -107,7 +133,7 @@ router.get(
  * /api/admin/health:
  *   get:
  *     summary: Health check endpoint
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     responses:
  *       200:
  *         description: Service is healthy

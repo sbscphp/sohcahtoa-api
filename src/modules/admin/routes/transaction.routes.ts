@@ -9,7 +9,7 @@ export const TransactionRouter: Router = Router();
  * /api/admin/transactions/stats:
  *   get:
  *     summary: Get transaction statistics
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -30,7 +30,7 @@ TransactionRouter.get(
  * /api/admin/transactions:
  *   get:
  *     summary: List transactions
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -95,7 +95,7 @@ TransactionRouter.get(
  * /api/admin/transactions/export:
  *   get:
  *     summary: Export transactions as CSV
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -152,7 +152,7 @@ TransactionRouter.get(
  * /api/admin/transactions/buy:
  *   get:
  *     summary: List Buy FX transactions
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -217,7 +217,7 @@ TransactionRouter.get(
  * /api/admin/transactions/sell:
  *   get:
  *     summary: List Sell FX transactions
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -282,7 +282,7 @@ TransactionRouter.get(
  * /api/admin/transactions/receive:
  *   get:
  *     summary: List Receive FX transactions
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -347,7 +347,7 @@ TransactionRouter.get(
  * /api/admin/transactions/{id}:
  *   get:
  *     summary: Get transaction details
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -376,7 +376,7 @@ TransactionRouter.get(
  * /api/admin/transactions/{id}/request-info:
  *   post:
  *     summary: Request information for a transaction
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -416,7 +416,7 @@ TransactionRouter.post(
  * /api/admin/transactions/{id}/review:
  *   post:
  *     summary: Review a transaction
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -456,7 +456,7 @@ TransactionRouter.post(
  * /api/admin/transactions/{id}/approve:
  *   post:
  *     summary: Approve a transaction
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -491,7 +491,7 @@ TransactionRouter.post(
  * /api/admin/transactions/{id}/reject:
  *   post:
  *     summary: Reject a transaction
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -531,7 +531,7 @@ TransactionRouter.post(
  * /api/admin/transactions/{id}/settle:
  *   post:
  *     summary: Settle a transaction
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -566,7 +566,7 @@ TransactionRouter.post(
  * /api/admin/deposits/{transactionId}/confirm:
  *   post:
  *     summary: Confirm a deposit
- *     tags: [Admin]
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
  *     parameters:

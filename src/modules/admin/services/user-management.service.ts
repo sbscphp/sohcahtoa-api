@@ -4,7 +4,7 @@ import { PrismaClient, AdminUser, Prisma } from "@prisma/client";
 import { CreateAdminUserDto, CreateRoleDto, UpdateRoleDto, RoleQueryDto, CreateDepartmentDto, DepartmentQueryDto, UpdateDepartmentDto } from "../dto/user-management.dto";
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { generateId, DuplicateError, NotFoundError, BadRequestError, paginate } from '../../../shared/utils';
+import { generateId, DuplicateError, NotFoundError, BadRequestError, paginate, hashPassword, generateSecureOtp } from '../../../shared/utils';
 import { emailService } from '../../../shared/utils';
 
 
@@ -87,8 +87,31 @@ class UserManagementService {
         });
 
         if (emailService.isReady()) {
-            const resetPasswordUrl =
-                `${process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000"}/admin/reset-password`;
+            const otp = generateSecureOtp();
+            const hashedOtp = await hashPassword(otp);
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+            await this.prisma.$transaction([
+                this.prisma.token.updateMany({
+                    where: { userId: result.id, type: "OTP", isUsed: false },
+                    data: { isUsed: true, usedAt: new Date() },
+                }),
+                this.prisma.token.create({
+                    data: {
+                        userId: result.id,
+                        type: "OTP",
+                        token: hashedOtp,
+                        expiresAt,
+                        attempts: 0,
+                        metadata: { purpose: "PASSWORD_RESET" },
+                    },
+                }),
+            ]);
+
+            const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000";
+            const url = new URL("/admin/reset-password", baseUrl);
+            url.searchParams.set("otp", otp);
+            const resetPasswordUrl = url.toString();
 
             emailService
                 .sendAdminWelcomeEmail(result.email, result.fullName, resetPasswordUrl)

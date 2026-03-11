@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse, streamCsv } from "../../../shared/utils";
+import { successResponse, streamCsv, ValidationError } from "../../../shared/utils";
 import { CreateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
@@ -8,6 +8,11 @@ import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/clo
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
     const result = await ticketsService.getStats();
+    res.json(successResponse(result));
+  });
+
+  caseTypes = asyncHandler(async (_req: Request, res: Response) => {
+    const result = ticketsService.getCaseTypes();
     res.json(successResponse(result));
   });
 
@@ -99,6 +104,24 @@ class TicketsController {
       resourceType: "INCIDENCE",
       resourceId: req.params.id,
       metadata: { assignedAgentId: adminId },
+    });
+    res.json(successResponse(updated));
+  });
+
+  assignTo = asyncHandler(async (req: Request, res: Response) => {
+    const assignedBy = (req as any).user?.userId as string;
+    const assigneeId = req.body?.adminId as string;
+    if (!assigneeId) {
+      throw new ValidationError("adminId is required");
+    }
+    const updated = await ticketsService.assignAgent(req.params.id, assigneeId);
+    await auditTrailService.logAction({
+      adminId: assignedBy,
+      actionType: "INCIDENCE_ASSIGN",
+      actionLabel: "Assign ticket to admin",
+      resourceType: "INCIDENCE",
+      resourceId: req.params.id,
+      metadata: { assignedAgentId: assigneeId, assignedBy },
     });
     res.json(successResponse(updated));
   });

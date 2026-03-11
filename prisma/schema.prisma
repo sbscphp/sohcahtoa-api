@@ -607,7 +607,7 @@ model AgentAttachment {
 model AdminAction {
   id            String     @id @default(uuid())
   adminId       String
-  actionType    ActionType
+  actionType    String?
   actionLabel   String?
   resourceType  String
   resourceId    String

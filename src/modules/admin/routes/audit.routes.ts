@@ -9,7 +9,7 @@ const AuditRouter: Router = Router();
  * /api/admin/audit/trail:
  *   get:
  *     summary: List audit trail entries
- *     tags: [Admin]
+ *     tags: [admin-audit]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -63,7 +63,7 @@ AuditRouter.get(
  * /api/admin/audit/trail/export:
  *   get:
  *     summary: Export audit trail as CSV
- *     tags: [Admin]
+ *     tags: [admin-audit]
  *     security:
  *       - bearerAuth: []
  *     parameters:

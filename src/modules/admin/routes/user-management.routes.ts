@@ -16,7 +16,7 @@ const UserManagementRouter: Router = Router();
  * /api/admin/management/users/stats:
  *   get:
  *     summary: User counters
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -36,7 +36,7 @@ UserManagementRouter.get(
  * /api/admin/management/users:
  *   get:
  *     summary: List admin users
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -67,7 +67,7 @@ UserManagementRouter.get(
  * /api/admin/management/users/export:
  *   get:
  *     summary: Export admin users as CSV
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -87,7 +87,7 @@ UserManagementRouter.get(
  * /api/admin/management/users/{id}:
  *   get:
  *     summary: Get admin user by ID
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -115,7 +115,7 @@ UserManagementRouter.get(
  * /api/admin/management/users/{id}/activities:
  *   get:
  *     summary: Get admin user activities
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -151,7 +151,7 @@ UserManagementRouter.get(
  * /api/admin/management/users/{id}/activities/export:
  *   get:
  *     summary: Export admin user activities as CSV
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -177,7 +177,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/export:
  *   get:
  *     summary: Export roles as CSV
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -197,7 +197,7 @@ UserManagementRouter.get(
  * /api/admin/management/departments/export:
  *   get:
  *     summary: Export departments as CSV
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -217,7 +217,7 @@ UserManagementRouter.get(
  * /api/admin/management/lookups:
  *   get:
  *     summary: List roles, branches and departments (unpaginated)
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -245,7 +245,7 @@ UserManagementRouter.get(
  * /api/admin/management/profile:
  *   get:
  *     summary: Get current admin profile
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -266,7 +266,7 @@ UserManagementRouter.get(
  * /api/admin/management/add-user:
  *   post:
  *     summary: Create a new admin user
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     requestBody:
  *       required: true
  *       content:
@@ -311,7 +311,7 @@ UserManagementRouter.post(
  * /api/admin/management/users/{id}/status:
  *   patch:
  *     summary: Toggle admin user active status
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -354,7 +354,7 @@ UserManagementRouter.patch(
  * /api/admin/management/users/{id}:
  *   patch:
  *     summary: Update an admin user
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -422,7 +422,7 @@ UserManagementRouter.patch(
  * /api/admin/management/roles:
  *   post:
  *     summary: Create a role
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -519,7 +519,7 @@ UserManagementRouter.post(
  * /api/admin/management/roles:
  *   get:
  *     summary: List roles
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -557,7 +557,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/stats:
  *   get:
  *     summary: Role counters
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -578,7 +578,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/{id}:
  *   get:
  *     summary: Get role by ID
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -607,7 +607,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/{id}/permissions:
  *   get:
  *     summary: Get role permissions
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -642,7 +642,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/{id}/status:
  *   patch:
  *     summary: Toggle role active status
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -682,7 +682,7 @@ UserManagementRouter.patch(
  *   get:
  *     summary: Get all permissions
  *     description: Returns all system permissions. Supports filters by module, featureKey, action and search term.
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -782,7 +782,7 @@ UserManagementRouter.get(
  * /api/admin/management/modules:
  *   get:
  *     summary: List available permission modules
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     responses:
  *       200:
  *         description: Modules retrieved successfully
@@ -797,7 +797,7 @@ UserManagementRouter.get(
  * /api/admin/management/roles/{id}:
  *   put:
  *     summary: Update a role
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -829,7 +829,7 @@ UserManagementRouter.put(
  * /api/admin/management/roles/{id}:
  *   delete:
  *     summary: Delete a role
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -855,15 +855,15 @@ UserManagementRouter.delete(
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin endpoints
+ *   name: admin-user-management
+ *   description: Admin user management endpoints
  */
 /**
  * @swagger
  * /api/admin/management/departments:
  *   post:
  *     summary: Create a department
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -902,7 +902,7 @@ UserManagementRouter.post(
  * /api/admin/management/departments:
  *   get:
  *     summary: List departments
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -939,7 +939,7 @@ UserManagementRouter.get(
  * /api/admin/management/departments/stats:
  *   get:
  *     summary: Department counters
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -959,7 +959,7 @@ UserManagementRouter.get(
  * /api/admin/management/departments/{id}/status:
  *   patch:
  *     summary: Toggle department active status
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -997,7 +997,7 @@ UserManagementRouter.patch(
  * /api/admin/management/departments/{id}:
  *   get:
  *     summary: Get department by ID
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1025,7 +1025,7 @@ UserManagementRouter.get(
  * /api/admin/management/departments/{id}:
  *   put:
  *     summary: Update a department
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1058,7 +1058,7 @@ UserManagementRouter.put(
  * /api/admin/management/departments/{id}:
  *   delete:
  *     summary: Delete a department
- *     tags: [Admin]
+ *     tags: [admin-user-management]
  *     security:
  *       - bearerAuth: []
  *     parameters:

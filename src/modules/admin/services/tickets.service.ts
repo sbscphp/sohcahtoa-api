@@ -8,6 +8,12 @@ const prisma: PrismaClient = getDatabase();
 
 type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type TicketPriority = "LOW" | "MEDIUM" | "HIGH";
+export const CASE_TYPES = [
+  "Transaction Dispute",
+  "Onboarding",
+  "Document Approval",
+  "Customer Account",
+] as const;
 
 export type CreateTicketPayload = {
   customer: string;
@@ -25,6 +31,9 @@ export type TicketAttachmentInput = {
 };
 
 export class TicketsService {
+  getCaseTypes() {
+    return [...CASE_TYPES];
+  }
   async getStats() {
     const client: any = prisma as any;
     const [open, inProgress, resolved, closed, unassigned] = await Promise.all([
@@ -67,11 +76,41 @@ export class TicketsService {
           caseType: true,
           assignedAgentId: true,
           customerId: true,
+          customer: {
+            select: {
+              email: true,
+              profile: { select: { firstName: true, lastName: true } },
+            },
+          },
+          assignedAgent: {
+            select: {
+              fullName: true,
+            },
+          },
         },
       }),
     ]);
+    const data = (items as any[]).map((t) => {
+      const customerName =
+        t?.customer?.profile
+          ? `${t.customer.profile.firstName || ""} ${t.customer.profile.lastName || ""}`.trim()
+          : t?.customer?.email || null;
+      const assignedAdminName = t?.assignedAgent?.fullName || null;
+      return {
+        id: t.id,
+        reference: t.reference,
+        createdAt: t.createdAt,
+        status: t.status,
+        priority: t.priority,
+        caseType: t.caseType,
+        assignedAgentId: t.assignedAgentId,
+        customerId: t.customerId,
+        customerName,
+        assignedAdminName,
+      };
+    });
     return {
-      data: items,
+      data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -92,6 +131,9 @@ export class TicketsService {
     const prio = (payload.priorityLevel || 'MEDIUM').toString().toUpperCase();
     if (!['LOW', 'MEDIUM', 'HIGH'].includes(prio)) {
       throw new ValidationError('priorityLevel must be LOW, MEDIUM or HIGH');
+    }
+    if (!CASE_TYPES.includes(payload.caseType as any)) {
+      throw new ValidationError('caseType must be one of: Transaction Dispute, Onboarding, Document Approval, Customer Account');
     }
     const customerId = await this.resolveCustomerId(payload.customer);
 
@@ -216,6 +258,13 @@ private validateAttachment(attachment: {
 
   async assignAgent(id: string, adminId: string) {
     const client: any = prisma as any;
+    if (!adminId || typeof adminId !== "string") {
+      throw new ValidationError("adminId is required");
+    }
+    const admin = await client.adminUser.findUnique({ where: { id: adminId } });
+    if (!admin || admin.isActive === false) {
+      throw new ValidationError("Assignee not found or inactive");
+    }
     const updated = await client.ticket.update({
       where: { id },
       data: { assignedAgentId: adminId },
