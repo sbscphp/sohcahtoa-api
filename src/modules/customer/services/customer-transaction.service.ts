@@ -16,6 +16,7 @@ interface TransactionDocumentLink {
 
 interface CreateCustomerTransactionPayload {
   userId: string;
+  createdByAgentId?: string;
   type: string;
   mode?: "BUY" | "SELL"; // Transaction mode: BUY (touring) or SELL (tourist)
   currency: string;
@@ -184,22 +185,26 @@ export class CustomerTransactionService {
     });
 
     // Create transaction
+    const createData = {
+      userId,
+      referenceNumber,
+      type: type as any,
+      transactionMode: mode as any || null,
+      status: initialStatus as any,
+      currentStep: initialStep as any,
+      purpose,
+      destinationCountry: destinationCountry || null,
+      currency,
+      foreignAmount: amount as any,
+      formAId,
+      taxClearanceNumber,
+      disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null) as any,
+    };
+    if (payload.createdByAgentId != null) {
+      (createData as any).createdByAgentId = payload.createdByAgentId;
+    }
     const transaction = await prisma.transaction.create({
-      data: {
-        userId,
-        referenceNumber,
-        type: type as any,
-        transactionMode: mode as any || null,
-        status: initialStatus as any,
-        currentStep: initialStep as any,
-        purpose,
-        destinationCountry: destinationCountry || null,
-        currency,
-        foreignAmount: amount as any,
-        formAId,
-        taxClearanceNumber,
-        disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null) as any,
-      },
+      data: createData as any,
     });
 
     logger.info(`[createTransaction] Transaction created successfully`, {
