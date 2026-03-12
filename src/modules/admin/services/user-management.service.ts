@@ -183,6 +183,41 @@ class UserManagementService {
         }
     };
 
+    listUsersAll = async (q?: string) => {
+        const query = (q || "").toString().trim();
+        const where: any = {};
+        if (query.length > 0) {
+            where.OR = [
+                { email: { contains: query, mode: "insensitive" } },
+                { phoneNumber: { contains: query, mode: "insensitive" } },
+                { fullName: { contains: query, mode: "insensitive" } },
+            ];
+        }
+        const users = await this.prisma.adminUser.findMany({
+            where,
+            orderBy: { fullName: "asc" },
+            take: 10_000,
+            select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phoneNumber: true,
+                isActive: true,
+                role: { select: { name: true } },
+                department: { select: { name: true } },
+            },
+        });
+        return (users || []).map((u: any) => ({
+            id: u.id,
+            fullName: u.fullName,
+            email: u.email,
+            phoneNumber: u.phoneNumber,
+            isActive: u.isActive,
+            roleName: u.role?.name || null,
+            departmentName: u.department?.name || null,
+        }));
+    };
+
     updateUser = async (id: string, data: import("../dto/user-management.dto").UpdateAdminUserDto) => {
         try {
             const existing = await this.prisma.adminUser.findUnique({ where: { id } });
@@ -503,11 +538,16 @@ class UserManagementService {
                     for (const feat of Object.keys(features)) {
                         const actions = features[feat] || [];
                         for (const action of actions) {
-                            const found = await tx.permission.findFirst({
-                                where: { module: mod, featureKey: feat, action },
-                            });
-                            const perm = found || await tx.permission.create({
-                                data: { module: mod, featureKey: feat, action, label: `${feat} ${action}` },
+                            const perm = await tx.permission.upsert({
+                                where: {
+                                    module_featureKey_action: {
+                                        module: mod,
+                                        featureKey: feat,
+                                        action,
+                                    },
+                                },
+                                update: { isActive: true, label: `${feat} ${action}` },
+                                create: { module: mod, featureKey: feat, action, label: `${feat} ${action}` },
                             });
                             const exists = await tx.rolePermission.findUnique({
                                 where: { roleId_permissionId: { roleId: created.id, permissionId: perm.id } },
@@ -676,33 +716,44 @@ class UserManagementService {
             };
 
             const updated = await this.prisma.$transaction(async (tx) => {
-                const normalized = normalizePermissions(data.permissions as any) as any;
+                const hasPermissions = Object.prototype.hasOwnProperty.call(data as any, "permissions");
+                const normalized = hasPermissions
+                    ? ((normalizePermissions((data as any).permissions) as any) ?? {})
+                    : undefined;
+                const { permissions: _permissions, ...roleData } = (data as any) ?? {};
 
                 const roleRes = await tx.role.update({
                     where: { id },
                     data: {
-                        ...data,
-                        permissions: normalized as any,
+                        ...roleData,
+                        ...(normalized !== undefined ? { permissions: normalized as any } : {}),
                     },
                 });
 
-                await tx.rolePermission.deleteMany({ where: { roleId: id } });
+                if (normalized !== undefined) {
+                    await tx.rolePermission.deleteMany({ where: { roleId: id } });
 
-                const map = normalized as Record<string, Record<string, string[]>>;
-                for (const mod of Object.keys(map)) {
-                    const features = map[mod] || {};
-                    for (const feat of Object.keys(features)) {
-                        const actions = features[feat] || [];
-                        for (const action of actions) {
-                            const found = await tx.permission.findFirst({
-                                where: { module: mod, featureKey: feat, action },
-                            });
-                            const perm = found || await tx.permission.create({
-                                data: { module: mod, featureKey: feat, action, label: `${feat} ${action}` },
-                            });
-                            await tx.rolePermission.create({
-                                data: { roleId: id, permissionId: perm.id },
-                            });
+                    const map = normalized as Record<string, Record<string, string[]>>;
+                    for (const mod of Object.keys(map)) {
+                        const features = map[mod] || {};
+                        for (const feat of Object.keys(features)) {
+                            const actions = features[feat] || [];
+                            for (const action of actions) {
+                                const perm = await tx.permission.upsert({
+                                    where: {
+                                        module_featureKey_action: {
+                                            module: mod,
+                                            featureKey: feat,
+                                            action,
+                                        },
+                                    },
+                                    update: { isActive: true, label: `${feat} ${action}` },
+                                    create: { module: mod, featureKey: feat, action, label: `${feat} ${action}` },
+                                });
+                                await tx.rolePermission.create({
+                                    data: { roleId: id, permissionId: perm.id },
+                                });
+                            }
                         }
                     }
                 }

@@ -54,6 +54,27 @@ TicketsRouter.get(
 
 /**
  * @swagger
+ * /api/admin/tickets/statuses:
+ *   get:
+ *     summary: List ticket status options with note templates
+ *     tags: [admin-tickets]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Status options retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TicketsRouter.get(
+  "/statuses",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.statuses
+);
+
+/**
+ * @swagger
  * /api/admin/tickets:
  *   get:
  *     summary: List tickets
@@ -240,8 +261,13 @@ TicketsRouter.get(
  *               status:
  *                 type: string
  *                 enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
- *               notes:
- *                 type: string
+ *           description: |
+ *             Notes are generated automatically based on the selected status.
+ *
+ *             - OPEN: Issue persists after resolution (when reopening from RESOLVED/CLOSED)
+ *             - IN_PROGRESS: Incident acknowledged / being worked on
+ *             - RESOLVED: Fix or resolution implemented
+ *             - CLOSED: Verified and no further action needed
  *     responses:
  *       200:
  *         description: Ticket status updated
@@ -294,6 +320,35 @@ TicketsRouter.post(
   authenticate,
   requirePermission({ module: "TICKETS", feature: "MODULE", action: "edit" }),
   ticketsController.assignTo
+);
+
+/**
+ * @swagger
+ * /api/admin/tickets/{id}/comments:
+ *   get:
+ *     summary: List ticket comments
+ *     tags: [admin-tickets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Comments retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+TicketsRouter.get(
+  "/:id/comments",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "view" }),
+  ticketsController.comments
 );
 
 /**

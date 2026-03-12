@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse, streamCsv, ValidationError } from "../../../shared/utils";
+import { ServiceUnavailableError, successResponse, streamCsv, ValidationError } from "../../../shared/utils";
 import { CreateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
@@ -13,6 +13,11 @@ class TicketsController {
 
   caseTypes = asyncHandler(async (_req: Request, res: Response) => {
     const result = ticketsService.getCaseTypes();
+    res.json(successResponse(result));
+  });
+
+  statuses = asyncHandler(async (_req: Request, res: Response) => {
+    const result = ticketsService.getStatusOptions();
     res.json(successResponse(result));
   });
 
@@ -33,12 +38,16 @@ class TicketsController {
 
   try {
     if (req.file) {
-      uploadedFile = await uploadToCloudinary(req.file.buffer, {
-        folder: 'tickets',
-        resourceType: 'auto',
-        allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],
-        maxFileSize: 2 * 1024 * 1024,
-      });
+      try {
+        uploadedFile = await uploadToCloudinary(req.file.buffer, {
+          folder: 'tickets',
+          resourceType: 'auto',
+          allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],
+          maxFileSize: 2 * 1024 * 1024,
+        });
+      } catch (e: any) {
+        throw new ServiceUnavailableError('Attachment upload failed');
+      }
     }
 
     const payload: CreateTicketPayload = {
@@ -82,14 +91,14 @@ class TicketsController {
 
   updateStatus = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const updated = await ticketsService.updateStatus(req.params.id, req.body.status, req.body?.notes, adminId);
+    const updated = await ticketsService.updateStatus(req.params.id, req.body.status, undefined, adminId);
     await auditTrailService.logAction({
       adminId,
       actionType: "INCIDENCE_UPDATE",
       actionLabel: "Update ticket status",
       resourceType: "INCIDENCE",
       resourceId: req.params.id,
-      metadata: { status: req.body.status, notes: req.body?.notes },
+      metadata: { status: req.body.status },
     });
     res.json(successResponse(updated));
   });
@@ -138,6 +147,11 @@ class TicketsController {
       metadata: { message: req.body.message },
     });
     res.status(201).json(successResponse(comment));
+  });
+
+  comments = asyncHandler(async (req: Request, res: Response) => {
+    const items = await ticketsService.listComments(req.params.id);
+    res.json(successResponse(items));
   });
 
   exportCsv = asyncHandler(async (req: Request, res: Response) => {

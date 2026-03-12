@@ -60,6 +60,15 @@ router.get(
  *         name: search
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, DEACTIVATED, ALL]
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
  *     responses:
  *       200:
  *         description: Customers retrieved successfully

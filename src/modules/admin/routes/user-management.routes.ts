@@ -62,6 +62,34 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getAllUsers
 );
+
+/**
+ * @swagger
+ * /api/admin/management/users/all:
+ *   get:
+ *     summary: List all admin users without pagination
+ *     tags: [admin-user-management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by full name, email, or phone number
+ *     responses:
+ *       200:
+ *         description: Admin users retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+UserManagementRouter.get(
+  "/users/all",
+  authenticate,
+  requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
+  userManagementController.listAllUsers
+);
+
 /**
  * @swagger
  * /api/admin/management/users/export:

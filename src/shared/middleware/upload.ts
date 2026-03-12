@@ -138,7 +138,25 @@ export const createUploadMiddleware = (options: {
     },
   });
 
-  return multiple ? upload.array(fieldName, maxFiles) : upload.single(fieldName);
+  const handler = multiple ? upload.array(fieldName, maxFiles) : upload.single(fieldName);
+  return (req: any, res: any, next: any) => {
+    handler(req, res, (err: any) => {
+      if (!err) return next();
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return next(new ValidationError(`File too large. Max size is ${Math.round(maxSize / 1024)}KB`));
+        }
+        if (err.code === 'LIMIT_FILE_COUNT') {
+          return next(new ValidationError(`Too many files. Max files is ${maxFiles}`));
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return next(new ValidationError(`Unexpected file field. Expected '${fieldName}'`));
+        }
+        return next(new ValidationError(err.message));
+      }
+      return next(err);
+    });
+  };
 };
 
 export default {

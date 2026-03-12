@@ -280,8 +280,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     if (!isPasswordValid) throw new UnauthorizedError("Invalid password");
 
     const otp = generateOtp();
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 10);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     await this.prisma.token.updateMany({
       where: {
@@ -381,7 +380,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     });
 
     const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const tokenRecord = await this.prisma.token.create({
       data: {
         userId: user.id,

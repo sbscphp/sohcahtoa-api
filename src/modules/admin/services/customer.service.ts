@@ -178,8 +178,23 @@ export class CustomerService {
     return { totalCustomer, activeCustomer, deactivatedCustomer };
   }
 
-  async listCustomersAll(q?: string) {
-    const where: any = { role: "CUSTOMER" };
+  async listCustomersAll(q?: string, filters: { status?: any; isActive?: any } = {}) {
+    const where: any = { role: "CUSTOMER", isActive: true };
+    if (filters.isActive !== undefined) {
+      where.isActive =
+        typeof filters.isActive === "string"
+          ? filters.isActive === "true"
+          : Boolean(filters.isActive);
+    } else if (filters.status !== undefined) {
+      const s = String(filters.status).toUpperCase();
+      if (s === "ALL") {
+        delete where.isActive;
+      } else if (s === "ACTIVE") {
+        where.isActive = true;
+      } else if (s === "DEACTIVATED" || s === "INACTIVE") {
+        where.isActive = false;
+      }
+    }
     const query = (q || "").toString().trim();
     if (query.length > 0) {
       where.OR = [

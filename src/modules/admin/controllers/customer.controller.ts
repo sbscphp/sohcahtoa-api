@@ -22,7 +22,10 @@ class CustomerController {
   listAllCustomers = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const q = ((req.query.search as string) || "").toString();
-      const items = await customerService.listCustomersAll(q);
+      const items = await customerService.listCustomersAll(q, {
+        status: (req.query as any).status,
+        isActive: (req.query as any).isActive,
+      });
       res.json(successResponse(items));
     } catch (error) {
       next(error);

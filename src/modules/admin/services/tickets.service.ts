@@ -1,4 +1,4 @@
-import { createLogger, generateId, UploadResult, ValidationError } from "../../../shared/utils";
+import { createLogger, generateId, NotFoundError, UploadResult, ValidationError } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
@@ -31,9 +31,20 @@ export type TicketAttachmentInput = {
 };
 
 export class TicketsService {
+  
   getCaseTypes() {
     return [...CASE_TYPES];
   }
+
+  getStatusOptions() {
+    return [
+      { status: "IN_PROGRESS", note: "Incident acknowledged / being worked on" },
+      { status: "RESOLVED", note: "Fix or resolution implemented" },
+      { status: "OPEN", note: "Issue persists after resolution", condition: "Only when reopening from RESOLVED or CLOSED" },
+      { status: "CLOSED", note: "Verified and no further action needed" },
+    ] as const;
+  }
+  
   async getStats() {
     const client: any = prisma as any;
     const [open, inProgress, resolved, closed, unassigned] = await Promise.all([
@@ -119,39 +130,79 @@ export class TicketsService {
     const client: any = prisma as any;
     const t = await client.ticket.findUnique({
       where: { id },
-      include: { attachments: true, comments: true },
+      include: {
+        attachments: true,
+        comments: true,
+        assignedAgent: { select: { id: true, fullName: true } },
+        customer: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
     });
-    return t;
+    if (!t) {
+      throw new NotFoundError("Ticket not found");
+    }
+    const customerName =
+      t.customer?.profile
+        ? `${t.customer.profile.firstName || ""} ${t.customer.profile.lastName || ""}`.trim()
+        : t.customer?.email || null;
+    return {
+      ...t,
+      customer: t.customer
+        ? {
+            id: t.customer.id,
+            fullName: customerName,
+            email: t.customer.email,
+            phoneNumber: t.customer.phoneNumber,
+          }
+        : null,
+    };
   }
 
   async create(payload: CreateTicketPayload) {
-    this.validateCreatePayload(payload);
+    const normalizedPayload: CreateTicketPayload = {
+      customer: (payload?.customer ?? "").toString(),
+      caseType: (payload?.caseType ?? "").toString(),
+      priorityLevel: (payload?.priorityLevel ?? "MEDIUM") as any,
+      description: (payload?.description ?? "").toString(),
+      attachment: payload?.attachment,
+    };
+    this.validateCreatePayload(normalizedPayload);
 
     const reference = generateId();
-    const prio = (payload.priorityLevel || 'MEDIUM').toString().toUpperCase();
+    const prio = (normalizedPayload.priorityLevel || 'MEDIUM').toString().toUpperCase();
     if (!['LOW', 'MEDIUM', 'HIGH'].includes(prio)) {
       throw new ValidationError('priorityLevel must be LOW, MEDIUM or HIGH');
     }
-    if (!CASE_TYPES.includes(payload.caseType as any)) {
+    if (!CASE_TYPES.includes(normalizedPayload.caseType as any)) {
       throw new ValidationError('caseType must be one of: Transaction Dispute, Onboarding, Document Approval, Customer Account');
     }
-    const customerId = await this.resolveCustomerId(payload.customer);
+    const customerId = await this.resolveCustomerId(normalizedPayload.customer);
+    const description = normalizedPayload.description.trim();
+    if (!description) {
+      throw new ValidationError('description is required');
+    }
 
     const ticket = await prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
         data: {
           reference,
           customerId,
-          caseType: payload.caseType,
-          description: payload.description.trim(),
+          caseType: normalizedPayload.caseType,
+          description,
           priority: prio as any,
           status: 'OPEN',
-          attachments: payload.attachment
+          attachments: normalizedPayload.attachment
             ? {
               create: {
-                fileUrl: payload.attachment.url,
-                mimeType: payload.attachment.format,
-                fileSize: payload.attachment.bytes,
+                fileUrl: normalizedPayload.attachment.url,
+                mimeType: normalizedPayload.attachment.format,
+                fileSize: normalizedPayload.attachment.bytes,
               },
             }
           : undefined,
@@ -239,16 +290,37 @@ private validateAttachment(attachment: {
 
   async updateStatus(id: string, status: TicketStatus, notes?: string, adminId?: string) {
     const client: any = prisma as any;
+    const allowed: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+    if (!allowed.includes(status)) {
+      throw new ValidationError("status must be OPEN, IN_PROGRESS, RESOLVED or CLOSED");
+    }
+    const current = await client.ticket.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!current) {
+      throw new NotFoundError("Ticket not found");
+    }
+    const noteByStatus: Record<TicketStatus, string | null> = {
+      OPEN:
+        current.status === "RESOLVED" || current.status === "CLOSED"
+          ? "Issue persists after resolution"
+          : null,
+      IN_PROGRESS: "Incident acknowledged / being worked on",
+      RESOLVED: "Fix or resolution implemented",
+      CLOSED: "Verified and no further action needed",
+    };
+    const note = noteByStatus[status];
     const ops: Array<any> = [
       client.ticket.update({
         where: { id },
         data: { status },
       }),
     ];
-    if (notes) {
+    if (note) {
       ops.push(
         client.ticketComment.create({
-          data: { ticketId: id, adminId, message: notes },
+          data: { ticketId: id, adminId, message: note },
         })
       );
     }
@@ -278,6 +350,31 @@ private validateAttachment(attachment: {
       data: { ticketId: id, adminId, message },
     });
     return comment;
+  }
+
+  async listComments(id: string) {
+    const client: any = prisma as any;
+    const ticket = await client.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) {
+      throw new NotFoundError("Ticket not found");
+    }
+    const comments = await client.ticketComment.findMany({
+      where: { ticketId: id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        adminId: true,
+        message: true,
+        createdAt: true,
+        admin: { select: { id: true, fullName: true } },
+      },
+    });
+    return (comments || []).map((c: any) => ({
+      id: c.id,
+      message: c.message,
+      createdAt: c.createdAt,
+      admin: c.admin ? { id: c.admin.id, fullName: c.admin.fullName } : null,
+    }));
   }
 
   async export(filters: any = {}) {
@@ -313,15 +410,18 @@ private validateAttachment(attachment: {
       customerIds.length
         ? client.user.findMany({
             where: { id: { in: customerIds } },
-            include: { profile: true },
             select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } },
           })
         : [],
       agentIds.length
         ? client.adminUser.findMany({
             where: { id: { in: agentIds } },
-            include: { role: { select: { name: true } }, department: { select: { name: true } } },
-            select: { id: true, fullName: true, role: { select: { name: true } } as any, department: { select: { name: true } } as any },
+            select: {
+              id: true,
+              fullName: true,
+              role: { select: { name: true } },
+              department: { select: { name: true } },
+            },
           })
         : [],
     ]);

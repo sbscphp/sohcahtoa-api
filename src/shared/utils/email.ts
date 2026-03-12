@@ -191,7 +191,7 @@ class EmailService {
             <div style="background: white; padding: 20px; text-align: center; border-radius: 5px; margin: 20px 0; border: 2px dashed #667eea;">
               <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #667eea;">${otp}</span>
             </div>
-            <p style="color: #666; font-size: 14px;">This code will expire in <strong>10 minutes</strong>.</p>
+            <p style="color: #666; font-size: 14px;">This code will expire in <strong>5 minutes</strong>.</p>
             <p style="color: #666; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #999; font-size: 12px; text-align: center;">

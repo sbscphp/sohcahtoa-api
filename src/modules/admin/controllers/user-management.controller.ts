@@ -70,6 +70,12 @@ class UserManagementController {
         res.json(successResponse(result.data, { pagination: result.meta }));
     });
 
+    listAllUsers = asyncHandler(async (req: Request, res: Response) => {
+        const q = ((req.query.search as string) || "").toString();
+        const items = await userManagementService.listUsersAll(q);
+        res.json(successResponse(items));
+    });
+
     getUserStats = asyncHandler(async (_req: Request, res: Response) => {
         const result = await userManagementService.getUserStats();
         res.json(successResponse(result));
