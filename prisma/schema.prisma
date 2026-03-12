@@ -583,6 +583,7 @@ model Agent {
 
   attachments      AgentAttachment[]
   createdCustomers User[]            @relation("AgentCreatedCustomers")
+  createdTransactions Transaction[] @relation("AgentCreatedTransactions")
 
   @@index([branchId])
   @@index([name])
@@ -735,6 +736,7 @@ model CustomerFlag {
 model Transaction {
   id                 String              @id @default(uuid())
   userId             String
+  createdByAgentId   String?
   referenceNumber    String              @unique
   type               TransactionType
   transactionMode    TransactionMode?    @map("transaction_mode")
@@ -755,6 +757,7 @@ model Transaction {
   rejectedAt         DateTime?
   rejectionReason    String?
 
+  createdByAgent Agent?              @relation("AgentCreatedTransactions", fields: [createdByAgentId], references: [id])
   steps       TransactionStepLog[]
   documents   TransactionDocument[]
   history     TransactionHistory[]
@@ -763,6 +766,7 @@ model Transaction {
   receipt     Receipt?
 
   @@index([userId])
+  @@index([createdByAgentId])
   @@index([referenceNumber])
   @@index([status])
   @@index([type])
