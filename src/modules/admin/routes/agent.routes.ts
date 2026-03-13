@@ -2,13 +2,14 @@ import { Router } from "express";
 import { authenticate, requirePermission } from "../../../shared/middleware";
 import { agentController } from "../controllers/agent.controller";
 import { createUploadMiddleware } from "../../../shared/middleware/upload";
+import { UPLOAD_LIMITS } from "../../../shared/config/upload-limits";
 
 const AgentRouter: Router = Router();
 
 // Accept 'attachment' field for agent creation (matches Swagger docs)
 const uploadAgentAttachment = createUploadMiddleware({
   fieldName: "attachment",
-  maxSize: 2 * 1024 * 1024, // 2MB to align with controller validation
+  maxSize: UPLOAD_LIMITS.AGENT_PROFILE_PICTURE,
   allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "application/pdf"],
 });
 

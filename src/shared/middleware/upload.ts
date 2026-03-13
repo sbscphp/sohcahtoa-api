@@ -1,6 +1,7 @@
 import multer from 'multer';
 import { Request } from 'express';
 import { ValidationError } from '../utils';
+import { UPLOAD_LIMITS, formatFileSize } from '../config/upload-limits';
 
 // Configure multer to use memory storage
 const storage = multer.memoryStorage();
@@ -49,7 +50,7 @@ export const uploadSingleImage = multer({
   storage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: UPLOAD_LIMITS.MEDIUM_FILE,
   },
 }).single('file');
 
@@ -61,7 +62,7 @@ export const uploadPassport = multer({
   storage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: UPLOAD_LIMITS.PASSPORT_IMAGE,
   },
 }).single('passport');
 
@@ -74,10 +75,10 @@ export const uploadMultipleDocuments = multer({
   storage,
   fileFilter: documentFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
-    files: 5, // Max 5 files
+    fileSize: UPLOAD_LIMITS.TRANSACTION_DOCUMENT,
+    files: UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD,
   },
-}).array('documents', 5);
+}).array('documents', UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD);
 
 /**
  * Upload middleware for single document
@@ -87,7 +88,7 @@ export const uploadSingleDocument = multer({
   storage,
   fileFilter: documentFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: UPLOAD_LIMITS.LARGE_FILE,
   },
 }).single('document');
 
@@ -99,7 +100,7 @@ export const uploadProofOfPayment = multer({
   storage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: UPLOAD_LIMITS.PROOF_OF_PAYMENT,
   },
 }).single('proofOfPayment');
 
@@ -115,10 +116,10 @@ export const createUploadMiddleware = (options: {
 }) => {
   const {
     fieldName,
-    maxSize = 5 * 1024 * 1024,
+    maxSize = UPLOAD_LIMITS.MEDIUM_FILE,
     allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'],
     multiple = false,
-    maxFiles = 5,
+    maxFiles = UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD,
   } = options;
 
   const customFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -144,7 +145,7 @@ export const createUploadMiddleware = (options: {
       if (!err) return next();
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return next(new ValidationError(`File too large. Max size is ${Math.round(maxSize / 1024)}KB`));
+          return next(new ValidationError(`File too large. Max size is ${formatFileSize(maxSize)}`));
         }
         if (err.code === 'LIMIT_FILE_COUNT') {
           return next(new ValidationError(`Too many files. Max files is ${maxFiles}`));

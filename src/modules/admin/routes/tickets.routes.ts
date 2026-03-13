@@ -2,12 +2,13 @@ import { Router } from "express";
 import { ticketsController } from "../controllers/tickets.controller";
 import { authenticate, requirePermission } from "../../../shared/middleware";
 import { createUploadMiddleware } from "../../../shared/middleware/upload";
+import { UPLOAD_LIMITS } from "../../../shared/config/upload-limits";
 
 const TicketsRouter: Router = Router();
 
 const uploadTicketAttachment = createUploadMiddleware({
   fieldName: "file",
-  maxSize: 200 * 1024,
+  maxSize: UPLOAD_LIMITS.SUPPORT_TICKET_ATTACHMENT,
   allowedMimeTypes: ["application/pdf", "image/jpeg", "image/jpg", "image/png"],
 });
 /**

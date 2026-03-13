@@ -2,6 +2,7 @@ import { Router } from "express";
 import customerSupportController from "../controllers/customer-support.controller";
 import { authenticate } from "../../../shared/middleware";
 import { createUploadMiddleware } from "../../../shared/middleware/upload";
+import { UPLOAD_LIMITS } from "../../../shared/config/upload-limits";
 
 const router: Router = Router();
 
@@ -17,8 +18,8 @@ router.use(authenticate);
 
 // Create upload middleware for ticket attachments
 const uploadTicketAttachment = createUploadMiddleware({
-  fieldName: "file",
-  maxSize: 5 * 1024 * 1024, // 5MB
+  fieldName: "attachment",
+  maxSize: UPLOAD_LIMITS.SUPPORT_TICKET_ATTACHMENT,
   allowedMimeTypes: [
     "application/pdf",
     "image/jpeg",

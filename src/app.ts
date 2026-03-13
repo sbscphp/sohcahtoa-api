@@ -6,6 +6,7 @@ import { errorHandler } from './shared/middleware/error-handler';
 import { requestLogger } from './shared/middleware/request-logger';
 import { correlationIdMiddleware } from './shared/middleware/correlation-id';
 import { createLogger } from './shared/utils/logger';
+import { UPLOAD_LIMITS } from './shared/config/upload-limits';
 import authRoutes from './modules/auth/routes/auth.routes';
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
@@ -44,8 +45,12 @@ export const createApp = async (): Promise<Application> => {
   }));
 
   // Body parsing middleware
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.json({ limit: UPLOAD_LIMITS.JSON_BODY }));
+  app.use(express.urlencoded({
+    extended: true,
+    limit: UPLOAD_LIMITS.URLENCODED_BODY,
+    parameterLimit: UPLOAD_LIMITS.PARAMETER_LIMIT
+  }));
 
   // Request tracking and logging
   app.use(correlationIdMiddleware);
