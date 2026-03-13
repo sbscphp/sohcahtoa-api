@@ -19,6 +19,10 @@ import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
 import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
 import notificationRoutes from './modules/notifications/routes/notification.routes';
+import providusWebhookRoutes from './modules/payments/routes/providus-webhook.routes';
+import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.routes';
+import customerVirtualAccountRoutes from './modules/customer/routes/customer-virtual-account.routes';
+import settlementManagementRoutes from './modules/admin/routes/settlement-management.routes';
 
 const logger = createLogger('app');
 
@@ -114,6 +118,18 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/notifications', notificationRoutes);
   logger.info('Notification routes registered');
+
+  app.use('/api/webhooks/providus', providusWebhookRoutes);
+  logger.info('Providus webhook routes registered');
+
+  app.use('/api/admin/virtual-accounts', adminVirtualAccountRoutes);
+  logger.info('Admin virtual account routes registered');
+
+  app.use('/api/customer', customerVirtualAccountRoutes);
+  logger.info('Customer virtual account routes registered');
+
+  app.use('/api/admin/settlement-management', settlementManagementRoutes);
+  logger.info('Settlement management routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

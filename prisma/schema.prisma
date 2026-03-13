@@ -950,6 +950,204 @@ model BankDetail {
   @@map("bank_details")
 }
 
+enum SettlementDirection {
+  INBOUND  // Deposits from customers
+  OUTBOUND // Payouts to beneficiaries/institutions
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  SUBMITTED
+  COMPLETED
+  FAILED
+  CANCELLED
+  REQUIRES_APPROVAL
+}
+
+enum VirtualAccountType {
+  DYNAMIC
+  RESERVED
+}
+
+enum VirtualAccountStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+model VirtualAccount {
+  id                   String               @id @default(uuid())
+  userId               String?
+  transactionId        String?              @unique
+  accountNumber        String               @unique
+  accountName          String
+  type                 VirtualAccountType
+  status               VirtualAccountStatus @default(ACTIVE)
+  bankName             String               @default("Providus Bank")
+  initiationTranRef    String?              // Providus reference
+  bvn                  String?
+  isBlacklisted        Boolean              @default(false)
+  blacklistedAt        DateTime?
+  blacklistReason      String?
+  expiresAt            DateTime?            // For dynamic accounts
+  metadata             Json?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  deposits ProvidusDeposit[]
+
+  @@index([userId])
+  @@index([transactionId])
+  @@index([accountNumber])
+  @@index([status])
+  @@map("virtual_accounts")
+}
+
+enum ProvidusTransactionStatus {
+  PENDING
+  VERIFIED
+  SETTLED
+  FAILED
+}
+
+model ProvidusDeposit {
+  id                   String                    @id @default(uuid())
+  virtualAccountId     String
+  virtualAccount       VirtualAccount            @relation(fields: [virtualAccountId], references: [id])
+  transactionId        String?
+  sessionId            String                    @unique // Providus session ID
+  settlementId         String?                   @unique // Providus settlement ID
+  accountNumber        String
+  amount               Decimal                   @db.Decimal(18, 2)
+  settledAmount        Decimal                   @db.Decimal(18, 2)
+  feeAmount            Decimal                   @default(0) @db.Decimal(18, 2)
+  vatAmount            Decimal                   @default(0) @db.Decimal(18, 2)
+  currency             String                    @default("NGN")
+  sourceAccountNumber  String?
+  sourceAccountName    String?
+  sourceBankName       String?
+  channelId            String?
+  tranRemarks          String?
+  tranDateTime         DateTime?
+  status               ProvidusTransactionStatus @default(PENDING)
+  verifiedAt           DateTime?
+  webhookReceivedAt    DateTime?
+  webhookPayload       Json?
+  metadata             Json?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([virtualAccountId])
+  @@index([transactionId])
+  @@index([sessionId])
+  @@index([settlementId])
+  @@index([status])
+  @@index([accountNumber])
+  @@map("providus_deposits")
+}
+
+model SettlementBatch {
+  id                String           @id @default(uuid())
+  batchNumber       String           @unique
+  direction         SettlementDirection
+  totalAmount       Decimal          @db.Decimal(18, 2)
+  totalCount        Int
+  currency          String           @default("NGN")
+  status            SettlementStatus @default(PENDING)
+  description       String?
+  createdBy         String
+  approvedBy        String?
+  processedBy       String?
+  approvedAt        DateTime?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  settlements OutboundSettlement[]
+
+  @@index([batchNumber])
+  @@index([status])
+  @@index([createdBy])
+  @@index([direction])
+  @@map("settlement_batches")
+}
+
+model OutboundSettlement {
+  id                   String           @id @default(uuid())
+  batchId              String?
+  batch                SettlementBatch? @relation(fields: [batchId], references: [id])
+  transactionId        String?
+  referenceNumber      String           @unique
+  amount               Decimal          @db.Decimal(18, 2)
+  currency             String
+  status               SettlementStatus @default(PENDING)
+
+  // Beneficiary details
+  beneficiaryName      String
+  beneficiaryBank      String?
+  beneficiaryAccount   String?
+  beneficiarySwift     String?
+  beneficiaryIban      String?
+  beneficiaryCountry   String?
+  beneficiaryAddress   String?
+
+  // Payment details
+  paymentMethod        String // BANK_TRANSFER, SWIFT, IMTO, etc.
+  paymentReference     String?
+  paymentProof         String? // URL to proof of payment
+
+  // Providus integration
+  providusReference    String?
+  providusSessionId    String?
+  providusResponse     Json?
+
+  // Processing
+  initiatedBy          String
+  approvedBy           String?
+  processedBy          String?
+  initiatedAt          DateTime         @default(now())
+  approvedAt           DateTime?
+  processedAt          DateTime?
+  completedAt          DateTime?
+  failedAt             DateTime?
+  failureReason        String?
+
+  notes                String?
+  metadata             Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([batchId])
+  @@index([transactionId])
+  @@index([referenceNumber])
+  @@index([status])
+  @@index([initiatedBy])
+  @@map("outbound_settlements")
+}
+
+model SettlementReconciliation {
+  id                String   @id @default(uuid())
+  settlementId      String
+  reconciliationType String // MANUAL, AUTO, PROVIDUS_VERIFY
+  expectedAmount    Decimal  @db.Decimal(18, 2)
+  actualAmount      Decimal? @db.Decimal(18, 2)
+  variance          Decimal? @db.Decimal(18, 2)
+  status            String   @default("PENDING") // PENDING, MATCHED, VARIANCE, RESOLVED
+  providusData      Json?
+  reconciledBy      String?
+  reconciledAt      DateTime?
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  @@index([settlementId])
+  @@index([status])
+  @@map("settlement_reconciliations")
+}
+
 model PayoutInstruction {
   id               String    @id @default(uuid())
   transactionId    String
