@@ -70,6 +70,11 @@ class OutletController {
     res.json(successResponse(data));
   });
 
+  getFranchise = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.getFranchise(req.params.id);
+    res.json(successResponse(data));
+  });
+
   exportFranchises = asyncHandler(async (req: Request, res: Response) => {
     const rows = await outletService.exportFranchises({
       search: (req.query.search as string) || (req.query.q as string) || "",
@@ -105,6 +110,32 @@ class OutletController {
     const q = ((req.query.search as string) || "").toString();
     const data = await outletService.listBranchesAll(q);
     res.json(successResponse(data));
+  });
+
+  listFranchiseBranches = asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await outletService.listBranchesByFranchise(req.params.id, req.query, page, limit);
+    res.json(successResponse(result.items, { pagination: result.pagination }));
+  });
+
+  listFranchiseBranchesAll = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.listBranchesByFranchiseAll(req.params.id, req.query);
+    res.json(successResponse(data));
+  });
+
+  listFranchiseTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await outletService.listTransactionsByFranchise(req.params.id, req.query, page, limit);
+    res.json(successResponse(result.data, { pagination: result.meta }));
+  });
+
+  listBranchTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await outletService.listTransactionsByBranch(req.params.id, req.query, page, limit);
+    res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
   createBranch = asyncHandler(async (req: Request, res: Response) => {
