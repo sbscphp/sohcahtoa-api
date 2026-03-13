@@ -190,6 +190,21 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Ensure transactions.createdByAgentId column exists
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
+
+-- Create index for transactions.createdByAgentId if it doesn't exist
+CREATE INDEX IF NOT EXISTS "transactions_createdByAgentId_idx" ON "transactions"("createdByAgentId");
+
+-- Add foreign key constraint for transactions.createdByAgentId if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_createdByAgentId_fkey') THEN
+    ALTER TABLE "transactions"
+      ADD CONSTRAINT "transactions_createdByAgentId_fkey"
+      FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$
 DECLARE
