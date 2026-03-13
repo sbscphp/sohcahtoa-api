@@ -99,9 +99,7 @@ export class VirtualAccountService {
           initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
           bvn,
           expiresAt,
-          metadata: {
-            providusResponse,
-          },
+          metadata: providusResponse as any,
         },
       });
 

@@ -140,9 +140,7 @@ export class DepositVerificationService {
           sourceAccountName: verificationResult.sourceAccountName || deposit.sourceAccountName,
           sourceBankName: verificationResult.sourceBankName || deposit.sourceBankName,
           verifiedAt: new Date(),
-          metadata: {
-            verificationResult,
-          },
+          metadata: verificationResult as any,
         },
       });
 
@@ -368,17 +366,20 @@ export class DepositVerificationService {
           tranDateTime: new Date(verificationResult.tranDateTime),
           status: ProvidusTransactionStatus.VERIFIED,
           verifiedAt: new Date(),
-          metadata: { verificationResult },
+          metadata: verificationResult as any,
+        },
+        include: {
+          virtualAccount: true,
         },
       });
 
       logger.info('Manual deposit verification successful', {
-        depositId: deposit.id,
+        depositId: deposit?.id,
         sessionId,
       });
 
       // Confirm transaction deposit if applicable
-      if (deposit.transactionId) {
+      if (deposit?.transactionId) {
         await this.confirmTransactionDeposit(deposit.transactionId, deposit.id);
       }
 

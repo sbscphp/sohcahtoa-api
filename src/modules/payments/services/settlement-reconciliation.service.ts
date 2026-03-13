@@ -107,33 +107,39 @@ export class SettlementReconciliationService {
             ? 'MATCHED'
             : 'VARIANCE';
 
-      // Create or update reconciliation record
-      const reconciliation = await prisma.settlementReconciliation.upsert({
-        where: {
-          settlementId: options.settlementId,
-        },
-        create: {
-          settlementId: options.settlementId,
-          reconciliationType: options.providusSessionId ? 'PROVIDUS_VERIFY' : 'MANUAL',
-          expectedAmount,
-          actualAmount,
-          variance,
-          status,
-          providusData,
-          reconciledBy: options.reconciledBy,
-          reconciledAt: new Date(),
-          notes: options.notes,
-        },
-        update: {
-          actualAmount,
-          variance,
-          status,
-          providusData,
-          reconciledBy: options.reconciledBy,
-          reconciledAt: new Date(),
-          notes: options.notes,
-        },
+      // Check if reconciliation already exists
+      const existingReconciliation = await prisma.settlementReconciliation.findFirst({
+        where: { settlementId: options.settlementId },
       });
+
+      // Create or update reconciliation record
+      const reconciliation = existingReconciliation
+        ? await prisma.settlementReconciliation.update({
+            where: { id: existingReconciliation.id },
+            data: {
+              actualAmount,
+              variance,
+              status,
+              providusData: providusData as any,
+              reconciledBy: options.reconciledBy,
+              reconciledAt: new Date(),
+              notes: options.notes,
+            },
+          })
+        : await prisma.settlementReconciliation.create({
+            data: {
+              settlementId: options.settlementId,
+              reconciliationType: options.providusSessionId ? 'PROVIDUS_VERIFY' : 'MANUAL',
+              expectedAmount,
+              actualAmount,
+              variance,
+              status,
+              providusData: providusData as any,
+              reconciledBy: options.reconciledBy,
+              reconciledAt: new Date(),
+              notes: options.notes,
+            },
+          });
 
       logger.info('Settlement reconciled', {
         id: reconciliation.id,
@@ -255,9 +261,6 @@ export class SettlementReconciliationService {
             gte: startDate,
             lte: endDate,
           },
-        },
-        include: {
-          // Would need to add relation to settlement in schema
         },
       });
 
