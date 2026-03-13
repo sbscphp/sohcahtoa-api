@@ -366,6 +366,52 @@ export class NotificationHandler {
         logger.error('Error sending transaction completed notification:', error);
       }
     });
+
+    eventBus.on(EventTypes.TRANSACTION_SUBMITTED, async (event: any) => {
+      try {
+        const { userId, transaction } = event.data;
+
+        const template = NotificationTemplates.TRANSACTION_SUBMITTED({
+          referenceNumber: transaction.referenceNumber,
+        });
+
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: template.priority,
+          title: template.title,
+          body: template.body,
+          data: { actionUrl: template.actionUrl },
+          transactionId: transaction.id,
+        });
+      } catch (error) {
+        logger.error('Error sending transaction submitted notification:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.TRANSACTION_CANCELLED, async (event: any) => {
+      try {
+        const { userId, transaction, reason } = event.data;
+
+        const template = NotificationTemplates.TRANSACTION_CANCELLED({
+          referenceNumber: transaction.referenceNumber,
+        });
+
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: template.priority,
+          title: template.title,
+          body: template.body,
+          data: { actionUrl: template.actionUrl, reason },
+          transactionId: transaction.id,
+        });
+      } catch (error) {
+        logger.error('Error sending transaction cancelled notification:', error);
+      }
+    });
   }
 
   /**

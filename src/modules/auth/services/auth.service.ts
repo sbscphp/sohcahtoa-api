@@ -845,7 +845,7 @@ export class AuthService {
       await emailService.sendWelcomeEmail(bvnData.email, bvnData.firstName);
     }
 
-    // Publish event
+    // Publish events
     eventBus.publish(EventType.USER_REGISTERED, {
       eventId: generateId(),
       source: ServiceName.AUTH,
@@ -857,6 +857,29 @@ export class AuthService {
         firstName: bvnData.firstName,
         lastName: bvnData.lastName,
       },
+    });
+
+    // Publish BVN verified event for notifications
+    eventBus.publish(EventTypes.BVN_VERIFIED, {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: bvnData.email,
+        firstName: bvnData.firstName,
+        lastName: bvnData.lastName,
+      },
+    });
+
+    // Publish KYC submitted event (BVN verification counts as KYC submission)
+    eventBus.publish(EventTypes.KYC_SUBMITTED, {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: bvnData.email,
+        firstName: bvnData.firstName,
+        lastName: bvnData.lastName,
+      },
+      kycType: 'BVN',
     });
 
     auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'NIGERIAN_CITIZEN', bvnVerified: true } });
@@ -1225,7 +1248,7 @@ export class AuthService {
       await emailService.sendWelcomeEmail(passportData.email, passportData.firstName);
     }
 
-    // Publish event
+    // Publish events
     eventBus.publish(EventType.USER_REGISTERED, {
       eventId: generateId(),
       source: ServiceName.AUTH,
@@ -1237,6 +1260,18 @@ export class AuthService {
         firstName: passportData.firstName,
         lastName: passportData.lastName,
       },
+    });
+
+    // Publish KYC submitted event (Passport verification counts as KYC submission)
+    eventBus.publish(EventTypes.KYC_SUBMITTED, {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: passportData.email,
+        firstName: passportData.firstName,
+        lastName: passportData.lastName,
+      },
+      kycType: 'PASSPORT',
     });
 
     auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'TOURIST', passportVerified: true } });
@@ -1323,7 +1358,7 @@ export class AuthService {
       await emailService.sendWelcomeEmail(passportData.email, passportData.firstName);
     }
 
-    // Publish event
+    // Publish events
     eventBus.publish(EventType.USER_REGISTERED, {
       eventId: generateId(),
       source: ServiceName.AUTH,
@@ -1335,6 +1370,18 @@ export class AuthService {
         firstName: passportData.firstName,
         lastName: passportData.lastName,
       },
+    });
+
+    // Publish KYC submitted event (Passport verification counts as KYC submission)
+    eventBus.publish(EventTypes.KYC_SUBMITTED, {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: passportData.email,
+        firstName: passportData.firstName,
+        lastName: passportData.lastName,
+      },
+      kycType: 'PASSPORT',
     });
 
     auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'EXPATRIATE', passportVerified: true } });
@@ -1679,6 +1726,15 @@ export class AuthService {
       purpose: OtpPurpose.PASSWORD_RESET,
     });
 
+    // Publish password reset requested event for notifications
+    eventBus.publish(EventTypes.PASSWORD_RESET_REQUESTED, {
+      userId: user.id,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+    });
+
     logger.info('Forgot password OTP sent', { userId: user.id });
 
     return {
@@ -1787,6 +1843,16 @@ export class AuthService {
       logger.error('Failed to send password reset confirmation email', { userId, error });
       // Don't fail the password reset if email fails
     }
+
+    // Publish password reset completed event for notifications
+    eventBus.publish(EventTypes.PASSWORD_RESET_COMPLETED, {
+      userId,
+      user: {
+        id: userId,
+        email: user.email,
+        firstName: user.profile?.firstName,
+      },
+    });
 
     logger.info('Password reset successfully', { userId });
 

@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { NotFoundError, ValidationError, paginate } from "../../../shared/utils";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 type CreateCustomerFlagPayload = {
   type: string; // should align with AmlFlagType
@@ -289,7 +290,10 @@ export class CustomerService {
   }
 
   async deactivateCustomer(userId: string, adminId?: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
     if (!user || user.role !== "CUSTOMER") {
       throw new NotFoundError("Customer not found");
     }
@@ -299,13 +303,28 @@ export class CustomerService {
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { isActive: false },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, email: true, profile: { select: { firstName: true, lastName: true } } },
     });
+
+    // Publish event for notifications
+    eventBus.publish(EventTypes.USER_SUSPENDED, {
+      userId: updated.id,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.profile ? `${updated.profile.firstName || ''} ${updated.profile.lastName || ''}`.trim() : undefined,
+      },
+      adminId,
+    });
+
     return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
   }
 
   async toggleCustomerActive(userId: string, isActive: boolean, adminId?: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
     if (!user || user.role !== "CUSTOMER") {
       throw new NotFoundError("Customer not found");
     }
@@ -315,8 +334,21 @@ export class CustomerService {
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { isActive },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, email: true, profile: { select: { firstName: true, lastName: true } } },
     });
+
+    // Publish event for notifications
+    const eventType = isActive ? EventTypes.USER_ACTIVATED : EventTypes.USER_SUSPENDED;
+    eventBus.publish(eventType, {
+      userId: updated.id,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.profile ? `${updated.profile.firstName || ''} ${updated.profile.lastName || ''}`.trim() : undefined,
+      },
+      adminId,
+    });
+
     return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
   }
 

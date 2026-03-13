@@ -3,6 +3,7 @@ const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -278,7 +279,7 @@ export class AdminTransactionsService {
 
   async approveTransaction(transactionId: string, adminId: string, reason?: string) {
 
-    await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.APPROVED as any,
@@ -309,14 +310,21 @@ export class AdminTransactionsService {
       },
     });
 
-    
+    // Publish event for notifications
+    eventBus.publish(EventTypes.TRANSACTION_APPROVED, {
+      userId: transaction.userId,
+      transaction: {
+        id: transaction.id,
+        referenceNumber: transaction.referenceNumber,
+      },
+    });
 
     return { message: "Transaction approved successfully" };
   }
 
   async rejectTransaction(transactionId: string, adminId: string, reason: string) {
 
-    const updated = await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.REJECTED as any,
@@ -336,7 +344,15 @@ export class AdminTransactionsService {
       },
     });
 
-    
+    // Publish event for notifications
+    eventBus.publish(EventTypes.TRANSACTION_REJECTED, {
+      userId: transaction.userId,
+      transaction: {
+        id: transaction.id,
+        referenceNumber: transaction.referenceNumber,
+      },
+      reason,
+    });
 
     return { message: "Transaction rejected successfully" };
   }
