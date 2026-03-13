@@ -172,6 +172,162 @@ OutletRouter.patch(
 
 /**
  * @swagger
+ * /api/admin/outlet/franchises/{id}/branches:
+ *   get:
+ *     summary: List branches attached to a franchise
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Branches retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/branches",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}/branches/all:
+ *   get:
+ *     summary: List branches attached to a franchise (unpaginated)
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Branches retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/branches/all",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseBranchesAll
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}/transactions:
+ *   get:
+ *     summary: List transactions connected to a franchise
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/transactions",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseTransactions
+);
+
+/**
+ * @swagger
  * /api/admin/outlet/franchises/export:
  *   get:
  *     summary: Export franchises as CSV
@@ -198,6 +354,35 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
   outletController.exportFranchises
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}:
+ *   get:
+ *     summary: Get franchise details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Franchise retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.getFranchise
 );
 
 /**
@@ -250,7 +435,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/branches",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listBranches
 );
 
@@ -429,6 +614,78 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.getBranch
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/transactions:
+ *   get:
+ *     summary: List transactions connected to a branch
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/branches/:id/transactions",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  outletController.listBranchTransactions
 );
 /**
  * @swagger

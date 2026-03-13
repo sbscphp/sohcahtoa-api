@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
 import { ServiceUnavailableError, successResponse, streamCsv, ValidationError } from "../../../shared/utils";
-import { CreateTicketPayload, ticketsService } from "../services/tickets.service";
+import { CreateTicketPayload, UpdateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
 
@@ -31,6 +31,58 @@ class TicketsController {
   get = asyncHandler(async (req: Request, res: Response) => {
     const ticket = await ticketsService.get(req.params.id);
     res.json(successResponse(ticket));
+  });
+
+  update = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+
+    try {
+      if (req.file) {
+        try {
+          uploadedFile = await uploadToCloudinary(req.file.buffer, {
+            folder: "tickets",
+            resourceType: "auto",
+            allowedFormats: ["jpg", "jpeg", "png", "pdf"],
+            maxFileSize: 2 * 1024 * 1024,
+          });
+        } catch (_e: any) {
+          throw new ServiceUnavailableError("Attachment upload failed");
+        }
+      }
+
+      const payload: UpdateTicketPayload = {
+        caseType: req.body.caseType,
+        priorityLevel: req.body.priorityLevel ?? req.body.priority,
+        description: req.body.description,
+        attachment: uploadedFile
+          ? {
+              url: uploadedFile.secureUrl,
+              format: req.file?.mimetype || "",
+              bytes: uploadedFile.bytes,
+              publicId: uploadedFile.publicId,
+            }
+          : undefined,
+      };
+
+      const result = await ticketsService.update(req.params.id, payload, adminId);
+      await auditTrailService.logAction({
+        adminId,
+        actionType: "INCIDENCE_UPDATE",
+        actionLabel: "Update ticket",
+        resourceType: "INCIDENCE",
+        resourceId: req.params.id,
+        previousState: result.previous,
+        newState: result.updated,
+        metadata: result.changes,
+      });
+      res.json(successResponse(result.updated));
+    } catch (error) {
+      if (uploadedFile?.publicId) {
+        await CloudinaryService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {});
+      }
+      throw error;
+    }
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {

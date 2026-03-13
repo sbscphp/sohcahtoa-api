@@ -1,5 +1,5 @@
 import { getDatabase } from "../../../config/database";
-import { createLogger, ValidationError } from "../../../shared/utils";
+import { createLogger, NotFoundError, ValidationError } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import { CreateFranchiseDto, FranchiseQueryDto, CreateBranchDto } from "../dto/outlet.dto";
 
@@ -152,6 +152,44 @@ class OutletService {
     return updated;
   }
 
+  async getFranchise(id: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+
+    const [totalBranches, activeBranches, deactivatedBranches, pendingBranches] = await Promise.all([
+      db.branch.count({ where: { franchiseId: id } }),
+      db.branch.count({ where: { franchiseId: id, status: "Active" } }),
+      db.branch.count({ where: { franchiseId: id, status: "Deactivated" } }),
+      db.branch.count({ where: { franchiseId: id, status: "PENDING" } }),
+    ]);
+
+    return {
+      id: franchise.id,
+      franchiseName: franchise.name,
+      contactPerson: franchise.contactPersonName,
+      email: franchise.email,
+      phoneNumber: franchise.phoneNumber,
+      altPhoneNumber: franchise.altPhoneNumber,
+      state: franchise.state,
+      address: franchise.address,
+      status: franchise.status,
+      isActive: franchise.isActive,
+      createdAt: franchise.createdAt,
+      updatedAt: franchise.updatedAt,
+      branchStats: {
+        total: totalBranches,
+        active: activeBranches,
+        deactivated: deactivatedBranches,
+        pending: pendingBranches,
+      },
+    };
+  }
+
   async exportFranchises(filters: { search?: string; status?: string } = {}) {
     const where: any = {};
     const search = (filters.search || "").toString().trim();
@@ -239,6 +277,281 @@ class OutletService {
     const items = rows.map((b: any) => ({ id: b.id, name: b.name }));
     items.sort((a: any, b: any) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
     return items;
+  }
+
+  async listBranchesByFranchise(franchiseId: string, query: any, page = 1, limit = 20) {
+    if (!franchiseId) {
+      throw new ValidationError("franchiseId is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id: franchiseId }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+    const skip = (page - 1) * limit;
+    const where: any = { franchiseId };
+    const q = ((query?.search as string) || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { address: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    if (query?.status) where.status = query.status;
+
+    const [rows, total] = await Promise.all([
+      db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
+      db.branch.count({ where }),
+    ]);
+
+    const items = (rows || []).map((b: any) => ({
+      id: b.id,
+      branchName: b.name,
+      branchManager: b.branchManager,
+      email: b.email,
+      address: b.address,
+      status: b.status,
+    }));
+    return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async listBranchesByFranchiseAll(franchiseId: string, query: any) {
+    if (!franchiseId) {
+      throw new ValidationError("franchiseId is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id: franchiseId }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+    const where: any = { franchiseId };
+    const q = ((query?.search as string) || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { address: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    if (query?.status) where.status = query.status;
+
+    const rows = await db.branch.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+
+    return (rows || []).map((b: any) => ({
+      id: b.id,
+      branchName: b.name,
+      branchManager: b.branchManager,
+      email: b.email,
+      address: b.address,
+      status: b.status,
+    }));
+  }
+
+  async listTransactionsByFranchise(franchiseId: string, filters: any, page = 1, limit = 20) {
+    if (!franchiseId) {
+      throw new ValidationError("franchiseId is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id: franchiseId }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+
+    const skip = (page - 1) * limit;
+    const where: any = {
+      createdByAgent: {
+        is: {
+          branch: {
+            is: { franchiseId },
+          },
+        },
+      },
+    };
+
+    if (filters?.status) where.status = filters.status;
+    if (filters?.step) where.currentStep = filters.step;
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const search = (filters?.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orderBy: any = {};
+    const sortBy = filters?.sortBy || "createdAt";
+    const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    const [items, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const uniqueUserIds = Array.from(new Set(items.map((t: any) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const data = items.map((t: any) => {
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+      const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      return {
+        id: t.id,
+        customerName: name,
+        dateAndId: { date: t.createdAt, reference: t.referenceNumber },
+        transactionType: t.type,
+        transactionStage: t.currentStep,
+        workflowStage: t.status,
+        transactionValue: value,
+        status: t.status,
+      };
+    });
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async listTransactionsByBranch(branchId: string, filters: any, page = 1, limit = 20) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const skip = (page - 1) * limit;
+    const where: any = {
+      createdByAgent: {
+        is: { branchId },
+      },
+    };
+
+    if (filters?.status) where.status = filters.status;
+    if (filters?.step) where.currentStep = filters.step;
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const search = (filters?.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orderBy: any = {};
+    const sortBy = filters?.sortBy || "createdAt";
+    const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    const [items, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const uniqueUserIds = Array.from(new Set(items.map((t: any) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const data = items.map((t: any) => {
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+      const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      return {
+        id: t.id,
+        customerName: name,
+        dateAndId: { date: t.createdAt, reference: t.referenceNumber },
+        transactionType: t.type,
+        transactionStage: t.currentStep,
+        workflowStage: t.status,
+        transactionValue: value,
+        status: t.status,
+      };
+    });
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async createBranch(payload: CreateBranchDto) {

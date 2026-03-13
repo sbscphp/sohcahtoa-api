@@ -239,6 +239,58 @@ TicketsRouter.get(
 
 /**
  * @swagger
+ * /api/admin/tickets/{id}:
+ *   patch:
+ *     summary: Update ticket details
+ *     tags: [admin-tickets]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               caseType:
+ *                 type: string
+ *                 enum: [Transaction Dispute, Onboarding, Document Approval, Customer Account]
+ *               priorityLevel:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *               description:
+ *                 type: string
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Attachment (PDF/JPG/JPEG/PNG), max size 200KB
+ *           description: "Allowed types: PDF/JPG/JPEG/PNG; Max size: 200KB"
+ *     responses:
+ *       200:
+ *         description: Ticket updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+TicketsRouter.patch(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "TICKETS", feature: "MODULE", action: "edit" }),
+  uploadTicketAttachment,
+  ticketsController.update
+);
+
+/**
+ * @swagger
  * /api/admin/tickets/{id}/status:
  *   patch:
  *     summary: Update ticket status
