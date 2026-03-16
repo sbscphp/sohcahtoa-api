@@ -6,14 +6,14 @@ const prisma: PrismaClient = getDatabase();
 class ReportService {
   async modules() {
     return [
-      { key: "OUTLET", name: "Outlets management" },
-      { key: "RATE", name: "Rate Management" },
-      { key: "TRANSACTION", name: "Transaction management" },
-      { key: "WORKFLOW", name: "Workflow management" },
-      { key: "AGENT", name: "Agents management" },
-      { key: "FRANCHISE", name: "Franchise management" },
-      { key: "BRANCH", name: "Branch management" },
-      { key: "INCIDENT", name: "Incidence management" },
+      { key: "OUTLET", name: "Outlets management", description: "Monitor outlet-related actions with supporting reports." },
+      { key: "RATE", name: "Rate Management", description: "Reports on rate creation, updates, and variances." },
+      { key: "TRANSACTION", name: "Transaction management", description: "Reports on customer transactions and flags." },
+      { key: "WORKFLOW", name: "Workflow management", description: "Reports on workflow executions and escalations." },
+      { key: "AGENT", name: "Agents management", description: "Monitor agent activities with supporting reports." },
+      { key: "FRANCHISE", name: "Franchise management", description: "Reports on franchise onboarding and status." },
+      { key: "BRANCH", name: "Branch management", description: "Reports on branch set-up, performance & incidents." },
+      { key: "INCIDENT", name: "Incidence management", description: "Reports on incidents and resolutions." },
     ];
   }
 
