@@ -278,7 +278,7 @@ export const checkSupportingDocuments = (
   next: NextFunction
 ): void => {
   try {
-    const { type, documents, admissionType } = req.body;
+    const { type, documents, admissionType, amount, mode } = req.body;
 
     if (!type) {
       return next();
@@ -303,6 +303,16 @@ export const checkSupportingDocuments = (
     // Add postgraduate-specific documents for school fees
     if (type === 'SCHOOL_FEES' && admissionType === 'POSTGRADUATE') {
       required = [...required, 'STATEMENT_OF_RESULT', 'DEGREE'];
+    }
+
+    // For transactions above $10,000, require proof of funds and digital signature
+    // This applies to SELL transactions (RESIDENT_FX, EXPATRIATE_FX, TOURIST_FX with mode=SELL)
+    const sellTransactionTypes = ['RESIDENT_FX', 'EXPATRIATE_FX'];
+    const isSellTransaction = sellTransactionTypes.includes(type) ||
+                             (type === 'TOURIST_FX' && mode === 'SELL');
+
+    if (isSellTransaction && amount && Number(amount) >= 10000) {
+      required = [...required, 'PROOF_OF_FUNDS', 'SOURCE_OF_FUNDS_DECLARATION', 'DIGITAL_SIGNATURE'];
     }
 
     if (!required.length) {

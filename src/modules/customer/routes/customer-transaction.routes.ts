@@ -44,6 +44,12 @@ router.use(authenticate);
  *       - `EXPATRIATE_FX`: PASSPORT, WORK_PERMIT, UTILITY_BILL
  *       - `IMTO_REMITTANCE`: (no required documents)
  *       - `CASH_REMITTANCE`: (no required documents)
+ *
+ *       **Additional documents for SELL transactions ≥ $10,000:**
+ *       For RESIDENT_FX, EXPATRIATE_FX, or TOURIST_FX (mode=SELL) with amount ≥ $10,000:
+ *       - `PROOF_OF_FUNDS`: Evidence of fund source
+ *       - `SOURCE_OF_FUNDS_DECLARATION`: Declaration form about fund sources
+ *       - `DIGITAL_SIGNATURE`: Customer's digital signature
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -138,8 +144,8 @@ router.use(authenticate);
  *                   properties:
  *                     documentType:
  *                       type: string
- *                       enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, TCC, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, STATEMENT_OF_RESULT, DEGREE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, WORK_PERMIT]
- *                       description: Type of document
+ *                       enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, TCC, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, STATEMENT_OF_RESULT, DEGREE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, WORK_PERMIT, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
+ *                       description: Type of document. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
  *                       example: PASSPORT
  *                     fileUrl:
  *                       type: string
@@ -322,8 +328,8 @@ router.post("/transactions", customerTransactionController.createTransaction);
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL]
- *                 description: Type of document being uploaded
+ *                 enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
+ *                 description: Type of document being uploaded. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
  *               documents:
  *                 type: array
  *                 items:
@@ -438,6 +444,13 @@ router.post("/transactions/:transactionId/documents", uploadMultipleDocuments, c
  *           type: string
  *           enum: [BUY, SELL, REMITTANCE]
  *         description: Filter by transaction group (ignored when `type` is also provided)
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           enum: [BUY, SELL]
+ *         description: Filter by transaction mode (BUY for touring/buying FX, SELL for tourist/selling FX)
+ *         example: BUY
  *       - in: query
  *         name: currency
  *         schema:
@@ -655,6 +668,13 @@ router.get("/transactions", customerTransactionController.getMyTransactions);
  *           type: string
  *           enum: [BUY, SELL, REMITTANCE]
  *         description: Filter by transaction group (ignored when `type` is also provided)
+ *       - in: query
+ *         name: mode
+ *         schema:
+ *           type: string
+ *           enum: [BUY, SELL]
+ *         description: Filter by transaction mode (BUY for touring/buying FX, SELL for tourist/selling FX)
+ *         example: BUY
  *       - in: query
  *         name: currency
  *         schema:

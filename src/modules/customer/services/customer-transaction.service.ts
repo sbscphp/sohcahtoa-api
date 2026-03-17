@@ -238,7 +238,8 @@ export class CustomerTransactionService {
         "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER",
         "RECEIPT", "INVOICE", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER",
         "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "STATEMENT_OF_RESULT",
-        "DEGREE", "UTILITY_BILL", "WORK_PERMIT",
+        "DEGREE", "UTILITY_BILL", "WORK_PERMIT", "PROOF_OF_FUNDS", "SOURCE_OF_FUNDS_DECLARATION",
+        "DIGITAL_SIGNATURE",
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -342,7 +343,7 @@ export class CustomerTransactionService {
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
       currentStep: transaction.currentStep,
-      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType, mode),
+      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType, mode, amount),
       message: hasDocuments
         ? "Transaction submitted successfully and is awaiting admin review."
         : "Transaction initiated successfully. Please upload required documents to proceed.",
@@ -437,6 +438,9 @@ export class CustomerTransactionService {
       "DEGREE",
       "UTILITY_BILL",
       "WORK_PERMIT",
+      "PROOF_OF_FUNDS",
+      "SOURCE_OF_FUNDS_DECLARATION",
+      "DIGITAL_SIGNATURE",
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
@@ -593,9 +597,12 @@ export class CustomerTransactionService {
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
 
+    // Get transaction amount for documents > $10k check
+    const transactionAmount = transaction.foreignAmount ? Number(transaction.foreignAmount) : null;
+
     return {
       message: "Documents uploaded successfully",
-      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType, transactionMode),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType, transactionMode, transactionAmount),
     };
   }
 
@@ -766,6 +773,7 @@ export class CustomerTransactionService {
       status?: string;
       type?: string;
       group?: string;
+      mode?: string;
       currency?: string;
       startDate?: string;
       endDate?: string;
@@ -785,6 +793,7 @@ export class CustomerTransactionService {
 
     if (filters.status) where.status = filters.status;
     if (filters.currency) where.currency = filters.currency.toUpperCase();
+    if (filters.mode) where.transactionMode = filters.mode.toUpperCase();
 
     // Filter by explicit type OR by group (BUY / SELL / REMITTANCE)
     if (filters.type) {
@@ -812,6 +821,7 @@ export class CustomerTransactionService {
    *   status      – exact TransactionStatus value
    *   type        – exact TransactionType value
    *   group       – BUY | SELL | REMITTANCE (maps to type set)
+   *   mode        – BUY | SELL (transaction mode)
    *   currency    – e.g. "USD"
    *   startDate   – ISO datetime lower bound on createdAt
    *   endDate     – ISO datetime upper bound on createdAt
@@ -825,6 +835,7 @@ export class CustomerTransactionService {
       status?: string;
       type?: string;
       group?: string;
+      mode?: string;
       currency?: string;
       startDate?: string;
       endDate?: string;
@@ -945,6 +956,7 @@ export class CustomerTransactionService {
       status?: string;
       type?: string;
       group?: string;
+      mode?: string;
       currency?: string;
       startDate?: string;
       endDate?: string;
@@ -1135,6 +1147,9 @@ export class CustomerTransactionService {
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
 
+    // Get transaction amount for documents > $10k check
+    const transactionAmount = transaction.foreignAmount ? Number(transaction.foreignAmount) : null;
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -1168,7 +1183,7 @@ export class CustomerTransactionService {
             rejectedAt: transaction.rejectedAt,
           }
         : null,
-      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType, transactionMode),
+      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType, transactionMode, transactionAmount),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
       steps: transaction.steps,
@@ -1193,9 +1208,10 @@ export class CustomerTransactionService {
       verifiedAt?: Date | null;
     }[],
     admissionType?: string | null,
-    transactionMode?: string | null
+    transactionMode?: string | null,
+    amount?: number | null
   ) {
-    const required = this.getRequiredDocuments(transactionType, admissionType, transactionMode);
+    const required = this.getRequiredDocuments(transactionType, admissionType, transactionMode, amount);
 
     return required.map((docType) => {
       const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
@@ -1217,9 +1233,14 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Get required documents based on transaction type, admission type (for SCHOOL_FEES), and transaction mode (for TOURIST_FX)
+   * Get required documents based on transaction type, admission type (for SCHOOL_FEES), transaction mode (for TOURIST_FX), and amount (for transactions > $10k)
    */
-  private getRequiredDocuments(transactionType: string, admissionType?: string | null, transactionMode?: string | null): string[] {
+  private getRequiredDocuments(
+    transactionType: string,
+    admissionType?: string | null,
+    transactionMode?: string | null,
+    amount?: number | null
+  ): string[] {
     const documentRequirements: Record<string, string[]> = {
       PTA: ["VISA", "RETURN_TICKET"],
       BTA: ["TIN", "TCC",  "PASSPORT", "VISA", "RETURN_TICKET", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
@@ -1249,6 +1270,16 @@ export class CustomerTransactionService {
     // Add postgraduate-specific documents for school fees
     if (transactionType === "SCHOOL_FEES" && admissionType === "POSTGRADUATE") {
       required = [...required, "STATEMENT_OF_RESULT", "DEGREE"];
+    }
+
+    // For transactions above $10,000, require proof of funds and digital signature
+    // This applies to SELL transactions (RESIDENT_FX, EXPATRIATE_FX, TOURIST_FX with mode=SELL)
+    const sellTransactionTypes = ["RESIDENT_FX", "EXPATRIATE_FX"];
+    const isSellTransaction = sellTransactionTypes.includes(transactionType) ||
+                             (transactionType === "TOURIST_FX" && transactionMode === "SELL");
+
+    if (isSellTransaction && amount && amount >= 10000) {
+      required = [...required, "PROOF_OF_FUNDS", "SOURCE_OF_FUNDS_DECLARATION", "DIGITAL_SIGNATURE"];
     }
 
     return required;

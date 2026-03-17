@@ -342,6 +342,21 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'PROOF_OF_FUNDS';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'SOURCE_OF_FUNDS_DECLARATION';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'DIGITAL_SIGNATURE';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================
