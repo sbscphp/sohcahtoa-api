@@ -138,8 +138,19 @@ ReportRouter.get(
  *                 type: string
  *                 enum: [CSV, PDF]
  *     responses:
- *       201:
- *         description: Report job created
+ *       200:
+ *         description: Report file (CSV or PDF)
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */

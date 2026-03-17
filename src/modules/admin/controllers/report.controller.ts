@@ -75,9 +75,10 @@ class ReportController {
     }
 
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", `${fileSize}`);
     if (format === "CSV") {
-      res.setHeader("Content-Type", "text/csv");
-      res.status(200).send(generated.csv);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.status(200).send(Buffer.from(generated.csv, "utf8"));
       return;
     }
 

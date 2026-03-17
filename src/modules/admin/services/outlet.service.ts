@@ -1,7 +1,15 @@
 import { getDatabase } from "../../../config/database";
 import { createLogger, NotFoundError, ValidationError } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
-import { CreateFranchiseDto, FranchiseQueryDto, CreateBranchDto } from "../dto/outlet.dto";
+import {
+  CreateFranchiseDto,
+  FranchiseQueryDto,
+  CreateBranchDto,
+  UpdateFranchiseDto,
+  CreatePickupStationDto,
+  PickupStationQueryDto,
+  UpdatePickupStationDto,
+} from "../dto/outlet.dto";
 
 const prisma = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -134,6 +142,43 @@ class OutletService {
       },
     });
     return created;
+  }
+
+  async updateFranchise(id: string, payload: UpdateFranchiseDto) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+
+    const patch: any = {};
+    if (typeof payload.franchiseName === "string" && payload.franchiseName.trim()) {
+      patch.name = payload.franchiseName.trim();
+    }
+    if (typeof payload.state === "string" && payload.state.trim()) patch.state = payload.state.trim();
+    if (typeof payload.address === "string" && payload.address.trim()) patch.address = payload.address.trim();
+    if (typeof payload.contactPersonName === "string" && payload.contactPersonName.trim()) {
+      patch.contactPersonName = payload.contactPersonName.trim();
+    }
+    if (typeof payload.email === "string" && payload.email.trim()) patch.email = payload.email.trim();
+    if (typeof payload.phoneNumber === "string" && payload.phoneNumber.trim()) patch.phoneNumber = payload.phoneNumber.trim();
+    if (typeof payload.altPhoneNumber === "string") {
+      patch.altPhoneNumber = payload.altPhoneNumber.trim() || null;
+    } else if (payload.altPhoneNumber === null) {
+      patch.altPhoneNumber = null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new ValidationError("No update fields provided");
+    }
+
+    const updated = await db.franchise.update({
+      where: { id },
+      data: patch,
+    });
+    return updated;
   }
 
   async updateFranchiseStatus(id: string, status: string) {
@@ -601,12 +646,242 @@ class OutletService {
     return branch;
   }
 
+  async updateBranch(
+    id: string,
+    payload: Partial<CreateBranchDto> & { status?: string; isActive?: boolean }
+  ) {
+    if (!id) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const patch: any = {};
+    const branchName = typeof payload.branchName === "string" ? payload.branchName.trim() : "";
+    const branchEmail = typeof payload.branchEmail === "string" ? payload.branchEmail.trim() : "";
+
+    if (branchName && branchName.toLowerCase() !== (branch.name || "").toLowerCase()) {
+      const existingByName = await db.branch.findFirst({
+        where: { name: { equals: branchName, mode: "insensitive" }, NOT: { id } },
+        select: { id: true },
+      });
+      if (existingByName) {
+        throw new ValidationError("Branch name already exists", { field: "branchName" });
+      }
+      patch.name = branchName;
+    }
+
+    if (branchEmail) {
+      const existingByEmail = await db.branch.findFirst({
+        where: { branchEmail: { equals: branchEmail, mode: "insensitive" }, NOT: { id } },
+        select: { id: true },
+      });
+      if (existingByEmail) {
+        throw new ValidationError("Branch email already exists", { field: "branchEmail" });
+      }
+      patch.branchEmail = branchEmail;
+    } else if (payload.branchEmail === null) {
+      patch.branchEmail = null;
+    }
+
+    if (typeof payload.state === "string" && payload.state.trim()) patch.state = payload.state.trim();
+    if (typeof payload.address === "string" && payload.address.trim()) patch.address = payload.address.trim();
+    if (typeof payload.branchManager === "string" && payload.branchManager.trim()) patch.branchManager = payload.branchManager.trim();
+    if (typeof payload.email === "string" && payload.email.trim()) patch.email = payload.email.trim();
+    if (typeof payload.phoneNumber === "string" && payload.phoneNumber.trim()) patch.phoneNumber = payload.phoneNumber.trim();
+    if (typeof payload.agentName === "string") patch.agentName = payload.agentName.trim() || null;
+    if (typeof payload.agentEmail === "string") patch.agentEmail = payload.agentEmail.trim() || null;
+    if (typeof payload.agentPhoneNumber === "string") patch.agentPhoneNumber = payload.agentPhoneNumber.trim() || null;
+
+    if (typeof payload.franchiseId === "string" && payload.franchiseId.trim()) {
+      const franchise = await db.franchise.findUnique({ where: { id: payload.franchiseId.trim() }, select: { id: true } });
+      if (!franchise) {
+        throw new NotFoundError("Franchise not found");
+      }
+      patch.franchiseId = payload.franchiseId.trim();
+    } else if (payload.franchiseId === null) {
+      patch.franchiseId = null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new ValidationError("No update fields provided");
+    }
+
+    const updated = await db.branch.update({
+      where: { id },
+      data: patch,
+    });
+    return updated;
+  }
+
   async updateBranchStatus(id: string, status: string) {
     const updated = await db.branch.update({
       where: { id },
       data: { status, isActive: status === "Active" },
     });
     return updated;
+  }
+
+  async listPickupStations(query: PickupStationQueryDto) {
+    const page = parseInt((query.page || "1") as any);
+    const limit = parseInt((query.limit || "20") as any);
+    const skip = (page - 1) * limit;
+    const where: any = {};
+
+    const search = (query.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { region: { contains: search, mode: "insensitive" } },
+        { state: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (query.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query.region) where.region = { equals: query.region, mode: "insensitive" };
+    if (query.status) where.status = query.status;
+
+    const [rows, total] = await Promise.all([
+      db.pickupStation.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      db.pickupStation.count({ where }),
+    ]);
+
+    const items = (rows || []).map((s: any) => ({
+      id: s.id,
+      stationName: s.name,
+      stationEmail: s.email,
+      phoneNumber: s.phoneNumber,
+      state: s.state,
+      region: s.region,
+      physicalAddress: s.address,
+      status: s.status,
+      isActive: s.isActive,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+
+    return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async createPickupStation(payload: CreatePickupStationDto) {
+    const { stationName, stationEmail, phoneNumber, state, region, physicalAddress, status } = payload || ({} as any);
+    if (!stationName || !stationEmail || !phoneNumber || !state || !region || !physicalAddress) {
+      throw new ValidationError("stationName, stationEmail, phoneNumber, state, region, physicalAddress are required");
+    }
+
+    const existingByName = await db.pickupStation.findFirst({
+      where: { name: { equals: stationName.trim(), mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existingByName) {
+      throw new ValidationError("Station name already exists", { field: "stationName" });
+    }
+
+    const existingByEmail = await db.pickupStation.findFirst({
+      where: { email: { equals: stationEmail.trim(), mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existingByEmail) {
+      throw new ValidationError("Station email already exists", { field: "stationEmail" });
+    }
+
+    const created = await db.pickupStation.create({
+      data: {
+        name: stationName.trim(),
+        email: stationEmail.trim(),
+        phoneNumber: phoneNumber.trim(),
+        state: state.trim(),
+        region: region.trim(),
+        address: physicalAddress.trim(),
+        status: status || "PENDING",
+        isActive: true,
+      },
+    });
+
+    return created;
+  }
+
+  async getPickupStation(id: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const station = await db.pickupStation.findUnique({ where: { id } });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+    return station;
+  }
+
+  async updatePickupStation(id: string, payload: UpdatePickupStationDto) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const station = await db.pickupStation.findUnique({ where: { id } });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+
+    const patch: any = {};
+
+    const stationName = typeof payload.stationName === "string" ? payload.stationName.trim() : "";
+    if (stationName && stationName.toLowerCase() !== (station.name || "").toLowerCase()) {
+      const existingByName = await db.pickupStation.findFirst({
+        where: { name: { equals: stationName, mode: "insensitive" }, NOT: { id } },
+        select: { id: true },
+      });
+      if (existingByName) {
+        throw new ValidationError("Station name already exists", { field: "stationName" });
+      }
+      patch.name = stationName;
+    }
+
+    const stationEmail = typeof payload.stationEmail === "string" ? payload.stationEmail.trim() : "";
+    if (stationEmail && stationEmail.toLowerCase() !== (station.email || "").toLowerCase()) {
+      const existingByEmail = await db.pickupStation.findFirst({
+        where: { email: { equals: stationEmail, mode: "insensitive" }, NOT: { id } },
+        select: { id: true },
+      });
+      if (existingByEmail) {
+        throw new ValidationError("Station email already exists", { field: "stationEmail" });
+      }
+      patch.email = stationEmail;
+    }
+
+    if (typeof payload.phoneNumber === "string" && payload.phoneNumber.trim()) patch.phoneNumber = payload.phoneNumber.trim();
+    if (typeof payload.state === "string" && payload.state.trim()) patch.state = payload.state.trim();
+    if (typeof payload.region === "string" && payload.region.trim()) patch.region = payload.region.trim();
+    if (typeof payload.physicalAddress === "string" && payload.physicalAddress.trim()) patch.address = payload.physicalAddress.trim();
+    if (typeof payload.status === "string" && payload.status.trim()) patch.status = payload.status.trim();
+    if (typeof payload.isActive === "boolean") patch.isActive = payload.isActive;
+
+    if (Object.keys(patch).length === 0) {
+      throw new ValidationError("No update fields provided");
+    }
+
+    const updated = await db.pickupStation.update({
+      where: { id },
+      data: patch,
+    });
+    return updated;
+  }
+
+  async deletePickupStation(id: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const station = await db.pickupStation.findUnique({ where: { id }, select: { id: true } });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+    await db.pickupStation.delete({ where: { id } });
+    return { id };
   }
 
   // async exportBranches() {
