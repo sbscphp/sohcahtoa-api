@@ -205,6 +205,8 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
+
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$
 DECLARE

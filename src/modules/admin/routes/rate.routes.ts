@@ -129,6 +129,8 @@ RateRouter.get(
  *                 type: number
  *               sellRate:
  *                 type: number
+ *               note:
+ *                 type: string
  *               validFrom:
  *                 type: string
  *                 format: date-time
