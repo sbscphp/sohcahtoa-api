@@ -1197,6 +1197,7 @@ model ExchangeRate {
   buyRate      Decimal? @db.Decimal(18, 6)
   sellRate     Decimal? @db.Decimal(18, 6)
   source       String   @default("MANUAL")
+  note         String?
   validFrom    DateTime @default(now())
   validUntil   DateTime
   createdAt    DateTime @default(now())

@@ -55,7 +55,7 @@ class RateService {
     return client.exchangeRate.findUnique({ where: { id } });
   }
 
-  async create(data: { fromCurrency: string; toCurrency: string; buyRate: number; sellRate: number; validFrom: Date; validUntil: Date }) {
+  async create(data: { fromCurrency: string; toCurrency: string; buyRate: number; sellRate: number; validFrom: Date; validUntil: Date; note?: string }) {
     const rate = data.sellRate;
     const client: any = prisma as any;
     const created = await client.exchangeRate.create({
@@ -65,6 +65,7 @@ class RateService {
         buyRate: data.buyRate as any,
         sellRate: data.sellRate as any,
         rate: rate as any,
+        note: data.note,
         validFrom: data.validFrom,
         validUntil: data.validUntil,
         isActive: true,
