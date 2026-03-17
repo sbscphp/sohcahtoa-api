@@ -571,6 +571,26 @@ model Branch {
   @@map("branches")
 }
 
+model PickupStation {
+  id          String   @id @default(uuid())
+  name        String
+  email       String
+  phoneNumber String
+  state       String
+  region      String
+  address     String
+  status      String   @default("PENDING")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([state])
+  @@index([region])
+  @@index([status])
+  @@map("pickup_stations")
+}
+
 model Agent {
   id          String   @id @default(uuid())
   name        String
@@ -1200,6 +1220,7 @@ model ExchangeRate {
   buyRate      Decimal? @db.Decimal(18, 6)
   sellRate     Decimal? @db.Decimal(18, 6)
   source       String   @default("MANUAL")
+  note         String?
   validFrom    DateTime @default(now())
   validUntil   DateTime
   createdAt    DateTime @default(now())

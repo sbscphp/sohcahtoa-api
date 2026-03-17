@@ -32,6 +32,7 @@ class RateController {
       sellRate: parseFloat(req.body.sellRate),
       validFrom: new Date(req.body.validFrom),
       validUntil: new Date(req.body.validUntil),
+      note: typeof req.body.note === "string" ? req.body.note : undefined,
     };
     const created = await rateService.create(payload);
     if (req.user) {

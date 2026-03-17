@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, ValidationError } from "../../../shared/utils";
 import { reportService } from "../services/report.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
@@ -30,14 +30,36 @@ class ReportController {
   });
 
   generate = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const payload = {
-      module: req.body.module,
-      startDate: new Date(req.body.startDate),
-      endDate: new Date(req.body.endDate),
-      format: (req.body.format || "CSV") as "CSV" | "PDF",
+    const module = req.body.module;
+    const startDate = new Date(req.body.startDate);
+    const endDate = new Date(req.body.endDate);
+    const format = ((req.body.format || "CSV") as string).toUpperCase() as "CSV" | "PDF";
+
+    if (!module) throw new ValidationError("module is required");
+    if (!req.body.startDate || Number.isNaN(startDate.getTime())) {
+      throw new ValidationError("startDate must be a valid date");
+    }
+    if (!req.body.endDate || Number.isNaN(endDate.getTime())) {
+      throw new ValidationError("endDate must be a valid date");
+    }
+    if (format !== "CSV" && format !== "PDF") {
+      throw new ValidationError("format must be CSV or PDF");
+    }
+
+    const generated = await reportService.buildGeneratedReport({ module, startDate, endDate });
+    const ext = format === "PDF" ? "pdf" : "csv";
+    const filename = `${generated.filenameBase}.${ext}`;
+    const fileSize =
+      format === "PDF" ? generated.pdf.length : Buffer.byteLength(generated.csv, "utf8");
+
+    const job = await reportService.generate({
+      module,
+      startDate,
+      endDate,
+      format,
       requestedBy: req.user?.userId || "system",
-    };
-    const job = await reportService.generate(payload);
+      metadata: { fileName: filename, fileSize, rowCount: generated.rowCount },
+    });
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
@@ -51,7 +73,17 @@ class ReportController {
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
       });
     }
-    res.status(201).json(successResponse(job));
+
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", `${fileSize}`);
+    if (format === "CSV") {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.status(200).send(Buffer.from(generated.csv, "utf8"));
+      return;
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.status(200).send(generated.pdf);
   });
 }
 

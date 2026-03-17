@@ -4,7 +4,16 @@ import { successResponse } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
 import { outletService } from "../services/outlet.service";
 import { auditTrailService } from "../services/audit-trail.service";
-import { CreateFranchiseDto, FranchiseQueryDto, UpdateFranchiseStatusDto, CreateBranchDto } from "../dto/outlet.dto";
+import {
+  CreateFranchiseDto,
+  FranchiseQueryDto,
+  UpdateFranchiseStatusDto,
+  CreateBranchDto,
+  UpdateFranchiseDto,
+  CreatePickupStationDto,
+  PickupStationQueryDto,
+  UpdatePickupStationDto,
+} from "../dto/outlet.dto";
 
 class OutletController {
   list = asyncHandler(async (_req: Request, res: Response) => {
@@ -27,6 +36,11 @@ class OutletController {
     res.json(successResponse(data));
   });
 
+  listPickupStations = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.listPickupStations(req.query as unknown as PickupStationQueryDto);
+    res.json(successResponse(data.items, { pagination: data.pagination }));
+  });
+
   createFranchise = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.createFranchise(req.body as CreateFranchiseDto);
     const adminId = (req as any).user?.userId as string;
@@ -35,6 +49,20 @@ class OutletController {
       actionType: "FRANCHISE_CREATE",
       actionLabel: "Create franchise",
       resourceType: "OUTLET",
+      resourceId: data.id,
+      newState: data,
+    });
+    res.json(successResponse(data));
+  });
+
+  createPickupStation = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.createPickupStation(req.body as CreatePickupStationDto);
+    const adminId = (req as any).user?.userId as string;
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "PICKUP_STATION_CREATE",
+      actionLabel: "Create pick-up station",
+      resourceType: "PICKUP_STATION",
       resourceId: data.id,
       newState: data,
     });
@@ -52,6 +80,60 @@ class OutletController {
       resourceType: "OUTLET",
       resourceId: req.params.id,
       metadata: { status: body.status },
+    });
+    res.json(successResponse(data));
+  });
+
+  updateFranchise = asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body as UpdateFranchiseDto;
+    const adminId = (req as any).user?.userId as string;
+    const before = await outletService.getFranchise(req.params.id);
+    const data = await outletService.updateFranchise(req.params.id, body);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "FRANCHISE_UPDATE",
+      actionLabel: "Update franchise",
+      resourceType: "OUTLET",
+      resourceId: req.params.id,
+      previousState: before,
+      newState: data,
+    });
+    res.json(successResponse(data));
+  });
+
+  getPickupStation = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.getPickupStation(req.params.id);
+    res.json(successResponse(data));
+  });
+
+  updatePickupStation = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const before = await outletService.getPickupStation(req.params.id);
+    const updated = await outletService.updatePickupStation(req.params.id, req.body as UpdatePickupStationDto);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "PICKUP_STATION_UPDATE",
+      actionLabel: "Update pick-up station",
+      resourceType: "PICKUP_STATION",
+      resourceId: req.params.id,
+      previousState: before,
+      newState: updated,
+    });
+    res.json(successResponse(updated));
+  });
+
+  deletePickupStation = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const before = await outletService.getPickupStation(req.params.id);
+    const data = await outletService.deletePickupStation(req.params.id);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "PICKUP_STATION_DELETE",
+      actionLabel: "Delete pick-up station",
+      resourceType: "PICKUP_STATION",
+      resourceId: req.params.id,
+      previousState: before,
+      newState: data,
     });
     res.json(successResponse(data));
   });
@@ -103,7 +185,7 @@ class OutletController {
 
   listBranches = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.listBranches(req.query);
-    res.json(successResponse(data));
+    res.json(successResponse(data.items, { pagination: data.pagination }));
   });
 
   listAllBranches = asyncHandler(async (req: Request, res: Response) => {
@@ -174,6 +256,22 @@ class OutletController {
       metadata: { status: req.body.status },
     });
     res.json(successResponse(data));
+  });
+
+  updateBranch = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const before = await outletService.getBranch(req.params.id);
+    const updated = await outletService.updateBranch(req.params.id, req.body || {});
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "BRANCH_UPDATE",
+      actionLabel: "Update branch",
+      resourceType: "BRANCH",
+      resourceId: req.params.id,
+      previousState: before,
+      newState: updated,
+    });
+    res.json(successResponse(updated));
   });
 
   // exportBranches = asyncHandler(async (_req: Request, res: Response) => {

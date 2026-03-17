@@ -20,6 +20,46 @@ export class UpdateFranchiseStatusDto {
   status!: string;
 }
 
+export class UpdateFranchiseDto {
+  franchiseName?: string;
+  state?: string;
+  address?: string;
+  contactPersonName?: string;
+  email?: string;
+  phoneNumber?: string;
+  altPhoneNumber?: string | null;
+}
+
+export class PickupStationQueryDto {
+  page?: number;
+  limit?: number;
+  search?: string;
+  state?: string;
+  region?: string;
+  status?: string;
+}
+
+export class CreatePickupStationDto {
+  stationName!: string;
+  physicalAddress!: string;
+  state!: string;
+  region!: string;
+  stationEmail!: string;
+  phoneNumber!: string;
+  status?: string;
+}
+
+export class UpdatePickupStationDto {
+  stationName?: string;
+  physicalAddress?: string;
+  state?: string;
+  region?: string;
+  stationEmail?: string;
+  phoneNumber?: string;
+  status?: string;
+  isActive?: boolean;
+}
+
 export class CreateBranchDto {
   branchName!: string;
   branchEmail?: string;
