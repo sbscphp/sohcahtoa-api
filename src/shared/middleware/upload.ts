@@ -93,18 +93,6 @@ export const uploadSingleDocument = multer({
 }).single('document');
 
 /**
- * Upload middleware for proof of payment
- * Max size: 5MB
- */
-export const uploadProofOfPayment = multer({
-  storage,
-  fileFilter: imageFilter,
-  limits: {
-    fileSize: UPLOAD_LIMITS.PROOF_OF_PAYMENT,
-  },
-}).single('proofOfPayment');
-
-/**
  * Generic upload middleware with custom options
  */
 export const createUploadMiddleware = (options: {
@@ -160,11 +148,37 @@ export const createUploadMiddleware = (options: {
   };
 };
 
+/**
+ * Upload middleware for proof of payment
+ * Max size: 5MB
+ */
+export const uploadProofOfPayment = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: {
+  fileSize: UPLOAD_LIMITS.PROOF_OF_PAYMENT,
+  },
+}).single('proofOfPayment');
+
+export const uploadAgentDisbursementReceipt = createUploadMiddleware({
+  fieldName: 'paymentReceipt',
+  maxSize: UPLOAD_LIMITS.PROOF_OF_PAYMENT,
+  allowedMimeTypes: [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+  ],
+  multiple: false,
+});
+
 export default {
   uploadSingleImage,
   uploadPassport,
   uploadMultipleDocuments,
   uploadSingleDocument,
   uploadProofOfPayment,
+  uploadAgentDisbursementReceipt,
   createUploadMiddleware,
 };

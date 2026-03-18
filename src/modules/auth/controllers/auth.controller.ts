@@ -383,6 +383,31 @@ export class AuthController {
     }
   }
 
+  async changeAgentPassword(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        throw new ValidationError('Authentication required');
+      }
+
+      const { currentPassword, newPassword, newPasswordConfirm } = req.body as {
+        currentPassword?: string;
+        newPassword?: string;
+        newPasswordConfirm?: string;
+      };
+
+      const result = await authService.changeAgentPassword(userId, {
+        currentPassword: currentPassword || '',
+        newPassword: newPassword || '',
+        newPasswordConfirm: newPasswordConfirm || '',
+      });
+
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async healthCheck(req: Request, res: Response) {
     res.json({
       status: 'healthy',

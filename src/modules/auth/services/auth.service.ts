@@ -495,6 +495,64 @@ export class AuthService {
     return { message: 'Password set successfully' };
   }
 
+  async changeAgentPassword(agentUserId: string, data: { currentPassword: string; newPassword: string; newPasswordConfirm: string }): Promise<{ message: string }> {
+    if (!data.currentPassword || !data.newPassword || !data.newPasswordConfirm) {
+      throw new ValidationError('currentPassword, newPassword and newPasswordConfirm are required');
+    }
+
+    if (data.newPassword !== data.newPasswordConfirm) {
+      throw new ValidationError('New password and confirmation do not match');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: agentUserId },
+      select: { email: true, role: true },
+    });
+
+    if (!user || user.role !== UserRole.AGENT) {
+      throw new UnauthorizedError('Only agents can change agent passwords');
+    }
+
+    const client = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email: user.email },
+    });
+
+    if (!agent || !agent.password) {
+      throw new ValidationError('Agent password not set');
+    }
+
+    const isCurrentValid = await comparePassword(data.currentPassword, agent.password);
+    if (!isCurrentValid) {
+      throw new ValidationError('password not correct');
+    }
+
+    const hashed = await hashPassword(data.newPassword);
+
+    await client.agent.update({
+      where: { id: agent.id },
+      data: { password: hashed },
+    });
+
+    await prisma.userCredential.upsert({
+      where: { userId: agentUserId },
+      update: { passwordHash: hashed, lastPasswordChange: new Date() },
+      create: { userId: agentUserId, passwordHash: hashed },
+    });
+
+    await prisma.session.updateMany({
+      where: { userId: agentUserId, isActive: true },
+      data: { isActive: false },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
   // STEP 1: Verify BVN and return ONLY verification token
   async verifyBvnForSignup(bvn: string): Promise<{
     verificationToken: string;
