@@ -58,6 +58,13 @@ WorkflowRouter.get(
   workflowController.actions
 );
 
+WorkflowRouter.get(
+  "/actions/export",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "export" }),
+  workflowController.exportActionsCsv
+);
+
 /**
  * @swagger
  * /api/admin/workflow/templates:

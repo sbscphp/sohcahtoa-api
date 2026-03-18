@@ -22,21 +22,21 @@ class AdminTransactionsController {
   listBuy = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const result = await adminTransactionsService.listTransactions({ ...req.query, tab: "buy" }, page, limit);
+    const result = await adminTransactionsService.listBuyTransactions(req.query, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
   listSell = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const result = await adminTransactionsService.listTransactions({ ...req.query, tab: "sell" }, page, limit);
+    const result = await adminTransactionsService.listSellTransactions(req.query, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
   listReceive = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const result = await adminTransactionsService.listTransactions({ ...req.query, tab: "receive" }, page, limit);
+    const result = await adminTransactionsService.listReceiveTransactions(req.query, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
@@ -122,6 +122,44 @@ class AdminTransactionsController {
       resourceType: "TRANSACTION",
       resourceId: req.params.id,
       reason: req.body?.reason,
+    });
+    res.json(successResponse(result));
+  });
+
+  approveDocument = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminTransactionsService.approveTransactionDocument(
+      req.params.id,
+      req.params.documentId,
+      adminId,
+      req.body?.notes
+    );
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.DOCUMENT_APPROVE,
+      actionLabel: "Approve transaction document",
+      resourceType: "TRANSACTION_DOCUMENT",
+      resourceId: req.params.documentId,
+      metadata: { transactionId: req.params.id, notes: req.body?.notes },
+    });
+    res.json(successResponse(result));
+  });
+
+  requestMoreInfoOnDocument = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminTransactionsService.requestMoreInfoOnTransactionDocument(
+      req.params.id,
+      req.params.documentId,
+      adminId,
+      req.body?.comment
+    );
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.COMPLIANCE_REVIEW,
+      actionLabel: "Request more information on document review",
+      resourceType: "TRANSACTION_DOCUMENT",
+      resourceId: req.params.documentId,
+      metadata: { transactionId: req.params.id, comment: req.body?.comment },
     });
     res.json(successResponse(result));
   });
