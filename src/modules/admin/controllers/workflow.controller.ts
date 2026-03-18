@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, streamCsv } from "../../../shared/utils";
 import { workflowService } from "../services/workflow.service";
 
 class WorkflowController {
@@ -14,6 +14,27 @@ class WorkflowController {
     const limit = parseInt(req.query.limit as string) || 20;
     const result = await workflowService.list(req.query as any, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
+  });
+
+  exportActionsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const result = await workflowService.list(req.query as any, 1, 10_000);
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "workflow-actions.csv",
+      [
+        { header: "ID", select: (r: any) => r.id || "" },
+        { header: "Module", select: (r: any) => r.module || "" },
+        { header: "Workflow Action", select: (r: any) => r.workflowAction || "" },
+        { header: "Action Needed", select: (r: any) => r.actionNeeded || "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Date Initiated", select: (r: any) => (r.dateInitiated ? new Date(r.dateInitiated).toISOString() : "") },
+        { header: "Escalation Minutes", select: (r: any) => r.escalationMinutes ?? "" },
+        { header: "Title", select: (r: any) => r.title || "" },
+        { header: "Subtype", select: (r: any) => r.subtype || "" },
+      ],
+      rows as any[]
+    );
   });
 
   createTemplate = asyncHandler(async (req: Request, res: Response) => {
