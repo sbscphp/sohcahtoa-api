@@ -145,6 +145,54 @@ class AgentTransactionController {
       next(error);
     }
   }
+
+  async recordDisbursement(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) {
+        throw new ValidationError("Authentication required");
+      }
+
+      const { transactionId } = req.params;
+      const { disbursementMethod, totalAmount, notes } = req.body as {
+        disbursementMethod?: string;
+        totalAmount?: string | number;
+        notes?: string;
+      };
+      const file = req.file as Express.Multer.File | undefined;
+
+      if (!transactionId) {
+        throw new ValidationError("transactionId is required");
+      }
+      if (!disbursementMethod) {
+        throw new ValidationError("disbursementMethod is required");
+      }
+      if (!totalAmount) {
+        throw new ValidationError("totalAmount is required");
+      }
+      if (!file) {
+        throw new ValidationError("paymentReceipt file is required");
+      }
+
+      const amountNumber =
+        typeof totalAmount === "number" ? totalAmount : Number(totalAmount);
+      if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+        throw new ValidationError("totalAmount must be a positive number");
+      }
+
+      const result = await (agentTransactionService as any).recordDisbursement(authUser.userId, {
+        transactionId,
+        disbursementMethod: disbursementMethod as any,
+        totalAmount: amountNumber,
+        notes,
+        receiptFile: file,
+      });
+
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 const agentTransactionController = new AgentTransactionController();

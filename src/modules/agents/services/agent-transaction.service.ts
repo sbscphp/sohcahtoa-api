@@ -1,6 +1,9 @@
 import { getDatabase } from "../../../config/database";
 import { ValidationError, NotFoundError } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
+import { DisbursementMethod, TransactionStatus, TransactionStep } from "../../../shared/types/transaction";
+import { uploadFile } from "../../../shared/utils/file-upload";
+import { generateId } from "../../../shared/utils";
 import { createLogger } from "../../../shared/utils/logger";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
 
@@ -73,6 +76,14 @@ export interface AgentCreateTransactionPayload {
     scheduledPickupDate?: string;
     scheduledPickupTime?: string;
   };
+}
+
+export interface AgentRecordDisbursementInput {
+  transactionId: string;
+  disbursementMethod: DisbursementMethod;
+  totalAmount: number;
+  notes?: string;
+  receiptFile: Express.Multer.File;
 }
 
 class AgentTransactionService {
@@ -188,6 +199,141 @@ class AgentTransactionService {
     ]);
 
     return { total, pending, settled, rejected };
+  }
+
+  async recordDisbursement(
+    agentUserId: string,
+    input: AgentRecordDisbursementInput
+  ) {
+    if (!input.transactionId) {
+      throw new ValidationError("transactionId is required");
+    }
+    if (!input.disbursementMethod) {
+      throw new ValidationError("disbursementMethod is required");
+    }
+    if (!input.totalAmount || input.totalAmount <= 0) {
+      throw new ValidationError("totalAmount must be a positive number");
+    }
+    if (!input.receiptFile) {
+      throw new ValidationError("payment receipt file is required");
+    }
+
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await (prisma as any).transaction.findFirst({
+      where: { id: input.transactionId, createdByAgentId: agent.id },
+      select: {
+        id: true,
+        status: true,
+        currentStep: true,
+        currency: true,
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundError("Transaction not found or you are not the creating agent");
+    }
+
+    if (
+      transaction.status === TransactionStatus.COMPLETED ||
+      transaction.status === TransactionStatus.CANCELLED
+    ) {
+      throw new ValidationError("Cannot record disbursement for a completed or cancelled transaction");
+    }
+
+    if (transaction.status !== TransactionStatus.APPROVED) {
+      throw new ValidationError("Disbursement can only be recorded for APPROVED transactions");
+    }
+
+    const uploaded = await uploadFile(input.receiptFile, {
+      folder: "agent-disbursements",
+    });
+
+    const result = await (prisma as any).$transaction(async (tx: any) => {
+      const updatedTransaction = await tx.transaction.update({
+        where: { id: input.transactionId },
+        data: {
+          disbursementMethod: input.disbursementMethod,
+          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          currentStep: TransactionStep.DISBURSEMENT as any,
+          updatedAt: new Date(),
+          history: {
+            create: {
+              action: "DISBURSEMENT_RECORDED",
+              notes: input.notes,
+              newValue: JSON.stringify({
+                method: input.disbursementMethod,
+                amount: input.totalAmount,
+                receiptUrl: uploaded.fileUrl,
+              }),
+            },
+          },
+        },
+        include: {
+          history: false,
+        },
+      });
+
+      const existingOutbound = await tx.outboundSettlement.findFirst({
+        where: { transactionId: input.transactionId },
+      });
+
+      let outbound;
+      if (existingOutbound) {
+        outbound = await tx.outboundSettlement.update({
+          where: { id: existingOutbound.id },
+          data: {
+            amount: input.totalAmount as any,
+            currency: transaction.currency,
+            paymentMethod: input.disbursementMethod,
+            paymentProof: uploaded.fileUrl,
+            notes: input.notes,
+            status: "COMPLETED",
+            metadata: {
+              ...(existingOutbound.metadata || {}),
+              receiptFile: {
+                fileUrl: uploaded.fileUrl,
+                fileName: uploaded.fileName,
+                fileSize: uploaded.fileSize,
+                mimeType: uploaded.mimeType,
+              },
+            },
+          },
+        });
+      } else {
+        outbound = await tx.outboundSettlement.create({
+          data: {
+            batchId: null,
+            transactionId: input.transactionId,
+            referenceNumber: generateId(),
+            amount: input.totalAmount as any,
+            currency: transaction.currency,
+            status: "COMPLETED",
+            beneficiaryName: "",
+            paymentMethod: input.disbursementMethod,
+            notes: input.notes,
+            paymentProof: uploaded.fileUrl,
+            initiatedBy: agent.id,
+            metadata: {
+              receiptFile: {
+                fileUrl: uploaded.fileUrl,
+                fileName: uploaded.fileName,
+                fileSize: uploaded.fileSize,
+                mimeType: uploaded.mimeType,
+              },
+            },
+          },
+        });
+      }
+
+      return {
+        transaction: updatedTransaction,
+        outboundSettlement: outbound,
+        paymentReceiptUrl: uploaded.fileUrl,
+      };
+    });
+
+    return result;
   }
 
   /**

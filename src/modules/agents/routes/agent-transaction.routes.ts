@@ -1,7 +1,7 @@
 import { Router } from "express";
 import agentTransactionController from "../controllers/agent-transaction.controller";
 import { authenticate, authorize } from "../../../shared/middleware";
-import { uploadMultipleDocuments } from "../../../shared/middleware/upload";
+import { uploadMultipleDocuments, uploadAgentDisbursementReceipt } from "../../../shared/middleware/upload";
 import { UserRole } from "../../../shared/types";
 
 const router: Router = Router();
@@ -402,5 +402,90 @@ router.post("/", agentTransactionController.createTransaction);
  *         description: Transaction not found or not created by this agent
  */
 router.post("/:transactionId/documents", uploadMultipleDocuments, agentTransactionController.uploadDocuments);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/disbursement/record:
+ *   post:
+ *     summary: Record disbursement for an agent-created transaction
+ *     description: |
+ *       Record that funds have been disbursed for a transaction created by the authenticated agent,
+ *       including disbursement method, total amount, optional notes, and an uploaded payment receipt file.
+ *       Only allowed when the transaction's createdByAgentId matches the agent.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Transaction ID (must be created by this agent)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - disbursementMethod
+ *               - totalAmount
+ *               - paymentReceipt
+ *             properties:
+ *               disbursementMethod:
+ *                 type: string
+ *                 enum: [BANK_TRANSFER, CASH_PICKUP, PREPAID_CARD, IMTO]
+ *                 description: Disbursement method used for this transaction
+ *               totalAmount:
+ *                 type: number
+ *                 description: Total amount disbursed (in NGN)
+ *                 example: 150000
+ *               notes:
+ *                 type: string
+ *                 description: Optional notes about the disbursement
+ *               paymentReceipt:
+ *                 type: string
+ *                 format: binary
+ *                 description: Proof-of-payment file (JPEG, PNG, WEBP, or PDF)
+ *     responses:
+ *       200:
+ *         description: Disbursement recorded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     transactionId:
+ *                       type: string
+ *                     disbursementMethod:
+ *                       type: string
+ *                     totalAmount:
+ *                       type: number
+ *                     paymentReceiptUrl:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     currentStep:
+ *                       type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.post(
+  "/:transactionId/disbursement/record",
+  uploadAgentDisbursementReceipt,
+  agentTransactionController.recordDisbursement
+);
 
 export default router;

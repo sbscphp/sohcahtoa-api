@@ -13,7 +13,65 @@ const AgentCustomerAuthRouter: Router = Router();
  *   description: BVN and OTP verification flow for agent-managed customer signup
  */
 // All routes require authenticated agent
-    AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
+AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
+
+/**
+ * @swagger
+ * /api/agent/auth/change-password:
+ *   post:
+ *     summary: Change agent password
+ *     description: >
+ *       Allows an authenticated agent to change their own password by providing the current password,
+ *       a new password, and a confirmation of the new password.
+ *     tags: [Agent Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *               - newPasswordConfirm
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: Agent's current password
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: New password (must meet existing password strength requirements)
+ *               newPasswordConfirm:
+ *                 type: string
+ *                 format: password
+ *                 description: Must match newPassword
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: Password updated successfully
+ *       400:
+ *         description: Validation error (incorrect current password, mismatch, or weak password)
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentCustomerAuthRouter.post('/change-password', authController.changeAgentPassword);
 /**
  * @swagger
  * /api/agent/customer-auth/verify-bvn:
