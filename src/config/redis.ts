@@ -9,36 +9,51 @@ export const initializeRedis = (): Redis => {
   if (!redisClient) {
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
+    logger.info(`Initializing Redis connection to: ${redisUrl}`);
+
     redisClient = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
       retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
+        if (times > 10) {
+          logger.error('Redis connection failed after 10 retries');
+          return null; // Stop retrying
+        }
+        const delay = Math.min(times * 100, 3000);
+        logger.info(`Redis retry attempt ${times}, waiting ${delay}ms`);
         return delay;
       },
       reconnectOnError: (err) => {
-        const targetError = 'READONLY';
-        if (err.message.includes(targetError)) {
-          // Only reconnect when the error contains "READONLY"
-          return true;
-        }
-        return false;
+        logger.warn('Redis reconnect on error:', err.message);
+        const targetErrors = ['READONLY', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND'];
+        return targetErrors.some(error => err.message.includes(error));
       },
+      lazyConnect: false,
+      showFriendlyErrorStack: true,
     });
 
     redisClient.on('connect', () => {
       logger.info('Redis connected successfully');
     });
 
+    redisClient.on('ready', () => {
+      logger.info('Redis is ready to accept commands');
+    });
+
     redisClient.on('error', (err) => {
-      logger.error('Redis connection error:', err);
+      logger.error('Redis connection error:', err.message);
     });
 
     redisClient.on('close', () => {
       logger.warn('Redis connection closed');
     });
 
-    redisClient.on('reconnecting', () => {
-      logger.info('Redis reconnecting...');
+    redisClient.on('reconnecting', (delay: number) => {
+      logger.info(`Redis reconnecting in ${delay}ms...`);
+    });
+
+    redisClient.on('end', () => {
+      logger.warn('Redis connection ended');
     });
   }
 

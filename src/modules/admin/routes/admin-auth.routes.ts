@@ -1,15 +1,15 @@
 import { Router } from "express";
 import { adminAuthController } from "../controllers/admin-auth.controller";
 import { addUserValidationStore, validate } from "../validations/user-management.validation";
-import { authRateLimiter } from "../../../shared/middleware";
+import { authenticate } from "../../../shared/middleware";
 
 export const AdminAuthRouter: Router = Router();
 
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin endpoints
+ *   name: admin-auth
+ *   description: Admin authentication endpoints
  */
 
 /**
@@ -17,7 +17,7 @@ export const AdminAuthRouter: Router = Router();
  * /api/admin/auth/login:
  *   post:
  *     summary: Initiate admin login (OTP)
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -37,14 +37,14 @@ export const AdminAuthRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AdminAuthRouter.post("/login", authRateLimiter, adminAuthController.login);
+AdminAuthRouter.post("/login", adminAuthController.login);
 
 /**
  * @swagger
  * /api/admin/auth/verify-login:
  *   post:
  *     summary: Verify OTP and complete login
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -66,14 +66,14 @@ AdminAuthRouter.post("/login", authRateLimiter, adminAuthController.login);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-AdminAuthRouter.post("/verify-login", authRateLimiter, adminAuthController.verifyLogin);
+AdminAuthRouter.post("/verify-login",  adminAuthController.verifyLogin);
 
 /**
  * @swagger
  * /api/admin/auth/forgot-password:
  *   post:
  *     summary: Request password reset OTP
- *     tags: [Admin]
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -91,30 +91,123 @@ AdminAuthRouter.post("/verify-login", authRateLimiter, adminAuthController.verif
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/forgot-password", authRateLimiter, adminAuthController.forgotPassword);
+AdminAuthRouter.post("/forgot-password",  adminAuthController.forgotPassword);
 
 /**
  * @swagger
- * /api/admin/auth/reset-password:
+ * /api/admin/auth/forgot-password/resend:
  *   post:
- *     summary: Reset password using OTP
- *     tags: [Admin]
+ *     summary: Resend password reset OTP
+ *     tags: [admin-auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [otp, password]
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent if account exists
+ */
+
+/**
+ * @swagger
+ * /api/admin/auth/otp/validate:
+ *   post:
+ *     summary: Validate OTP for admin password reset and receive resetToken
+ *     tags: [admin-auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp]
  *             properties:
  *               otp:
  *                 type: string
- *               password:
- *                 type: string
  *     responses:
  *       200:
- *         description: Password reset successful
+ *         description: OTP validated; resetToken issued
  *       400:
  *         $ref: '#/components/responses/ValidationError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
  */
-AdminAuthRouter.post("/reset-password", authRateLimiter, adminAuthController.resetPassword);
+AdminAuthRouter.post("/otp/validate",  adminAuthController.validateResetOtp);
+
+/**
+ * @swagger
+ * /api/admin/auth/reset-password:
+ *   post:
+ *     summary: Submit new admin password using resetToken
+ *     tags: [admin-auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [resetToken, password]
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AdminAuthRouter.post("/reset-password",  adminAuthController.submitNewPassword);
+AdminAuthRouter.post("/forgot-password/resend", adminAuthController.resendForgotPassword);
+
+/**
+ * @swagger
+ * /api/admin/auth/resend-otp:
+ *   post:
+ *     summary: Resend login OTP to admin email
+ *     tags: [admin-auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AdminAuthRouter.post("/resend-otp", adminAuthController.resendOtp);
+
+/**
+ * @swagger
+ * /api/admin/auth/logout:
+ *   post:
+ *     summary: Logout current admin session
+ *     tags: [admin-auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminAuthRouter.post("/logout", authenticate, adminAuthController.logout);

@@ -2,29 +2,11 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger, ForbiddenError, NotFoundError } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared/types";
+import { hashPassword } from "../../../shared/utils/password";
+import { auditTrailService } from "../services/audit-trail.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
-
-  private async logAdminAction(params: {
-    adminId: string;
-    actionType: any;  // ActionType enum from Prisma
-    resourceType: string;
-    resourceId: string;
-    reason?: string;
-    metadata?: any;
-  }) {
-    return prisma.adminAction.create({
-      data: {
-        adminId: params.adminId,
-        actionType: params.actionType,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId,
-        reason: params.reason,
-        metadata: params.metadata,
-      },
-    });
-  }
 
   async getDashboard() {
     const now = new Date();
@@ -143,13 +125,6 @@ export class AdminService {
   }
 
   async confirmDeposit(transactionId: string, adminId: string, paymentReference: string, proofOfPayment?: string) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "DEPOSIT_CONFIRM",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: { paymentReference, proofOfPayment },
-    });
 
     const settlement = await prisma.settlement.upsert({
       where: { transactionId },
@@ -205,14 +180,6 @@ export class AdminService {
   }
 
   async getPendingApprovals(adminId: string, page = 1, limit = 20) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "PENDING_APPROVALS_VIEW",
-      resourceType: "QUEUE",
-      resourceId: "PENDING_APPROVALS",
-      metadata: { page, limit },
-    });
-
     const skip = (page - 1) * limit;
     const [transactions, total] = await Promise.all([
       prisma.transaction.findMany({
@@ -254,6 +221,23 @@ export class AdminService {
     };
   }
 
+  async getAdminActionsAll(adminId: string) {
+    const actions = await prisma.adminAction.findMany({
+      where: { adminId },
+      orderBy: { performedAt: "desc" },
+      select: {
+        id: true,
+        performedAt: true,
+        actionLabel: true,
+        actionType: true,
+        resourceType: true,
+        resourceId: true,
+        status: true,
+      },
+    } as any);
+    return actions;
+  }
+
   async getAuditLog(filters: any, page = 1, limit = 50) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -291,6 +275,61 @@ export class AdminService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async seedAdminDefaults(params?: { email?: string; password?: string; name?: string }) {
+    const adminEmail = params?.email || process.env.SEED_ADMIN_EMAIL || "sohcahtoa@yopmail.com";
+    const adminPassword = params?.password || process.env.SEED_ADMIN_PASSWORD || "password@1234";
+    const fullName = params?.name || process.env.SEED_ADMIN_NAME || "Local Super Admin";
+    const branchName = "Head Office";
+    const departmentName = "Administration";
+
+    const department =
+      (await prisma.department.findFirst({ where: { name: departmentName } })) ||
+      (await prisma.department.create({
+        data: {
+          name: departmentName,
+          description: "Default administration department",
+          branch: branchName,
+          isDefault: true,
+          isActive: true,
+        },
+      }));
+
+    let defaultRole = await prisma.role.findFirst({ where: { isDefault: true } });
+    if (!defaultRole) {
+      defaultRole = await prisma.role.create({
+        data: {
+          name: "SUPER_ADMIN",
+          description: "Default super admin role",
+          permissions: [],
+          isDefault: true,
+          isActive: true,
+          branch: branchName,
+          departmentId: department.id,
+        },
+      });
+    }
+
+    const existing = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
+    if (!existing) {
+      const passwordHash = await hashPassword(adminPassword);
+      const admin = await prisma.adminUser.create({
+        data: {
+          email: adminEmail,
+          fullName,
+          phoneNumber: "08000000000",
+          branch: branchName,
+          departmentId: department.id,
+          roleId: defaultRole.id,
+          password: passwordHash,
+          isActive: true,
+        },
+      });
+      return { created: true, admin: { id: admin.id, email: admin.email, fullName: admin.fullName }, role: { id: defaultRole.id, name: defaultRole.name }, department: { id: department.id, name: department.name } };
+    } else {
+      return { created: false, admin: { id: existing.id, email: existing.email, fullName: existing.fullName }, role: { id: defaultRole.id, name: defaultRole.name }, department: { id: department.id, name: department.name } };
+    }
   }
 }
 

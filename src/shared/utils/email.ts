@@ -133,6 +133,21 @@ class EmailService {
     return result.success;
   }
 
+  async sendPasswordResetConfirmationEmail(email: string, firstName?: string): Promise<boolean> {
+    const subject = 'Password Reset Successful - FX Platform';
+    const html = this.getPasswordResetConfirmationTemplate(firstName || 'User');
+    const text = `Your password has been successfully reset. If you did not perform this action, please contact our support team immediately.`;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject,
+      text,
+      html,
+    });
+
+    return result.success;
+  }
+
 
   private getOtpSubject(purpose: string): string {
     switch (purpose) {
@@ -176,7 +191,7 @@ class EmailService {
             <div style="background: white; padding: 20px; text-align: center; border-radius: 5px; margin: 20px 0; border: 2px dashed #667eea;">
               <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #667eea;">${otp}</span>
             </div>
-            <p style="color: #666; font-size: 14px;">This code will expire in <strong>10 minutes</strong>.</p>
+            <p style="color: #666; font-size: 14px;">This code will expire in <strong>5 minutes</strong>.</p>
             <p style="color: #666; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #999; font-size: 12px; text-align: center;">
@@ -306,6 +321,46 @@ class EmailService {
 
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
 
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              FX Platform | Secure Foreign Exchange Transactions
+            </p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  private getPasswordResetConfirmationTemplate(firstName: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Password Reset Successful</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0;">Password Reset Successful</h1>
+          </div>
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hello ${firstName}!</h2>
+            <p>Your password has been successfully reset.</p>
+            <div style="background: #d4edda; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745; margin: 20px 0;">
+              <p style="margin: 0; color: #155724; font-size: 14px;">
+                <strong>✓ Success:</strong> You can now log in with your new password.
+              </p>
+            </div>
+            <p>For your security, all active sessions have been logged out. You'll need to log in again with your new password.</p>
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107; margin: 20px 0;">
+              <p style="margin: 0; color: #856404; font-size: 14px;">
+                <strong>Security Notice:</strong> If you did not perform this password reset, please contact our support team immediately. Your account may be compromised.
+              </p>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="#" style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Login Now</a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #999; font-size: 12px; text-align: center;">
               FX Platform | Secure Foreign Exchange Transactions
             </p>

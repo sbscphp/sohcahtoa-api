@@ -1,0 +1,1909 @@
+{
+  "info": {
+    "_postman_id": "6864b64f-3e2d-48c0-b9a7-d51d9f5859a3",
+    "name": "ProvidusBank - Virtual Payment Service Endpoint",
+    "description": "This end point is created to allow merchants using the ProvidusBank's virtual payment service to be able to update account details as well as generate dynamic account numbers",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "13771554",
+    "_collection_link": "https://go.postman.co/collection/13771554-6864b64f-3e2d-48c0-b9a7-d51d9f5859a3?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Update Account Name",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342"
+          },
+          {
+            "key": "Client-Id",
+            "value": "323535t341g2452452yt34547342"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPUpdateAccountName",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPUpdateAccountName"
+          ]
+        },
+        "description": "Endpoint update account name; this can be used when a virtual account is re-assigned and there is need to change the name of the account.\n\n#### Expected Sample Response\n\n{\n    \"requestSuccessful\": true,\n    \"responseMessage\": \"Successful\",\n    \"responseCode\": \"00\"\n}"
+      },
+      "response": [
+        {
+          "name": "Update Account Name",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "V2dfsdf3463463gASSWW",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "2314141241241DASQWW12233444",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_number\":\"9919286022\",\n\t\"account_name\":\"CustomerWize\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPUpdateAccountName",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPUpdateAccountName"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "94",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Thu, 11 Feb 2021 18:31:10 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQVXBkYXRlQWNjb3VudE5hbWU=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "423",
+          "body": "{\"requestSuccessful\":false,\"responseMessage\":\"Error Completing Operation\",\"responseCode\":\"03\"}"
+        },
+        {
+          "name": "Update Account Name.",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_number\":\"9919286022\",\n\t\"account_name\":\"LazoWize\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPUpdateAccountName",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPUpdateAccountName"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "87",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 08:59:54 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQVXBkYXRlQWNjb3VudE5hbWU=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "779",
+          "body": "{\"requestSuccessful\":true,\"responseMessage\":\"OPERATION SUCCESSFUL\",\"responseCode\":\"00\"}"
+        },
+        {
+          "name": "Update Account Name.",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://bank_url/api/PiPUpdateAccountName",
+              "protocol": "http",
+              "host": [
+                "bank_url"
+              ],
+              "path": [
+                "api",
+                "PiPUpdateAccountName"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "87",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 08:59:54 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQVXBkYXRlQWNjb3VudE5hbWU=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "779",
+          "body": "{\"requestSuccessful\":true,\"responseMessage\":\"OPERATION SUCCESSFUL\",\"responseCode\":\"00\"}"
+        }
+      ]
+    },
+    {
+      "name": "Create Dynamic AccountNumber",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342"
+          },
+          {
+            "key": "Client-Id",
+            "value": "323535t341g2452452yt34547342"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPCreateDynamicAccountNumber",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPCreateDynamicAccountNumber"
+          ]
+        },
+        "description": "This method is to create dynamic account number. \n\n#### Expected Sample Response\n\n{\n    \"account_number\": \"9900000001\",\n    \"account_name\": \"CharlyWize(Adewale)\",\n    \"requestSuccessful\": true,\n    \"responseMessage\": \"Successful\",\n    \"responseCode\": \"00\",\n    \"initiationTranRef\": \"352352352325\"\n}"
+      },
+      "response": [
+        {
+          "name": "Create Dynamic AccountNumber",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_name\":\"CustomerWize\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPCreateDynamicAccountNumber",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPCreateDynamicAccountNumber"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "150",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Thu, 11 Feb 2021 18:36:19 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQQ3JlYXRlRHluYW1pY0FjY291bnROdW1iZXI=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "339",
+          "body": "{\"account_number\":\"\",\"account_name\":\"\",\"requestSuccessful\":false,\"responseMessage\":\"Authentication Failed\",\"responseCode\":\"05\",\"initiationTranRef\":\"\"}"
+        },
+        {
+          "name": "Create Dynamic AccountNumber",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_name\":\"CustoWize\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPCreateDynamicAccountNumber",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPCreateDynamicAccountNumber"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "219",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 08:57:29 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQQ3JlYXRlRHluYW1pY0FjY291bnROdW1iZXI=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "17313",
+          "body": "{\"account_number\":\"9919286022\",\"account_name\":\"EVERYDAYTRANSACT-(custowize)\",\"requestSuccessful\":true,\"responseMessage\":\"OPERATION SUCCESSFUL\",\"responseCode\":\"00\",\"initiationTranRef\":\"everydaytransact-2102120957317052\"}"
+        },
+        {
+          "name": "Create Dynamic AccountNumber",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://bank_url/api/PiPCreateDynamicAccountNumber",
+              "protocol": "http",
+              "host": [
+                "bank_url"
+              ],
+              "path": [
+                "api",
+                "PiPCreateDynamicAccountNumber"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "219",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 08:57:29 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQQ3JlYXRlRHluYW1pY0FjY291bnROdW1iZXI=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "17313",
+          "body": "{\"account_number\":\"9919286022\",\"account_name\":\"EVERYDAYTRANSACT-(custowize)\",\"requestSuccessful\":true,\"responseMessage\":\"OPERATION SUCCESSFUL\",\"responseCode\":\"00\",\"initiationTranRef\":\"everydaytransact-2102120957317052\"}"
+        }
+      ]
+    },
+    {
+      "name": "verify Transaction",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Auth-Signature",
+            "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342"
+          },
+          {
+            "key": "Client-Id",
+            "value": "323535t341g2452452yt34547342"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPverifyTransaction?session_id=204210202000000500002",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPverifyTransaction"
+          ],
+          "query": [
+            {
+              "key": "session_id",
+              "value": "204210202000000500002"
+            }
+          ]
+        },
+        "description": "This endpoint is to verify a transaction by supplying the session id and credentials."
+      },
+      "response": [
+        {
+          "name": "verify Transaction",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPverifyTransaction?session_id=204210202000000500001",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPverifyTransaction"
+              ],
+              "query": [
+                {
+                  "key": "session_id",
+                  "value": "204210202000000500001"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "254",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 20:00:01 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQdmVyaWZ5VHJhbnNhY3Rpb24=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "2614",
+          "body": "{\"sessionId\":\"204210202000000500001\",\"initiationTranRef\":\"\",\"accountNumber\":\"9919267764\",\"tranRemarks\":\"\",\"transactionAmount\":44.0,\"settledAmount\":42.0,\"feeAmount\":2.0,\"vatAmount\":0.0,\"currency\":\"NGN\",\"channelId\":\"\",\"tranDateTime\":\"2/11/2021 6:08:34 PM\"}"
+        },
+        {
+          "name": "verify Transaction",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPverifyTransaction?session_id=204210202000000500002",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPverifyTransaction"
+              ],
+              "query": [
+                {
+                  "key": "session_id",
+                  "value": "204210202000000500002"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "222",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 20:07:48 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQdmVyaWZ5VHJhbnNhY3Rpb24=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "202",
+          "body": "{\"sessionId\":\"\",\"initiationTranRef\":\"\",\"accountNumber\":\"\",\"tranRemarks\":\"Transaction not found!!!\",\"transactionAmount\":0.0,\"settledAmount\":0.0,\"feeAmount\":0.0,\"vatAmount\":0.0,\"currency\":\"\",\"channelId\":\"\",\"tranDateTime\":\"\"}"
+        }
+      ]
+    },
+    {
+      "name": "Blacklist Account",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342"
+          },
+          {
+            "key": "Client-Id",
+            "value": "323535t341g2452452yt34547342"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n\t\"account_number\":\"9919279789\",\n\t\"blacklist_flg\":1\n}"
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPBlacklistAccount",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPBlacklistAccount"
+          ]
+        },
+        "description": "This endpoint is for blacklisting an account.\n\n\n#### Expected Sample Response\n\n{\n    \"requestSuccessful\": true,\n    \"responseMessage\": \"account blacklisted successfully\",\n    \"responseCode\": \"00\"\n}"
+      },
+      "response": [
+        {
+          "name": "Blacklist Account",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_number\":\"9919267764\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPBlacklistAccount",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPBlacklistAccount"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "101",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 20:04:55 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQQmxhY2tsaXN0QWNjb3VudA==?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "958",
+          "body": "{\"requestSuccessful\":false,\"responseMessage\":\"account number already blcklisted\",\"responseCode\":\"02\"}"
+        },
+        {
+          "name": "Blacklist Account",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "323535t341g2452452yt34547342:323535t341g2452452yt34547342",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "323535t341g2452452yt34547342",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_number\":\"9919269524\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPBlacklistAccount",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPBlacklistAccount"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "99",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Fri, 12 Feb 2021 20:07:19 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQQmxhY2tsaXN0QWNjb3VudA==?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "327",
+          "body": "{\"requestSuccessful\":true,\"responseMessage\":\"account blacklisted successfully\",\"responseCode\":\"00\"}"
+        }
+      ]
+    },
+    {
+      "name": "Create Reserved Account Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Client-Id",
+            "value": "dGVzdF9Qcm92aWR1cw=="
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPCreateReservedAccountNumber",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPCreateReservedAccountNumber"
+          ]
+        },
+        "description": "This service can be used to create static/reserved accounts."
+      },
+      "response": [
+        {
+          "name": "Create Reserved Account Number",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "warning": ""
+              },
+              {
+                "key": "Client-Id",
+                "value": "dGVzdF9Qcm92aWR1cw==",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"account_name\":\"lemuel\",\n\t\"bvn\":\"\"\n\t\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.210:8088/appdevapi/api/PiPCreateReservedAccountNumber",
+              "protocol": "http",
+              "host": [
+                "192",
+                "168",
+                "1",
+                "210"
+              ],
+              "port": "8088",
+              "path": [
+                "appdevapi",
+                "api",
+                "PiPCreateReservedAccountNumber"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "179",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Thu, 25 Feb 2021 18:48:04 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/8.5",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "10997",
+          "body": "{\"account_number\":\"9977573399\",\"account_name\":\"MERCHANT(lemuel)\",\"bvn\":\"\",\"requestSuccessful\":true,\"responseMessage\":\"Reserved Account Generated Successfully\",\"responseCode\":\"00\"}"
+        }
+      ]
+    },
+    {
+      "name": "verify Transaction by Session Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Client-Id",
+            "value": "dGVzdF9Qcm92aWR1cw=="
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPverifyTransaction_sessionid?session_id=204210202000000700001",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPverifyTransaction_sessionid"
+          ],
+          "query": [
+            {
+              "key": "session_id",
+              "value": "204210202000000700001"
+            }
+          ]
+        },
+        "description": "This is the end point to verify transactions by passing the session id"
+      },
+      "response": [
+        {
+          "name": "verify Transaction by Session Id",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Client-Id",
+                "value": "dGVzdF9Qcm92aWR1cw==",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPverifyTransaction?session_id=204210202000000700001",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPverifyTransaction"
+              ],
+              "query": [
+                {
+                  "key": "session_id",
+                  "value": "204210202000000700001"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "363",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Mon, 01 Mar 2021 09:43:56 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQdmVyaWZ5VHJhbnNhY3Rpb24=?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "445",
+          "body": "{\"sessionId\":\"204210202000000700001\",\"initiationTranRef\":\"\",\"accountNumber\":\"9919267764\",\"tranRemarks\":\"\",\"transactionAmount\":10593.0,\"settledAmount\":0.0,\"feeAmount\":0.0,\"vatAmount\":0.0,\"currency\":\"NGN\",\"settlementId\":\"204210202000000700001\",\"sourceAccountNumber\":\"\",\"sourceAccountName\":\"\",\"sourceBankName\":\"\",\"channelId\":\"\",\"tranDateTime\":\"2/13/2021 4:11:09 PM\"}"
+        }
+      ]
+    },
+    {
+      "name": "verify Transaction by Settlement Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Client-Id",
+            "value": "dGVzdF9Qcm92aWR1cw=="
+          },
+          {
+            "key": "X-Auth-Signature",
+            "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "http://bank_url/api/PiPverifyTransaction_settlementid?settlement_id=204210202000000700001",
+          "protocol": "http",
+          "host": [
+            "bank_url"
+          ],
+          "path": [
+            "api",
+            "PiPverifyTransaction_settlementid"
+          ],
+          "query": [
+            {
+              "key": "settlement_id",
+              "value": "204210202000000700001"
+            }
+          ]
+        },
+        "description": "This is an enpoint to verify transactions by passing the settlement id."
+      },
+      "response": [
+        {
+          "name": "http://localhost:54356/api/PiPverifyTransaction_settlementid?settlement_id=204210202000000700001",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Client-Id",
+                "value": "dGVzdF9Qcm92aWR1cw==",
+                "warning": ""
+              },
+              {
+                "key": "X-Auth-Signature",
+                "value": "BE09BEE831CF262226B426E39BD1092AF84DC63076D4174FAC78A2261F9A3D6E59744983B8326B69CDF2963FE314DFC89635CFA37A40596508DD6EAAB09402C7",
+                "warning": ""
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://localhost:54356/api/PiPverifyTransaction_settlementid?settlement_id=204210202000000700001",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "54356",
+              "path": [
+                "api",
+                "PiPverifyTransaction_settlementid"
+              ],
+              "query": [
+                {
+                  "key": "settlement_id",
+                  "value": "204210202000000700001"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "name": "access-control-allow-headers",
+              "key": "access-control-allow-headers",
+              "value": "Content-Type",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-methods",
+              "key": "access-control-allow-methods",
+              "value": "GET, POST, PUT, DELETE, OPTIONS",
+              "description": ""
+            },
+            {
+              "name": "access-control-allow-origin",
+              "key": "access-control-allow-origin",
+              "value": "*",
+              "description": ""
+            },
+            {
+              "name": "cache-control",
+              "key": "cache-control",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "content-length",
+              "key": "content-length",
+              "value": "363",
+              "description": ""
+            },
+            {
+              "name": "content-type",
+              "key": "content-type",
+              "value": "application/json; charset=utf-8",
+              "description": ""
+            },
+            {
+              "name": "date",
+              "key": "date",
+              "value": "Mon, 01 Mar 2021 09:48:09 GMT",
+              "description": ""
+            },
+            {
+              "name": "expires",
+              "key": "expires",
+              "value": "-1",
+              "description": ""
+            },
+            {
+              "name": "pragma",
+              "key": "pragma",
+              "value": "no-cache",
+              "description": ""
+            },
+            {
+              "name": "server",
+              "key": "server",
+              "value": "Microsoft-IIS/10.0",
+              "description": ""
+            },
+            {
+              "name": "x-aspnet-version",
+              "key": "x-aspnet-version",
+              "value": "4.0.30319",
+              "description": ""
+            },
+            {
+              "name": "x-powered-by",
+              "key": "x-powered-by",
+              "value": "ASP.NET",
+              "description": ""
+            },
+            {
+              "name": "x-sourcefiles",
+              "key": "x-sourcefiles",
+              "value": "=?UTF-8?B?RTpcREVWXEFwcERldlJlc3RBUElcUHJvdmlkdXNDZ2F0ZVxhcGlcUGlQdmVyaWZ5VHJhbnNhY3Rpb25fc2V0dGxlbWVudGlk?=",
+              "description": ""
+            }
+          ],
+          "cookie": [],
+          "responseTime": "148",
+          "body": "{\"sessionId\":\"204210202000000700001\",\"initiationTranRef\":\"\",\"accountNumber\":\"9919267764\",\"tranRemarks\":\"\",\"transactionAmount\":10593.0,\"settledAmount\":0.0,\"feeAmount\":0.0,\"vatAmount\":0.0,\"currency\":\"NGN\",\"settlementId\":\"204210202000000700001\",\"sourceAccountNumber\":\"\",\"sourceAccountName\":\"\",\"sourceBankName\":\"\",\"channelId\":\"\",\"tranDateTime\":\"2/13/2021 4:11:09 PM\"}"
+        }
+      ]
+    }
+  ]
+}

@@ -6,10 +6,24 @@ import { errorHandler } from './shared/middleware/error-handler';
 import { requestLogger } from './shared/middleware/request-logger';
 import { correlationIdMiddleware } from './shared/middleware/correlation-id';
 import { createLogger } from './shared/utils/logger';
+import { UPLOAD_LIMITS } from './shared/config/upload-limits';
 import authRoutes from './modules/auth/routes/auth.routes';
-import transactionRoutes from './modules/transactions/routes/transaction.routes';
 import paymentRoutes from './modules/payments/routes/payment.routes';
 import adminRoutes from './modules/admin/routes/admin.routes';
+import customerTransactionRoutes from './modules/customer/routes/customer-transaction.routes';
+import AgentCustomerRouter from './modules/agents/routes/agent-customer.routes';
+import AgentCustomerAuthRouter from './modules/agents/routes/agent-customer-auth.routes';
+import AgentAuthRouter from './modules/agents/routes/agent-auth.routes';
+import AgentTransactionRouter from './modules/agents/routes/agent-transaction.routes';
+import customerSupportRoutes from './modules/customer/routes/customer-support.routes';
+import { DocumentRouter } from './modules/documents/routes/document.routes';
+import { AuditRouter } from './modules/audit/routes/audit.routes';
+import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
+import notificationRoutes from './modules/notifications/routes/notification.routes';
+import providusWebhookRoutes from './modules/payments/routes/providus-webhook.routes';
+import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.routes';
+import customerVirtualAccountRoutes from './modules/customer/routes/customer-virtual-account.routes';
+import settlementManagementRoutes from './modules/admin/routes/settlement-management.routes';
 
 const logger = createLogger('app');
 
@@ -17,19 +31,36 @@ export const createApp = async (): Promise<Application> => {
   const app = express();
 
   // Security middleware
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+          scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+          imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+        },
+      },
+    })
+  );
   app.use(cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-    credentials: true,
+    origin: '*',
+    // origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
+    // credentials: true,
   }));
 
   // Body parsing middleware
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.json({ limit: UPLOAD_LIMITS.JSON_BODY }));
+  app.use(express.urlencoded({
+    extended: true,
+    limit: UPLOAD_LIMITS.URLENCODED_BODY,
+    parameterLimit: UPLOAD_LIMITS.PARAMETER_LIMIT
+  }));
 
   // Request tracking and logging
   app.use(correlationIdMiddleware);
   app.use(requestLogger(logger));
+  app.use(auditMiddleware);
 
   // Health check endpoint
   app.get('/health', (req: Request, res: Response) => {
@@ -56,17 +87,53 @@ export const createApp = async (): Promise<Application> => {
   }
 
   // Module routes - all routes will be registered here
+  app.use('/api/agent/customer-auth', AgentCustomerAuthRouter);
+  logger.info('Agent customer auth routes registered');
+
+  app.use('/api/agent/auth', AgentAuthRouter);
+  logger.info('Agent auth routes registered');
+
   app.use('/api/auth', authRoutes);
   logger.info('Auth routes registered');
-
-  app.use('/api/transactions', transactionRoutes);
-  logger.info('Transaction routes registered');
 
   app.use('/api/payments', paymentRoutes);
   logger.info('Payment routes registered');
 
   app.use('/api/admin', adminRoutes);
   logger.info('Admin routes registered');
+
+  app.use('/api/customer', customerTransactionRoutes);
+  logger.info('Customer transaction routes registered');
+
+  app.use('/api/agent', AgentCustomerRouter);
+  logger.info('Agent customer routes registered');
+
+  app.use('/api/agent/transactions', AgentTransactionRouter);
+  logger.info('Agent transaction routes registered');
+
+  app.use('/api/customer/support', customerSupportRoutes);
+  logger.info('Customer support routes registered');
+
+  app.use('/api/documents', DocumentRouter);
+  logger.info('Document routes registered');
+
+  app.use('/api/audit', AuditRouter);
+  logger.info('Audit routes registered');
+
+  app.use('/api/notifications', notificationRoutes);
+  logger.info('Notification routes registered');
+
+  app.use('/api/webhooks/providus', providusWebhookRoutes);
+  logger.info('Providus webhook routes registered');
+
+  app.use('/api/admin/virtual-accounts', adminVirtualAccountRoutes);
+  logger.info('Admin virtual account routes registered');
+
+  app.use('/api/customer', customerVirtualAccountRoutes);
+  logger.info('Customer virtual account routes registered');
+
+  app.use('/api/admin/settlement-management', settlementManagementRoutes);
+  logger.info('Settlement management routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

@@ -1,13 +1,12 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { createApp } from './app';
 import { initializeDatabase, disconnectDatabase } from './config/database';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import { initializeEmail } from './config/email';
+import { initializeFirebase } from './config/firebase';
 import { createLogger } from './shared/utils/logger';
 import { eventBus } from './events/event-bus';
-
-// Load environment variables
-dotenv.config();
+import notificationHandler from './modules/notifications/handlers/notification.handler';
 
 const logger = createLogger('Server');
 
@@ -30,6 +29,10 @@ async function startServer() {
     // Initialize Email service
     logger.info('Initializing email service...');
     initializeEmail();
+
+    // Initialize Firebase for push notifications
+    logger.info('Initializing Firebase for push notifications...');
+    initializeFirebase();
 
     // Initialize event bus handlers
     initializeEventHandlers();
@@ -106,8 +109,11 @@ function initializeEventHandlers() {
 
   // Initialize module-specific event handlers
   try {
-    // Notification service handlers
-    initializeNotificationHandlers();
+    // Notification service handlers (new comprehensive handler)
+    notificationHandler.initialize();
+
+    // Legacy notification handlers (email only)
+    initializeLegacyNotificationHandlers();
   } catch (error) {
     logger.warn('Failed to initialize notification handlers:', error);
   }
@@ -130,9 +136,10 @@ function initializeEventHandlers() {
 }
 
 /**
- * Initialize notification event handlers
+ * Initialize legacy notification event handlers (email only)
+ * This function maintains backward compatibility with existing email notifications
  */
-function initializeNotificationHandlers() {
+function initializeLegacyNotificationHandlers() {
   const { EventTypes } = require('./events/event-bus');
   const { sendEmail } = require('./config/email');
 
@@ -172,48 +179,8 @@ function initializeNotificationHandlers() {
  * Initialize audit event handlers
  */
 function initializeAuditHandlers() {
-  const { EventTypes } = require('./events/event-bus');
-
-  // Log all important events to audit service
-  const auditableEvents = [
-    EventTypes.USER_REGISTERED,
-    EventTypes.USER_LOGIN,
-    EventTypes.TRANSACTION_CREATED,
-    EventTypes.TRANSACTION_APPROVED,
-    EventTypes.PAYMENT_PROCESSED,
-    EventTypes.ADMIN_ACTION_PERFORMED,
-  ];
-
-  auditableEvents.forEach((eventType) => {
-    eventBus.subscribe(eventType, async (payload) => {
-      try {
-        // Store audit event in database
-        const { getDatabase } = require('./config/database');
-        const db = getDatabase();
-
-        await db.auditEvent.create({
-          data: {
-            eventId: payload.eventId || require('uuid').v4(),
-            eventType: eventType,
-            category: getCategoryFromEventType(eventType),
-            severity: 'INFO',
-            source: 'MONOLITH',
-            userId: payload.userId,
-            resourceType: payload.resourceType,
-            resourceId: payload.resourceId,
-            metadata: payload,
-            timestamp: new Date(),
-          },
-        });
-
-        logger.debug('Audit event created:', eventType);
-      } catch (error) {
-        logger.error('Failed to create audit event:', error);
-      }
-    });
-  });
-
-  logger.info('Audit handlers registered');
+  const { initializeAuditListeners } = require('./modules/audit/listeners/audit.listeners');
+  initializeAuditListeners();
 }
 
 /**
@@ -234,18 +201,6 @@ function initializeComplianceHandlers() {
   });
 
   logger.info('Compliance handlers registered');
-}
-
-/**
- * Helper to determine event category
- */
-function getCategoryFromEventType(eventType: string): string {
-  if (eventType.startsWith('user.') || eventType.startsWith('kyc.')) return 'AUTHENTICATION';
-  if (eventType.startsWith('transaction.')) return 'TRANSACTION';
-  if (eventType.startsWith('payment.')) return 'PAYMENT';
-  if (eventType.startsWith('compliance.')) return 'COMPLIANCE';
-  if (eventType.startsWith('admin.')) return 'ADMIN';
-  return 'SYSTEM';
 }
 
 // Start the server

@@ -1,3 +1,4 @@
+import { TransactionType } from "./transaction";
 export interface JwtPayload {
   userId: string;
   email: string;
@@ -9,6 +10,7 @@ export interface JwtPayload {
 
 export enum UserRole {
   CUSTOMER = 'CUSTOMER',
+  AGENT = 'AGENT',
   ADMIN = 'ADMIN',
   COMPLIANCE_OFFICER = 'COMPLIANCE_OFFICER',
   OPERATIONS = 'OPERATIONS',
@@ -18,7 +20,7 @@ export enum UserRole {
 export enum CustomerType {
   NIGERIAN_CITIZEN = 'NIGERIAN_CITIZEN',
   TOURIST = 'TOURIST',
-  AGENT = 'AGENT',
+  EXPATRIATE = 'EXPATRIATE',
 }
 
 export enum KycStatus {
@@ -54,6 +56,12 @@ export interface NigerianSignupRequest {
 
 export interface TouristSignupRequest {
   passportDocumentUrl: string;
+  passportNumber?: string;
+}
+
+export interface ExpatriateSignupRequest {
+  passportDocumentUrl: string;
+  passportNumber?: string;
 }
 
 export interface BvnVerificationResponse {
@@ -77,12 +85,37 @@ export enum OtpPurpose {
   LOGIN = 'LOGIN',
   PASSWORD_RESET = 'PASSWORD_RESET',
   TRANSACTION_VERIFICATION = 'TRANSACTION_VERIFICATION',
+  AGENT_SET_PASSWORD = 'AGENT_SET_PASSWORD',
 }
 
 export interface OtpValidationRequest {
-  email: string;
+  email?: string;
   otp: string;
   purpose: OtpPurpose;
+}
+
+export interface CreateAgentPasswordRequest {
+  email: string;
+  otp: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface AgentPasswordPromptResponse {
+  message: string;
+  requiresPasswordSet: true;
+  otp?: string;
+}
+
+export interface AgentLoginOtpSentResponse {
+  message: string;
+  requiresVerification: true;
+  otp?: string;
+}
+
+export interface VerifyAgentLoginRequest {
+  email: string;
+  otp: string;
 }
 
 export interface UserProfile {
@@ -103,4 +136,74 @@ export interface KycVerificationRequest {
   bvn?: string;
   tin?: string;
   passportNumber?: string;
+}
+
+export interface AgentCustomerSummary {
+  userId: string;
+  fullName: string;
+  customerType?: CustomerType;
+  lastTransactionType?: TransactionType | null;
+  registeredAt: string;
+  kycStatus?: KycStatus;
+}
+
+export interface AgentCustomerListMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AgentCustomerListResponse {
+  items: AgentCustomerSummary[];
+  meta: AgentCustomerListMeta;
+}
+
+export interface CustomerIdDetails {
+  idType: string | null;
+  bvn: string | null;
+  tin: string | null;
+  formAId: string | null;
+}
+
+export interface CustomerFile {
+  id: string;
+  documentType: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
+export interface AgentCustomerDetailsResponse {
+  userId: string;
+  registeredAt: string;
+  fullName: string;
+  email: string;
+  dateOnboarded: string | null;
+  totalTransactionsCompleted: number;
+  idDetails: CustomerIdDetails;
+  files: {
+    FormA: CustomerFile | null;
+    utilityBill: CustomerFile | null;
+    Visa: CustomerFile | null;
+    ReturnTicket: CustomerFile | null;
+  };
+}
+
+export interface AgentCustomerTransactionListItem {
+  transactionId: string;
+  transactionDate: string;
+  transactionType: string;
+  transactionStatus: string;
+  transactionReferenceNumber: string;
+  currency: string;
+  foreignAmount: number | null;
+}
+
+export interface AgentCustomerStatsResponse {
+  totalCustomers: number;
+  verifiedCustomers: number;
+  repeatCustomers: number;
+  pendingKyc: number;
 }

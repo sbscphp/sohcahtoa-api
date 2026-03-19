@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import adminService from "../services/admin.service";
+import { auditTrailService } from "../services/audit-trail.service";
+import { ActionType } from "../../../shared/types/action-type";
 import { successResponse } from "../../../shared/utils";
 
 class AdminController {
@@ -24,6 +26,14 @@ class AdminController {
         proofOfPayment
       );
 
+      await auditTrailService.logAction({
+        adminId,
+        actionType: ActionType.DEPOSIT_CONFIRM,
+        actionLabel: "Confirm deposit",
+        resourceType: "TRANSACTION",
+        resourceId: req.params.transactionId,
+        metadata: { paymentReference, proofOfPayment },
+      });
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -63,6 +73,19 @@ class AdminController {
 
       const result = await adminService.getAuditLog(req.query, page, limit);
       res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  seedAdmin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.seedAdminDefaults({
+        email: req.body?.email,
+        password: req.body?.password,
+        name: req.body?.name,
+      });
+      res.status(result.created ? 201 : 200).json(successResponse(result));
     } catch (error) {
       next(error);
     }

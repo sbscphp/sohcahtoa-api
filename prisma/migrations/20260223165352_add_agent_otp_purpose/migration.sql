@@ -1,0 +1,5 @@
+-- AlterEnum
+DO $$ BEGIN
+  ALTER TYPE "OtpPurpose" ADD VALUE IF NOT EXISTS 'AGENT_SET_PASSWORD';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

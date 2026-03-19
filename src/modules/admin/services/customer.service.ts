@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { NotFoundError, ValidationError, paginate } from "../../../shared/utils";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 type CreateCustomerFlagPayload = {
   type: string; // should align with AmlFlagType
@@ -178,8 +179,121 @@ export class CustomerService {
     return { totalCustomer, activeCustomer, deactivatedCustomer };
   }
 
+  async listCustomersAll(q?: string, filters: { status?: any; isActive?: any } = {}) {
+    const where: any = { role: "CUSTOMER", isActive: true };
+    if (filters.isActive !== undefined) {
+      where.isActive =
+        typeof filters.isActive === "string"
+          ? filters.isActive === "true"
+          : Boolean(filters.isActive);
+    } else if (filters.status !== undefined) {
+      const s = String(filters.status).toUpperCase();
+      if (s === "ALL") {
+        delete where.isActive;
+      } else if (s === "ACTIVE") {
+        where.isActive = true;
+      } else if (s === "DEACTIVATED" || s === "INACTIVE") {
+        where.isActive = false;
+      }
+    }
+    const query = (q || "").toString().trim();
+    if (query.length > 0) {
+      where.OR = [
+        { email: { contains: query, mode: "insensitive" } },
+        { phoneNumber: { contains: query, mode: "insensitive" } },
+        { profile: { firstName: { contains: query, mode: "insensitive" } } } as any,
+        { profile: { lastName: { contains: query, mode: "insensitive" } } } as any,
+      ];
+    }
+    const users = await prisma.user.findMany({
+      where,
+      include: { profile: true, kyc: true },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+    const items = users.map((u: any) => {
+      const name =
+        u.profile && (u.profile.firstName || u.profile.lastName)
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
+      return {
+        id: u.id,
+        name,
+        email: u.email,
+      };
+    });
+    items.sort((a: any, b: any) => {
+      const an = (a.name || "").toString();
+      const bn = (b.name || "").toString();
+      return an.localeCompare(bn, undefined, { sensitivity: "base" });
+    });
+    return items;
+  }
+
+  async exportCustomers(filters: { search?: string; status?: string } = {}) {
+    const where: any = { role: "CUSTOMER" };
+    const q = (filters.search || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { email: { contains: q, mode: "insensitive" } },
+        { phoneNumber: { contains: q, mode: "insensitive" } },
+        { profile: { firstName: { contains: q, mode: "insensitive" } } } as any,
+        { profile: { lastName: { contains: q, mode: "insensitive" } } } as any,
+      ];
+    }
+    if (filters.status) {
+      const s = String(filters.status).toUpperCase();
+      if (s === "ACTIVE") where.isActive = true;
+      if (s === "DEACTIVATED") where.isActive = false;
+    }
+    const users = await prisma.user.findMany({
+      where,
+      include: { profile: true },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+    const userIds = users.map((u: any) => u.id);
+    const txAgg =
+      userIds.length === 0
+        ? []
+        : await prisma.transaction.groupBy({
+            by: ["userId"],
+            where: { userId: { in: userIds } },
+            _count: { _all: true },
+            _sum: { nairaEquivalent: true, foreignAmount: true },
+          });
+    const aggByUser: Record<string, { totalTransactions: number; transactionVolume: number }> = {};
+    for (const row of txAgg as any[]) {
+      const count = row._count?._all || 0;
+      const nairaSum = Number(row._sum?.nairaEquivalent || 0);
+      const foreignSum = Number(row._sum?.foreignAmount || 0);
+      const volume = nairaSum || foreignSum || 0;
+      aggByUser[row.userId] = { totalTransactions: count, transactionVolume: volume };
+    }
+    return (users || []).map((u: any) => {
+      const name =
+        u.profile && (u.profile.firstName || u.profile.lastName)
+          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
+          : undefined;
+      const agg = aggByUser[u.id] || { totalTransactions: 0, transactionVolume: 0 };
+      return {
+        id: u.id,
+        name,
+        phoneNumber: u.phoneNumber,
+        email: u.email,
+        dateJoined: u.createdAt?.toISOString?.() || u.createdAt,
+        totalTransactions: agg.totalTransactions,
+        transactionVolume: agg.transactionVolume,
+        status: u.isActive ? "Active" : "Deactivated",
+      };
+    });
+  }
+
   async deactivateCustomer(userId: string, adminId?: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
     if (!user || user.role !== "CUSTOMER") {
       throw new NotFoundError("Customer not found");
     }
@@ -189,8 +303,52 @@ export class CustomerService {
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { isActive: false },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, email: true, profile: { select: { firstName: true, lastName: true } } },
     });
+
+    // Publish event for notifications
+    eventBus.publish(EventTypes.USER_SUSPENDED, {
+      userId: updated.id,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.profile ? `${updated.profile.firstName || ''} ${updated.profile.lastName || ''}`.trim() : undefined,
+      },
+      adminId,
+    });
+
+    return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
+  }
+
+  async toggleCustomerActive(userId: string, isActive: boolean, adminId?: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
+    if (!user || user.role !== "CUSTOMER") {
+      throw new NotFoundError("Customer not found");
+    }
+    if (user.isActive === isActive) {
+      return { id: user.id, status: user.isActive ? "ACTIVE" : "DEACTIVATED" };
+    }
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isActive },
+      select: { id: true, isActive: true, email: true, profile: { select: { firstName: true, lastName: true } } },
+    });
+
+    // Publish event for notifications
+    const eventType = isActive ? EventTypes.USER_ACTIVATED : EventTypes.USER_SUSPENDED;
+    eventBus.publish(eventType, {
+      userId: updated.id,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.profile ? `${updated.profile.firstName || ''} ${updated.profile.lastName || ''}`.trim() : undefined,
+      },
+      adminId,
+    });
+
     return { id: updated.id, status: updated.isActive ? "ACTIVE" : "DEACTIVATED" };
   }
 

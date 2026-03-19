@@ -46,49 +46,62 @@ export class PassportVerificationService {
     // Simulate OCR and verification delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Mock data - in production, this would be extracted via OCR from the document
-    // The document URL could be parsed or used to determine which mock data to return
-    const mockPassportData: Record<string, any> = {
-      'passport1': {
-        firstName: 'John',
-        lastName: 'Smith',
-        dateOfBirth: '1985-03-15',
-        passportNumber: 'A12345678',
-        nationality: 'United Kingdom',
-        email: 'john.smith@example.com',
-        phoneNumber: '+447123456789',
-      },
-      'passport2': {
-        firstName: 'Maria',
-        lastName: 'Garcia',
-        dateOfBirth: '1992-07-20',
-        passportNumber: 'B98765432',
-        nationality: 'Spain',
-        email: 'maria.garcia@example.com',
-        phoneNumber: '+34612345678',
-      },
-      'passport3': {
-        firstName: 'Wei',
-        lastName: 'Zhang',
-        dateOfBirth: '1988-11-08',
-        passportNumber: 'C11223344',
-        nationality: 'China',
-        email: 'wei.zhang@example.com',
-        phoneNumber: '+8613812345678',
-      },
+    // Generate dynamic user data based on document URL
+    // This ensures each unique document URL generates consistent but unique data
+    const timestamp = Date.now();
+    const urlHash = documentUrl.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+    const firstNames = ['John', 'Maria', 'Wei', 'Ahmed', 'Sophie', 'Raj', 'Elena', 'Kwame', 'Yuki', 'Carlos'];
+    const lastNames = ['Smith', 'Garcia', 'Zhang', 'Al-Fayed', 'Dubois', 'Patel', 'Rossi', 'Osei', 'Tanaka', 'Silva'];
+
+    const nationalities = [
+      { name: 'United Kingdom', prefix: 'GB', phoneCode: '+44' },
+      { name: 'Spain', prefix: 'ES', phoneCode: '+34' },
+      { name: 'China', prefix: 'CN', phoneCode: '+86' },
+      { name: 'United Arab Emirates', prefix: 'AE', phoneCode: '+971' },
+      { name: 'France', prefix: 'FR', phoneCode: '+33' },
+      { name: 'India', prefix: 'IN', phoneCode: '+91' },
+      { name: 'Italy', prefix: 'IT', phoneCode: '+39' },
+      { name: 'Ghana', prefix: 'GH', phoneCode: '+233' },
+      { name: 'Japan', prefix: 'JP', phoneCode: '+81' },
+      { name: 'Brazil', prefix: 'BR', phoneCode: '+55' },
+    ];
+
+    const firstNameIndex = urlHash % firstNames.length;
+    const lastNameIndex = (urlHash * 2) % lastNames.length;
+    const nationalityIndex = urlHash % nationalities.length;
+
+    const firstName = firstNames[firstNameIndex];
+    const lastName = lastNames[lastNameIndex];
+    const nationality = nationalities[nationalityIndex];
+
+    // Generate unique email using timestamp
+    const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${String(timestamp).slice(-9)}`;
+    const email = `${emailPrefix}@yopmail.com`;
+
+    // Generate unique passport number using nationality prefix and timestamp
+    const passportNumber = `${nationality.prefix}${String(timestamp).slice(-8)}`;
+
+    // Generate unique phone number
+    const phoneDigits = String(timestamp).slice(-9);
+    const phoneNumber = `${nationality.phoneCode}${phoneDigits}`;
+
+    // Generate date of birth (between 18 and 70 years old)
+    const age = 18 + (urlHash % 52);
+    const year = new Date().getFullYear() - age;
+    const month = String(1 + (urlHash % 12)).padStart(2, '0');
+    const day = String(1 + (urlHash % 28)).padStart(2, '0');
+    const dateOfBirth = `${year}-${month}-${day}`;
+
+    const passportData = {
+      firstName,
+      lastName,
+      dateOfBirth,
+      passportNumber,
+      nationality: nationality.name,
+      email,
+      phoneNumber,
     };
-
-    // For demo purposes, return first passport data
-    // In production, OCR would extract this from the actual document
-    const passportData = mockPassportData['passport1'];
-
-    if (!passportData) {
-      return {
-        success: false,
-        message: 'Could not extract data from passport document',
-        error: 'OCR_FAILED',
-      };
-    }
 
     return {
       success: true,

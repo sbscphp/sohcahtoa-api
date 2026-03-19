@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { outletController } from "../controllers/outlet.controller";
-import { authenticate, authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 
 const OutletRouter: Router = Router();
 
@@ -10,7 +9,7 @@ const OutletRouter: Router = Router();
  * /api/admin/outlet/franchises/stats:
  *   get:
  *     summary: Get franchise counters
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -19,13 +18,18 @@ const OutletRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.franchiseStats);
+OutletRouter.get(
+  "/franchises/stats",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.franchiseStats
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
  *   get:
  *     summary: List franchises
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -38,7 +42,7 @@ OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADM
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -51,13 +55,18 @@ OutletRouter.get("/franchises/stats", authenticate, authorize(UserRole.SUPER_ADM
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.listFranchises);
+OutletRouter.get(
+  "/franchises",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listFranchises
+);
 /**
  * @swagger
  * /api/admin/outlet/franchises:
  *   post:
  *     summary: Create a new franchise
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -89,13 +98,19 @@ OutletRouter.get("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), o
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.createFranchise);
+OutletRouter.post(
+  "/franchises",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
+  outletController.createFranchise
+);
+
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/status:
  *   patch:
  *     summary: Update franchise status (activate/deactivate)
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -121,13 +136,19 @@ OutletRouter.post("/franchises", authenticate, authorize(UserRole.SUPER_ADMIN), 
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.updateFranchiseStatus);
+OutletRouter.patch(
+  "/franchises/:id/status",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.updateFranchiseStatus
+);
+
 /**
  * @swagger
  * /api/admin/outlet/franchises/{id}/approve:
  *   patch:
  *     summary: Approve a pending franchise
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -142,83 +163,288 @@ OutletRouter.patch("/franchises/:id/status", authenticate, authorize(UserRole.SU
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/franchises/:id/approve", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.approveFranchise);
-// /**
-//  * @swagger
-//  * /api/admin/outlet/franchises/export:
-//  *   get:
-//  *     summary: Export franchises
-//  *     tags: [Admin]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Export generated
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// OutletRouter.get("/franchises/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportFranchises);
+OutletRouter.patch(
+  "/franchises/:id/approve",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.approveFranchise
+);
 
 /**
  * @swagger
- * /api/admin/outlet:
+ * /api/admin/outlet/franchises/{id}/branches:
  *   get:
- *     summary: List cash pickup outlets and activity
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Outlets retrieved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
-OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.list);
-/**
- * @swagger
- * /api/admin/outlet/{name}:
- *   get:
- *     summary: Get outlet details and recent pickups
- *     tags: [Admin]
+ *     summary: List branches attached to a franchise
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: name
+ *         name: id
  *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *       - in: query
+ *         name: status
  *         schema:
  *           type: string
  *     responses:
  *       200:
- *         description: Outlet details retrieved successfully
+ *         description: Branches retrieved successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-OutletRouter.get("/:name", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.get);
+OutletRouter.get(
+  "/franchises/:id/branches",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseBranches
+);
 
 /**
  * @swagger
- * /api/admin/outlet/branches/stats:
+ * /api/admin/outlet/franchises/{id}/branches/all:
  *   get:
- *     summary: Get branch counters
- *     tags: [Admin]
+ *     summary: List branches attached to a franchise (unpaginated)
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Stats retrieved successfully
+ *         description: Branches retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/branches/all",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseBranchesAll
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}/transactions:
+ *   get:
+ *     summary: List transactions connected to a franchise
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/transactions",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  outletController.listFranchiseTransactions
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/export:
+ *   get:
+ *     summary: Export franchises as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.branchStats);
+OutletRouter.get(
+  "/franchises/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportFranchises
+);
+
 /**
  * @swagger
- * /api/admin/outlet/branches:
+ * /api/admin/outlet/franchises/{id}:
  *   get:
- *     summary: List branches
- *     tags: [Admin]
+ *     summary: Get franchise details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Franchise retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.getFranchise
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}:
+ *   put:
+ *     summary: Update franchise details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               franchiseName:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               contactPersonName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phoneNumber:
+ *                 type: string
+ *               altPhoneNumber:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Franchise updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.put(
+  "/franchises/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.updateFranchise
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations:
+ *   get:
+ *     summary: List pick-up stations [Paginated]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -231,7 +457,228 @@ OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *         schema:
  *           type: integer
  *       - in: query
- *         name: q
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: region
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Pick-up stations retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/pickup-stations",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listPickupStations
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations:
+ *   post:
+ *     summary: Create a new pick-up station
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [stationName, physicalAddress, state, region, stationEmail, phoneNumber]
+ *             properties:
+ *               stationName:
+ *                 type: string
+ *               physicalAddress:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               region:
+ *                 type: string
+ *               stationEmail:
+ *                 type: string
+ *                 format: email
+ *               phoneNumber:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Pick-up station created
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.post(
+  "/pickup-stations",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
+  outletController.createPickupStation
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations/{id}:
+ *   get:
+ *     summary: Get pick-up station details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Pick-up station retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/pickup-stations/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.getPickupStation
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations/{id}:
+ *   put:
+ *     summary: Update pick-up station details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               stationName:
+ *                 type: string
+ *               physicalAddress:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               region:
+ *                 type: string
+ *               stationEmail:
+ *                 type: string
+ *                 format: email
+ *               phoneNumber:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Pick-up station updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.put(
+  "/pickup-stations/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.updatePickupStation
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations/{id}:
+ *   delete:
+ *     summary: Delete a pick-up station
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Pick-up station deleted
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.delete(
+  "/pickup-stations/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "delete" }),
+  outletController.deletePickupStation
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet:
+ *   get:
+ *     summary: List cash pickup outlets and activity
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Outlets retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+// OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.list);
+
+/**
+ *  * @swagger
+ * /api/admin/outlet/branches:
+ *   get:
+ *     summary: List branches [Paginated]
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
  *         schema:
  *           type: string
  *       - in: query
@@ -244,13 +691,116 @@ OutletRouter.get("/branches/stats", authenticate, authorize(UserRole.SUPER_ADMIN
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.listBranches);
+OutletRouter.get(
+  "/branches",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/all:
+ *   get:
+ *     summary: List all branches (unpaginated)
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *     responses:
+ *       200:
+ *         description: Branches retrieved successfully (id and name only)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "br_123"
+ *                       name:
+ *                         type: string
+ *                         example: "Ikeja"
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/all",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listAllBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/states:
+ *   get:
+ *     summary: List Nigerian states
+ *     tags: [admin-outlet]
+ *     responses:
+ *       200:
+ *         description: States retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     states:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Abia", "Adamawa", "Akwa Ibom", "Lagos", "Abuja"]
+ */
+OutletRouter.get(
+  "/states",
+  outletController.listNigeriaStates
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/stats:
+ *   get:
+ *     summary: Get branch counters
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stats retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/stats",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.branchStats
+);
+
 /**
  * @swagger
  * /api/admin/outlet/branches:
  *   post:
  *     summary: Create a new branch
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -290,13 +840,19 @@ OutletRouter.get("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), out
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.createBranch);
+OutletRouter.post(
+  "/branches",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
+  outletController.createBranch
+);
+
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}:
  *   get:
  *     summary: Get branch details
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -313,13 +869,159 @@ OutletRouter.post("/branches", authenticate, authorize(UserRole.SUPER_ADMIN), ou
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
-OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.getBranch);
+OutletRouter.get(
+  "/branches/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.getBranch
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}:
+ *   put:
+ *     summary: Update branch details
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               branchName:
+ *                 type: string
+ *               branchEmail:
+ *                 type: string
+ *                 format: email
+ *                 nullable: true
+ *               state:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               branchManager:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phoneNumber:
+ *                 type: string
+ *               agentName:
+ *                 type: string
+ *                 nullable: true
+ *               agentEmail:
+ *                 type: string
+ *                 format: email
+ *                 nullable: true
+ *               agentPhoneNumber:
+ *                 type: string
+ *                 nullable: true
+ *               franchiseId:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Branch updated
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.put(
+  "/branches/:id",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.updateBranch
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/transactions:
+ *   get:
+ *     summary: List transactions connected to a branch
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: Transactions retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/branches/:id/transactions",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  outletController.listBranchTransactions
+);
+
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/status:
  *   patch:
  *     summary: Update branch status (activate/deactivate)
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -345,13 +1047,19 @@ OutletRouter.get("/branches/:id", authenticate, authorize(UserRole.SUPER_ADMIN),
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.updateBranchStatus);
+OutletRouter.patch(
+  "/branches/:id/status",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.updateBranchStatus
+);
+
 /**
  * @swagger
  * /api/admin/outlet/branches/{id}/agents:
  *   post:
  *     summary: Assign agents to branch
- *     tags: [Admin]
+ *     tags: [admin-outlet]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -377,13 +1085,19 @@ OutletRouter.patch("/branches/:id/status", authenticate, authorize(UserRole.SUPE
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.addAgents);
+OutletRouter.post(
+  "/branches/:id/agents",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  outletController.addAgents
+);
+
 // /**
 //  * @swagger
 //  * /api/admin/outlet/branches/export:
 //  *   get:
 //  *     summary: Export branches
-//  *     tags: [Admin]
+//  *     tags: [admin-outlet]
 //  *     security:
 //  *       - bearerAuth: []
 //  *     responses:
@@ -393,5 +1107,29 @@ OutletRouter.post("/branches/:id/agents", authenticate, authorize(UserRole.SUPER
 //  *         $ref: '#/components/responses/UnauthorizedError'
 //  */
 // // OutletRouter.get("/branches/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportBranches);
+
+/**
+ * @swagger
+ * /api/admin/outlet/{name}:
+ *   get:
+ *     summary: Get outlet details and recent pickups
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Outlet details retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+// OutletRouter.get("/:name", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.get);
 
 export default OutletRouter;

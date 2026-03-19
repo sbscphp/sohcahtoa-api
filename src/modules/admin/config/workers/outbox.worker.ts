@@ -1,8 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { createLogger } from "../../../../shared/utils";
 import { ServiceName } from "../../../../shared/types";
-import { eventBus } from "../../../../events/event-bus";
 import { getDatabase } from "../../../../config/database";
+import { eventBus } from "../../../../events/event-bus";
 
 const prisma = getDatabase();
 

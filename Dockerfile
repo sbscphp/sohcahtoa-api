@@ -18,6 +18,7 @@ RUN npm ci
 
 # Copy source code
 COPY src ./src
+COPY scripts ./scripts
 COPY tsconfig.json ./
 
 # Generate Prisma Client
@@ -31,8 +32,8 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma and netcat for health checks
+RUN apt-get update -y && apt-get install -y openssl netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json ./
@@ -47,9 +48,12 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Create non-root user
-RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
-USER appuser
+# Copy TypeScript source files for Swagger JSDoc comments
+COPY --from=builder /app/src ./src
+
+# Copy entrypoint script and make it executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
 EXPOSE 3000
@@ -58,5 +62,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
+# Use entrypoint script
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Start application
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]

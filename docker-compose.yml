@@ -2,6 +2,7 @@ services:
   # PostgreSQL - Single unified database
   postgres:
     image: postgres:15-alpine
+    container_name: sochatoa-postgres
     environment:
       POSTGRES_DB: sochatoa_db
       POSTGRES_USER: postgres
@@ -17,10 +18,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   # Redis - Caching and session storage
   redis:
     image: redis:7-alpine
+    container_name: sochatoa-redis
     ports:
       - "6379:6379"
     volumes:
@@ -33,12 +36,14 @@ services:
       timeout: 5s
       retries: 5
     command: redis-server --appendonly yes
+    restart: unless-stopped
 
   # Sochatoa API Monolith
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: sochatoa-api
     ports:
       - "3000:3000"
     environment:
@@ -53,26 +58,27 @@ services:
 
       # Redis Configuration
       REDIS_URL: redis://redis:6379
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
 
       # JWT Secrets (CHANGE IN PRODUCTION!)
       JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
       JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
-      JWT_ACCESS_EXPIRY: 15m
+      JWT_ACCESS_EXPIRY: 1d
       JWT_REFRESH_EXPIRY: 7d
 
       # SMTP Configuration (Optional - configure for email sending)
-      # SMTP_HOST: smtp.gmail.com
-      # SMTP_PORT: 587
-      # SMTP_SECURE: false
-      # SMTP_USER: your-email@gmail.com
-      # SMTP_PASSWORD: your-app-password
-      # SMTP_FROM: noreply@sochatoa.com
+      SMTP_USER: oladeletobiadedoyin@gmail.com
+      # sbscproject2@gmail.com
+      SMTP_PASSWORD: mebjzgbonwzpqqcb
+      # dzbrzbgsxirzjrzj
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 465
+      SMTP_SECURE: true
+      SMTP_FROM: sbscproject2@gmail.com
+      SMTP_PASS: true
 
       # API Configuration
       CORS_ORIGIN: "*"
-      API_BASE_URL: http://104.45.229.69:3000
+      API_BASE_URL: http://localhost:3000
       API_BASE_PATH: ""
 
       # SMS Configuration (Optional - Termii)
@@ -80,9 +86,16 @@ services:
       # TERMII_SENDER_ID: Sochatoa
 
       # Cloudinary Configuration (Optional - for document uploads)
-      # CLOUDINARY_CLOUD_NAME: your-cloud-name
+      
+      CLOUDINARY_API_KEY: 348432696833351
+      CLOUDINARY_API_SECRET: lfIsuQFDy3uBPoyuLSHTlnd_SyA
+      CLOUDINARY_CLOUD_NAME: dlcenmo5x
+      CLOUDINARY_URL: cloudinary://348432696833351:lfIsuQFDy3uBPoyuLSHTlnd_SyA@dlcenmo5x
+
       # CLOUDINARY_API_KEY: your-api-key
       # CLOUDINARY_API_SECRET: your-api-secret
+      MOBILE_ACCESS_TOKEN_EXPIRY: 1d
+      ACCESS_TOKEN_EXPIRY: 1d
 
     depends_on:
       postgres:

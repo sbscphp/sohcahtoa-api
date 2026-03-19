@@ -1,7 +1,6 @@
 import { Router } from "express";
 import adminController from "../controllers/admin.controller";
-import { authorize } from "../../../shared/middleware";
-import { UserRole } from "../../../shared/types";
+import { authenticate, requirePermission } from "../../../shared/middleware";
 import { AdminAuthRouter } from "./admin-auth.routes";
 import UserManagementRouter from "./user-management.routes";
 import CustomerRouter from "./customer.routes";
@@ -11,15 +10,44 @@ import OutletRouter from "./outlet.routes";
 import WorkflowRouter from "./workflow.routes";
 import TicketsRouter from "./tickets.routes";
 import RateRouter from "./rate.routes";
+import AuditRouter from "./audit.routes";
 import ReportRouter from "./report.routes";
+import SettlementRouter from "./settlement.routes";
+import RegulatoryRouter from "./regulatory.routes";
 
 const router: Router = Router();
 
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin operations for transaction and deposit management
+ *   - name: admin-core
+ *     description: Core admin endpoints (dashboard, health, approvals)
+ *   - name: admin-auth
+ *     description: Admin authentication
+ *   - name: admin-user-management
+ *     description: Admin users, roles, permissions
+ *   - name: admin-customers
+ *     description: Customer management
+ *   - name: admin-transactions
+ *     description: Transaction management
+ *   - name: admin-agent
+ *     description: Agent management
+ *   - name: admin-outlet
+ *     description: Franchise and branches
+ *   - name: admin-settlement
+ *     description: Settlements and bank details
+ *   - name: admin-workflow
+ *     description: Workflows and templates
+ *   - name: admin-tickets
+ *     description: Support tickets
+ *   - name: admin-rate
+ *     description: Exchange rates
+ *   - name: admin-audit
+ *     description: Audit trail
+ *   - name: admin-reports
+ *     description: Reports and analytics
+ *   - name: admin-regulatory
+ *     description: Regulatory and compliance
  */
 
 /**
@@ -27,7 +55,7 @@ const router: Router = Router();
  * /api/admin/dashboard:
  *   get:
  *     summary: Get admin dashboard statistics
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -53,7 +81,7 @@ router.get("/dashboard", adminController.getDashboard);
  * /api/admin/pending-approvals:
  *   get:
  *     summary: Get all pending approvals
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -81,7 +109,7 @@ router.get("/pending-approvals", adminController.getPendingApprovals);
  * /api/admin/audit-log:
  *   get:
  *     summary: Get audit log (Super Admin only)
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -93,20 +121,26 @@ router.get("/pending-approvals", adminController.getPendingApprovals);
  *         description: Forbidden - Super Admin only
  */
 // Audit log (Super Admin only)
-router.get("/audit-log", authorize(UserRole.SUPER_ADMIN), adminController.getAuditLog);
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission({ module: "AUDIT", feature: "MODULE", action: "view" }),
+  adminController.getAuditLog
+);
 
 /**
  * @swagger
  * /api/admin/health:
  *   get:
  *     summary: Health check endpoint
- *     tags: [Admin]
+ *     tags: [admin-core]
  *     responses:
  *       200:
  *         description: Service is healthy
  */
 // Health
 router.get("/health", adminController.health);
+router.post("/seed-admin", adminController.seedAdmin);
 
 // Sub-routers
 router.use("/auth", AdminAuthRouter);
@@ -115,9 +149,12 @@ router.use("/customers", CustomerRouter);
 router.use("/transactions", TransactionRouter);
 router.use("/agent", AgentRouter);
 router.use("/outlet", OutletRouter);
+router.use("/settlement", SettlementRouter);
 router.use("/workflow", WorkflowRouter);
 router.use("/tickets", TicketsRouter);
 router.use("/rate", RateRouter);
+router.use("/audit", AuditRouter);
 router.use("/reports", ReportRouter)
+router.use("/regulatory", RegulatoryRouter);
 
 export default router;

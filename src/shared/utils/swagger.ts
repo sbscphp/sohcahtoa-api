@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import path from 'path';
 
 export interface SwaggerConfig {
   title: string;
@@ -12,6 +13,40 @@ export interface SwaggerConfig {
 }
 
 export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise<void> => {
+  // Find the project root by looking for package.json
+  // This works regardless of whether we're running from src or dist
+  let rootDir = __dirname;
+  while (rootDir !== '/' && !require('fs').existsSync(path.join(rootDir, 'package.json'))) {
+    rootDir = path.dirname(rootDir);
+  }
+
+  const isProduction = __dirname.includes('/dist/');
+
+  // IMPORTANT: Always use TypeScript source files because compiled JS files lose JSDoc comments
+  // swagger-jsdoc can read .ts files directly even in production
+  const apiPaths = [
+    // All module route files (main pattern)
+    path.join(rootDir, 'src', 'modules', '*', 'routes', '*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', '*', 'routes', '*.ts'),
+
+    // All module controller files (may contain JSDoc)
+    path.join(rootDir, 'src', 'modules', '*', 'controllers', '*.ts'),
+    path.join(rootDir, 'src', 'modules', '*', '*', 'controllers', '*.ts'),
+
+    // Service files (some may have JSDoc)
+    path.join(rootDir, 'src', 'modules', '*', 'services', '*.ts'),
+
+    // Root level routes
+    path.join(rootDir, 'src', 'routes', '*.ts'),
+
+    // Main app files
+    path.join(rootDir, 'src', 'app.ts'),
+    path.join(rootDir, 'src', 'index.ts'),
+
+    // Shared utilities that might have JSDoc
+    path.join(rootDir, 'src', 'shared', 'middleware', '*.ts'),
+  ];
+
   const options: swaggerJsdoc.Options = {
     definition: {
       openapi: '3.0.0',
@@ -26,7 +61,7 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       servers: [
         {
-          url: `http://104.45.229.69:${config.port}${config.apiBasePath || ''}`,
+          url: `https://sohcahtoa-dev.clocksurewise.com${config.apiBasePath || ''}`,
           description: 'Production server',
         },
         {
@@ -112,16 +147,30 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       },
       security: [],
     },
-    apis: [
-      './src/modules/*/routes/*.ts',
-      './src/modules/*/routes/*.js',
-      './dist/modules/*/routes/*.js',
-      './src/index.ts',
-      './dist/index.js'
-    ],
+    apis: apiPaths,
   };
 
-  const swaggerSpec = swaggerJsdoc(options);
+  console.log('🔍 Swagger scanning paths:', apiPaths);
+  console.log('📁 Current directory:', __dirname);
+  console.log('📁 Root directory:', rootDir);
+  console.log('🏭 Is production:', isProduction);
+
+  const swaggerSpec = swaggerJsdoc(options) as any;
+
+  // Log the number of paths found
+  const pathCount = Object.keys(swaggerSpec.paths || {}).length;
+  console.log(`📚 Swagger generated ${pathCount} API endpoints`);
+
+  if (pathCount === 0) {
+    console.warn('⚠️  WARNING: No API endpoints found! Check the api paths configuration.');
+    console.log('📂 Trying to list route files...');
+    const glob = require('glob');
+    apiPaths.forEach((pattern: string) => {
+      const files = glob.sync(pattern);
+      console.log(`   Pattern: ${pattern}`);
+      console.log(`   Found ${files.length} files:`, files.slice(0, 5));
+    });
+  }
 
   // Mount swagger-ui-express
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

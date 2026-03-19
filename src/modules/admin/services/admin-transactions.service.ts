@@ -1,7 +1,9 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
-import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
+import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode } from "../../../shared/types";
+import { auditTrailService } from "../services/audit-trail.service";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -18,25 +20,25 @@ type SettlePayload = {
 
 export class AdminTransactionsService {
 
-  private async logAdminAction(params: {
-    adminId: string;
-    actionType: any;
-    resourceType: string;
-    resourceId: string;
-    reason?: string;
-    metadata?: any;
-  }) {
-    return prisma.adminAction.create({
-      data: {
-        adminId: params.adminId,
-        actionType: params.actionType,
-        resourceType: params.resourceType,
-        resourceId: params.resourceId,
-        reason: params.reason,
-        metadata: params.metadata,
-      },
-    });
-  }
+  // private async logAdminAction(params: {
+  //   adminId: string;
+  //   actionType: any;
+  //   resourceType: string;
+  //   resourceId: string;
+  //   reason?: string;
+  //   metadata?: any;
+  // }) {
+  //   return prisma.adminAction.create({
+  //     data: {
+  //       adminId: params.adminId,
+  //       actionType: String(params.actionType) as any,
+  //       resourceType: params.resourceType,
+  //       resourceId: params.resourceId,
+  //       reason: params.reason,
+  //       metadata: params.metadata,
+  //     },
+  //   });
+  // }
 
   async getTransactionStats() {
     const [underReviewA, underReviewB, rejected, approved, reqInfoGroup] = await Promise.all([
@@ -58,43 +60,60 @@ export class AdminTransactionsService {
     };
   }
 
-  async listTransactions(filters: any, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
+  private async buildTransactionsListQuery(filters: any) {
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.step) where.currentStep = filters.step;
-    if (filters.type) where.type = filters.type;
+
+    const rawType = (filters.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = TransactionMode.BUY;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = TransactionMode.SELL;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters.userId) where.userId = filters.userId;
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
       if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
     }
-    if (filters.tab === "receive") {
-      where.disbursementMethod = "IMTO";
-    }
-    if (filters.tab === "sell") {
-      where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] } as any;
-    }
-    const q = (filters.q || "").toString().trim();
-    if (q) {
+
+    const search = (filters.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
       where.OR = [
-        { referenceNumber: { contains: q, mode: "insensitive" } },
-        { user: { profile: { firstName: { contains: q, mode: "insensitive" } } } },
-        { user: { profile: { lastName: { contains: q, mode: "insensitive" } } } },
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
       ];
     }
+
     const orderBy: any = {};
     const sortBy = filters.sortBy || "createdAt";
     const sortOrder = (filters.sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
     orderBy[sortBy] = sortOrder;
 
+    return { where, orderBy };
+  }
+
+  private async fetchTransactionsList(where: any, orderBy: any, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
-        include: { 
-          // @ts-ignore
-          user: { include: { profile: true } } 
-        },
         orderBy,
         skip,
         take: limit,
@@ -102,10 +121,21 @@ export class AdminTransactionsService {
       prisma.transaction.count({ where }),
     ]);
 
+    const uniqueUserIds = Array.from(new Set(items.map((t) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     const data = items.map((t: any) => {
-      const name = t.user?.profile
-        ? `${t.user.profile.firstName || ""} ${t.user.profile.lastName || ""}`.trim()
-        : undefined;
+      const u: any = userMap.get(t.userId);
+      const name = u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
       return {
         id: t.id,
@@ -125,13 +155,35 @@ export class AdminTransactionsService {
     };
   }
 
+  async listTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listBuyTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.transactionMode = TransactionMode.BUY;
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listSellTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.transactionMode = TransactionMode.SELL;
+    where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] };
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listReceiveTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.disbursementMethod = "IMTO";
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
   async getTransaction(id: string) {
     const trx = await prisma.transaction.findUnique(
       {
         where: { id },
         include: {
-          // @ts-ignore
-          user: { include: { profile: true, kyc: true } },
           steps: true,
           documents: true,
           history: true,
@@ -141,10 +193,15 @@ export class AdminTransactionsService {
       } as any
     );
     if (!trx) return null;
-    const name = (trx as any).user?.profile
-      ? `${(trx as any).user.profile.firstName || ""} ${(trx as any).user.profile.lastName || ""}`.trim()
-      : undefined;
-    const bvn = (trx as any).user?.kyc?.bvn || null;
+    const user = await prisma.user.findUnique({
+      where: { id: (trx as any).userId },
+      include: { profile: true, kyc: true },
+    });
+    const name =
+      user?.profile
+        ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
+        : undefined;
+    const bvn = user?.kyc?.bvn || null;
     const maskedBvn = bvn ? `${bvn.slice(0, 2)}********* ${bvn.slice(-3)}` : null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
     const pickup = (trx as any).cashPickup || null;
@@ -166,7 +223,7 @@ export class AdminTransactionsService {
       date: trx.createdAt,
       time: trx.createdAt,
       customerName: name,
-      customerType: (trx as any).user?.customerType || null,
+      customerType: user?.customerType || null,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,
@@ -185,13 +242,6 @@ export class AdminTransactionsService {
   }
 
   async requestInformation(transactionId: string, adminId: string, payload: { notes?: string; fields?: string[] }) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "COMPLIANCE_REVIEW",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
-    });
 
     await prisma.transaction.update({
       where: { id: transactionId },
@@ -207,13 +257,6 @@ export class AdminTransactionsService {
   }
 
   async reviewTransaction(transactionId: string, adminId: string, payload: ReviewPayload) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "TRANSACTION_REVIEW",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
-    });
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -244,25 +287,33 @@ export class AdminTransactionsService {
       } as any,
     });
 
+    
+
     return { message: "Transaction reviewed successfully" };
   }
 
   async approveTransaction(transactionId: string, adminId: string, reason?: string) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "TRANSACTION_APPROVE",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
 
-    const updated = await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.APPROVED as any,
         currentStep: TransactionStep.ADMIN_REVIEW as any,
         updatedAt: new Date(),
       },
+    });
+
+    // Mark all pending documents as verified
+    await prisma.transactionDocument.updateMany({
+      where: {
+        transactionId,
+        verificationStatus: VerificationStatus.PENDING as any,
+      },
+      data: {
+        verificationStatus: VerificationStatus.VERIFIED as any,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+      } as any,
     });
 
     await prisma.transactionHistory.create({
@@ -274,19 +325,21 @@ export class AdminTransactionsService {
       },
     });
 
+    // Publish event for notifications
+    eventBus.publish(EventTypes.TRANSACTION_APPROVED, {
+      userId: transaction.userId,
+      transaction: {
+        id: transaction.id,
+        referenceNumber: transaction.referenceNumber,
+      },
+    });
+
     return { message: "Transaction approved successfully" };
   }
 
   async rejectTransaction(transactionId: string, adminId: string, reason: string) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "TRANSACTION_REJECT",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      reason,
-    });
 
-    const updated = await prisma.transaction.update({
+    const transaction = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.REJECTED as any,
@@ -306,17 +359,111 @@ export class AdminTransactionsService {
       },
     });
 
+    // Publish event for notifications
+    eventBus.publish(EventTypes.TRANSACTION_REJECTED, {
+      userId: transaction.userId,
+      transaction: {
+        id: transaction.id,
+        referenceNumber: transaction.referenceNumber,
+      },
+      reason,
+    });
+
     return { message: "Transaction rejected successfully" };
   }
 
-  async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
-    await this.logAdminAction({
-      adminId,
-      actionType: "TRANSACTION_SETTLE",
-      resourceType: "TRANSACTION",
-      resourceId: transactionId,
-      metadata: payload,
+  async approveTransactionDocument(transactionId: string, documentId: string, adminId: string, notes?: string) {
+    const document = await prisma.transactionDocument.findFirst({
+      where: { id: documentId, transactionId },
+      select: { id: true, transactionId: true, documentType: true },
     });
+    if (!document) throw new Error("Document not found");
+
+    const updated = await prisma.transactionDocument.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: VerificationStatus.VERIFIED as any,
+        verificationNotes: notes || null,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+      } as any,
+      select: {
+        id: true,
+        transactionId: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        verificationStatus: true,
+        verificationNotes: true,
+        verifiedAt: true,
+        verifiedBy: true,
+        uploadedAt: true,
+      },
+    });
+
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, id: true, referenceNumber: true },
+    });
+    if (tx) {
+      eventBus.publish(EventTypes.DOCUMENT_VERIFIED, {
+        userId: tx.userId,
+        documentId: updated.id,
+        transactionId,
+        documentType: updated.documentType,
+        verifiedBy: adminId,
+        transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+      });
+    }
+
+    return updated;
+  }
+
+  async requestMoreInfoOnTransactionDocument(transactionId: string, documentId: string, adminId: string, comment: string) {
+    const document = await prisma.transactionDocument.findFirst({
+      where: { id: documentId, transactionId },
+      select: { id: true, transactionId: true, documentType: true },
+    });
+    if (!document) throw new Error("Document not found");
+
+    const updated = await prisma.transactionDocument.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW as any,
+        verificationNotes: comment,
+        verifiedAt: null,
+        verifiedBy: null,
+      } as any,
+      select: {
+        id: true,
+        transactionId: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        verificationStatus: true,
+        verificationNotes: true,
+        verifiedAt: true,
+        verifiedBy: true,
+        uploadedAt: true,
+      },
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_MORE_INFO_REQUESTED",
+        performedBy: adminId,
+        notes: comment,
+        metadata: { documentId, documentType: updated.documentType },
+      } as any,
+    });
+
+    return updated;
+  }
+
+  async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },

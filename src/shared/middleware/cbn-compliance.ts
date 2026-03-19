@@ -278,23 +278,44 @@ export const checkSupportingDocuments = (
   next: NextFunction
 ): void => {
   try {
-    const { type, documents } = req.body;
+    const { type, documents, admissionType, amount, mode } = req.body;
 
     if (!type) {
       return next();
     }
 
-    // Define required documents per transaction type
+    // Define required documents per transaction type (must match getRequiredDocuments in customer-transaction.service.ts)
     const requiredDocuments: Record<string, string[]> = {
-      PTA: ['PASSPORT', 'VISA', 'TICKET'],
-      BTA: ['PASSPORT', 'VISA', 'TICKET'],
-      SCHOOL_FEES: ['PASSPORT', 'VISA', 'SCHOOL_ADMISSION', 'INVOICE'],
-      MEDICAL: ['PASSPORT', 'MEDICAL_LETTER', 'INVOICE'],
-      PROFESSIONAL_BODY: ['PASSPORT', 'PROFESSIONAL_BODY_LETTER', 'INVOICE'],
+      PTA: ['VISA', 'RETURN_TICKET'],
+      BTA: ['TIN', 'TCC', 'PASSPORT', 'VISA', 'RETURN_TICKET', 'CORPORATE_BODY_LETTER', 'PARTNER_INVITATION_LETTER'],
+      SCHOOL_FEES: ['PASSPORT', 'SCHOOL_ADMISSION', 'INVOICE'],
+      MEDICAL: ['PASSPORT', 'VISA', 'RETURN_TICKET', 'FORM_A_DOCUMENT', 'MEDICAL_LETTER', 'OVERSEAS_MEDICAL_LETTER'],
+      PROFESSIONAL_BODY: ['MEMBERSHIP_CARD', 'INVOICE'],
+      TOURIST_FX: ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'],
+      RESIDENT_FX: ['PASSPORT', 'UTILITY_BILL'],
+      EXPATRIATE_FX: ['PASSPORT', 'WORK_PERMIT', 'UTILITY_BILL'],
+      IMTO_REMITTANCE: [],
+      CASH_REMITTANCE: [],
     };
 
-    const required = requiredDocuments[type];
-    if (!required || !required.length) {
+    let required = requiredDocuments[type] || [];
+
+    // Add postgraduate-specific documents for school fees
+    if (type === 'SCHOOL_FEES' && admissionType === 'POSTGRADUATE') {
+      required = [...required, 'STATEMENT_OF_RESULT', 'DEGREE'];
+    }
+
+    // For transactions above $10,000, require proof of funds and digital signature
+    // This applies to SELL transactions (RESIDENT_FX, EXPATRIATE_FX, TOURIST_FX with mode=SELL)
+    const sellTransactionTypes = ['RESIDENT_FX', 'EXPATRIATE_FX'];
+    const isSellTransaction = sellTransactionTypes.includes(type) ||
+                             (type === 'TOURIST_FX' && mode === 'SELL');
+
+    if (isSellTransaction && amount && Number(amount) >= 10000) {
+      required = [...required, 'PROOF_OF_FUNDS', 'SOURCE_OF_FUNDS_DECLARATION', 'DIGITAL_SIGNATURE'];
+    }
+
+    if (!required.length) {
       return next();
     }
 
