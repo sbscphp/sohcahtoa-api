@@ -529,7 +529,7 @@ export class AuthService {
 
     const isCurrentValid = await comparePassword(data.currentPassword, agent.password);
     if (!isCurrentValid) {
-      throw new ValidationError('password not correct');
+      throw new ValidationError('current password not correct');
     }
 
     const hashed = await hashPassword(data.newPassword);

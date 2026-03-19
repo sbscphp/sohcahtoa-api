@@ -158,3 +158,52 @@ export interface AgentCustomerListResponse {
   items: AgentCustomerSummary[];
   meta: AgentCustomerListMeta;
 }
+
+export interface CustomerIdDetails {
+  idType: string | null;
+  bvn: string | null;
+  tin: string | null;
+  formAId: string | null;
+}
+
+export interface CustomerFile {
+  id: string;
+  documentType: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
+export interface AgentCustomerDetailsResponse {
+  userId: string;
+  registeredAt: string;
+  fullName: string;
+  email: string;
+  dateOnboarded: string | null;
+  totalTransactionsCompleted: number;
+  idDetails: CustomerIdDetails;
+  files: {
+    FormA: CustomerFile | null;
+    utilityBill: CustomerFile | null;
+    Visa: CustomerFile | null;
+    ReturnTicket: CustomerFile | null;
+  };
+}
+
+export interface AgentCustomerTransactionListItem {
+  transactionId: string;
+  transactionDate: string;
+  transactionType: string;
+  transactionStatus: string;
+  transactionReferenceNumber: string;
+  currency: string;
+  foreignAmount: number | null;
+}
+
+export interface AgentCustomerStatsResponse {
+  totalCustomers: number;
+  verifiedCustomers: number;
+  repeatCustomers: number;
+  pendingKyc: number;
+}
