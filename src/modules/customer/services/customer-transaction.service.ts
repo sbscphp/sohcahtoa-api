@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import auditService from "../../audit/services/audit.service";
 import { createLogger } from "../../../shared/utils/logger";
+import { buildRateWhereClause, rateSelectFields } from "../../../shared/utils/rate-filters";
 
 const prisma = getDatabase();
 const logger = createLogger('customer-transaction-service');
@@ -618,28 +619,16 @@ export class CustomerTransactionService {
       toCurrency,
     });
 
-    const now = new Date();
-    const where: any = {
-      isActive: true,
-      validFrom: { lte: now },
-      validUntil: { gt: now },
-    };
-
-    if (fromCurrency) where.fromCurrency = fromCurrency.toUpperCase();
-    if (toCurrency) where.toCurrency = toCurrency.toUpperCase();
+    const where = buildRateWhereClause({
+      status: "active",
+      fromCurrency,
+      toCurrency,
+    });
 
     const client: any = prisma as any;
     const rates = await client.exchangeRate.findMany({
       where,
-      select: {
-        id: true,
-        fromCurrency: true,
-        toCurrency: true,
-        buyRate: true,
-        sellRate: true,
-        validFrom: true,
-        validUntil: true,
-      },
+      select: rateSelectFields,
       orderBy: { updatedAt: "desc" },
     });
 
@@ -667,17 +656,16 @@ export class CustomerTransactionService {
       amount,
     });
 
-    const now = new Date();
+    const where = buildRateWhereClause({
+      status: "active",
+      fromCurrency,
+      toCurrency,
+    });
+
     const client: any = prisma as any;
 
     const rate = await client.exchangeRate.findFirst({
-      where: {
-        fromCurrency: fromCurrency.toUpperCase(),
-        toCurrency: toCurrency.toUpperCase(),
-        isActive: true,
-        validFrom: { lte: now },
-        validUntil: { gt: now },
-      },
+      where,
       orderBy: { updatedAt: "desc" },
     });
 
