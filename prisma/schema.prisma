@@ -607,6 +607,7 @@ model Agent {
   attachments      AgentAttachment[]
   createdCustomers User[]            @relation("AgentCreatedCustomers")
   createdTransactions Transaction[] @relation("AgentCreatedTransactions")
+  createdTickets   Ticket[]         @relation("TicketCreatedByAgent")
 
   @@index([branchId])
   @@index([name])
@@ -1383,11 +1384,13 @@ model Ticket {
   priority        TicketPriority @default(MEDIUM)
   status          TicketStatus   @default(OPEN)
   assignedAgentId String?
+  createdByAgentId String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   customer      User       @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   assignedAgent AdminUser? @relation("TicketAssignedAgent", fields: [assignedAgentId], references: [id])
+  createdByAgent Agent?   @relation("TicketCreatedByAgent", fields: [createdByAgentId], references: [id])
 
   attachments TicketAttachment[]
   comments    TicketComment[]
