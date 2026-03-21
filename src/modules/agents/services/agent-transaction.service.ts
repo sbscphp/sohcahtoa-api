@@ -1,10 +1,16 @@
 import { getDatabase } from "../../../config/database";
 import { ValidationError, NotFoundError } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
-import { DisbursementMethod, TransactionStatus, TransactionStep } from "../../../shared/types/transaction";
+import {
+  DisbursementMethod,
+  TransactionStatus,
+  TransactionStep,
+  TransactionType,
+} from "../../../shared/types/transaction";
 import { uploadFile } from "../../../shared/utils/file-upload";
 import { generateId } from "../../../shared/utils";
 import { createLogger } from "../../../shared/utils/logger";
+import { resolveDashboardDateRange } from "../../../shared/utils/date-range-presets";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
 
 const prisma = getDatabase();
@@ -38,6 +44,30 @@ export interface AgentTransactionStats {
   pending: number;
   settled: number;
   rejected: number;
+}
+
+export interface AgentDashboardRecentTransactionItem {
+  transactionId: string;
+  timestamp: string;
+  amount: number | null;
+  currency: string;
+}
+
+export interface AgentDashboardTransactionTypeSegment {
+  transactionType: string;
+  count: number;
+  totalAmount: number;
+  percentageOfVolume: number;
+}
+
+export interface AgentDashboardTransactionsByTypeResult {
+  range: string;
+  rangeStart: string;
+  rangeEnd: string;
+  amountBasis: "USD_FOREIGN_AMOUNT";
+  totalTransactionCount: number;
+  totalVolume: number;
+  segments: AgentDashboardTransactionTypeSegment[];
 }
 
 /**
@@ -171,6 +201,137 @@ class AgentTransactionService {
         total,
         totalPages: Math.ceil(total / limit) || 1,
       },
+    };
+  }
+
+  /**
+   * Dashboard: recent transactions created by the agent (slim fields, optional type filter).
+   */
+  async listDashboardRecentTransactions(
+    agentUserId: string,
+    typeFilter: string | undefined,
+    page: number,
+    limit: number
+  ): Promise<{
+    data: AgentDashboardRecentTransactionItem[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    if (typeFilter) {
+      if (!Object.values(TransactionType).includes(typeFilter as TransactionType)) {
+        throw new ValidationError(`Invalid transaction type: ${typeFilter}`);
+      }
+    }
+
+    const where: { createdByAgentId: string; type?: TransactionType } = {
+      createdByAgentId: agent.id,
+    };
+    if (typeFilter) {
+      where.type = typeFilter as TransactionType;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        select: { id: true, createdAt: true, foreignAmount: true, currency: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const data: AgentDashboardRecentTransactionItem[] = rows.map((t) => ({
+      transactionId: t.id,
+      timestamp: t.createdAt.toISOString(),
+      amount: t.foreignAmount != null ? Number(t.foreignAmount) : null,
+      currency: t.currency,
+    }));
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  /**
+   * Dashboard pie chart: counts per type (all currencies) and USD foreignAmount sums per type.
+   */
+  async getDashboardTransactionsByType(
+    agentUserId: string,
+    rangePreset: string
+  ): Promise<AgentDashboardTransactionsByTypeResult> {
+    const agent = await this.resolveAgent(agentUserId);
+    const { start, end } = resolveDashboardDateRange(rangePreset);
+
+    const baseWhere = {
+      createdByAgentId: agent.id,
+      createdAt: { gte: start, lte: end },
+    };
+
+    const [countGroups, sumGroups] = await Promise.all([
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: {
+          ...baseWhere,
+          currency: { equals: "USD", mode: "insensitive" },
+        },
+        _sum: { foreignAmount: true },
+      }),
+    ]);
+
+    const sumByType = new Map<string, number>();
+    for (const row of sumGroups) {
+      const amt = row._sum.foreignAmount;
+      sumByType.set(row.type, amt != null ? Number(amt) : 0);
+    }
+
+    let totalVolume = 0;
+    const segmentsRaw: AgentDashboardTransactionTypeSegment[] = [];
+
+    for (const row of countGroups) {
+      const count = row._count._all;
+      if (count === 0) continue;
+      const totalAmount = sumByType.get(row.type) ?? 0;
+      totalVolume += totalAmount;
+      segmentsRaw.push({
+        transactionType: row.type,
+        count,
+        totalAmount,
+        percentageOfVolume: 0,
+      });
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const segments = segmentsRaw.map((s) => ({
+      ...s,
+      percentageOfVolume:
+        totalVolume > 0 ? round2((s.totalAmount / totalVolume) * 100) : 0,
+    }));
+
+    const totalTransactionCount = segments.reduce((acc, s) => acc + s.count, 0);
+
+    return {
+      range: rangePreset.trim(),
+      rangeStart: start.toISOString(),
+      rangeEnd: end.toISOString(),
+      amountBasis: "USD_FOREIGN_AMOUNT",
+      totalTransactionCount,
+      totalVolume: round2(totalVolume),
+      segments,
     };
   }
 
