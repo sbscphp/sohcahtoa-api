@@ -250,7 +250,7 @@ AgentRouter.patch(
  * @swagger
  * /api/admin/agent/{id}/transactions:
  *   get:
- *     summary: Get transactions handled by the agent's branch (cash pickups)
+ *     summary: Get transactions created by the agent
  *     tags: [admin-agent]
  *     security:
  *       - bearerAuth: []
@@ -274,7 +274,7 @@ AgentRouter.patch(
  *         name: status
  *         schema:
  *           type: string
- *           description: Cash pickup status filter (e.g., PENDING, COMPLETED)
+ *           description: Transaction status filter (e.g., DRAFT, APPROVED, COMPLETED)
  *       - in: query
  *         name: dateFrom
  *         schema:

@@ -13,7 +13,7 @@ const AgentCustomerAuthRouter: Router = Router();
  *   description: BVN and OTP verification flow for agent-managed customer signup
  */
 // All routes require authenticated agent
-    AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
+AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
 /**
  * @swagger
  * /api/agent/customer-auth/verify-bvn:

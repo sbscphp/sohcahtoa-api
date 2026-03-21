@@ -16,3 +16,9 @@ export interface AgentCustomerListFilters {
   search?: string;
 }
 
+export interface AgentUpdateCustomerRequest {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+}
+

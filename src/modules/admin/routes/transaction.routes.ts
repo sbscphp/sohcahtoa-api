@@ -528,6 +528,89 @@ TransactionRouter.post(
 
 /**
  * @swagger
+ * /api/admin/transactions/{id}/documents/{documentId}/approve:
+ *   post:
+ *     summary: Approve a transaction document
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Document approved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/documents/:documentId/approve",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.approveDocument
+);
+
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/documents/{documentId}/request-info:
+ *   post:
+ *     summary: Request more information on a transaction document
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - comment
+ *             properties:
+ *               comment:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Information request recorded successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/documents/:documentId/request-info",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.requestMoreInfoOnDocument
+);
+
+/**
+ * @swagger
  * /api/admin/transactions/{id}/settle:
  *   post:
  *     summary: Settle a transaction

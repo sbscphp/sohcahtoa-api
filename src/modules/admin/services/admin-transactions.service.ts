@@ -1,7 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
-import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus } from "../../../shared/types";
+import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 
@@ -60,20 +60,17 @@ export class AdminTransactionsService {
     };
   }
 
-  async listTransactions(filters: any, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
+  private async buildTransactionsListQuery(filters: any) {
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.step) where.currentStep = filters.step;
 
-    // Normalize friendly type labels from UI to proper filters
     const rawType = (filters.type || "").toString().trim().toLowerCase();
     if (rawType === "buyfx") {
-      where.transactionMode = "BUY" as any;
+      where.transactionMode = TransactionMode.BUY;
     } else if (rawType === "sellfx") {
-      where.transactionMode = "SELL" as any;
+      where.transactionMode = TransactionMode.SELL;
     } else if (rawType) {
-      // Assume it's a TransactionType enum value (e.g., PTA, BTA, etc.)
       where.type = (filters.type as string).toUpperCase();
     }
 
@@ -83,16 +80,7 @@ export class AdminTransactionsService {
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
       if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
     }
-    if (filters.tab === "receive") {
-      where.disbursementMethod = "IMTO";
-    }
-    if (filters.tab === "sell") {
-      where.transactionMode = "SELL" as any;
-      where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] } as any;
-    }
-    if (filters.tab === "buy") {
-      where.transactionMode = "BUY" as any;
-    }
+
     const search = (filters.search || "").toString().trim();
     if (search) {
       const matchedUsers = await prisma.user.findMany({
@@ -112,11 +100,17 @@ export class AdminTransactionsService {
         ...(userIds.length ? [{ userId: { in: userIds } }] : []),
       ];
     }
+
     const orderBy: any = {};
     const sortBy = filters.sortBy || "createdAt";
     const sortOrder = (filters.sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
     orderBy[sortBy] = sortOrder;
 
+    return { where, orderBy };
+  }
+
+  private async fetchTransactionsList(where: any, orderBy: any, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
@@ -141,10 +135,7 @@ export class AdminTransactionsService {
 
     const data = items.map((t: any) => {
       const u: any = userMap.get(t.userId);
-      const name =
-        u && u.profile
-          ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
-          : undefined;
+      const name = u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
       return {
         id: t.id,
@@ -162,6 +153,30 @@ export class AdminTransactionsService {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  async listTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listBuyTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.transactionMode = TransactionMode.BUY;
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listSellTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.transactionMode = TransactionMode.SELL;
+    where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] };
+    return this.fetchTransactionsList(where, orderBy, page, limit);
+  }
+
+  async listReceiveTransactions(filters: any, page = 1, limit = 20) {
+    const { where, orderBy } = await this.buildTransactionsListQuery(filters);
+    where.disbursementMethod = "IMTO";
+    return this.fetchTransactionsList(where, orderBy, page, limit);
   }
 
   async getTransaction(id: string) {
@@ -355,6 +370,97 @@ export class AdminTransactionsService {
     });
 
     return { message: "Transaction rejected successfully" };
+  }
+
+  async approveTransactionDocument(transactionId: string, documentId: string, adminId: string, notes?: string) {
+    const document = await prisma.transactionDocument.findFirst({
+      where: { id: documentId, transactionId },
+      select: { id: true, transactionId: true, documentType: true },
+    });
+    if (!document) throw new Error("Document not found");
+
+    const updated = await prisma.transactionDocument.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: VerificationStatus.VERIFIED as any,
+        verificationNotes: notes || null,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+      } as any,
+      select: {
+        id: true,
+        transactionId: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        verificationStatus: true,
+        verificationNotes: true,
+        verifiedAt: true,
+        verifiedBy: true,
+        uploadedAt: true,
+      },
+    });
+
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, id: true, referenceNumber: true },
+    });
+    if (tx) {
+      eventBus.publish(EventTypes.DOCUMENT_VERIFIED, {
+        userId: tx.userId,
+        documentId: updated.id,
+        transactionId,
+        documentType: updated.documentType,
+        verifiedBy: adminId,
+        transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+      });
+    }
+
+    return updated;
+  }
+
+  async requestMoreInfoOnTransactionDocument(transactionId: string, documentId: string, adminId: string, comment: string) {
+    const document = await prisma.transactionDocument.findFirst({
+      where: { id: documentId, transactionId },
+      select: { id: true, transactionId: true, documentType: true },
+    });
+    if (!document) throw new Error("Document not found");
+
+    const updated = await prisma.transactionDocument.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW as any,
+        verificationNotes: comment,
+        verifiedAt: null,
+        verifiedBy: null,
+      } as any,
+      select: {
+        id: true,
+        transactionId: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        verificationStatus: true,
+        verificationNotes: true,
+        verifiedAt: true,
+        verifiedBy: true,
+        uploadedAt: true,
+      },
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_MORE_INFO_REQUESTED",
+        performedBy: adminId,
+        notes: comment,
+        metadata: { documentId, documentType: updated.documentType },
+      } as any,
+    });
+
+    return updated;
   }
 
   async settleTransaction(transactionId: string, adminId: string, payload: SettlePayload) {
