@@ -8,6 +8,8 @@ const AgentAuthRouter: Router = Router();
 // All routes require authenticated agent
 AgentAuthRouter.use(authenticate, authorize(UserRole.AGENT));
 
+AgentAuthRouter.get('/profile', agentAuthController.getProfile);
+
 AgentAuthRouter.post('/change-password', agentAuthController.changeAgentPassword);
 
 export default AgentAuthRouter;

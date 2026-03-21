@@ -1,4 +1,8 @@
 import { getDatabase } from "../../../config/database";
+import {
+  calculateAmountUsingActiveSellRate,
+  getActiveExchangeRates,
+} from "../../../shared/services/exchange-rate-reader.service";
 import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import auditService from "../../audit/services/audit.service";
@@ -617,40 +621,7 @@ export class CustomerTransactionService {
       fromCurrency,
       toCurrency,
     });
-
-    const now = new Date();
-    const where: any = {
-      isActive: true,
-      validFrom: { lte: now },
-      validUntil: { gt: now },
-    };
-
-    if (fromCurrency) where.fromCurrency = fromCurrency.toUpperCase();
-    if (toCurrency) where.toCurrency = toCurrency.toUpperCase();
-
-    const client: any = prisma as any;
-    const rates = await client.exchangeRate.findMany({
-      where,
-      select: {
-        id: true,
-        fromCurrency: true,
-        toCurrency: true,
-        buyRate: true,
-        sellRate: true,
-        validFrom: true,
-        validUntil: true,
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-
-    logger.info(`[getActiveRates] Found ${rates.length} active rates`, {
-      fromCurrency,
-      toCurrency,
-      rateCount: rates.length,
-      currencies: rates.map((r: any) => `${r.fromCurrency}/${r.toCurrency}`),
-    });
-
-    return rates;
+    return getActiveExchangeRates(fromCurrency, toCurrency);
   }
 
   /**
@@ -661,59 +632,7 @@ export class CustomerTransactionService {
    * @param amount       - The amount in fromCurrency to convert
    */
   async calculateAmount(fromCurrency: string, toCurrency: string, amount: number) {
-    logger.info(`[calculateAmount] Calculating transaction amount`, {
-      fromCurrency,
-      toCurrency,
-      amount,
-    });
-
-    const now = new Date();
-    const client: any = prisma as any;
-
-    const rate = await client.exchangeRate.findFirst({
-      where: {
-        fromCurrency: fromCurrency.toUpperCase(),
-        toCurrency: toCurrency.toUpperCase(),
-        isActive: true,
-        validFrom: { lte: now },
-        validUntil: { gt: now },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-
-    if (!rate) {
-      logger.error(`[calculateAmount] No active exchange rate found`, {
-        fromCurrency: fromCurrency.toUpperCase(),
-        toCurrency: toCurrency.toUpperCase(),
-      });
-      throw new NotFoundError(
-        `No active exchange rate found for ${fromCurrency.toUpperCase()} to ${toCurrency.toUpperCase()}`
-      );
-    }
-
-    const sellRate = parseFloat(rate.sellRate);
-    const buyRate = parseFloat(rate.buyRate);
-    const convertedAmount = amount * sellRate;
-
-    logger.info(`[calculateAmount] Amount calculated successfully`, {
-      fromCurrency: rate.fromCurrency,
-      toCurrency: rate.toCurrency,
-      amount,
-      sellRate,
-      buyRate,
-      convertedAmount,
-      rateId: rate.id,
-    });
-
-    return {
-      fromCurrency: rate.fromCurrency,
-      toCurrency: rate.toCurrency,
-      amount,
-      sellRate,
-      buyRate,
-      convertedAmount,
-      rateValidUntil: rate.validUntil,
-    };
+    return calculateAmountUsingActiveSellRate(fromCurrency, toCurrency, amount);
   }
 
   /**
