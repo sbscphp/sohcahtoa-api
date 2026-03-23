@@ -21,7 +21,7 @@ export class SettlementService {
       (prisma as any).settlement.count({
         where: { OR: [{ status: "PENDING" }, { status: "AWAITING_CONFIRMATION" }] },
       }),
-      (prisma as any).bankDetail.count(),
+      (prisma as any).escrowAccount.count(),
     ]);
     const currentBalance = Number(sumConfirmed._sum?.amount || 0);
     return {
@@ -111,7 +111,7 @@ export class SettlementService {
   }
 
   async escrowAccounts() {
-    const rows = await (prisma as any).bankDetail.findMany({
+    const rows = await (prisma as any).escrowAccount.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -119,6 +119,7 @@ export class SettlementService {
         accountNumber: true,
         accountName: true,
         reference: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -128,7 +129,7 @@ export class SettlementService {
       bank: b.bankName,
       accountNumber: b.accountNumber,
       reference: b.reference,
-      status: "Active",
+      status: (b.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
       createdAt: b.createdAt,
     }));
   }
@@ -196,59 +197,42 @@ export class SettlementService {
     if (!accountNumber) throw new ValidationError("accountNumber is required");
     if (!accountName) throw new ValidationError("accountName is required");
 
-    const existing = await (prisma as any).bankDetail.findFirst({
-      where: { bankName, accountNumber },
+    const existing = await (prisma as any).escrowAccount.findFirst({
+      where: { accountNumber },
       select: { id: true },
     });
     if (existing) throw new ValidationError("Escrow account already exists");
 
     const reference = `ESCROW-${randomUUID()}`;
-    const created = await (prisma as any).settlement.create({
+    const created = await (prisma as any).escrowAccount.create({
       data: {
-        transactionId: `ESCROW-${randomUUID()}`,
-        amount: 0,
         currency,
-        status: "CONFIRMED",
-        paymentMethod: "BANK_TRANSFER",
-        paymentReference: reference,
-        depositedAt: new Date(),
-        confirmedAt: new Date(),
-        confirmedBy: payload.createdBy || "SYSTEM",
-        notes: "ESCROW_ACCOUNT",
-        bankDetails: {
-          create: {
-            bankName,
-            accountNumber,
-            accountName,
-            reference,
-          },
-        },
+        bankName,
+        accountNumber,
+        accountName,
+        reference,
+        createdBy: payload.createdBy || null,
       },
       select: {
-        bankDetails: {
-          select: {
-            id: true,
-            bankName: true,
-            accountNumber: true,
-            accountName: true,
-            reference: true,
-            createdAt: true,
-          },
-        },
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        accountName: true,
+        reference: true,
+        status: true,
+        createdAt: true,
       },
     });
 
-    const b = created?.bankDetails;
-    if (!b) throw new ValidationError("Failed to create escrow account");
     return {
-      id: b.id,
-      name: b.accountName,
-      bank: b.bankName,
-      accountNumber: b.accountNumber,
-      reference: b.reference,
+      id: created.id,
+      name: created.accountName,
+      bank: created.bankName,
+      accountNumber: created.accountNumber,
+      reference: created.reference,
       currency,
-      status: "Active",
-      createdAt: b.createdAt,
+      status: (created.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
+      createdAt: created.createdAt,
     };
   }
 

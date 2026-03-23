@@ -110,11 +110,11 @@ SettlementRouter.get(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [currency, bankName, accountNumber, accountName]
+ *             required: [currencyType, bankName, accountNumber, accountName]
  *             properties:
- *               currency:
+ *               currencyType:
  *                 type: string
- *                 example: "NGN"
+ *                 example: "NGN - Naira"
  *               bankName:
  *                 type: string
  *                 example: "Access Bank"
