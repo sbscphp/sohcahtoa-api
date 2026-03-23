@@ -273,6 +273,39 @@ class OutletService {
     }));
   }
 
+  async exportBranches(filters: { search?: string; status?: string } = {}) {
+    const where: any = {};
+    const search = (filters.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (filters.status) where.status = filters.status;
+    const rows = await db.branch.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        branchManager: true,
+        email: true,
+        address: true,
+        status: true,
+      },
+    });
+    return (rows || []).map((b: any) => ({
+      id: b.id,
+      branchName: b.name,
+      branchManager: b.branchManager,
+      email: b.email,
+      address: b.address,
+      status: b.status,
+    }));
+  }
+
   async getBranchStats() {
     const total = await db.branch.count();
     const active = await db.branch.count({ where: { status: "Active" } });
