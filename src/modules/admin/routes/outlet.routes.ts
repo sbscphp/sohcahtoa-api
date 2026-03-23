@@ -661,7 +661,7 @@ OutletRouter.delete(
 // OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.list);
 
 /**
- *  * @swagger
+ * @swagger
  * /api/admin/outlet/branches:
  *   get:
  *     summary: List branches [Paginated]
@@ -696,6 +696,36 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/export:
+ *   get:
+ *     summary: Export branches as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportBranches
 );
 
 /**

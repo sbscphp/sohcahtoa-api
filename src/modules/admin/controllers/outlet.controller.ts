@@ -178,6 +178,26 @@ class OutletController {
     );
   });
 
+  exportBranches = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportBranches({
+      search: (req.query.search as string) || "",
+      status: (req.query.status as string) || undefined,
+    });
+    streamCsv(
+      res,
+      "branches.csv",
+      [
+        { header: "Branch ID", select: (r: any) => r.id },
+        { header: "Branch Name", select: (r: any) => r.branchName },
+        { header: "Branch Manager", select: (r: any) => r.branchManager },
+        { header: "Email", select: (r: any) => r.email },
+        { header: "Address", select: (r: any) => r.address },
+        { header: "Status", select: (r: any) => r.status },
+      ],
+      rows as any[]
+    );
+  });
+
   branchStats = asyncHandler(async (_req: Request, res: Response) => {
     const data = await outletService.getBranchStats();
     res.json(successResponse(data));
