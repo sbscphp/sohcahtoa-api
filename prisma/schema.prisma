@@ -753,6 +753,27 @@ model CustomerFlag {
   @@map("customer_flags")
 }
 
+enum EscrowAccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model EscrowAccount {
+  id            String             @id @default(uuid())
+  currency      String             @default("NGN")
+  bankName      String
+  accountNumber String
+  accountName   String
+  status        EscrowAccountStatus @default(ACTIVE)
+  createdBy     String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([accountNumber])
+  @@index([status])
+  @@map("escrow_accounts")
+}
+
 // ========================================
 // TRANSACTION SERVICE MODELS
 // ========================================

@@ -403,13 +403,19 @@ class RegulatoryService {
   }
 
   async fnWindowStats() {
-    const [rates, submittedReports, pendingReports] = await Promise.all([
-      fnWindowClient.getCurrentRates(),
+    const [submittedReports, pendingReports] = await Promise.all([
       prisma.reportJob.count({ where: { module: "RATE", status: "COMPLETED" } }),
       prisma.reportJob.count({ where: { module: "RATE", status: "PENDING" } }),
     ]);
+    let ratesCount = 0;
+    try {
+      const rates = await fnWindowClient.getCurrentRates();
+      ratesCount = rates.length;
+    } catch {
+      ratesCount = 0;
+    }
     return {
-      dailyFxSalesAllocations: rates.length,
+      dailyFxSalesAllocations: ratesCount,
       fnWindowDailyReports: submittedReports,
       activeComplianceReports: pendingReports,
     };

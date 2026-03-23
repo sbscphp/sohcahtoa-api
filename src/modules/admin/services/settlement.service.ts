@@ -1,5 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
+import { randomUUID } from "crypto";
+import { ServiceUnavailableError, ValidationError } from "../../../shared/utils/errors";
+import { nibssClient } from "../../../integrations";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -18,7 +21,7 @@ export class SettlementService {
       (prisma as any).settlement.count({
         where: { OR: [{ status: "PENDING" }, { status: "AWAITING_CONFIRMATION" }] },
       }),
-      (prisma as any).bankDetail.count(),
+      (prisma as any).escrowAccount.count(),
     ]);
     const currentBalance = Number(sumConfirmed._sum?.amount || 0);
     return {
@@ -108,7 +111,7 @@ export class SettlementService {
   }
 
   async escrowAccounts() {
-    const rows = await (prisma as any).bankDetail.findMany({
+    const rows = await (prisma as any).escrowAccount.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -116,6 +119,7 @@ export class SettlementService {
         accountNumber: true,
         accountName: true,
         reference: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -125,7 +129,7 @@ export class SettlementService {
       bank: b.bankName,
       accountNumber: b.accountNumber,
       reference: b.reference,
-      status: "Active",
+      status: (b.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
       createdAt: b.createdAt,
     }));
   }
@@ -174,6 +178,120 @@ export class SettlementService {
       status: r.settlementId ? statusMap[r.settlementId] : "PENDING",
     }));
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async createEscrowAccount(payload: {
+    currency: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    createdBy?: string;
+  }) {
+    const currency = (payload.currency || "").toString().trim().toUpperCase();
+    const bankName = (payload.bankName || "").toString().trim();
+    const accountNumber = (payload.accountNumber || "").toString().trim();
+    const accountName = (payload.accountName || "").toString().trim();
+
+    if (!currency || currency.length !== 3) throw new ValidationError("currency is required");
+    if (!bankName) throw new ValidationError("bankName is required");
+    if (!accountNumber) throw new ValidationError("accountNumber is required");
+    if (!accountName) throw new ValidationError("accountName is required");
+
+    const existing = await (prisma as any).escrowAccount.findFirst({
+      where: { accountNumber },
+      select: { id: true },
+    });
+    if (existing) throw new ValidationError("Escrow account already exists");
+
+    const reference = `ESCROW-${randomUUID()}`;
+    const created = await (prisma as any).escrowAccount.create({
+      data: {
+        currency,
+        bankName,
+        accountNumber,
+        accountName,
+        reference,
+        createdBy: payload.createdBy || null,
+      },
+      select: {
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        accountName: true,
+        reference: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      id: created.id,
+      name: created.accountName,
+      bank: created.bankName,
+      accountNumber: created.accountNumber,
+      reference: created.reference,
+      currency,
+      status: (created.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
+      createdAt: created.createdAt,
+    };
+  }
+
+  async getBankList() {
+    try {
+      const banks = await nibssClient.getBankList();
+      const normalized = (banks || []).map((b: any) => ({
+        bankCode: (b.bankCode || "").toString(),
+        bankName: (b.bankName || "").toString(),
+      }));
+      normalized.sort((a: any, b: any) =>
+        (a.bankName || "").localeCompare(b.bankName || "", undefined, { sensitivity: "base" })
+      );
+      return normalized;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        throw new ServiceUnavailableError("Bank list service is not configured", {
+          upstreamStatus: status,
+        });
+      }
+      throw new ServiceUnavailableError("Failed to fetch bank list", {
+        upstreamStatus: status,
+        message: error?.message,
+      });
+    }
+  }
+
+  async verifyBankAccount(payload: { accountNumber: string; bankCode: string }) {
+    const accountNumber = (payload.accountNumber || "").toString().trim();
+    const bankCode = (payload.bankCode || "").toString().trim();
+    if (!accountNumber) throw new ValidationError("accountNumber is required");
+    if (!bankCode) throw new ValidationError("bankCode is required");
+
+    try {
+      const result = await nibssClient.verifyAccount(accountNumber, bankCode);
+      return {
+        verified: !!result.verified,
+        accountName: result.accountName || null,
+        accountNumber: result.accountNumber || accountNumber,
+        bankCode,
+      };
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 400) {
+        throw new ValidationError("Invalid bank details", {
+          upstreamStatus: status,
+        });
+      }
+      if (status === 401 || status === 403) {
+        throw new ServiceUnavailableError("Bank verification service is not configured", {
+          upstreamStatus: status,
+        });
+      }
+      throw new ServiceUnavailableError("Unable to verify bank account", {
+        upstreamStatus: status,
+        message: error?.message,
+      });
+    }
   }
 }
 
