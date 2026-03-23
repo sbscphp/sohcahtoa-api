@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import axios from "axios";
 import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
@@ -9,6 +10,25 @@ import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
 
 class AgentController {
+  private safeFilename(name: string) {
+    return String(name || "download")
+      .replace(/[\r\n"]/g, "")
+      .replace(/[\/\\?%*:|<>]/g, "-")
+      .trim();
+  }
+
+  private async pipeRemoteFile(res: Response, url: string, filename: string) {
+    const upstream = await axios.get(url, { responseType: "stream" });
+    const contentType = upstream.headers?.["content-type"] || "application/octet-stream";
+    const contentLength = upstream.headers?.["content-length"];
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${this.safeFilename(filename)}"`);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    upstream.data.pipe(res);
+  }
+
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
     let attachment;
     if (req.file) {
@@ -112,6 +132,28 @@ class AgentController {
   getTransaction = asyncHandler(async (req: Request, res: Response) => {
     const result = await agentService.transaction(req.params.id, req.params.transactionId);
     res.json(successResponse(result));
+  });
+
+  downloadTransactionReceipt = asyncHandler(async (req: Request, res: Response) => {
+    const { url, filename } = await agentService.getReceiptDownload(req.params.id, req.params.transactionId);
+    try {
+      await this.pipeRemoteFile(res, url, filename);
+    } catch (err: any) {
+      throw new ValidationError(err?.message || "Unable to download receipt");
+    }
+  });
+
+  downloadTransactionDocument = asyncHandler(async (req: Request, res: Response) => {
+    const { url, filename } = await agentService.getDocumentDownload(
+      req.params.id,
+      req.params.transactionId,
+      req.params.documentId
+    );
+    try {
+      await this.pipeRemoteFile(res, url, filename);
+    } catch (err: any) {
+      throw new ValidationError(err?.message || "Unable to download document");
+    }
   });
 
   get = asyncHandler(async (req: Request, res: Response) => {

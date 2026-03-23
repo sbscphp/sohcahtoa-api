@@ -61,7 +61,39 @@ class AgentService {
         },
       }),
     ]);
-    return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+
+    const agentIds = (items || []).map((a: any) => a.id).filter(Boolean);
+    const volumesByAgentId = new Map<string, { count: number; volume: number }>();
+    if (agentIds.length) {
+      const transactions = await (prisma as any).transaction.findMany({
+        where: { createdByAgentId: { in: agentIds } },
+        select: {
+          createdByAgentId: true,
+          nairaEquivalent: true,
+          foreignAmount: true,
+          cashPickup: { select: { amount: true } },
+        },
+      });
+
+      for (const t of transactions || []) {
+        const agentId = t.createdByAgentId;
+        if (!agentId) continue;
+        const prev = volumesByAgentId.get(agentId) || { count: 0, volume: 0 };
+        const value = Number(t.nairaEquivalent || t.foreignAmount || t.cashPickup?.amount || 0);
+        volumesByAgentId.set(agentId, { count: prev.count + 1, volume: prev.volume + value });
+      }
+    }
+
+    const enriched = (items || []).map((a: any) => {
+      const totals = volumesByAgentId.get(a.id) || { count: 0, volume: 0 };
+      return {
+        ...a,
+        totalTransactions: totals.count,
+        totalTransactionsVolume: totals.volume,
+      };
+    });
+
+    return { data: enriched, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
   
   async export(filters: any = {}) {
@@ -491,7 +523,10 @@ class AgentService {
 
   async transaction(agentId: string, transactionId: string) {
     const client: any = prisma as any;
-    const agent = await client.agent.findUnique({ where: { id: agentId }, select: { id: true } });
+    const agent = await client.agent.findUnique({
+      where: { id: agentId },
+      select: { id: true, name: true, email: true, phoneNumber: true },
+    });
     if (!agent) throw new NotFoundError("Agent not found");
     const row = await client.transaction.findFirst({
       where: { id: transactionId, createdByAgentId: agentId },
@@ -508,9 +543,7 @@ class AgentService {
         nairaEquivalent: true,
         foreignAmount: true,
         userId: true,
-        documents: {
-          select: { id: true },
-        },
+        documents: { select: { id: true, documentType: true, fileName: true, fileUrl: true } },
         cashPickup: {
           select: {
             id: true,
@@ -520,15 +553,52 @@ class AgentService {
             pickupCode: true,
             pickupLocation: true,
             pickupLocationId: true,
+            pickupCity: true,
+            pickupState: true,
             amount: true,
           },
         },
+        receipt: { select: { id: true, receiptNumber: true, pdfUrl: true, generatedAt: true } },
       },
     });
     if (!row) throw new NotFoundError("Transaction not found for this agent");
     const pickup = (row as any).cashPickup || null;
     const value = Number(row.nairaEquivalent || row.foreignAmount || pickup?.amount || 0);
     const docCount = Array.isArray((row as any).documents) ? (row as any).documents.length : 0;
+    const documents =
+      ((row as any).documents || []).map((d: any) => ({
+        id: d.id,
+        type: d.documentType,
+        fileName: d.fileName,
+        fileUrl: d.fileUrl,
+      })) || [];
+
+    const user = await client.user.findUnique({
+      where: { id: row.userId },
+      select: {
+        kyc: { select: { bvn: true, tin: true } },
+        profile: { select: { firstName: true, lastName: true } },
+      },
+    });
+    const customerName =
+      user?.profile ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim() : null;
+    const bvn = user?.kyc?.bvn || null;
+    const tin = user?.kyc?.tin || null;
+
+    const settlement = await client.settlement.findUnique({
+      where: { transactionId: row.id },
+      select: {
+        id: true,
+        status: true,
+        paymentMethod: true,
+        amount: true,
+        currency: true,
+        confirmedAt: true,
+        proofOfPayment: true,
+        bankDetails: { select: { bankName: true, accountName: true, accountNumber: true, reference: true } },
+      },
+    });
+
     return {
       transactionId: row.id,
       referenceNumber: row.referenceNumber || null,
@@ -550,13 +620,90 @@ class AgentService {
             code: pickup.pickupCode,
             status: pickup.status,
             createdAt: pickup.createdAt,
+            address: [pickup.pickupLocation, pickup.pickupCity, pickup.pickupState].filter(Boolean).join(", "),
+          }
+        : null,
+      agent: {
+        id: agent.id,
+        name: agent.name || null,
+        email: agent.email || null,
+        phoneNumber: agent.phoneNumber || null,
+      },
+      customer: {
+        name: customerName,
+        bvn,
+        tin,
+      },
+      receipt: row.receipt
+        ? {
+            receiptNumber: (row as any).receipt?.receiptNumber,
+            pdfUrl: (row as any).receipt?.pdfUrl || null,
+            generatedAt: (row as any).receipt?.generatedAt || null,
+          }
+        : null,
+      settlement: settlement
+        ? {
+            id: settlement.id,
+            status: settlement.status,
+            paymentMethod: settlement.paymentMethod,
+            amount: Number(settlement.amount || 0),
+            currency: settlement.currency,
+            confirmedAt: settlement.confirmedAt || null,
+            proofOfPayment: settlement.proofOfPayment || null,
+            bankDetails: settlement.bankDetails || null,
           }
         : null,
       meta: {
         documents: { count: docCount },
+        documentsList: documents,
         destinationCountry: row.destinationCountry || null,
       },
       createdAt: row.createdAt,
+    };
+  }
+
+  async getReceiptDownload(agentId: string, transactionId: string) {
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({ where: { id: agentId }, select: { id: true } });
+    if (!agent) throw new NotFoundError("Agent not found");
+
+    const trx = await client.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agentId },
+      select: {
+        id: true,
+        receipt: { select: { receiptNumber: true, pdfUrl: true } },
+      },
+    });
+    if (!trx) throw new NotFoundError("Transaction not found for this agent");
+    const pdfUrl = (trx as any).receipt?.pdfUrl || null;
+    if (!pdfUrl) throw new NotFoundError("Receipt not available for this transaction");
+
+    const receiptNumber = (trx as any).receipt?.receiptNumber || null;
+    return {
+      url: pdfUrl,
+      filename: `receipt-${receiptNumber || transactionId}.pdf`,
+    };
+  }
+
+  async getDocumentDownload(agentId: string, transactionId: string, documentId: string) {
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({ where: { id: agentId }, select: { id: true } });
+    if (!agent) throw new NotFoundError("Agent not found");
+
+    const doc = await client.transactionDocument.findFirst({
+      where: {
+        id: documentId,
+        transactionId,
+        transaction: { createdByAgentId: agentId },
+      },
+      select: { id: true, fileUrl: true, fileName: true, documentType: true },
+    });
+    if (!doc) throw new NotFoundError("Document not found for this transaction");
+    if (!doc.fileUrl) throw new NotFoundError("Document file not available");
+
+    return {
+      url: doc.fileUrl,
+      filename: doc.fileName || `${doc.documentType}-${doc.id}`,
     };
   }
 }

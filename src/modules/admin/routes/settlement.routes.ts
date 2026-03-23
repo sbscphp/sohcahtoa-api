@@ -98,6 +98,107 @@ SettlementRouter.get(
 
 /**
  * @swagger
+ * /api/admin/settlement/escrow-accounts:
+ *   post:
+ *     summary: Register escrow account
+ *     tags: [admin-settlement]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currency, bankName, accountNumber, accountName]
+ *             properties:
+ *               currency:
+ *                 type: string
+ *                 example: "NGN"
+ *               bankName:
+ *                 type: string
+ *                 example: "Access Bank"
+ *               accountNumber:
+ *                 type: string
+ *                 example: "0000000000"
+ *               accountName:
+ *                 type: string
+ *                 example: "SOHCAHTOA PAYOUTBDC"
+ *     responses:
+ *       201:
+ *         description: Escrow account registered
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+SettlementRouter.post(
+  "/escrow-accounts",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "create" }),
+  settlementController.createEscrowAccount
+);
+
+/**
+ * @swagger
+ * /api/admin/settlement/banks:
+ *   get:
+ *     summary: Get bank list
+ *     tags: [admin-settlement]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Bank list retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+SettlementRouter.get(
+  "/banks",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.bankList
+);
+
+/**
+ * @swagger
+ * /api/admin/settlement/banks/verify:
+ *   post:
+ *     summary: Verify bank account name
+ *     tags: [admin-settlement]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [accountNumber, bankCode]
+ *             properties:
+ *               accountNumber:
+ *                 type: string
+ *                 example: "0000000000"
+ *               bankCode:
+ *                 type: string
+ *                 example: "044"
+ *     responses:
+ *       200:
+ *         description: Account verification result
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+SettlementRouter.post(
+  "/banks/verify",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.verifyBankAccount
+);
+
+/**
+ * @swagger
  * /api/admin/settlement/funding-transactions:
  *   get:
  *     summary: Recent funding transactions
