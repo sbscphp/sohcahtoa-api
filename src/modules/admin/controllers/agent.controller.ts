@@ -83,6 +83,32 @@ class AgentController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  exportTransactionsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const filters = {
+      status: req.query.status,
+      dateFrom: req.query.dateFrom,
+      dateTo: req.query.dateTo,
+    };
+    const rows = await agentService.exportTransactions(req.params.id, filters);
+    streamCsv(
+      res,
+      "agent-transactions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.transactionId },
+        { header: "Reference Number", select: (r: any) => r.referenceNumber || "" },
+        { header: "Type", select: (r: any) => r.type || "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Stage", select: (r: any) => r.stage || "" },
+        { header: "Value", select: (r: any) => r.value },
+        { header: "Currency", select: (r: any) => r.currency || "" },
+        { header: "Pickup Code", select: (r: any) => r.pickup?.code || "" },
+        { header: "Pickup Location", select: (r: any) => r.pickup?.location || "" },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
   getTransaction = asyncHandler(async (req: Request, res: Response) => {
     const result = await agentService.transaction(req.params.id, req.params.transactionId);
     res.json(successResponse(result));

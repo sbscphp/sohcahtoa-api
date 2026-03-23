@@ -419,6 +419,76 @@ class AgentService {
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
+  async exportTransactions(agentId: string, filters: any = {}) {
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({ where: { id: agentId }, select: { id: true } });
+    if (!agent) {
+      throw new NotFoundError("Agent not found");
+    }
+
+    const where: any = { createdByAgentId: agentId };
+    if (filters.status) where.status = filters.status;
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const rows = await client.transaction.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        status: true,
+        currency: true,
+        type: true,
+        currentStep: true,
+        referenceNumber: true,
+        nairaEquivalent: true,
+        foreignAmount: true,
+        createdAt: true,
+        cashPickup: {
+          select: {
+            id: true,
+            status: true,
+            currency: true,
+            createdAt: true,
+            pickupCode: true,
+            pickupLocation: true,
+            pickupLocationId: true,
+            amount: true,
+          },
+        },
+      },
+    });
+
+    return rows.map((r: any) => {
+      const pickup = r.cashPickup || null;
+      const value = Number(r.nairaEquivalent || r.foreignAmount || pickup?.amount || 0);
+      return {
+        transactionId: r.id,
+        referenceNumber: r.referenceNumber || null,
+        type: r.type || null,
+        status: r.status || null,
+        stage: r.currentStep || null,
+        value,
+        currency: r.currency || null,
+        pickup: pickup
+          ? {
+              id: pickup.id,
+              location: pickup.pickupLocation,
+              locationId: pickup.pickupLocationId,
+              code: pickup.pickupCode,
+              status: pickup.status,
+              createdAt: pickup.createdAt,
+            }
+          : null,
+        createdAt: r.createdAt,
+      };
+    });
+  }
+
   async transaction(agentId: string, transactionId: string) {
     const client: any = prisma as any;
     const agent = await client.agent.findUnique({ where: { id: agentId }, select: { id: true } });

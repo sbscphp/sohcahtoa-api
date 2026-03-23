@@ -302,6 +302,50 @@ AgentRouter.get(
 
 /**
  * @swagger
+ * /api/admin/agent/{id}/transactions/export:
+ *   get:
+ *     summary: Export agent transactions as CSV
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Transaction status filter (e.g., DRAFT, APPROVED, COMPLETED)
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/export",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "export" }),
+  agentController.exportTransactionsCsv
+);
+
+/**
+ * @swagger
  * /api/admin/agent/{id}/transactions/{transactionId}:
  *   get:
  *     summary: Get single agent transaction details
