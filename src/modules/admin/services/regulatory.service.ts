@@ -554,7 +554,7 @@ class RegulatoryService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: "desc" },
-        select: { id: true, module: true, status: true, createdAt: true },
+        select: { id: true, module: true, status: true, createdAt: true, generatedUrl: true },
       }),
       prisma.reportJob.count({ where: whereJob }),
     ]);

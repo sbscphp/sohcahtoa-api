@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, streamCsv } from "../../../shared/utils";
 import { regulatoryService } from "../services/regulatory.service";
 
 class RegulatoryController {
@@ -119,6 +119,47 @@ class RegulatoryController {
   regulatoryLogDetails = asyncHandler(async (req: Request, res: Response) => {
     const result = await regulatoryService.regulatoryLogDetails(req.params.id);
     res.json(successResponse(result));
+  });
+
+  exportAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+    const severity = (req.query.severity as string) || "ALL";
+    const category = (req.query.category as string) || "ALL";
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.auditLogsList({ severity, category, search }, 1, 10_000);
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "regulatory-audit-logs.csv",
+      [
+        { header: "Timestamp", select: (r: any) => r.timestamp },
+        { header: "User/System", select: (r: any) => r.userOrSystem },
+        { header: "Action Performed", select: (r: any) => r.actionPerformed },
+        { header: "Result", select: (r: any) => r.actionResult },
+        { header: "Channel", select: (r: any) => r.channel },
+        { header: "Audit ID", select: (r: any) => r.auditId },
+      ],
+      rows as any[]
+    );
+  });
+
+  exportRegulatoryLogs = asyncHandler(async (req: Request, res: Response) => {
+    const status = (req.query.status as string) || "ALL";
+    const search = (req.query.search as string) || "";
+    const result = await regulatoryService.regulatoryLogsList({ status, search }, 1, 10_000);
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "regulatory-logs.csv",
+      [
+        { header: "Timestamp", select: (r: any) => r.timestamp },
+        { header: "User/System", select: (r: any) => r.userOrSystem },
+        { header: "Action Performed", select: (r: any) => r.actionPerformed },
+        { header: "Result", select: (r: any) => r.actionResult },
+        { header: "Channel", select: (r: any) => r.channel },
+        { header: "Regulatory ID", select: (r: any) => r.regulatoryId },
+      ],
+      rows as any[]
+    );
   });
 }
 
