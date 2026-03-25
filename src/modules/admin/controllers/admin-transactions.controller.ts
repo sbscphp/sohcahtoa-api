@@ -145,6 +145,27 @@ class AdminTransactionsController {
     res.json(successResponse(result));
   });
 
+  rejectDocument = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const reason = (req.body?.reason || req.body?.notes || "") as string;
+    const result = await adminTransactionsService.rejectTransactionDocument(
+      req.params.id,
+      req.params.documentId,
+      adminId,
+      reason
+    );
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.DOCUMENT_REJECT,
+      actionLabel: "Reject transaction document",
+      resourceType: "TRANSACTION_DOCUMENT",
+      resourceId: req.params.documentId,
+      reason,
+      metadata: { transactionId: req.params.id },
+    });
+    res.json(successResponse(result));
+  });
+
   requestMoreInfoOnDocument = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const result = await adminTransactionsService.requestMoreInfoOnTransactionDocument(
