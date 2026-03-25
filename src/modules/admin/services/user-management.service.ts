@@ -171,7 +171,7 @@ class UserManagementService {
                         const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user;
                         const roleName = user.role?.name || null;
                         const departmentName = user.department?.name || null;
-                        return { ...userWithoutPassword, roleName, departmentName };
+                        return { ...userWithoutPassword, roleId: user.roleId || null, departmentId: user.departmentId || null, roleName, departmentName };
                     });
                 }
             );
@@ -203,6 +203,8 @@ class UserManagementService {
                 email: true,
                 phoneNumber: true,
                 isActive: true,
+                roleId: true,
+                departmentId: true,
                 role: { select: { name: true } },
                 department: { select: { name: true } },
             },
@@ -213,6 +215,8 @@ class UserManagementService {
             email: u.email,
             phoneNumber: u.phoneNumber,
             isActive: u.isActive,
+            roleId: u.roleId || null,
+            departmentId: u.departmentId || null,
             roleName: u.role?.name || null,
             departmentName: u.department?.name || null,
         }));
@@ -325,7 +329,7 @@ class UserManagementService {
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
             const roleName = (user as any).role?.name || null;
             const departmentName = (user as any).department?.name || null;
-            return { ...userWithoutPassword, roleName, departmentName, rolePermissions };
+            return { ...userWithoutPassword, roleId: (user as any).roleId || null, departmentId: (user as any).departmentId || null, roleName, departmentName, rolePermissions };
         } catch (error) {
             logger.error("Failed to get admin user", {
                 id,

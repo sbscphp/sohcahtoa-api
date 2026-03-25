@@ -13,22 +13,32 @@ export class SettlementService {
   }
 
   async stats() {
-    const [sumConfirmed, pendingRecon, escrowCount] = await Promise.all([
-      (prisma as any).settlement.aggregate({
-        where: { status: "CONFIRMED" },
-        _sum: { amount: true },
-      }),
-      (prisma as any).settlement.count({
-        where: { OR: [{ status: "PENDING" }, { status: "AWAITING_CONFIRMATION" }] },
-      }),
-      (prisma as any).escrowAccount.count(),
-    ]);
-    const currentBalance = Number(sumConfirmed._sum?.amount || 0);
-    return {
-      currentBalance,
-      pendingReconciliation: pendingRecon,
-      totalEscrowAccounts: escrowCount,
-    };
+    try {
+      const [sumRows, pendingRows, escrowRows] = await Promise.all([
+        prisma.$queryRaw<{ sum: any }[]>`
+          SELECT COALESCE(SUM("amount"), 0) AS sum
+          FROM "settlements"
+          WHERE "status"::text IN ('CONFIRMED', 'COMPLETED')
+        `,
+        prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "settlements"
+          WHERE "status"::text IN ('PENDING', 'AWAITING_CONFIRMATION')
+        `,
+        prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "escrow_accounts"
+        `,
+      ]);
+
+      return {
+        currentBalance: Number(sumRows?.[0]?.sum || 0),
+        pendingReconciliation: Number(pendingRows?.[0]?.count || 0),
+        totalEscrowAccounts: Number(escrowRows?.[0]?.count || 0),
+      };
+    } catch {
+      return { currentBalance: 0, pendingReconciliation: 0, totalEscrowAccounts: 0 };
+    }
   }
 
   async discrepancies(page = 1, limit = 10) {
@@ -111,27 +121,31 @@ export class SettlementService {
   }
 
   async escrowAccounts() {
-    const rows = await (prisma as any).escrowAccount.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        bankName: true,
-        accountNumber: true,
-        accountName: true,
-        reference: true,
-        status: true,
-        createdAt: true,
-      },
-    });
-    return rows.map((b: any) => ({
-      id: b.id,
-      name: b.accountName,
-      bank: b.bankName,
-      accountNumber: b.accountNumber,
-      reference: b.reference,
-      status: (b.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
-      createdAt: b.createdAt,
-    }));
+    try {
+      const rows = await (prisma as any).escrowAccount.findMany({
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          bankName: true,
+          accountNumber: true,
+          accountName: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+
+      return rows.map((b: any) => ({
+        id: b.id,
+        name: b.accountName,
+        bank: b.bankName,
+        accountNumber: b.accountNumber,
+        reference: `ESCROW-${b.id}`,
+        status: (b.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
+        createdAt: b.createdAt,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async fundingTransactions(page = 1, limit = 10) {
@@ -203,14 +217,12 @@ export class SettlementService {
     });
     if (existing) throw new ValidationError("Escrow account already exists");
 
-    const reference = `ESCROW-${randomUUID()}`;
     const created = await (prisma as any).escrowAccount.create({
       data: {
         currency,
         bankName,
         accountNumber,
         accountName,
-        reference,
         createdBy: payload.createdBy || null,
       },
       select: {
@@ -218,7 +230,6 @@ export class SettlementService {
         bankName: true,
         accountNumber: true,
         accountName: true,
-        reference: true,
         status: true,
         createdAt: true,
       },
@@ -229,7 +240,7 @@ export class SettlementService {
       name: created.accountName,
       bank: created.bankName,
       accountNumber: created.accountNumber,
-      reference: created.reference,
+      reference: `ESCROW-${created.id}`,
       currency,
       status: (created.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
       createdAt: created.createdAt,
