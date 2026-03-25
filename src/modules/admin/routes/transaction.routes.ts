@@ -566,6 +566,13 @@ TransactionRouter.post(
   adminTransactionsController.approveDocument
 );
 
+TransactionRouter.post(
+  "/:id/documents/:documentId/reject",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.rejectDocument
+);
+
 /**
  * @swagger
  * /api/admin/transactions/{id}/documents/{documentId}/request-info:
