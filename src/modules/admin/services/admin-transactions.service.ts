@@ -145,6 +145,7 @@ export class AdminTransactionsService {
         transactionStage: t.currentStep,
         workflowStage: t.status,
         transactionValue: value,
+        currency: t.currency,
         status: t.status,
       };
     });
@@ -301,6 +302,7 @@ export class AdminTransactionsService {
       details: {
         transactionValueFx: valueFx,
         transactionValueNgn: valueNgn,
+        transactionCurrency: trx.currency,
         requesterType: "Customer Direct",
         bvnNumber: maskedBvn,
         numberOfDocuments: docCount,

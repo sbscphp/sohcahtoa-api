@@ -110,6 +110,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "export" }),
   userManagementController.exportUsersCsv
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}:
@@ -138,6 +139,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getUser
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}/activities:

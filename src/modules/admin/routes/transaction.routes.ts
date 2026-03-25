@@ -566,6 +566,44 @@ TransactionRouter.post(
   adminTransactionsController.approveDocument
 );
 
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/documents/{documentId}/reject:
+ *   post:
+ *     summary: Reject a transaction document
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Document rejected successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 TransactionRouter.post(
   "/:id/documents/:documentId/reject",
   authenticate,
