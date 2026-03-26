@@ -60,6 +60,11 @@ class UserManagementService {
                         altPhoneNumber: body.altPhoneNumber,
                         roleId: role.id,
                         departmentId: department.id,
+                        isActive: false,
+                    },
+                    include: {
+                        role: { select: { name: true } },
+                        department: { select: { name: true } },
                     },
                 });
 
@@ -123,7 +128,21 @@ class UserManagementService {
                 );
         }
 
-        return { user: result, rolePermissions };
+        const computedStatus = !(result as any).password ? "PENDING" : (result as any).isActive ? "ACTIVE" : "DEACTIVATED";
+        const { password: _password, role: _role, department: _department, ...userWithoutPassword } = result as any;
+        const roleName = (result as any).role?.name || null;
+        const departmentName = (result as any).department?.name || null;
+        return {
+            user: {
+                ...userWithoutPassword,
+                roleId: (result as any).roleId || null,
+                departmentId: (result as any).departmentId || null,
+                roleName,
+                departmentName,
+                status: computedStatus,
+            },
+            rolePermissions,
+        };
         } catch (error) {
             if ((error as any)?.code === "P2002") {
                 const target = (error as any)?.meta?.target || "unique field";
@@ -168,10 +187,11 @@ class UserManagementService {
                 { page, limit },
                 async (users: any[]) => {
                     return users.map((user) => {
+                        const computedStatus = !user.password ? "PENDING" : user.isActive ? "ACTIVE" : "DEACTIVATED";
                         const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user;
                         const roleName = user.role?.name || null;
                         const departmentName = user.department?.name || null;
-                        return { ...userWithoutPassword, roleId: user.roleId || null, departmentId: user.departmentId || null, roleName, departmentName };
+                        return { ...userWithoutPassword, roleId: user.roleId || null, departmentId: user.departmentId || null, roleName, departmentName, status: computedStatus };
                     });
                 }
             );
@@ -203,6 +223,7 @@ class UserManagementService {
                 email: true,
                 phoneNumber: true,
                 isActive: true,
+                password: true,
                 roleId: true,
                 departmentId: true,
                 role: { select: { name: true } },
@@ -219,6 +240,7 @@ class UserManagementService {
             departmentId: u.departmentId || null,
             roleName: u.role?.name || null,
             departmentName: u.department?.name || null,
+            status: !u.password ? "PENDING" : u.isActive ? "ACTIVE" : "DEACTIVATED",
         }));
     };
 
@@ -265,10 +287,25 @@ class UserManagementService {
                     roleId: roleId ?? undefined,
                     departmentId: departmentId ?? undefined,
                 },
+                include: {
+                    role: { select: { name: true } },
+                    department: { select: { name: true } },
+                },
             });
             const rolePermissions = await this.getRolePermissions(updated.roleId, "grouped");
-            const result: any = { user: updated, rolePermissions };
-            return result;
+            const { password: _password, role: _role, department: _department, ...userWithoutPassword } = updated as any;
+            const roleName = (updated as any).role?.name || null;
+            const departmentName = (updated as any).department?.name || null;
+            return {
+                user: {
+                    ...userWithoutPassword,
+                    roleId: (updated as any).roleId || null,
+                    departmentId: (updated as any).departmentId || null,
+                    roleName,
+                    departmentName,
+                },
+                rolePermissions,
+            };
         } catch (error) {
             logger.error("Failed to update admin user", { id, error });
             throw error;
@@ -284,9 +321,25 @@ class UserManagementService {
             const updated = await this.prisma.adminUser.update({
                 where: { id },
                 data: { isActive },
+                include: {
+                    role: { select: { name: true } },
+                    department: { select: { name: true } },
+                },
             });
             const rolePermissions = await this.getRolePermissions(updated.roleId, "grouped");
-            return { user: updated, rolePermissions };
+            const { password: _password, role: _role, department: _department, ...userWithoutPassword } = updated as any;
+            const roleName = (updated as any).role?.name || null;
+            const departmentName = (updated as any).department?.name || null;
+            return {
+                user: {
+                    ...userWithoutPassword,
+                    roleId: (updated as any).roleId || null,
+                    departmentId: (updated as any).departmentId || null,
+                    roleName,
+                    departmentName,
+                },
+                rolePermissions,
+            };
         } catch (error) {
             logger.error("Failed to toggle admin user active status", { id, isActive, error });
             throw error;
@@ -325,11 +378,12 @@ class UserManagementService {
             if (!user) {
                 throw new NotFoundError("User not found");
             }
+            const computedStatus = !(user as any).password ? "PENDING" : (user as any).isActive ? "ACTIVE" : "DEACTIVATED";
             const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user as any;
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
             const roleName = (user as any).role?.name || null;
             const departmentName = (user as any).department?.name || null;
-            return { ...userWithoutPassword, roleId: (user as any).roleId || null, departmentId: (user as any).departmentId || null, roleName, departmentName, rolePermissions };
+            return { ...userWithoutPassword, roleId: (user as any).roleId || null, departmentId: (user as any).departmentId || null, roleName, departmentName, status: computedStatus, rolePermissions };
         } catch (error) {
             logger.error("Failed to get admin user", {
                 id,
@@ -405,6 +459,7 @@ class UserManagementService {
             roleName: u.role?.name || null,
             departmentName: u.department?.name || null,
             isActive: u.isActive,
+            status: !u.password ? "PENDING" : u.isActive ? "ACTIVE" : "DEACTIVATED",
             createdAt: u.createdAt,
         }));
     };
@@ -454,7 +509,22 @@ class UserManagementService {
                 throw new DuplicateError("Role with this name already exists");
             }
 
-            if (data.isDefault) {
+            const parseBool = (v: any): boolean | undefined => {
+                if (v === undefined || v === null) return undefined;
+                if (typeof v === "boolean") return v;
+                const s = String(v).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+                if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+                return undefined;
+            };
+            const isDefaultRaw = (data as any).isDefault;
+            const isDefaultParsed = parseBool(isDefaultRaw);
+            if (isDefaultRaw !== undefined && isDefaultParsed === undefined) {
+                throw new BadRequestError("isDefault must be boolean");
+            }
+            const isDefault = isDefaultParsed ?? false;
+
+            if (isDefault) {
                 await this.prisma.role.updateMany({
                     where: { isDefault: true },
                     data: { isDefault: false },
@@ -519,6 +589,25 @@ class UserManagementService {
             };
 
             const permissionsJson = normalizePermissions(data.permissions as any);
+            const countPermissions = (p: any): number => {
+                if (!p) return 0;
+                if (Array.isArray(p)) return p.length;
+                if (typeof p === "object") {
+                    let count = 0;
+                    for (const m of Object.keys(p)) {
+                        const features = p[m] || {};
+                        for (const f of Object.keys(features)) {
+                            const actions = features[f] || [];
+                            if (Array.isArray(actions)) count += actions.length;
+                        }
+                    }
+                    return count;
+                }
+                return 0;
+            };
+            if (countPermissions(permissionsJson) < 1) {
+                throw new BadRequestError("At least one permission is required");
+            }
 
             const adminUser = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
 
@@ -532,7 +621,7 @@ class UserManagementService {
                         createdBy: adminUser?.fullName,
                         createdById: adminId,
                         department: departmentConnect,
-                        isDefault: data.isDefault,
+                        isDefault,
                     } as any),
                 });
 
@@ -665,7 +754,29 @@ class UserManagementService {
                 if (existing) throw new DuplicateError("Role with this name already exists");
             }
 
-            if (data.isDefault) {
+            const parseBool = (v: any): boolean | undefined => {
+                if (v === undefined || v === null) return undefined;
+                if (typeof v === "boolean") return v;
+                const s = String(v).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+                if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+                return undefined;
+            };
+            const sanitized: any = { ...(data as any) };
+            const hasIsDefault = Object.prototype.hasOwnProperty.call(sanitized, "isDefault");
+            const hasIsActive = Object.prototype.hasOwnProperty.call(sanitized, "isActive");
+            if (hasIsDefault) {
+                const parsed = parseBool(sanitized.isDefault);
+                if (parsed === undefined) throw new BadRequestError("isDefault must be boolean");
+                sanitized.isDefault = parsed;
+            }
+            if (hasIsActive) {
+                const parsed = parseBool(sanitized.isActive);
+                if (parsed === undefined) throw new BadRequestError("isActive must be boolean");
+                sanitized.isActive = parsed;
+            }
+
+            if (hasIsDefault && sanitized.isDefault === true) {
                 await this.prisma.role.updateMany({
                     where: { isDefault: true, id: { not: id } },
                     data: { isDefault: false },
@@ -720,11 +831,30 @@ class UserManagementService {
             };
 
             const updated = await this.prisma.$transaction(async (tx) => {
-                const hasPermissions = Object.prototype.hasOwnProperty.call(data as any, "permissions");
+                const hasPermissions = Object.prototype.hasOwnProperty.call(sanitized as any, "permissions");
                 const normalized = hasPermissions
-                    ? ((normalizePermissions((data as any).permissions) as any) ?? {})
+                    ? ((normalizePermissions((sanitized as any).permissions) as any) ?? {})
                     : undefined;
-                const { permissions: _permissions, ...roleData } = (data as any) ?? {};
+                const countPermissions = (p: any): number => {
+                    if (!p) return 0;
+                    if (Array.isArray(p)) return p.length;
+                    if (typeof p === "object") {
+                        let count = 0;
+                        for (const m of Object.keys(p)) {
+                            const features = p[m] || {};
+                            for (const f of Object.keys(features)) {
+                                const actions = features[f] || [];
+                                if (Array.isArray(actions)) count += actions.length;
+                            }
+                        }
+                        return count;
+                    }
+                    return 0;
+                };
+                if (hasPermissions && countPermissions(normalized) < 1) {
+                    throw new BadRequestError("At least one permission is required");
+                }
+                const { permissions: _permissions, ...roleData } = sanitized ?? {};
 
                 const roleRes = await tx.role.update({
                     where: { id },
@@ -870,6 +1000,38 @@ class UserManagementService {
             if (existing) {
                 throw new DuplicateError("Department with this name already exists");
             }
+
+            const rawEmail = typeof data.departmentEmail === "string" ? data.departmentEmail.trim() : "";
+            const departmentEmail = rawEmail ? rawEmail : null;
+            if (departmentEmail) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(departmentEmail)) {
+                    throw new BadRequestError("Enter a valid email address");
+                }
+            }
+
+            const parseBool = (v: any): boolean | undefined => {
+                if (v === undefined || v === null) return undefined;
+                if (typeof v === "boolean") return v;
+                const s = String(v).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+                if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+                return undefined;
+            };
+            const isDefaultRaw = (data as any).isDefault;
+            const isDefaultParsed = parseBool(isDefaultRaw);
+            if (isDefaultRaw !== undefined && isDefaultParsed === undefined) {
+                throw new BadRequestError("isDefault must be boolean");
+            }
+            const isDefault = isDefaultParsed ?? false;
+
+            if (isDefault) {
+                await this.prisma.department.updateMany({
+                    where: { isDefault: true },
+                    data: { isDefault: false },
+                });
+            }
+
             const branchName = (data.branch || "Head Office").trim();
             const branch = await this.prisma.branch.findFirst({
                 where: { name: { equals: branchName, mode: "insensitive" } },
@@ -885,10 +1047,10 @@ class UserManagementService {
             return await this.prisma.department.create({
                 data: {
                     name: data.name,
-                    departmentEmail: data.departmentEmail,
+                    departmentEmail,
                     description: data.description,
                     branch: branchName,
-                    isDefault: data.isDefault,
+                    isDefault,
                     createdBy,
                     createdById: adminId,
                 },
@@ -910,10 +1072,22 @@ class UserManagementService {
             }
 
             if (isActive !== undefined) {
-                where.isActive =
-                    typeof isActive === "string"
-                        ? isActive === "true"
-                        : Boolean(isActive);
+                const parseActiveFilter = (value: any): boolean | undefined => {
+                    if (value === undefined || value === null) return undefined;
+                    if (typeof value === "boolean") return value;
+                    const s = String(value).trim().toLowerCase();
+                    if (s === "true" || s === "1") return true;
+                    if (s === "false" || s === "0") return false;
+                    if (s === "active" || s === "activated" || s === "enabled") return true;
+                    if (s === "deactivated" || s === "dectivated" || s === "inactive" || s === "disabled") return false;
+                    if (s === "all" || s === "any") return undefined;
+                    return undefined;
+                };
+
+                const parsed = parseActiveFilter(isActive);
+                if (parsed !== undefined) {
+                    where.isActive = parsed;
+                }
             }
 
             return await paginate(
@@ -977,15 +1151,47 @@ class UserManagementService {
                 }
             }
 
+            const parseBool = (v: any): boolean | undefined => {
+                if (v === undefined || v === null) return undefined;
+                if (typeof v === "boolean") return v;
+                const s = String(v).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+                if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+                return undefined;
+            };
+            const hasIsDefault = Object.prototype.hasOwnProperty.call(data as any, "isDefault");
+            const isDefaultRaw = (data as any).isDefault;
+            const isDefaultParsed = hasIsDefault ? parseBool(isDefaultRaw) : undefined;
+            if (hasIsDefault && isDefaultParsed === undefined) {
+                throw new BadRequestError("isDefault must be boolean");
+            }
+
+            if (hasIsDefault && isDefaultParsed === true) {
+                await this.prisma.department.updateMany({
+                    where: { isDefault: true, id: { not: id } },
+                    data: { isDefault: false },
+                });
+            }
+
+            const hasEmail = Object.prototype.hasOwnProperty.call(data as any, "departmentEmail");
+            const rawEmail = typeof data.departmentEmail === "string" ? data.departmentEmail.trim() : "";
+            const departmentEmail = rawEmail ? rawEmail : null;
+            if (hasEmail && departmentEmail) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(departmentEmail)) {
+                    throw new BadRequestError("Enter a valid email address");
+                }
+            }
+
             return await this.prisma.department.update({
                 where: { id },
                 data: {
                     name: data.name,
-                    departmentEmail: data.departmentEmail,
+                    ...(hasEmail ? { departmentEmail } : {}),
                     description: data.description,
                     branch: data.branch,
                     isActive: data.isActive,
-                    isDefault: data.isDefault,
+                    ...(hasIsDefault ? { isDefault: isDefaultParsed } : {}),
                 },
             });
         } catch (error) {
