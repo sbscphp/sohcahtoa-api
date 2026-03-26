@@ -24,6 +24,7 @@ OutletRouter.get(
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.franchiseStats
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -61,6 +62,7 @@ OutletRouter.get(
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listFranchises
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises:

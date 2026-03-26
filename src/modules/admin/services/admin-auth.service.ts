@@ -105,7 +105,10 @@ class AdminAuthService {
     await this.prisma.$transaction([
       this.prisma.adminUser.update({
         where: { id: tokenRecord.userId },
-        data: { password: hashedPassword },
+        data: {
+          password: hashedPassword,
+          isActive: tokenRecord.user?.password ? undefined : true,
+        },
       }),
       this.prisma.token.update({
         where: { id: tokenRecord.id },
@@ -242,13 +245,22 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     throw new ValidationError("Invalid or expired reset token");
   }
 
+  const existingUser = await this.prisma.adminUser.findUnique({
+    where: { id: matchedToken.userId },
+    select: { id: true, password: true },
+  });
+  if (!existingUser) throw new NotFoundError("User not found");
+
   const hashedPassword = await hashPassword(newPassword);
 
   await this.prisma.$transaction([
     // Update user password
     this.prisma.adminUser.update({
       where: { id: matchedToken.userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        isActive: existingUser.password ? undefined : true,
+      },
     }),
 
     // Mark reset token as used

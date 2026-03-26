@@ -34,6 +34,44 @@ const router:Router = Router();
  *         name: search
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, DEACTIVATED, ALL]
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: customerType
+ *         schema:
+ *           type: string
+ *           enum: [NIGERIAN_CITIZEN, TOURIST, EXPATRIATE]
+ *       - in: query
+ *         name: kycStatus
+ *         schema:
+ *           type: string
+ *           enum: [NOT_STARTED, IN_PROGRESS, PENDING_VERIFICATION, VERIFIED, REJECTED]
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
  *     responses:
  *       200:
  *         description: Customers retrieved successfully

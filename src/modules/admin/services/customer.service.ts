@@ -18,15 +18,78 @@ type UpdateFlagStatusPayload = {
 
 export class CustomerService {
  
-  async listCustomers(page = 1, limit = 20, q?: string) {
+  async listCustomers(
+    page = 1,
+    limit = 20,
+    q?: string,
+    filters: {
+      status?: any;
+      isActive?: any;
+      customerType?: any;
+      kycStatus?: any;
+      dateFrom?: any;
+      dateTo?: any;
+      sortBy?: any;
+      sortOrder?: any;
+    } = {}
+  ) {
     const where: any = { role: "CUSTOMER" };
+    const and: any[] = [];
+    if (filters.isActive !== undefined) {
+      where.isActive =
+        typeof filters.isActive === "string"
+          ? filters.isActive === "true"
+          : Boolean(filters.isActive);
+    } else if (filters.status !== undefined) {
+      const s = String(filters.status).toUpperCase();
+      if (s === "ALL") {
+        delete where.isActive;
+      } else if (s === "ACTIVE") {
+        where.isActive = true;
+      } else if (s === "DEACTIVATED" || s === "INACTIVE") {
+        where.isActive = false;
+      }
+    }
+
+    if (filters.customerType !== undefined) {
+      where.customerType = String(filters.customerType).toUpperCase();
+    }
+
+    if (filters.kycStatus !== undefined) {
+      const k = String(filters.kycStatus).toUpperCase();
+      if (k === "NOT_STARTED") {
+        and.push({
+          OR: [{ kyc: { is: null } }, { kyc: { is: { status: "NOT_STARTED" } } }],
+        });
+      } else {
+        and.push({ kyc: { is: { status: k } } });
+      }
+    }
+
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
     if (q && q.trim().length > 0) {
-      where.OR = [
+      and.push({
+        OR: [
         { email: { contains: q, mode: "insensitive" } },
         { phoneNumber: { contains: q, mode: "insensitive" } },
         { profile: { firstName: { contains: q, mode: "insensitive" } } } as any,
         { profile: { lastName: { contains: q, mode: "insensitive" } } } as any,
-      ];
+        ],
+      });
+    }
+
+    const orderBy: any = {};
+    const sortBy = (filters.sortBy || "createdAt").toString();
+    const sortOrder = (filters.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    if (and.length > 0) {
+      where.AND = and;
     }
 
     return paginate(
@@ -34,7 +97,7 @@ export class CustomerService {
       {
         where,
         include: { profile: true, kyc: true },
-        orderBy: { createdAt: "desc" },
+        orderBy,
       },
       { page, limit },
       async (users: any[]) => {

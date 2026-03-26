@@ -142,6 +142,7 @@ export class AdminTransactionsService {
         customerName: name,
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
+        transactionMode: t.transactionMode,
         transactionStage: t.currentStep,
         workflowStage: t.status,
         transactionValue: value,
