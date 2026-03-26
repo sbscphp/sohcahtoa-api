@@ -194,22 +194,27 @@ class AgentService {
       },
     });
     if (!agent) return null;
-    const branchId = agent.branchId || null;
-    let where: any = {};
-    if (branchId) {
-      where = { pickupLocationId: branchId };
-    } else if (agent.branch?.name) {
-      where = { pickupLocation: agent.branch.name };
-    } else {
-      return { ...agent, totalTransactions: 0, transactionValue: 0 };
-    }
-    const [totalTransactions, sumAgg] = await Promise.all([
-      client.cashPickup.count({ where }),
-      client.cashPickup.aggregate({ where, _sum: { amount: true } }),
+    const [totalTransactions, sumNairaAgg, sumForeignAgg, sumPickupAgg] = await Promise.all([
+      client.transaction.count({ where: { createdByAgentId: id } }),
+      client.transaction.aggregate({
+        where: { createdByAgentId: id, nairaEquivalent: { not: null } },
+        _sum: { nairaEquivalent: true },
+      }),
+      client.transaction.aggregate({
+        where: { createdByAgentId: id, nairaEquivalent: null, foreignAmount: { not: null } },
+        _sum: { foreignAmount: true },
+      }),
+      client.cashPickup.aggregate({
+        where: { transaction: { createdByAgentId: id, nairaEquivalent: null, foreignAmount: null } },
+        _sum: { amount: true },
+      }),
     ]);
-    const transactionValue = Number((sumAgg as any)?._sum?.amount || 0);
+    const volNaira = Number((sumNairaAgg as any)?._sum?.nairaEquivalent || 0);
+    const volForeign = Number((sumForeignAgg as any)?._sum?.foreignAmount || 0);
+    const volPickup = Number((sumPickupAgg as any)?._sum?.amount || 0);
+    const totalTransactionsVolume = volNaira + volForeign + volPickup;
     const { branchId: _omit, ...rest } = agent as any;
-    return { ...rest, totalTransactions, transactionValue };
+    return { ...rest, totalTransactions, totalTransactionsVolume };
   }
 
   async update(id: string, data: { name?: string; email?: string; phoneNumber?: string; branch?: string; attachment?: { fileUrl: string; fileName?: string; fileSize?: number; mimeType?: string } }) {
@@ -563,7 +568,15 @@ class AgentService {
     });
     if (!row) throw new NotFoundError("Transaction not found for this agent");
     const pickup = (row as any).cashPickup || null;
-    const value = Number(row.nairaEquivalent || row.foreignAmount || pickup?.amount || 0);
+    const currency = (row.currency || "").toString().trim();
+    let nairaEquivalent = Number(row.nairaEquivalent || 0);
+    let foreignAmount = Number(row.foreignAmount || 0);
+    const pickupAmount = Number(pickup?.amount || 0);
+    if (currency.toUpperCase() === "NGN" && nairaEquivalent === 0 && foreignAmount > 0) {
+      nairaEquivalent = foreignAmount;
+      foreignAmount = 0;
+    }
+    const value = Number(nairaEquivalent || foreignAmount || pickupAmount || 0);
     const docCount = Array.isArray((row as any).documents) ? (row as any).documents.length : 0;
     const documents =
       ((row as any).documents || []).map((d: any) => ({
@@ -607,9 +620,9 @@ class AgentService {
       stage: row.currentStep || null,
       currency: row.currency || null,
       amounts: {
-        nairaEquivalent: Number(row.nairaEquivalent || 0),
-        foreignAmount: Number(row.foreignAmount || 0),
-        pickupAmount: Number(pickup?.amount || 0),
+        nairaEquivalent,
+        foreignAmount,
+        pickupAmount,
         value,
       },
       pickup: pickup

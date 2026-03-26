@@ -243,7 +243,7 @@ AgentRouter.patch(
   authenticate,
   requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
   uploadAgentAttachment,
-  uploadAgentAttachment, agentController.update
+  agentController.update
 );
 
 /**

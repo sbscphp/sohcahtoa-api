@@ -14,6 +14,8 @@ import {
   PickupStationQueryDto,
   UpdatePickupStationDto,
 } from "../dto/outlet.dto";
+import statesCities from "../../../shared/utils/states-cities.json";
+import { NotFoundError } from "../../../shared/utils/errors";
 
 class OutletController {
   list = asyncHandler(async (_req: Request, res: Response) => {
@@ -226,11 +228,49 @@ class OutletController {
     res.json(successResponse(data));
   });
 
+  exportFranchiseBranches = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportBranchesByFranchise(req.params.id, req.query);
+    streamCsv(
+      res,
+      "franchise-branches.csv",
+      [
+        { header: "Branch ID", select: (r: any) => r.id },
+        { header: "Branch Name", select: (r: any) => r.branchName },
+        { header: "Branch Manager", select: (r: any) => r.branchManager },
+        { header: "Email", select: (r: any) => r.email },
+        { header: "Address", select: (r: any) => r.address },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Is Active", select: (r: any) => r.isActive },
+      ],
+      rows as any[]
+    );
+  });
+
   listFranchiseTransactions = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const result = await outletService.listTransactionsByFranchise(req.params.id, req.query, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
+  });
+
+  exportFranchiseTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportTransactionsByFranchise(req.params.id, req.query);
+    streamCsv(
+      res,
+      "franchise-transactions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.id },
+        { header: "Reference Number", select: (r: any) => r.dateAndId?.reference || "" },
+        { header: "Customer Name", select: (r: any) => r.customerName || "" },
+        { header: "Transaction Type", select: (r: any) => r.transactionType || "" },
+        { header: "Transaction Stage", select: (r: any) => r.transactionStage || "" },
+        { header: "Workflow Stage", select: (r: any) => r.workflowStage || "" },
+        { header: "Transaction Value", select: (r: any) => r.transactionValue ?? "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Created At", select: (r: any) => (r.dateAndId?.date ? new Date(r.dateAndId.date).toISOString() : "") },
+      ],
+      rows as any[]
+    );
   });
 
   listBranchTransactions = asyncHandler(async (req: Request, res: Response) => {
@@ -260,8 +300,22 @@ class OutletController {
   });
 
   listNigeriaStates = asyncHandler(async (_req: Request, res: Response) => {
-    const states = await outletService.listNigeriaStates();
-    res.json(successResponse({ states }));
+    const states = statesCities.map(item => item.name);
+    res.json(successResponse(states));
+  });
+
+  listNigeriaCitiesByState = asyncHandler(async (req: Request, res: Response) => {
+    const { state } = req.params;
+    
+    const stateData = statesCities.find(
+      (item) => item.name.toLowerCase() === state.toLowerCase()
+    );
+
+    if (!stateData) {
+      throw new NotFoundError(`State '${state}' not found`);
+    }
+
+    res.json(successResponse(stateData.cities));
   });
 
   updateBranchStatus = asyncHandler(async (req: Request, res: Response) => {

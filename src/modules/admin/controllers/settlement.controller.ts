@@ -39,9 +39,7 @@ class SettlementController {
 
   createEscrowAccount = asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.user) throw new ValidationError("Authentication required");
-    const currency =
-      req.body.currency ||
-      (typeof req.body.currencyType === "string" ? req.body.currencyType.split(" - ")[0] : undefined);
+    const currency = req.body.currencyType || req.body.currency;
     const created = await settlementService.createEscrowAccount({
       currency,
       bankName: req.body.bankName,
