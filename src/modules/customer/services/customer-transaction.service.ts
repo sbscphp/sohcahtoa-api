@@ -220,6 +220,8 @@ export class CustomerTransactionService {
     });
 
     // Create transaction
+    const currencyCode = (currency || '').toString().trim();
+    const isNgn = currencyCode.toUpperCase() === 'NGN';
     const createData = {
       userId,
       referenceNumber,
@@ -229,8 +231,8 @@ export class CustomerTransactionService {
       currentStep: initialStep as any,
       purpose,
       destinationCountry: destinationCountry || null,
-      currency,
-      foreignAmount: amount as any,
+      currency: currencyCode,
+      ...(isNgn ? { nairaEquivalent: amount as any, foreignAmount: null } : { foreignAmount: amount as any }),
       formAId,
       taxClearanceNumber,
       disbursementMethod: pickupLocation

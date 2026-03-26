@@ -126,6 +126,7 @@ export class SettlementService {
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
+          currency: true,
           bankName: true,
           accountNumber: true,
           accountName: true,
@@ -140,6 +141,7 @@ export class SettlementService {
         bank: b.bankName,
         accountNumber: b.accountNumber,
         reference: `ESCROW-${b.id}`,
+        currencyType: b.currency,
         status: (b.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
         createdAt: b.createdAt,
       }));
@@ -201,12 +203,12 @@ export class SettlementService {
     accountName: string;
     createdBy?: string;
   }) {
-    const currency = (payload.currency || "").toString().trim().toUpperCase();
+    const currency = (payload.currency || "").toString().trim();
     const bankName = (payload.bankName || "").toString().trim();
     const accountNumber = (payload.accountNumber || "").toString().trim();
     const accountName = (payload.accountName || "").toString().trim();
 
-    if (!currency || currency.length !== 3) throw new ValidationError("currency is required");
+    if (!currency) throw new ValidationError("currencyType is required");
     if (!bankName) throw new ValidationError("bankName is required");
     if (!accountNumber) throw new ValidationError("accountNumber is required");
     if (!accountName) throw new ValidationError("accountName is required");
@@ -219,6 +221,7 @@ export class SettlementService {
 
     const created = await (prisma as any).escrowAccount.create({
       data: {
+        id: randomUUID(),
         currency,
         bankName,
         accountNumber,
@@ -227,6 +230,7 @@ export class SettlementService {
       },
       select: {
         id: true,
+        currency: true,
         bankName: true,
         accountNumber: true,
         accountName: true,
@@ -241,7 +245,7 @@ export class SettlementService {
       bank: created.bankName,
       accountNumber: created.accountNumber,
       reference: `ESCROW-${created.id}`,
-      currency,
+      currencyType: created.currency,
       status: (created.status || "").toString().toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
       createdAt: created.createdAt,
     };
