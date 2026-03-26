@@ -219,6 +219,59 @@ export class CustomerTransactionService {
           : null,
     });
 
+    // Fetch active exchange rate and calculate nairaEquivalent
+    let nairaEquivalent: number | null = null;
+    let exchangeRate: number | null = null;
+
+    if (currency.toUpperCase() !== 'NGN') {
+      logger.info(`[createTransaction] Fetching exchange rate for ${currency} to NGN`, {
+        currency,
+        amount,
+      });
+
+      try {
+        const where = buildRateWhereClause({
+          status: 'active',
+          fromCurrency: currency.toUpperCase(),
+          toCurrency: 'NGN',
+        });
+
+        const client: any = prisma as any;
+        const rate = await client.exchangeRate.findFirst({
+          where,
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        if (rate) {
+          exchangeRate = parseFloat(rate.sellRate);
+          nairaEquivalent = amount * exchangeRate;
+
+          logger.info(`[createTransaction] Exchange rate calculated`, {
+            currency,
+            amount,
+            exchangeRate,
+            nairaEquivalent,
+          });
+        } else {
+          logger.warn(`[createTransaction] No active exchange rate found for ${currency} to NGN`, {
+            currency,
+          });
+        }
+      } catch (error) {
+        logger.error(`[createTransaction] Error fetching exchange rate`, {
+          currency,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      // If currency is already NGN, set nairaEquivalent to the amount
+      nairaEquivalent = amount;
+      exchangeRate = 1;
+      logger.debug(`[createTransaction] Currency is NGN, setting nairaEquivalent = amount`, {
+        amount,
+      });
+    }
+
     // Create transaction
     const createData = {
       userId,
@@ -231,6 +284,8 @@ export class CustomerTransactionService {
       destinationCountry: destinationCountry || null,
       currency,
       foreignAmount: amount as any,
+      nairaEquivalent: nairaEquivalent as any,
+      exchangeRate: exchangeRate as any,
       formAId,
       taxClearanceNumber,
       disbursementMethod: pickupLocation
