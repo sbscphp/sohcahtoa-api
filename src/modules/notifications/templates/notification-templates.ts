@@ -349,6 +349,14 @@ export const NotificationTemplates = {
     actionUrl: `/admin/settlements/${data.referenceNumber}`,
   }),
 
+  TICKET_ASSIGNED_ADMIN: (data: { ticketReference: string; ticketId: string }): NotificationTemplate => ({
+    title: 'Ticket Assigned',
+    body: `Support ticket ${data.ticketReference} has been assigned to you.`,
+    channel: NotificationChannel.IN_APP,
+    priority: NotificationPriority.HIGH,
+    actionUrl: `/admin/tickets/${data.ticketId}`,
+  }),
+
   // System Notifications
   SYSTEM_MAINTENANCE: (data: { startTime: string; duration: string }): NotificationTemplate => ({
     title: 'Scheduled Maintenance',

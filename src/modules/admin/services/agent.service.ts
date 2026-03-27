@@ -16,6 +16,64 @@ class AgentService {
     return { total, active, deactivated, pendingApproval };
   }
 
+  async listAll(filters: any = {}) {
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
+    const where: any = {};
+    if (filters.isActive !== undefined) where.isActive = String(filters.isActive) === "true";
+    if (filters.isApproved !== undefined) where.isApproved = String(filters.isApproved) === "true";
+    const branchRaw = ((filters || {}).branch ?? (filters || {}).branchId ?? "").toString().trim();
+    if (branchRaw) {
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchRaw);
+      if (isUuid) {
+        where.branchId = branchRaw;
+      } else {
+        const branch = await (prisma as any).branch.findFirst({
+          where: { name: { equals: branchRaw, mode: "insensitive" } },
+          select: { id: true },
+        });
+        if (!branch) {
+          throw new ValidationError("Branch not found", { branch: branchRaw });
+        }
+        where.branchId = branch.id;
+      }
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const items = await (prisma as any).agent.findMany({
+      where,
+      orderBy: { name: "asc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        isActive: true,
+        isApproved: true,
+        branchId: true,
+        branch: { select: { id: true, name: true } },
+      },
+    });
+
+    return (items || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      email: a.email,
+      phoneNumber: a.phoneNumber,
+      isActive: a.isActive,
+      isApproved: a.isApproved,
+      branchId: a.branchId || null,
+      branchName: a.branch?.name || null,
+    }));
+  }
+
   async list(filters: any = {}, page = 1, limit = 20) {
     const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
     const where: any = {};
@@ -86,8 +144,11 @@ class AgentService {
 
     const enriched = (items || []).map((a: any) => {
       const totals = volumesByAgentId.get(a.id) || { count: 0, volume: 0 };
+      const branchName = a.branch?.name || null;
+      const { branch: _branch, ...agentWithoutBranchObj } = a;
       return {
-        ...a,
+        ...agentWithoutBranchObj,
+        branchName,
         totalTransactions: totals.count,
         totalTransactionsVolume: totals.volume,
       };
@@ -100,6 +161,23 @@ class AgentService {
     const where: any = {};
     const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
     if (filters.isActive !== undefined) where.isActive = String(filters.isActive) === "true";
+    const branchRaw = ((filters || {}).branch ?? (filters || {}).branchId ?? "").toString().trim();
+    if (branchRaw) {
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchRaw);
+      if (isUuid) {
+        where.branchId = branchRaw;
+      } else {
+        const branch = await (prisma as any).branch.findFirst({
+          where: { name: { equals: branchRaw, mode: "insensitive" } },
+          select: { id: true },
+        });
+        if (!branch) {
+          throw new ValidationError("Branch not found", { branch: branchRaw });
+        }
+        where.branchId = branch.id;
+      }
+    }
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
@@ -222,6 +300,10 @@ class AgentService {
       throw new ValidationError("No update fields provided");
     }
     const client: any = prisma as any;
+    const existing = await client.agent.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      throw new NotFoundError("Agent not found");
+    }
     if (data.email) {
       const existingEmail = await client.agent.findFirst({
         where: { email: data.email, NOT: { id } },
@@ -297,6 +379,10 @@ class AgentService {
   
   async updateStatus(id: string, isActive: boolean) {
     const client: any = prisma as any;
+    const existing = await client.agent.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      throw new NotFoundError("Agent not found");
+    }
     return client.agent.update({
       where: { id },
       data: { isActive },
@@ -314,6 +400,10 @@ class AgentService {
 
   async updateApproval(id: string, isApproved: boolean) {
     const client: any = prisma as any;
+    const existing = await client.agent.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      throw new NotFoundError("Agent not found");
+    }
     return client.agent.update({
       where: { id },
       data: { isApproved },

@@ -16,9 +16,9 @@ export class FranchiseQueryDto {
   status?: string;
 }
 
-export class UpdateFranchiseStatusDto {
-  status!: string;
-}
+export type UpdateFranchiseStatusDto = {
+  status: boolean;
+};
 
 export class UpdateFranchiseDto {
   franchiseName?: string;
