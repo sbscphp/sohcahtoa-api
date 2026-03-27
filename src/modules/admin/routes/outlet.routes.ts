@@ -130,8 +130,7 @@ OutletRouter.post(
  *             required: [status]
  *             properties:
  *               status:
- *                 type: string
- *                 enum: [Active, Deactivated]
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Franchise status updated
@@ -1212,8 +1211,7 @@ OutletRouter.get(
  *             required: [status]
  *             properties:
  *               status:
- *                 type: string
- *                 enum: [Active, Deactivated, Pending]
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Branch status updated
@@ -1225,6 +1223,94 @@ OutletRouter.patch(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.updateBranchStatus
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/agents:
+ *   get:
+ *     summary: List agents under a branch
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: Branch agents retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/:id/agents",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listBranchAgents
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/agents/export:
+ *   get:
+ *     summary: Export branch agents as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/:id/agents/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportBranchAgents
 );
 
 /**

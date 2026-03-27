@@ -95,6 +95,48 @@ AgentRouter.get(
 
 /**
  * @swagger
+ * /api/admin/agent/all:
+ *   get:
+ *     summary: List agents (unpaginated)
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: branch
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: branchId
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agents retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.get(
+  "/all",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.listAll
+);
+
+/**
+ * @swagger
  * /api/admin/agent/export:
  *   get:
  *     summary: Export agents as CSV

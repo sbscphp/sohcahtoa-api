@@ -441,6 +441,13 @@ private validateAttachment(attachment: {
     if (!adminId || typeof adminId !== "string") {
       throw new ValidationError("adminId is required");
     }
+    if (!id || typeof id !== "string") {
+      throw new ValidationError("ticketId is required");
+    }
+    const ticket = await client.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) {
+      throw new NotFoundError("Ticket not found");
+    }
     const admin = await client.adminUser.findUnique({ where: { id: adminId } });
     if (!admin || admin.isActive === false) {
       throw new ValidationError("Assignee not found or inactive");

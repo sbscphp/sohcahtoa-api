@@ -15,7 +15,7 @@ import {
   UpdatePickupStationDto,
 } from "../dto/outlet.dto";
 import statesCities from "../../../shared/utils/states-cities.json";
-import { NotFoundError } from "../../../shared/utils/errors";
+import { NotFoundError, ValidationError } from "../../../shared/utils/errors";
 
 class OutletController {
   list = asyncHandler(async (_req: Request, res: Response) => {
@@ -72,19 +72,32 @@ class OutletController {
   });
 
   updateFranchiseStatus = asyncHandler(async (req: Request, res: Response) => {
-    const body = req.body as UpdateFranchiseStatusDto;
-    const data = await outletService.updateFranchiseStatus(req.params.id, body.status);
+    const { status } = req.body as { status: boolean };
+
+    if (typeof status !== "boolean") {
+      throw new ValidationError("status must be a boolean");
+    }
+
+    const resolvedStatus: "Active" | "Deactivated" = status ? "Active" : "Deactivated";
+
+    const data = await outletService.updateFranchiseStatus(
+      req.params.id,
+      resolvedStatus
+    );
+
     const adminId = (req as any).user?.userId as string;
+
     await auditTrailService.logAction({
       adminId,
       actionType: "FRANCHISE_UPDATE",
       actionLabel: "Update franchise status",
       resourceType: "OUTLET",
       resourceId: req.params.id,
-      metadata: { status: body.status },
+      metadata: { status: resolvedStatus },
     });
+
     res.json(successResponse(data));
-  });
+  }); 
 
   updateFranchise = asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as UpdateFranchiseDto;
@@ -319,7 +332,15 @@ class OutletController {
   });
 
   updateBranchStatus = asyncHandler(async (req: Request, res: Response) => {
-    const data = await outletService.updateBranchStatus(req.params.id, req.body.status);
+    const { status } = req.body as { status: boolean };
+
+    if (typeof status !== "boolean") {
+      throw new ValidationError("status must be a boolean");
+    }
+
+    const resolvedStatus: "Active" | "Deactivated" = status ? "Active" : "Deactivated";
+
+    const data = await outletService.updateBranchStatus(req.params.id, resolvedStatus);
     const adminId = (req as any).user?.userId as string;
     await auditTrailService.logAction({
       adminId,
@@ -327,7 +348,7 @@ class OutletController {
       actionLabel: "Update branch status",
       resourceType: "BRANCH",
       resourceId: req.params.id,
-      metadata: { status: req.body.status },
+      metadata: { status: resolvedStatus },
     });
     res.json(successResponse(data));
   });
@@ -352,6 +373,29 @@ class OutletController {
   //   const data = await outletService.exportBranches();
   //   res.json(successResponse(data));
   // });
+
+  listBranchAgents = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.listBranchAgents(req.params.id, req.query);
+    res.json(successResponse(data.items, { pagination: data.pagination }));
+  });
+
+  exportBranchAgents = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportBranchAgents(req.params.id, req.query);
+    streamCsv(
+      res,
+      "branch-agents.csv",
+      [
+        { header: "Agent ID", select: (r: any) => r.id },
+        { header: "Agent Name", select: (r: any) => r.name },
+        { header: "Email", select: (r: any) => r.email },
+        { header: "Phone Number", select: (r: any) => r.phoneNumber },
+        { header: "Active", select: (r: any) => (r.isActive ? "Active" : "Deactivated") },
+        { header: "Approved", select: (r: any) => (r.isApproved ? "Approved" : "Pending") },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
 
   addAgents = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.addAgentsToBranch(req.params.id, req.body.agentIds || []);

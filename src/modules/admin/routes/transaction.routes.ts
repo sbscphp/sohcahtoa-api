@@ -442,8 +442,6 @@ TransactionRouter.post(
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-// Transactions - Buy FX lifecycle (review, approve, reject, settle)
-
 TransactionRouter.post(
   "/:id/review",
   authenticate,
@@ -689,32 +687,3 @@ TransactionRouter.post(
   adminTransactionsController.settle
 );
 
-/**
- * @swagger
- * /api/admin/deposits/{transactionId}/confirm:
- *   post:
- *     summary: Confirm a deposit
- *     tags: [admin-transactions]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               confirmationDetails:
- *                 type: object
- *     responses:
- *       200:
- *         description: Deposit confirmed successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
- 
