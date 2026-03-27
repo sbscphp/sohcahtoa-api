@@ -586,7 +586,11 @@ echo ""
 
 # Seed pickup locations (if needed)
 echo "🌱 Seeding pickup locations..."
-npm run seed:pickup || echo "⚠️  Pickup locations seed skipped (may already exist)"
+if [ -f "/app/dist/seeds/pickup-locations.seed.js" ]; then
+  node /app/dist/seeds/pickup-locations.seed.js || echo "⚠️  Pickup locations seed skipped (may already exist)"
+else
+  echo "⚠️  Pickup locations seed file not found"
+fi
 echo ""
 
 # Start the application
