@@ -64,27 +64,51 @@ export class CustomerVirtualAccountController {
           transactionId
         );
 
-        logger.info('Virtual account already exists', {
-          userId,
-          transactionId,
-          accountNumber: existingAccount.accountNumber,
-        });
+        // Check if account is expired
+        const isExpired =
+          existingAccount.expiresAt && new Date(existingAccount.expiresAt) < new Date();
 
-        // Return existing account
-        const customerView = {
-          accountNumber: existingAccount.accountNumber,
-          accountName: existingAccount.accountName,
-          bankName: existingAccount.bankName,
-          status: existingAccount.status,
-          expiresAt: existingAccount.expiresAt,
-          createdAt: existingAccount.createdAt,
-          message: 'Virtual account already exists for this transaction',
-        };
+        if (isExpired) {
+          logger.warn('Existing virtual account has expired, creating new one', {
+            userId,
+            transactionId,
+            accountNumber: existingAccount.accountNumber,
+            expiresAt: existingAccount.expiresAt,
+          });
 
-        return res.status(200).json({
-          success: true,
-          data: customerView,
-        });
+          // Deactivate the expired account
+          await prisma.virtualAccount.update({
+            where: { id: existingAccount.id },
+            data: {
+              status: 'INACTIVE',
+            },
+          });
+
+          // Continue to create a new account (fall through to creation logic below)
+        } else {
+          logger.info('Valid virtual account already exists', {
+            userId,
+            transactionId,
+            accountNumber: existingAccount.accountNumber,
+            status: existingAccount.status,
+          });
+
+          // Return existing active account
+          const customerView = {
+            accountNumber: existingAccount.accountNumber,
+            accountName: existingAccount.accountName,
+            bankName: existingAccount.bankName,
+            status: existingAccount.status,
+            expiresAt: existingAccount.expiresAt,
+            createdAt: existingAccount.createdAt,
+            message: 'Virtual account already exists for this transaction',
+          };
+
+          return res.status(200).json({
+            success: true,
+            data: customerView,
+          });
+        }
       } catch (error) {
         // Account doesn't exist, proceed to create
         if (!(error instanceof AppError && error.statusCode === 404)) {
@@ -178,6 +202,10 @@ export class CustomerVirtualAccountController {
         transactionId
       );
 
+      // Check if account is expired
+      const isExpired =
+        virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
+
       // Filter sensitive information for customer view
       const customerView = {
         accountNumber: virtualAccount.accountNumber,
@@ -186,6 +214,7 @@ export class CustomerVirtualAccountController {
         status: virtualAccount.status,
         expiresAt: virtualAccount.expiresAt,
         createdAt: virtualAccount.createdAt,
+        isExpired,
         deposits: virtualAccount.deposits?.map((deposit) => ({
           id: deposit.id,
           amount: deposit.amount,
@@ -194,6 +223,10 @@ export class CustomerVirtualAccountController {
           tranDateTime: deposit.tranDateTime,
           createdAt: deposit.createdAt,
         })),
+        ...(isExpired && {
+          message:
+            'This virtual account has expired. Please create a new one by calling POST /api/customer/transactions/:transactionId/virtual-account',
+        }),
       };
 
       res.status(200).json({
@@ -244,6 +277,18 @@ export class CustomerVirtualAccountController {
       const virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(
         transactionId
       );
+
+      // Check if account is expired
+      const isExpired =
+        virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
+
+      if (isExpired) {
+        throw new AppError(
+          ErrorCode.VALIDATION_ERROR,
+          'Virtual account has expired. Please create a new one by calling POST /api/customer/transactions/:transactionId/virtual-account',
+          400
+        );
+      }
 
       const instructions = {
         accountNumber: virtualAccount.accountNumber,
