@@ -273,6 +273,8 @@ export class CustomerTransactionService {
     }
 
     // Create transaction
+    const currencyCode = (currency || '').toString().trim();
+    const isNgn = currencyCode.toUpperCase() === 'NGN';
     const createData = {
       userId,
       referenceNumber,

@@ -151,7 +151,6 @@ export const createApp = async (): Promise<Application> => {
   app.use('/api/agent/dashboard', AgentDashboardRouter)
   logger.info('Settlement management routes registered');
 
-
   // 404 handler
   app.use((req: Request, res: Response) => {
     res.status(404).json({

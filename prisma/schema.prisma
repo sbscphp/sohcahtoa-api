@@ -760,7 +760,7 @@ enum EscrowAccountStatus {
 
 model EscrowAccount {
   id            String             @id @default(uuid())
-  currency      String             @default("NGN")
+  currency      String             @default("NGN - Naira")
   bankName      String
   accountNumber String
   accountName   String

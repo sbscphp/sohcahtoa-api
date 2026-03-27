@@ -7,10 +7,19 @@ const prisma: PrismaClient = getDatabase();
 class RateService {
 
   async stats() {
-    const [all, active, scheduled] = await Promise.all([
-      prisma.exchangeRate.count(),
+    const now = new Date();
+    const [active, scheduled, all] = await Promise.all([
       prisma.exchangeRate.count({ where: isActiveWhere() }),
       prisma.exchangeRate.count({ where: isScheduledWhere() }),
+      prisma.exchangeRate.count({
+        where: {
+          isActive: true,
+          OR: [
+            { validFrom: { lte: now }, validUntil: { gt: now } },
+            { validFrom: { gt: now } },
+          ],
+        },
+      }),
     ]);
     return { all, active, scheduled };
   }

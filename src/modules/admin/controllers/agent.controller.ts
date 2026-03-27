@@ -202,7 +202,12 @@ class AgentController {
   });
 
   update = asyncHandler(async (req: AuthRequest, res: Response) => {
-    let attachment;
+    const normalizeOptionalText = (v: unknown) => {
+      if (v == null) return undefined;
+      const s = String(v).trim();
+      return s ? s : undefined;
+    };
+    let attachment; 
     if (req.file) {
       if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
         throw new ValidationError("Attachment exceeds 2MB limit");
@@ -226,13 +231,12 @@ class AgentController {
     }
     const before = await agentService.get(req.params.id);
     const updated = await agentService.update(req.params.id, {
-      name: req.body.name,
-      email: req.body.email,
-      phoneNumber: req.body.phoneNumber,
-      branch: req.body.branch,
+      name: normalizeOptionalText(req.body.name),
+      email: normalizeOptionalText(req.body.email),
+      phoneNumber: normalizeOptionalText(req.body.phoneNumber),
+      branch: normalizeOptionalText(req.body.branch),
       attachment,
     });
-    const enriched = await agentService.get(req.params.id);
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
@@ -241,13 +245,13 @@ class AgentController {
         resourceType: "AGENT",
         resourceId: updated.id,
         previousState: before,
-        newState: enriched,
+        newState: updated,
         status: "SUCCESS",
         userAgent: req.headers["user-agent"] as string,
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
       });
     }
-    res.json(successResponse(enriched));
+    res.json(successResponse(updated));
   });
 
   deactivate = asyncHandler(async (req: AuthRequest, res: Response) => {
