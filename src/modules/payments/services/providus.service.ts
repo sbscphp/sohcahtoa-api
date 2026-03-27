@@ -150,7 +150,7 @@ export class ProvidusService {
       logger.info('Creating dynamic account', { accountName });
 
       const response = await this.client.post<CreateDynamicAccountResponse>(
-        '/api/PiPCreateDynamicAccountNumber',
+        '/PiPCreateDynamicAccountNumber',
         { account_name: accountName }
       );
 
