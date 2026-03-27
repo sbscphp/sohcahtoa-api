@@ -182,6 +182,13 @@ class OutletService {
   }
 
   async updateFranchiseStatus(id: string, status: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
     const updated = await db.franchise.update({
       where: { id },
       data: { status, isActive: status === "Active" },
@@ -190,6 +197,13 @@ class OutletService {
   }
 
   async approveFranchise(id: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
     const updated = await db.franchise.update({
       where: { id },
       data: { status: "Active", isActive: true },
@@ -904,6 +918,13 @@ class OutletService {
   }
 
   async updateBranchStatus(id: string, status: string) {
+    if (!id) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
     const updated = await db.branch.update({
       where: { id },
       data: { status, isActive: status === "Active" },
@@ -1075,8 +1096,123 @@ class OutletService {
   //   return { message: "Export generated", url: "/exports/branches.csv" };
   // }
 
+  async listBranchAgents(branchId: string, query: any = {}) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const page = parseInt((query.page || "1") as string);
+    const limit = parseInt((query.limit || "20") as string);
+    const skip = (page - 1) * limit;
+
+    const search = (query.search || query.q || "").toString().trim();
+    const where: any = { branchId };
+    if (query.isActive !== undefined) where.isActive = String(query.isActive) === "true";
+    if (query.isApproved !== undefined) where.isApproved = String(query.isApproved) === "true";
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      db.agent.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phoneNumber: true,
+          isActive: true,
+          isApproved: true,
+          branchId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      db.agent.count({ where }),
+    ]);
+
+    return { items: rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportBranchAgents(branchId: string, query: any = {}) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    const where: any = { branchId };
+    if (query.isActive !== undefined) where.isActive = String(query.isActive) === "true";
+    if (query.isApproved !== undefined) where.isApproved = String(query.isApproved) === "true";
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const rows = await db.agent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        isActive: true,
+        isApproved: true,
+        branchId: true,
+        createdAt: true,
+      },
+    });
+
+    return rows;
+  }
+
   async addAgentsToBranch(id: string, agentIds: string[]) {
-    return { message: "Agents added", branchId: id, count: agentIds?.length || 0 };
+    if (!id) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+    const ids = Array.isArray(agentIds) ? agentIds.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];
+    if (ids.length === 0) {
+      return { message: "Agents added", branchId: id, count: 0 };
+    }
+
+    const existing = await db.agent.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    const existingIds = new Set((existing || []).map((a: any) => a.id));
+    const missingIds = ids.filter((x) => !existingIds.has(x));
+    if (missingIds.length) {
+      throw new NotFoundError(`Agent(s) not found: ${missingIds.join(", ")}`);
+    }
+
+    const result = await db.agent.updateMany({
+      where: { id: { in: ids } },
+      data: { branchId: id },
+    });
+    return { message: "Agents added", branchId: id, count: result.count };
   }
 
   async listNigeriaStates() {

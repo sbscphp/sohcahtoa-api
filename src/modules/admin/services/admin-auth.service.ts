@@ -13,6 +13,7 @@ import {
   ValidationError,
   NotFoundError,
 } from "../../../shared/utils";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const prisma: PrismaClient = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -117,6 +118,9 @@ class AdminAuthService {
     ]);
 
     logger.info("Password reset successful", { userId: tokenRecord.userId });
+    try {
+      eventBus.publish(EventTypes.PASSWORD_RESET_COMPLETED, { data: { userId: tokenRecord.userId } });
+    } catch {}
     return { message: "Password reset successful" };
   }
 
@@ -280,6 +284,9 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     }),
   ]);
 
+  try {
+    eventBus.publish(EventTypes.PASSWORD_RESET_COMPLETED, { data: { userId: matchedToken.userId } });
+  } catch {}
   return { message: "Password updated successfully" };
 }
 
