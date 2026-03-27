@@ -134,10 +134,11 @@ export class ProvidusService {
 
   /**
    * Generate authentication signature for Providus API
-   * Format: clientId:clientSecret
+   * Format: SHA512(ClientId:ClientSecret)
    */
   private generateAuthSignature(): string {
-    return `${this.config.clientId}:${this.config.clientSecret}`;
+    const payload = `${this.config.clientId}:${this.config.clientSecret}`;
+    return crypto.createHash('sha512').update(payload).digest('hex').toUpperCase();
   }
 
   /**
