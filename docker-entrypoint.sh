@@ -584,6 +584,11 @@ npx prisma generate > /dev/null 2>&1
 echo "✅ Prisma Client regenerated"
 echo ""
 
+# Seed pickup locations (if needed)
+echo "🌱 Seeding pickup locations..."
+npm run seed:pickup || echo "⚠️  Pickup locations seed skipped (may already exist)"
+echo ""
+
 # Start the application
 echo "🚀 Starting application..."
 exec "$@"
