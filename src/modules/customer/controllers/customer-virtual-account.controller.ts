@@ -137,7 +137,7 @@ export class CustomerVirtualAccountController {
         warningNote: 'Please transfer the exact amount. Any discrepancy may delay processing.',
       };
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: customerView,
         message: 'Virtual account created successfully',
