@@ -12,6 +12,143 @@ const prisma = new PrismaClient();
 
 export class CustomerVirtualAccountController {
   /**
+   * Create virtual account for customer's transaction
+   * POST /api/customer/transactions/:transactionId/virtual-account
+   */
+  async createTransactionVirtualAccount(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.userId;
+      const { transactionId } = req.params;
+
+      if (!userId) {
+        throw new AppError(ErrorCode.UNAUTHORIZED, 'Unauthorized', 401);
+      }
+
+      logger.info('Customer creating virtual account', {
+        userId,
+        transactionId,
+      });
+
+      // Verify transaction belongs to user
+      const transaction = await prisma.transaction.findFirst({
+        where: {
+          id: transactionId,
+          userId,
+        },
+      });
+
+      if (!transaction) {
+        throw new AppError(ErrorCode.NOT_FOUND, 'Transaction not found', 404);
+      }
+
+      // Get user profile for account name generation
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          profile: true,
+        },
+      });
+
+      // Verify transaction is approved
+      if (transaction.status !== 'APPROVED') {
+        throw new AppError(
+          ErrorCode.VALIDATION_ERROR,
+          'Virtual account can only be created for approved transactions',
+          400
+        );
+      }
+
+      // Check if virtual account already exists
+      try {
+        const existingAccount = await virtualAccountService.getVirtualAccountByTransaction(
+          transactionId
+        );
+
+        logger.info('Virtual account already exists', {
+          userId,
+          transactionId,
+          accountNumber: existingAccount.accountNumber,
+        });
+
+        // Return existing account
+        const customerView = {
+          accountNumber: existingAccount.accountNumber,
+          accountName: existingAccount.accountName,
+          bankName: existingAccount.bankName,
+          status: existingAccount.status,
+          expiresAt: existingAccount.expiresAt,
+          createdAt: existingAccount.createdAt,
+          message: 'Virtual account already exists for this transaction',
+        };
+
+        return res.status(200).json({
+          success: true,
+          data: customerView,
+        });
+      } catch (error) {
+        // Account doesn't exist, proceed to create
+        if (!(error instanceof AppError && error.statusCode === 404)) {
+          throw error;
+        }
+      }
+
+      // Generate account name from user profile
+      const userProfile = user?.profile;
+      const userName = userProfile
+        ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
+        : 'Customer';
+      const accountName = `SOHCAHTOA-(${userName})`;
+
+      // Create virtual account
+      const virtualAccount = await virtualAccountService.createVirtualAccount({
+        userId,
+        transactionId,
+        accountName,
+        type: 'DYNAMIC',
+        expiresInHours: 48, // Default 48 hours
+      });
+
+      logger.info('Virtual account created successfully by customer', {
+        userId,
+        transactionId,
+        accountNumber: virtualAccount.accountNumber,
+      });
+
+      // Return customer view of the account
+      const customerView = {
+        accountNumber: virtualAccount.accountNumber,
+        accountName: virtualAccount.accountName,
+        bankName: virtualAccount.bankName,
+        status: virtualAccount.status,
+        expiresAt: virtualAccount.expiresAt,
+        createdAt: virtualAccount.createdAt,
+        depositAmount: transaction.nairaEquivalent,
+        currency: 'NGN',
+        instructions: [
+          'Transfer the exact amount specified to the account number provided',
+          'Use your registered name as the sender name',
+          'The account is valid for single use only',
+          virtualAccount.expiresAt
+            ? `Complete the transfer before ${new Date(virtualAccount.expiresAt).toLocaleString()}`
+            : 'Complete the transfer within 48 hours',
+          'Your transaction will be automatically confirmed once the deposit is received',
+          'Do not share this account number with anyone',
+        ],
+        warningNote: 'Please transfer the exact amount. Any discrepancy may delay processing.',
+      };
+
+      res.status(201).json({
+        success: true,
+        data: customerView,
+        message: 'Virtual account created successfully',
+      });
+    } catch (error) {
+      logger.error('Error creating virtual account for customer', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get virtual account for customer's transaction
    * GET /api/customer/transactions/:transactionId/virtual-account
    */
