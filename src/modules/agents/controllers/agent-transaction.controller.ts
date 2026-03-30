@@ -83,6 +83,28 @@ class AgentTransactionController {
     }
   }
 
+  async getTransactionById(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) {
+        throw new ValidationError("Authentication required");
+      }
+
+      const { transactionId } = req.params;
+      if (!transactionId) {
+        throw new ValidationError("transactionId is required");
+      }
+
+      const result = await agentTransactionService.getTransactionById(
+        authUser.userId,
+        transactionId
+      );
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async uploadDocuments(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;
