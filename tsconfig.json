@@ -38,6 +38,7 @@
     "apps",
     "packages",
     "k8s",
-    "helm"
+    "helm",
+    "**/*.test.ts"
   ]
 }

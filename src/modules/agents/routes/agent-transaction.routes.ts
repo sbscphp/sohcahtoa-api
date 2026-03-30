@@ -213,6 +213,100 @@ router.get("/", agentTransactionController.listTransactions);
 
 /**
  * @swagger
+ * /api/agent/transactions/{transactionId}:
+ *   get:
+ *     summary: Get transaction detail by ID (agent)
+ *     description: |
+ *       Returns identification, transaction amounts, beneficiary details, and required-document fields
+ *       for a transaction created by the authenticated agent. BVN and NIN are returned in full.
+ *       Only transactions with createdByAgentId matching this agent are accessible.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Transaction detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *                     identification:
+ *                       type: object
+ *                       properties:
+ *                         full_name: { type: string, nullable: true }
+ *                         email_address: { type: string }
+ *                         phone_number: { type: string }
+ *                         address: { type: string, nullable: true }
+ *                     transaction_details:
+ *                       type: object
+ *                       properties:
+ *                         transaction_id: { type: string, format: uuid }
+ *                         amount: { type: number, nullable: true }
+ *                         equivalent_amount: { type: number, nullable: true }
+ *                         currency: { type: string }
+ *                         date_initiated: { type: string, format: date-time }
+ *                     beneficiary_details:
+ *                       type: object
+ *                       properties:
+ *                         beneficiary_full_name: { type: string, nullable: true }
+ *                         beneficiary_bank: { type: string, nullable: true }
+ *                         routing_number: { type: string, nullable: true }
+ *                         bank_address: { type: string, nullable: true }
+ *                         swift_code: { type: string, nullable: true }
+ *                         account_number: { type: string, nullable: true }
+ *                         beneficiary_address: { type: string, nullable: true }
+ *                     required_documents:
+ *                       type: object
+ *                       properties:
+ *                         bvn: { type: string, nullable: true }
+ *                         nin: { type: string, nullable: true }
+ *                         admission_type: { type: string, nullable: true }
+ *                         form_a_id: { type: string, nullable: true }
+ *                         evidence_of_admission:
+ *                           oneOf:
+ *                             - type: object
+ *                               properties:
+ *                                 id: { type: string }
+ *                                 file_name: { type: string }
+ *                                 file_url: { type: string }
+ *                                 verification_status: { type: string }
+ *                             - type: 'null'
+ *                         school_invoice:
+ *                           oneOf:
+ *                             - type: object
+ *                               properties:
+ *                                 id: { type: string }
+ *                                 file_name: { type: string }
+ *                                 file_url: { type: string }
+ *                                 verification_status: { type: string }
+ *                             - type: 'null'
+ *                         international_passport_number: { type: string, nullable: true }
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.get("/:transactionId", agentTransactionController.getTransactionById);
+
+/**
+ * @swagger
  * /api/agent/transactions:
  *   post:
  *     summary: Create a transaction for a customer (Agent)
