@@ -1489,14 +1489,16 @@ export class CustomerTransactionService {
       branchCount: branches.length,
     });
 
-    // Extract unique cities from addresses (assuming format like "City, State")
-    // This is a simplified approach - adjust based on your address format
+    // Extract unique cities from addresses
+    // Address format: "Street Address, City/Area, State"
+    // Example: "45 Marina Street, Lagos Island, Lagos"
     const cities = new Set<string>();
     branches.forEach((branch) => {
-      // Try to extract city from address
-      const addressParts = branch.address.split(',');
-      if (addressParts.length > 0) {
-        const city = addressParts[0].trim();
+      // Try to extract city from address (second-to-last part before state)
+      const addressParts = branch.address.split(',').map(p => p.trim());
+      if (addressParts.length >= 2) {
+        // Get the second-to-last element (the city/area)
+        const city = addressParts[addressParts.length - 2];
         if (city) cities.add(city);
       }
     });
