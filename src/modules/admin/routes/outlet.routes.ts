@@ -590,6 +590,44 @@ OutletRouter.get(
 
 /**
  * @swagger
+ * /api/admin/outlet/pickup-stations/export:
+ *   get:
+ *     summary: Export pick-up stations [CSV]
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: region
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV export
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/pickup-stations/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.exportPickupStations
+);
+
+/**
+ * @swagger
  * /api/admin/outlet/pickup-stations:
  *   post:
  *     summary: Create a new pick-up station
