@@ -207,6 +207,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
+CREATE INDEX IF NOT EXISTS "tickets_createdByAgentId_idx" ON "tickets"("createdByAgentId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tickets_createdByAgentId_fkey') THEN
+    ALTER TABLE "tickets"
+      ADD CONSTRAINT "tickets_createdByAgentId_fkey"
+      FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
 
 -- Ensure escrow accounts table exists (migration fallback)

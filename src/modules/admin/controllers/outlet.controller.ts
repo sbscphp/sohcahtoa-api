@@ -43,6 +43,28 @@ class OutletController {
     res.json(successResponse(data.items, { pagination: data.pagination }));
   });
 
+  exportPickupStations = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportPickupStations(req.query as unknown as PickupStationQueryDto);
+    streamCsv(
+      res,
+      "pickup-stations.csv",
+      [
+        { header: "Station ID", select: (r: any) => r.id },
+        { header: "Station Name", select: (r: any) => r.stationName },
+        { header: "Station Email", select: (r: any) => r.stationEmail },
+        { header: "Phone Number", select: (r: any) => r.phoneNumber },
+        { header: "State", select: (r: any) => r.state },
+        { header: "Region", select: (r: any) => r.region },
+        { header: "Physical Address", select: (r: any) => r.physicalAddress },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Active", select: (r: any) => (r.isActive ? "Active" : "Deactivated") },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+        { header: "Updated At", select: (r: any) => (r.updatedAt ? new Date(r.updatedAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
   createFranchise = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.createFranchise(req.body as CreateFranchiseDto);
     const adminId = (req as any).user?.userId as string;

@@ -293,7 +293,6 @@ UserManagementRouter.get(
 UserManagementRouter.get(
   "/profile",
   authenticate,
-  requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getProfile
 );
 
