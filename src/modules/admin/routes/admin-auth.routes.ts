@@ -211,3 +211,63 @@ AdminAuthRouter.post("/resend-otp", adminAuthController.resendOtp);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 AdminAuthRouter.post("/logout", authenticate, adminAuthController.logout);
+
+/**
+ * @swagger
+ * /api/admin/auth/password/verify-old:
+ *   post:
+ *     summary: Verify old password before changing password
+ *     tags: [admin-auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [oldPassword]
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Old password verified; changeToken issued
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminAuthRouter.post("/password/verify-old", authenticate, adminAuthController.verifyOldPassword);
+
+/**
+ * @swagger
+ * /api/admin/auth/password/change:
+ *   post:
+ *     summary: Change password using changeToken
+ *     tags: [admin-auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [changeToken, newPassword]
+ *             properties:
+ *               changeToken:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminAuthRouter.post("/password/change", authenticate, adminAuthController.submitPasswordChange);
