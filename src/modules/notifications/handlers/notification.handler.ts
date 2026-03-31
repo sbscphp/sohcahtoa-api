@@ -697,6 +697,35 @@ export class NotificationHandler {
         logger.error('Error handling admin action event:', error);
       }
     });
+
+    eventBus.on(EventTypes.ADMIN_REVIEW_REQUIRED, async (event: any) => {
+      try {
+        const { adminIds = [], transaction } = event.data || {};
+        if (!transaction || adminIds.length === 0) return;
+
+        const template = NotificationTemplates.NEW_TRANSACTION_ADMIN({
+          referenceNumber: transaction.referenceNumber,
+          amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
+          type: String(transaction.type || ""),
+        });
+
+        for (const adminId of adminIds) {
+          await notificationService.sendNotification({
+            userId: adminId,
+            type: NotificationType.IN_APP,
+            channel: NotificationChannel.IN_APP,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl, transactionId: transaction.id },
+            transactionId: transaction.id,
+          });
+        }
+        logger.info(`Admin review notifications sent for transaction ${transaction.id} to ${adminIds.length} admins`);
+      } catch (error) {
+        logger.error('Error sending admin review required notifications:', error);
+      }
+    });
   }
 }
 

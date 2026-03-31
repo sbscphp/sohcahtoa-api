@@ -4,6 +4,9 @@ import { ServiceUnavailableError, successResponse, streamCsv, ValidationError } 
 import { CreateTicketPayload, UpdateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
+import notificationService from "../../notifications/services/notification.service";
+import NotificationTemplates from "../../notifications/templates/notification-templates";
+import { NotificationType, NotificationChannel } from "@prisma/client";
 
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -166,6 +169,20 @@ class TicketsController {
       resourceId: req.params.id,
       metadata: { assignedAgentId: adminId },
     });
+    const template = NotificationTemplates.TICKET_ASSIGNED_ADMIN({
+      ticketReference: (updated as any)?.reference || req.params.id,
+      ticketId: updated.id,
+    });
+    await notificationService.sendNotification({
+      userId: adminId,
+      type: NotificationType.IN_APP,
+      channel: NotificationChannel.IN_APP,
+      priority: template.priority,
+      title: template.title,
+      body: template.body,
+      data: { actionUrl: template.actionUrl },
+      ticketId: updated.id,
+    });
     res.json(successResponse(updated));
   });
 
@@ -183,6 +200,20 @@ class TicketsController {
       resourceType: "INCIDENCE",
       resourceId: req.params.id,
       metadata: { assignedAgentId: assigneeId, assignedBy },
+    });
+    const template = NotificationTemplates.TICKET_ASSIGNED_ADMIN({
+      ticketReference: (updated as any)?.reference || req.params.id,
+      ticketId: updated.id,
+    });
+    await notificationService.sendNotification({
+      userId: assigneeId,
+      type: NotificationType.IN_APP,
+      channel: NotificationChannel.IN_APP,
+      priority: template.priority,
+      title: template.title,
+      body: template.body,
+      data: { actionUrl: template.actionUrl },
+      ticketId: updated.id,
     });
     res.json(successResponse(updated));
   });

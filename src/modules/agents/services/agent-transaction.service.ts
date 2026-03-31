@@ -1,11 +1,23 @@
 import { getDatabase } from "../../../config/database";
 import { ValidationError, NotFoundError } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
-import { DisbursementMethod, TransactionStatus, TransactionStep } from "../../../shared/types/transaction";
+import {
+  DisbursementMethod,
+  TransactionStatus,
+  TransactionStep,
+  TransactionType,
+} from "../../../shared/types/transaction";
 import { uploadFile } from "../../../shared/utils/file-upload";
 import { generateId } from "../../../shared/utils";
 import { createLogger } from "../../../shared/utils/logger";
+import { resolveDashboardDateRange } from "../../../shared/utils/date-range-presets";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
+import type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
+import {
+  formatProfileAddress,
+  mapDocSnippet,
+  pickLatestDocumentByType,
+} from "./agent-transaction-view.helpers";
 
 const prisma = getDatabase();
 const logger = createLogger("agent-transaction-service");
@@ -38,6 +50,30 @@ export interface AgentTransactionStats {
   pending: number;
   settled: number;
   rejected: number;
+}
+
+export interface AgentDashboardRecentTransactionItem {
+  transactionId: string;
+  timestamp: string;
+  amount: number | null;
+  currency: string;
+}
+
+export interface AgentDashboardTransactionTypeSegment {
+  transactionType: string;
+  count: number;
+  totalAmount: number;
+  percentageOfVolume: number;
+}
+
+export interface AgentDashboardTransactionsByTypeResult {
+  range: string;
+  rangeStart: string;
+  rangeEnd: string;
+  amountBasis: "USD_FOREIGN_AMOUNT";
+  totalTransactionCount: number;
+  totalVolume: number;
+  segments: AgentDashboardTransactionTypeSegment[];
 }
 
 /**
@@ -84,6 +120,43 @@ export interface AgentRecordDisbursementInput {
   totalAmount: number;
   notes?: string;
   receiptFile: Express.Multer.File;
+}
+
+export type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
+
+export interface AgentTransactionDetailView {
+  timestamp: string;
+  identification: {
+    full_name: string | null;
+    email_address: string;
+    phone_number: string;
+    address: string | null;
+  };
+  transaction_details: {
+    transaction_id: string;
+    amount: number | null;
+    equivalent_amount: number | null;
+    currency: string;
+    date_initiated: string;
+  };
+  beneficiary_details: {
+    beneficiary_full_name: string | null;
+    beneficiary_bank: string | null;
+    routing_number: string | null;
+    bank_address: string | null;
+    swift_code: string | null;
+    account_number: string | null;
+    beneficiary_address: string | null;
+  };
+  required_documents: {
+    bvn: string | null;
+    nin: string | null;
+    admission_type: string | null;
+    form_a_id: string | null;
+    evidence_of_admission: AgentTransactionDetailUploadedDoc | null;
+    school_invoice: AgentTransactionDetailUploadedDoc | null;
+    international_passport_number: string | null;
+  };
 }
 
 class AgentTransactionService {
@@ -175,6 +248,137 @@ class AgentTransactionService {
   }
 
   /**
+   * Dashboard: recent transactions created by the agent (slim fields, optional type filter).
+   */
+  async listDashboardRecentTransactions(
+    agentUserId: string,
+    typeFilter: string | undefined,
+    page: number,
+    limit: number
+  ): Promise<{
+    data: AgentDashboardRecentTransactionItem[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    if (typeFilter) {
+      if (!Object.values(TransactionType).includes(typeFilter as TransactionType)) {
+        throw new ValidationError(`Invalid transaction type: ${typeFilter}`);
+      }
+    }
+
+    const where: { createdByAgentId: string; type?: TransactionType } = {
+      createdByAgentId: agent.id,
+    };
+    if (typeFilter) {
+      where.type = typeFilter as TransactionType;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        select: { id: true, createdAt: true, foreignAmount: true, currency: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const data: AgentDashboardRecentTransactionItem[] = rows.map((t) => ({
+      transactionId: t.id,
+      timestamp: t.createdAt.toISOString(),
+      amount: t.foreignAmount != null ? Number(t.foreignAmount) : null,
+      currency: t.currency,
+    }));
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  /**
+   * Dashboard pie chart: counts per type (all currencies) and USD foreignAmount sums per type.
+   */
+  async getDashboardTransactionsByType(
+    agentUserId: string,
+    rangePreset: string
+  ): Promise<AgentDashboardTransactionsByTypeResult> {
+    const agent = await this.resolveAgent(agentUserId);
+    const { start, end } = resolveDashboardDateRange(rangePreset);
+
+    const baseWhere = {
+      createdByAgentId: agent.id,
+      createdAt: { gte: start, lte: end },
+    };
+
+    const [countGroups, sumGroups] = await Promise.all([
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: {
+          ...baseWhere,
+          currency: { equals: "USD", mode: "insensitive" },
+        },
+        _sum: { foreignAmount: true },
+      }),
+    ]);
+
+    const sumByType = new Map<string, number>();
+    for (const row of sumGroups) {
+      const amt = row._sum.foreignAmount;
+      sumByType.set(row.type, amt != null ? Number(amt) : 0);
+    }
+
+    let totalVolume = 0;
+    const segmentsRaw: AgentDashboardTransactionTypeSegment[] = [];
+
+    for (const row of countGroups) {
+      const count = row._count._all;
+      if (count === 0) continue;
+      const totalAmount = sumByType.get(row.type) ?? 0;
+      totalVolume += totalAmount;
+      segmentsRaw.push({
+        transactionType: row.type,
+        count,
+        totalAmount,
+        percentageOfVolume: 0,
+      });
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const segments = segmentsRaw.map((s) => ({
+      ...s,
+      percentageOfVolume:
+        totalVolume > 0 ? round2((s.totalAmount / totalVolume) * 100) : 0,
+    }));
+
+    const totalTransactionCount = segments.reduce((acc, s) => acc + s.count, 0);
+
+    return {
+      range: rangePreset.trim(),
+      rangeStart: start.toISOString(),
+      rangeEnd: end.toISOString(),
+      amountBasis: "USD_FOREIGN_AMOUNT",
+      totalTransactionCount,
+      totalVolume: round2(totalVolume),
+      segments,
+    };
+  }
+
+  /**
    * Get transaction stats for the agent (total, pending, settled, rejected).
    */
   async getTransactionStats(agentUserId: string): Promise<AgentTransactionStats> {
@@ -199,6 +403,155 @@ class AgentTransactionService {
     ]);
 
     return { total, pending, settled, rejected };
+  }
+
+  /**
+   * Full transaction detail for agent (scoped to createdByAgentId). BVN/NIN are unmasked.
+   */
+  async getTransactionById(
+    agentUserId: string,
+    transactionId: string
+  ): Promise<AgentTransactionDetailView> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agent.id },
+      include: {
+        documents: {
+          select: {
+            id: true,
+            documentType: true,
+            fileName: true,
+            fileUrl: true,
+            verificationStatus: true,
+            uploadedAt: true,
+          },
+        },
+        steps: {
+          where: { step: TransactionStep.PERSONAL_INFO },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundError("Transaction not found or you are not the creating agent");
+    }
+
+    const [user, outbound] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: transaction.userId },
+        select: {
+          email: true,
+          phoneNumber: true,
+          profile: {
+            select: {
+              firstName: true,
+              lastName: true,
+              address: true,
+              city: true,
+              state: true,
+              country: true,
+              postalCode: true,
+            },
+          },
+          kyc: {
+            select: {
+              bvn: true,
+              nin: true,
+              passportNumber: true,
+            },
+          },
+        },
+      }),
+      prisma.outboundSettlement.findFirst({
+        where: { transactionId: transaction.id },
+        select: {
+          beneficiaryName: true,
+          beneficiaryBank: true,
+          beneficiaryAccount: true,
+          beneficiarySwift: true,
+          beneficiaryAddress: true,
+        },
+      }),
+    ]);
+
+    if (!user) {
+      throw new NotFoundError("Customer not found for this transaction");
+    }
+
+    const personalInfoStep = transaction.steps[0];
+    const personalInfoData = (personalInfoStep?.data as Record<string, unknown> | null) || null;
+    const stepBeneficiary = personalInfoData?.beneficiaryDetails as
+      | {
+          name?: string;
+          accountNumber?: string;
+          accountName?: string;
+          bankName?: string;
+          iban?: string;
+        }
+      | undefined;
+
+    const amount =
+      transaction.foreignAmount != null ? Number(transaction.foreignAmount) : null;
+    const equivalentAmount =
+      transaction.nairaEquivalent != null ? Number(transaction.nairaEquivalent) : null;
+
+    const admissionType =
+      personalInfoData?.admissionType != null
+        ? String(personalInfoData.admissionType)
+        : null;
+
+    const evidenceDoc = pickLatestDocumentByType(transaction.documents, "SCHOOL_ADMISSION");
+    const invoiceDoc = pickLatestDocumentByType(transaction.documents, "INVOICE");
+
+    const profile = user.profile;
+    const fullName = profile
+      ? `${profile.firstName || ""} ${profile.lastName || ""}`.trim() || null
+      : null;
+
+    return {
+      timestamp: transaction.createdAt.toISOString(),
+      identification: {
+        full_name: fullName,
+        email_address: user.email,
+        phone_number: user.phoneNumber,
+        address: formatProfileAddress(profile),
+      },
+      transaction_details: {
+        transaction_id: transaction.id,
+        amount,
+        equivalent_amount: equivalentAmount,
+        currency: transaction.currency,
+        date_initiated: transaction.createdAt.toISOString(),
+      },
+      beneficiary_details: {
+        beneficiary_full_name:
+          outbound?.beneficiaryName ||
+          stepBeneficiary?.name ||
+          stepBeneficiary?.accountName ||
+          null,
+        beneficiary_bank: outbound?.beneficiaryBank || stepBeneficiary?.bankName || null,
+        routing_number: null,
+        bank_address: null,
+        swift_code: outbound?.beneficiarySwift || null,
+        account_number:
+          outbound?.beneficiaryAccount ||
+          stepBeneficiary?.accountNumber ||
+          stepBeneficiary?.iban ||
+          null,
+        beneficiary_address: outbound?.beneficiaryAddress || null,
+      },
+      required_documents: {
+        bvn: user.kyc?.bvn ?? null,
+        nin: user.kyc?.nin ?? null,
+        admission_type: admissionType,
+        form_a_id: transaction.formAId ?? null,
+        evidence_of_admission: mapDocSnippet(evidenceDoc),
+        school_invoice: mapDocSnippet(invoiceDoc),
+        international_passport_number: user.kyc?.passportNumber ?? null,
+      },
+    };
   }
 
   async recordDisbursement(

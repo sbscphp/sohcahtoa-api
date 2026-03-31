@@ -1,8 +1,13 @@
-import { getDatabase } from "../../../config/database";
-import { NotFoundError, ValidationError } from "../../../shared/utils";
-import { v2 as cloudinary } from "cloudinary";
-import auditService from "../../audit/services/audit.service";
-import { createLogger } from "../../../shared/utils/logger";
+import { getDatabase } from '../../../config/database';
+import {
+  calculateAmountUsingActiveSellRate,
+  getActiveExchangeRates,
+} from '../../../shared/services/exchange-rate-reader.service';
+import { NotFoundError, ValidationError } from '../../../shared/utils';
+import { v2 as cloudinary } from 'cloudinary';
+import auditService from '../../audit/services/audit.service';
+import { createLogger } from '../../../shared/utils/logger';
+import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
 
 const prisma = getDatabase();
 const logger = createLogger('customer-transaction-service');
@@ -18,7 +23,7 @@ interface CreateCustomerTransactionPayload {
   userId: string;
   createdByAgentId?: string;
   type: string;
-  mode?: "BUY" | "SELL"; // Transaction mode: BUY (touring) or SELL (tourist)
+  mode?: 'BUY' | 'SELL'; // Transaction mode: BUY (touring) or SELL (tourist)
   currency: string;
   amount: number;
   purpose: string;
@@ -31,7 +36,7 @@ interface CreateCustomerTransactionPayload {
   taxClearanceNumber?: string;
 
   // School fees specific fields
-  admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
+  admissionType?: 'UNDERGRADUATE' | 'POSTGRADUATE' | 'OTHER';
 
   // Documents submitted inline with transaction creation
   documents?: TransactionDocumentLink[];
@@ -79,7 +84,23 @@ export class CustomerTransactionService {
    * Create a new transaction for a customer
    */
   async createTransaction(payload: CreateCustomerTransactionPayload) {
-    const { userId, type, mode, currency, amount, purpose, destinationCountry, bvn, nin, formAId, taxClearanceNumber, admissionType, documents, beneficiaryDetails, pickupLocation } = payload;
+    const {
+      userId,
+      type,
+      mode,
+      currency,
+      amount,
+      purpose,
+      destinationCountry,
+      bvn,
+      nin,
+      formAId,
+      taxClearanceNumber,
+      admissionType,
+      documents,
+      beneficiaryDetails,
+      pickupLocation,
+    } = payload;
 
     logger.info(`[createTransaction] Starting transaction creation for user: ${userId}`, {
       userId,
@@ -102,7 +123,7 @@ export class CustomerTransactionService {
 
     if (!user) {
       logger.error(`[createTransaction] User not found: ${userId}`);
-      throw new NotFoundError("User not found");
+      throw new NotFoundError('User not found');
     }
 
     logger.debug(`[createTransaction] User validated successfully`, {
@@ -113,21 +134,23 @@ export class CustomerTransactionService {
 
     // Validate transaction type
     const validTypes = [
-      "PTA",
-      "BTA",
-      "SCHOOL_FEES",
-      "MEDICAL",
-      "PROFESSIONAL_BODY",
-      "TOURIST_FX",
-      "RESIDENT_FX",
-      "EXPATRIATE_FX",
-      "IMTO_REMITTANCE",
-      "CASH_REMITTANCE",
+      'PTA',
+      'BTA',
+      'SCHOOL_FEES',
+      'MEDICAL',
+      'PROFESSIONAL_BODY',
+      'TOURIST_FX',
+      'RESIDENT_FX',
+      'EXPATRIATE_FX',
+      'IMTO_REMITTANCE',
+      'CASH_REMITTANCE',
     ];
 
     if (!validTypes.includes(type)) {
       logger.error(`[createTransaction] Invalid transaction type: ${type}`, { userId, type });
-      throw new ValidationError(`Invalid transaction type. Must be one of: ${validTypes.join(", ")}`);
+      throw new ValidationError(
+        `Invalid transaction type. Must be one of: ${validTypes.join(', ')}`
+      );
     }
 
     logger.debug(`[createTransaction] Transaction type validated: ${type}`, { userId, type });
@@ -153,8 +176,13 @@ export class CustomerTransactionService {
         });
         logger.debug(`[createTransaction] KYC created successfully`, { userId, kycId: newKyc.id });
       } catch (error) {
-        logger.error(`[createTransaction] Failed to create KYC`, { userId, error: error instanceof Error ? error.message : String(error) });
-        throw new ValidationError('Failed to create KYC information. The BVN or NIN may already be registered to another account.');
+        logger.error(`[createTransaction] Failed to create KYC`, {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new ValidationError(
+          'Failed to create KYC information. The BVN or NIN may already be registered to another account.'
+        );
       }
     } else if ((bvn || nin) && user.kyc) {
       logger.debug(`[createTransaction] User already has KYC data, using existing information`, {
@@ -167,12 +195,15 @@ export class CustomerTransactionService {
 
     // Generate unique reference number
     const referenceNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    logger.debug(`[createTransaction] Generated reference number: ${referenceNumber}`, { userId, referenceNumber });
+    logger.debug(`[createTransaction] Generated reference number: ${referenceNumber}`, {
+      userId,
+      referenceNumber,
+    });
 
     // Determine initial status — if documents are provided upfront, submit for admin review immediately
     const hasDocuments = documents && documents.length > 0;
-    const initialStatus = hasDocuments ? "AWAITING_VERIFICATION" : "DRAFT";
-    const initialStep = hasDocuments ? "DOCUMENT_UPLOAD" : "PERSONAL_INFO";
+    const initialStatus = hasDocuments ? 'AWAITING_VERIFICATION' : 'DRAFT';
+    const initialStep = hasDocuments ? 'DOCUMENT_UPLOAD' : 'PERSONAL_INFO';
 
     logger.info(`[createTransaction] Creating transaction record`, {
       userId,
@@ -181,24 +212,87 @@ export class CustomerTransactionService {
       initialStatus,
       initialStep,
       hasDocuments,
-      disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null),
+      disbursementMethod: pickupLocation
+        ? 'CASH_PICKUP'
+        : beneficiaryDetails
+          ? 'BANK_TRANSFER'
+          : null,
     });
 
+    // Fetch active exchange rate and calculate nairaEquivalent
+    let nairaEquivalent: number | null = null;
+    let exchangeRate: number | null = null;
+
+    if (currency.toUpperCase() !== 'NGN') {
+      logger.info(`[createTransaction] Fetching exchange rate for ${currency} to NGN`, {
+        currency,
+        amount,
+      });
+
+      try {
+        const where = buildRateWhereClause({
+          status: 'active',
+          fromCurrency: currency.toUpperCase(),
+          toCurrency: 'NGN',
+        });
+
+        const client: any = prisma as any;
+        const rate = await client.exchangeRate.findFirst({
+          where,
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        if (rate) {
+          exchangeRate = parseFloat(rate.sellRate);
+          nairaEquivalent = amount * exchangeRate;
+
+          logger.info(`[createTransaction] Exchange rate calculated`, {
+            currency,
+            amount,
+            exchangeRate,
+            nairaEquivalent,
+          });
+        } else {
+          logger.warn(`[createTransaction] No active exchange rate found for ${currency} to NGN`, {
+            currency,
+          });
+        }
+      } catch (error) {
+        logger.error(`[createTransaction] Error fetching exchange rate`, {
+          currency,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      // If currency is already NGN, set nairaEquivalent to the amount
+      nairaEquivalent = amount;
+      exchangeRate = 1;
+      logger.debug(`[createTransaction] Currency is NGN, setting nairaEquivalent = amount`, {
+        amount,
+      });
+    }
+
     // Create transaction
+    const currencyCode = (currency || '').toString().trim();
+    const isNgn = currencyCode.toUpperCase() === 'NGN';
     const createData = {
       userId,
       referenceNumber,
       type: type as any,
-      transactionMode: mode as any || null,
+      transactionMode: (mode as any) || null,
       status: initialStatus as any,
       currentStep: initialStep as any,
       purpose,
       destinationCountry: destinationCountry || null,
       currency,
       foreignAmount: amount as any,
+      nairaEquivalent: nairaEquivalent as any,
+      exchangeRate: exchangeRate as any,
       formAId,
       taxClearanceNumber,
-      disbursementMethod: pickupLocation ? "CASH_PICKUP" : (beneficiaryDetails ? "BANK_TRANSFER" : null) as any,
+      disbursementMethod: pickupLocation
+        ? 'CASH_PICKUP'
+        : ((beneficiaryDetails ? 'BANK_TRANSFER' : null) as any),
     };
     if (payload.createdByAgentId != null) {
       (createData as any).createdByAgentId = payload.createdByAgentId;
@@ -218,12 +312,12 @@ export class CustomerTransactionService {
       data: {
         transactionId: transaction.id,
         step: initialStep as any,
-        status: "COMPLETED",
+        status: 'COMPLETED',
         data: {
-          bvn: bvn ? "***" + bvn.slice(-4) : null,
-          nin: nin ? "***" + nin.slice(-4) : null,
+          bvn: bvn ? '***' + bvn.slice(-4) : null,
+          nin: nin ? '***' + nin.slice(-4) : null,
           formAId,
-          admissionType: type === "SCHOOL_FEES" ? admissionType : null,
+          admissionType: type === 'SCHOOL_FEES' ? admissionType : null,
           beneficiaryDetails,
           pickupLocation,
         },
@@ -234,12 +328,31 @@ export class CustomerTransactionService {
     // Save any document links provided inline with the transaction
     if (documents && documents.length > 0) {
       const validDocumentTypes = [
-        "PASSPORT", "VISA", "TICKET", "RETURN_TICKET", "BVN", "NIN", "TIN", "TCC",
-        "FORM_A_DOCUMENT", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER",
-        "RECEIPT", "INVOICE", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER",
-        "PROFESSIONAL_BODY_LETTER", "MEMBERSHIP_CARD", "SCHOOL_ADMISSION", "STATEMENT_OF_RESULT",
-        "DEGREE", "UTILITY_BILL", "WORK_PERMIT", "PROOF_OF_FUNDS", "SOURCE_OF_FUNDS_DECLARATION",
-        "DIGITAL_SIGNATURE",
+        'PASSPORT',
+        'VISA',
+        'TICKET',
+        'RETURN_TICKET',
+        'BVN',
+        'NIN',
+        'TIN',
+        'TCC',
+        'FORM_A_DOCUMENT',
+        'CORPORATE_BODY_LETTER',
+        'PARTNER_INVITATION_LETTER',
+        'RECEIPT',
+        'INVOICE',
+        'MEDICAL_LETTER',
+        'OVERSEAS_MEDICAL_LETTER',
+        'PROFESSIONAL_BODY_LETTER',
+        'MEMBERSHIP_CARD',
+        'SCHOOL_ADMISSION',
+        'STATEMENT_OF_RESULT',
+        'DEGREE',
+        'UTILITY_BILL',
+        'WORK_PERMIT',
+        'PROOF_OF_FUNDS',
+        'SOURCE_OF_FUNDS_DECLARATION',
+        'DIGITAL_SIGNATURE',
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -248,14 +361,14 @@ export class CustomerTransactionService {
       if (invalidDocs.length > 0) {
         logger.warn(`[createTransaction] Some documents have invalid types`, {
           transactionId: transaction.id,
-          invalidDocTypes: invalidDocs.map(d => d.documentType),
+          invalidDocTypes: invalidDocs.map((d) => d.documentType),
         });
       }
 
       logger.info(`[createTransaction] Saving ${validDocs.length} inline documents`, {
         transactionId: transaction.id,
         documentCount: validDocs.length,
-        documentTypes: validDocs.map(d => d.documentType),
+        documentTypes: validDocs.map((d) => d.documentType),
       });
 
       await prisma.transactionDocument.createMany({
@@ -265,8 +378,8 @@ export class CustomerTransactionService {
           fileUrl: doc.fileUrl,
           fileName: doc.fileName,
           fileSize: doc.fileSize ?? 0,
-          verificationStatus: "PENDING" as any,
-          metadata: { source: "inline_upload", uploadedBy: userId },
+          verificationStatus: 'PENDING' as any,
+          metadata: { source: 'inline_upload', uploadedBy: userId },
         })),
       });
 
@@ -343,10 +456,16 @@ export class CustomerTransactionService {
       referenceNumber: transaction.referenceNumber,
       status: transaction.status,
       currentStep: transaction.currentStep,
-      requiredDocuments: this.buildDocumentStatus(type, existingDocuments, admissionType, mode, amount),
+      requiredDocuments: this.buildDocumentStatus(
+        type,
+        existingDocuments,
+        admissionType,
+        mode,
+        amount
+      ),
       message: hasDocuments
-        ? "Transaction submitted successfully and is awaiting admin review."
-        : "Transaction initiated successfully. Please upload required documents to proceed.",
+        ? 'Transaction submitted successfully and is awaiting admin review.'
+        : 'Transaction initiated successfully. Please upload required documents to proceed.',
     };
 
     auditService.logTransactionEvent({
@@ -379,7 +498,7 @@ export class CustomerTransactionService {
       userId,
       documentType,
       fileCount: files.length,
-      fileSizes: files.map(f => f.size),
+      fileSizes: files.map((f) => f.size),
     });
 
     // Validate transaction exists and belongs to user
@@ -391,7 +510,7 @@ export class CustomerTransactionService {
       include: {
         steps: {
           where: {
-            step: "PERSONAL_INFO",
+            step: 'PERSONAL_INFO',
           },
           take: 1,
         },
@@ -403,7 +522,7 @@ export class CustomerTransactionService {
         transactionId,
         userId,
       });
-      throw new NotFoundError("Transaction not found or does not belong to you");
+      throw new NotFoundError('Transaction not found or does not belong to you');
     }
 
     logger.debug(`[uploadDocuments] Transaction validated`, {
@@ -416,31 +535,31 @@ export class CustomerTransactionService {
 
     // Validate document type
     const validDocumentTypes = [
-      "PASSPORT",
-      "VISA",
-      "TICKET",
-      "RETURN_TICKET",
-      "BVN",
-      "NIN",
-      "TIN",
-      "TCC",
-      "FORM_A_DOCUMENT",
-      "CORPORATE_BODY_LETTER",
-      "PARTNER_INVITATION_LETTER",
-      "RECEIPT",
-      "INVOICE",
-      "MEDICAL_LETTER",
-      "OVERSEAS_MEDICAL_LETTER",
-      "PROFESSIONAL_BODY_LETTER",
-      "MEMBERSHIP_CARD",
-      "SCHOOL_ADMISSION",
-      "STATEMENT_OF_RESULT",
-      "DEGREE",
-      "UTILITY_BILL",
-      "WORK_PERMIT",
-      "PROOF_OF_FUNDS",
-      "SOURCE_OF_FUNDS_DECLARATION",
-      "DIGITAL_SIGNATURE",
+      'PASSPORT',
+      'VISA',
+      'TICKET',
+      'RETURN_TICKET',
+      'BVN',
+      'NIN',
+      'TIN',
+      'TCC',
+      'FORM_A_DOCUMENT',
+      'CORPORATE_BODY_LETTER',
+      'PARTNER_INVITATION_LETTER',
+      'RECEIPT',
+      'INVOICE',
+      'MEDICAL_LETTER',
+      'OVERSEAS_MEDICAL_LETTER',
+      'PROFESSIONAL_BODY_LETTER',
+      'MEMBERSHIP_CARD',
+      'SCHOOL_ADMISSION',
+      'STATEMENT_OF_RESULT',
+      'DEGREE',
+      'UTILITY_BILL',
+      'WORK_PERMIT',
+      'PROOF_OF_FUNDS',
+      'SOURCE_OF_FUNDS_DECLARATION',
+      'DIGITAL_SIGNATURE',
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
@@ -450,7 +569,9 @@ export class CustomerTransactionService {
         documentType,
         validTypes: validDocumentTypes,
       });
-      throw new ValidationError(`Invalid document type. Must be one of: ${validDocumentTypes.join(", ")}`);
+      throw new ValidationError(
+        `Invalid document type. Must be one of: ${validDocumentTypes.join(', ')}`
+      );
     }
 
     logger.debug(`[uploadDocuments] Document type validated: ${documentType}`, {
@@ -475,7 +596,7 @@ export class CustomerTransactionService {
           const uploadStream = cloudinary.uploader.upload_stream(
             {
               folder: `sochatoa/transactions/${transactionId}`,
-              resource_type: "auto",
+              resource_type: 'auto',
             },
             (error, result) => {
               if (error) reject(error);
@@ -500,7 +621,7 @@ export class CustomerTransactionService {
             fileUrl: result.secure_url,
             fileName: file.originalname,
             fileSize: file.size,
-            verificationStatus: "PENDING",
+            verificationStatus: 'PENDING',
             metadata: {
               cloudinaryPublicId: result.public_id,
               format: result.format,
@@ -530,11 +651,11 @@ export class CustomerTransactionService {
     logger.info(`[uploadDocuments] All files uploaded successfully`, {
       transactionId,
       uploadedCount: uploadedDocuments.length,
-      documentIds: uploadedDocuments.map(d => d.id),
+      documentIds: uploadedDocuments.map((d) => d.id),
     });
 
     // Update transaction step if not already done
-    if (transaction.currentStep === "PERSONAL_INFO") {
+    if (transaction.currentStep === 'PERSONAL_INFO') {
       logger.info(`[uploadDocuments] Updating transaction step to DOCUMENT_UPLOAD`, {
         transactionId,
         previousStep: transaction.currentStep,
@@ -542,14 +663,14 @@ export class CustomerTransactionService {
 
       await prisma.transaction.update({
         where: { id: transactionId },
-        data: { currentStep: "DOCUMENT_UPLOAD" },
+        data: { currentStep: 'DOCUMENT_UPLOAD' },
       });
 
       await prisma.transactionStepLog.create({
         data: {
           transactionId,
-          step: "DOCUMENT_UPLOAD",
-          status: "IN_PROGRESS",
+          step: 'DOCUMENT_UPLOAD',
+          status: 'IN_PROGRESS',
           data: { documentCount: uploadedDocuments.length },
         },
       });
@@ -590,9 +711,10 @@ export class CustomerTransactionService {
     });
 
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
-    const admissionType = transaction.type === "SCHOOL_FEES" && transaction.steps?.[0]?.data
-      ? (transaction.steps[0].data as any).admissionType
-      : null;
+    const admissionType =
+      transaction.type === 'SCHOOL_FEES' && transaction.steps?.[0]?.data
+        ? (transaction.steps[0].data as any).admissionType
+        : null;
 
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
@@ -601,8 +723,14 @@ export class CustomerTransactionService {
     const transactionAmount = transaction.foreignAmount ? Number(transaction.foreignAmount) : null;
 
     return {
-      message: "Documents uploaded successfully",
-      requiredDocuments: this.buildDocumentStatus(transaction.type, allDocuments, admissionType, transactionMode, transactionAmount),
+      message: 'Documents uploaded successfully',
+      requiredDocuments: this.buildDocumentStatus(
+        transaction.type,
+        allDocuments,
+        admissionType,
+        transactionMode,
+        transactionAmount
+      ),
     };
   }
 
@@ -617,30 +745,19 @@ export class CustomerTransactionService {
       fromCurrency,
       toCurrency,
     });
+    // return getActiveExchangeRates(fromCurrency, toCurrency);
 
-    const now = new Date();
-    const where: any = {
-      isActive: true,
-      validFrom: { lte: now },
-      validUntil: { gt: now },
-    };
-
-    if (fromCurrency) where.fromCurrency = fromCurrency.toUpperCase();
-    if (toCurrency) where.toCurrency = toCurrency.toUpperCase();
+    const where = buildRateWhereClause({
+      status: 'active',
+      fromCurrency,
+      toCurrency,
+    });
 
     const client: any = prisma as any;
     const rates = await client.exchangeRate.findMany({
       where,
-      select: {
-        id: true,
-        fromCurrency: true,
-        toCurrency: true,
-        buyRate: true,
-        sellRate: true,
-        validFrom: true,
-        validUntil: true,
-      },
-      orderBy: { updatedAt: "desc" },
+      select: rateSelectFields,
+      orderBy: { updatedAt: 'desc' },
     });
 
     logger.info(`[getActiveRates] Found ${rates.length} active rates`, {
@@ -661,24 +778,24 @@ export class CustomerTransactionService {
    * @param amount       - The amount in fromCurrency to convert
    */
   async calculateAmount(fromCurrency: string, toCurrency: string, amount: number) {
+    // return calculateAmountUsingActiveSellRate(fromCurrency, toCurrency, amount);
     logger.info(`[calculateAmount] Calculating transaction amount`, {
       fromCurrency,
       toCurrency,
       amount,
     });
 
-    const now = new Date();
+    const where = buildRateWhereClause({
+      status: 'active',
+      fromCurrency,
+      toCurrency,
+    });
+
     const client: any = prisma as any;
 
     const rate = await client.exchangeRate.findFirst({
-      where: {
-        fromCurrency: fromCurrency.toUpperCase(),
-        toCurrency: toCurrency.toUpperCase(),
-        isActive: true,
-        validFrom: { lte: now },
-        validUntil: { gt: now },
-      },
-      orderBy: { updatedAt: "desc" },
+      where,
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!rate) {
@@ -735,7 +852,7 @@ export class CustomerTransactionService {
         address: true,
         branchManager: true,
       },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
 
     logger.info(`[getPickupPoints] Found ${branches.length} active pickup points`, {
@@ -743,7 +860,7 @@ export class CustomerTransactionService {
     });
 
     // Transform branches to PickupPoint format
-    return branches.map(branch => ({
+    return branches.map((branch) => ({
       id: branch.id,
       name: branch.name,
       location: branch.state,
@@ -758,9 +875,9 @@ export class CustomerTransactionService {
   // REMITTANCE: IMTO_REMITTANCE, CASH_REMITTANCE
   // NOTE: TOURIST_FX can be in either BUY or SELL group depending on transaction mode
   private static readonly TRANSACTION_GROUPS: Record<string, string[]> = {
-    BUY: ["PTA", "BTA", "SCHOOL_FEES", "MEDICAL", "PROFESSIONAL_BODY"],
-    SELL: ["RESIDENT_FX", "EXPATRIATE_FX"],
-    REMITTANCE: ["IMTO_REMITTANCE", "CASH_REMITTANCE"],
+    BUY: ['PTA', 'BTA', 'SCHOOL_FEES', 'MEDICAL', 'PROFESSIONAL_BODY'],
+    SELL: ['RESIDENT_FX', 'EXPATRIATE_FX'],
+    REMITTANCE: ['IMTO_REMITTANCE', 'CASH_REMITTANCE'],
   };
 
   /**
@@ -784,10 +901,10 @@ export class CustomerTransactionService {
     // Full-text search across reference number and purpose
     if (filters.q) {
       where.OR = [
-        { referenceNumber: { contains: filters.q, mode: "insensitive" } },
-        { purpose: { contains: filters.q, mode: "insensitive" } },
-        { destinationCountry: { contains: filters.q, mode: "insensitive" } },
-        { currency: { contains: filters.q, mode: "insensitive" } },
+        { referenceNumber: { contains: filters.q, mode: 'insensitive' } },
+        { purpose: { contains: filters.q, mode: 'insensitive' } },
+        { destinationCountry: { contains: filters.q, mode: 'insensitive' } },
+        { currency: { contains: filters.q, mode: 'insensitive' } },
       ];
     }
 
@@ -799,8 +916,7 @@ export class CustomerTransactionService {
     if (filters.type) {
       where.type = filters.type.toUpperCase();
     } else if (filters.group) {
-      const groupTypes =
-        CustomerTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
+      const groupTypes = CustomerTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
       if (groupTypes) where.type = { in: groupTypes };
     }
 
@@ -840,7 +956,7 @@ export class CustomerTransactionService {
       startDate?: string;
       endDate?: string;
       sortBy?: string;
-      sortOrder?: "asc" | "desc";
+      sortOrder?: 'asc' | 'desc';
     } = {},
     page = 1,
     limit = 10
@@ -864,10 +980,8 @@ export class CustomerTransactionService {
       type: true,
     };
     const sortBy =
-      filters.sortBy && allowedSortFields[filters.sortBy]
-        ? filters.sortBy
-        : "createdAt";
-    const sortOrder = filters.sortOrder === "asc" ? "asc" : "desc";
+      filters.sortBy && allowedSortFields[filters.sortBy] ? filters.sortBy : 'createdAt';
+    const sortOrder = filters.sortOrder === 'asc' ? 'asc' : 'desc';
 
     logger.debug(`[getCustomerTransactions] Query parameters`, {
       userId,
@@ -988,7 +1102,7 @@ export class CustomerTransactionService {
         rejectedAt: true,
         rejectionReason: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 10_000,
     });
 
@@ -998,25 +1112,25 @@ export class CustomerTransactionService {
     });
 
     const headers = [
-      "Reference Number",
-      "Group",
-      "Type",
-      "Status",
-      "Purpose",
-      "Destination Country",
-      "Currency",
-      "Foreign Amount",
-      "NGN Equivalent",
-      "Exchange Rate",
-      "Disbursement Method",
-      "Created At",
-      "Completed At",
-      "Rejected At",
-      "Rejection Reason",
+      'Reference Number',
+      'Group',
+      'Type',
+      'Status',
+      'Purpose',
+      'Destination Country',
+      'Currency',
+      'Foreign Amount',
+      'NGN Equivalent',
+      'Exchange Rate',
+      'Disbursement Method',
+      'Created At',
+      'Completed At',
+      'Rejected At',
+      'Rejection Reason',
     ];
 
     const escape = (v: unknown) => {
-      if (v == null) return "";
+      if (v == null) return '';
       const s = String(v);
       // Wrap in quotes if contains comma, quote, or newline
       return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -1031,20 +1145,20 @@ export class CustomerTransactionService {
         t.purpose,
         t.destinationCountry,
         t.currency,
-        t.foreignAmount ?? "",
-        t.nairaEquivalent ?? "",
-        t.exchangeRate ?? "",
-        t.disbursementMethod ?? "",
+        t.foreignAmount ?? '',
+        t.nairaEquivalent ?? '',
+        t.exchangeRate ?? '',
+        t.disbursementMethod ?? '',
         t.createdAt.toISOString(),
-        t.completedAt?.toISOString() ?? "",
-        t.rejectedAt?.toISOString() ?? "",
-        t.rejectionReason ?? "",
+        t.completedAt?.toISOString() ?? '',
+        t.rejectedAt?.toISOString() ?? '',
+        t.rejectionReason ?? '',
       ]
         .map(escape)
-        .join(",")
+        .join(',')
     );
 
-    const csvContent = [headers.join(","), ...rows].join("\n");
+    const csvContent = [headers.join(','), ...rows].join('\n');
 
     logger.info(`[exportCustomerTransactions] CSV export completed successfully`, {
       userId,
@@ -1057,20 +1171,18 @@ export class CustomerTransactionService {
 
   private resolveTransactionGroup(type: string, mode?: string | null): string {
     // Special handling for TOURIST_FX based on mode
-    if (type === "TOURIST_FX") {
-      if (mode === "BUY") return "BUY";   // TOURING (buying FX)
-      if (mode === "SELL") return "SELL"; // TOURIST (selling FX)
+    if (type === 'TOURIST_FX') {
+      if (mode === 'BUY') return 'BUY'; // TOURING (buying FX)
+      if (mode === 'SELL') return 'SELL'; // TOURIST (selling FX)
       // Default to SELL if no mode specified (backward compatibility)
-      return "SELL";
+      return 'SELL';
     }
 
     // For all other transaction types, use the static mapping
-    for (const [group, types] of Object.entries(
-      CustomerTransactionService.TRANSACTION_GROUPS
-    )) {
+    for (const [group, types] of Object.entries(CustomerTransactionService.TRANSACTION_GROUPS)) {
       if (types.includes(type)) return group;
     }
-    return "OTHER";
+    return 'OTHER';
   }
 
   /**
@@ -1101,7 +1213,7 @@ export class CustomerTransactionService {
           },
         },
         steps: {
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
         },
         cashPickup: true,
         prepaidCard: true,
@@ -1113,7 +1225,7 @@ export class CustomerTransactionService {
         transactionId,
         userId,
       });
-      throw new NotFoundError("Transaction not found");
+      throw new NotFoundError('Transaction not found');
     }
 
     logger.info(`[getTransactionDetails] Transaction details fetched successfully`, {
@@ -1136,10 +1248,11 @@ export class CustomerTransactionService {
     });
 
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
-    const personalInfoStep = transaction.steps.find(s => s.step === "PERSONAL_INFO");
-    const admissionType = transaction.type === "SCHOOL_FEES" && personalInfoStep?.data
-      ? (personalInfoStep.data as any).admissionType
-      : null;
+    const personalInfoStep = transaction.steps.find((s) => s.step === 'PERSONAL_INFO');
+    const admissionType =
+      transaction.type === 'SCHOOL_FEES' && personalInfoStep?.data
+        ? (personalInfoStep.data as any).admissionType
+        : null;
 
     // Extract personal info details from the step data
     const personalInfoData = personalInfoStep?.data as any;
@@ -1183,7 +1296,13 @@ export class CustomerTransactionService {
             rejectedAt: transaction.rejectedAt,
           }
         : null,
-      requiredDocuments: this.buildDocumentStatus(transaction.type, transaction.documents as any, admissionType, transactionMode, transactionAmount),
+      requiredDocuments: this.buildDocumentStatus(
+        transaction.type,
+        transaction.documents as any,
+        admissionType,
+        transactionMode,
+        transactionAmount
+      ),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
       steps: transaction.steps,
@@ -1211,7 +1330,12 @@ export class CustomerTransactionService {
     transactionMode?: string | null,
     amount?: number | null
   ) {
-    const required = this.getRequiredDocuments(transactionType, admissionType, transactionMode, amount);
+    const required = this.getRequiredDocuments(
+      transactionType,
+      admissionType,
+      transactionMode,
+      amount
+    );
 
     return required.map((docType) => {
       const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
@@ -1223,7 +1347,10 @@ export class CustomerTransactionService {
               fileName: uploaded.fileName,
               fileUrl: uploaded.fileUrl,
               status: uploaded.verificationStatus,
-              rejectionNotes: uploaded.verificationStatus === "FAILED" ? (uploaded.verificationNotes ?? null) : null,
+              rejectionNotes:
+                uploaded.verificationStatus === 'FAILED'
+                  ? (uploaded.verificationNotes ?? null)
+                  : null,
               uploadedAt: uploaded.uploadedAt,
               verifiedAt: uploaded.verifiedAt ?? null,
             }
@@ -1242,14 +1369,29 @@ export class CustomerTransactionService {
     amount?: number | null
   ): string[] {
     const documentRequirements: Record<string, string[]> = {
-      PTA: ["VISA", "RETURN_TICKET"],
-      BTA: ["TIN", "TCC",  "PASSPORT", "VISA", "RETURN_TICKET", "CORPORATE_BODY_LETTER", "PARTNER_INVITATION_LETTER"],
-      SCHOOL_FEES: ["PASSPORT", "SCHOOL_ADMISSION", "INVOICE" ],
-      MEDICAL: ["PASSPORT", "VISA", "RETURN_TICKET", "FORM_A_DOCUMENT", "MEDICAL_LETTER", "OVERSEAS_MEDICAL_LETTER"],
-      PROFESSIONAL_BODY: ["MEMBERSHIP_CARD", "INVOICE"],
-      TOURIST_FX: ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"],
-      RESIDENT_FX: ["PASSPORT", "UTILITY_BILL"],
-      EXPATRIATE_FX: ["PASSPORT", "WORK_PERMIT", "UTILITY_BILL"],
+      PTA: ['VISA', 'RETURN_TICKET'],
+      BTA: [
+        'TIN',
+        'TCC',
+        'PASSPORT',
+        'VISA',
+        'RETURN_TICKET',
+        'CORPORATE_BODY_LETTER',
+        'PARTNER_INVITATION_LETTER',
+      ],
+      SCHOOL_FEES: ['PASSPORT', 'SCHOOL_ADMISSION', 'INVOICE'],
+      MEDICAL: [
+        'PASSPORT',
+        'VISA',
+        'RETURN_TICKET',
+        'FORM_A_DOCUMENT',
+        'MEDICAL_LETTER',
+        'OVERSEAS_MEDICAL_LETTER',
+      ],
+      PROFESSIONAL_BODY: ['MEMBERSHIP_CARD', 'INVOICE'],
+      TOURIST_FX: ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'],
+      RESIDENT_FX: ['PASSPORT', 'UTILITY_BILL'],
+      EXPATRIATE_FX: ['PASSPORT', 'WORK_PERMIT', 'UTILITY_BILL'],
       IMTO_REMITTANCE: [],
       CASH_REMITTANCE: [],
     };
@@ -1257,29 +1399,35 @@ export class CustomerTransactionService {
     let required = documentRequirements[transactionType] || [];
 
     // For TOURIST_FX, differentiate based on transaction mode
-    if (transactionType === "TOURIST_FX") {
-      if (transactionMode === "BUY") {
+    if (transactionType === 'TOURIST_FX') {
+      if (transactionMode === 'BUY') {
         // TOURING (buying FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
-        required = ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"];
-      } else if (transactionMode === "SELL") {
+        required = ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'];
+      } else if (transactionMode === 'SELL') {
         // TOURIST (selling FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
-        required = ["VISA", "PASSPORT", "RETURN_TICKET", "RECEIPT"];
+        required = ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'];
       }
     }
 
     // Add postgraduate-specific documents for school fees
-    if (transactionType === "SCHOOL_FEES" && admissionType === "POSTGRADUATE") {
-      required = [...required, "STATEMENT_OF_RESULT", "DEGREE"];
+    if (transactionType === 'SCHOOL_FEES' && admissionType === 'POSTGRADUATE') {
+      required = [...required, 'STATEMENT_OF_RESULT', 'DEGREE'];
     }
 
     // For transactions above $10,000, require proof of funds and digital signature
     // This applies to SELL transactions (RESIDENT_FX, EXPATRIATE_FX, TOURIST_FX with mode=SELL)
-    const sellTransactionTypes = ["RESIDENT_FX", "EXPATRIATE_FX"];
-    const isSellTransaction = sellTransactionTypes.includes(transactionType) ||
-                             (transactionType === "TOURIST_FX" && transactionMode === "SELL");
+    const sellTransactionTypes = ['RESIDENT_FX', 'EXPATRIATE_FX'];
+    const isSellTransaction =
+      sellTransactionTypes.includes(transactionType) ||
+      (transactionType === 'TOURIST_FX' && transactionMode === 'SELL');
 
     if (isSellTransaction && amount && amount >= 10000) {
-      required = [...required, "PROOF_OF_FUNDS", "SOURCE_OF_FUNDS_DECLARATION", "DIGITAL_SIGNATURE"];
+      required = [
+        ...required,
+        'PROOF_OF_FUNDS',
+        'SOURCE_OF_FUNDS_DECLARATION',
+        'DIGITAL_SIGNATURE',
+      ];
     }
 
     return required;
@@ -1341,14 +1489,16 @@ export class CustomerTransactionService {
       branchCount: branches.length,
     });
 
-    // Extract unique cities from addresses (assuming format like "City, State")
-    // This is a simplified approach - adjust based on your address format
+    // Extract unique cities from addresses
+    // Address format: "Street Address, City/Area, State"
+    // Example: "45 Marina Street, Lagos Island, Lagos"
     const cities = new Set<string>();
     branches.forEach((branch) => {
-      // Try to extract city from address
-      const addressParts = branch.address.split(',');
-      if (addressParts.length > 0) {
-        const city = addressParts[0].trim();
+      // Try to extract city from address (second-to-last part before state)
+      const addressParts = branch.address.split(',').map(p => p.trim());
+      if (addressParts.length >= 2) {
+        // Get the second-to-last element (the city/area)
+        const city = addressParts[addressParts.length - 2];
         if (city) cities.add(city);
       }
     });
@@ -1422,11 +1572,7 @@ export class CustomerTransactionService {
       const availableTerminals = [];
 
       for (const branch of branches) {
-        const isAvailable = await this.checkTerminalAvailability(
-          branch.id,
-          pickupDate,
-          pickupTime
-        );
+        const isAvailable = await this.checkTerminalAvailability(branch.id, pickupDate, pickupTime);
 
         if (isAvailable) {
           availableTerminals.push({

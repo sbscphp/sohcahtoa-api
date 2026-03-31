@@ -12,7 +12,16 @@ class CustomerController {
       const limit = parseInt(req.query.limit as string) || 20;
       const q = (req.query.search as string) || undefined;
 
-      const result = await customerService.listCustomers(page, limit, q);
+      const result = await customerService.listCustomers(page, limit, q, {
+        status: (req.query as any).status,
+        isActive: (req.query as any).isActive,
+        customerType: (req.query as any).customerType,
+        kycStatus: (req.query as any).kycStatus,
+        dateFrom: (req.query as any).dateFrom,
+        dateTo: (req.query as any).dateTo,
+        sortBy: (req.query as any).sortBy,
+        sortOrder: (req.query as any).sortOrder,
+      });
       res.json(successResponse(result.data, { pagination: result.meta }));
     } catch (error) {
       next(error);

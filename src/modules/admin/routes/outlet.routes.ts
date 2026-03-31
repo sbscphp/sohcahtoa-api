@@ -24,6 +24,7 @@ OutletRouter.get(
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.franchiseStats
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -61,6 +62,7 @@ OutletRouter.get(
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listFranchises
 );
+
 /**
  * @swagger
  * /api/admin/outlet/franchises:
@@ -128,8 +130,7 @@ OutletRouter.post(
  *             required: [status]
  *             properties:
  *               status:
- *                 type: string
- *                 enum: [Active, Deactivated]
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Franchise status updated
@@ -214,6 +215,44 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
   outletController.listFranchiseBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}/branches/export:
+ *   get:
+ *     summary: Export franchise branches as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filter by branch name or address
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/branches/export",
+  authenticate,
+  requirePermission({ module: "BRANCH", feature: "MODULE", action: "export" }),
+  outletController.exportFranchiseBranches
 );
 
 /**
@@ -324,6 +363,70 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
   outletController.listFranchiseTransactions
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/franchises/{id}/transactions/export:
+ *   get:
+ *     summary: Export franchise transactions as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/franchises/:id/transactions/export",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "export" }),
+  outletController.exportFranchiseTransactions
 );
 
 /**
@@ -483,6 +586,44 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listPickupStations
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations/export:
+ *   get:
+ *     summary: Export pick-up stations [CSV]
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: region
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV export
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/pickup-stations/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.exportPickupStations
 );
 
 /**
@@ -661,7 +802,7 @@ OutletRouter.delete(
 // OutletRouter.get("/", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.list);
 
 /**
- *  * @swagger
+ * @swagger
  * /api/admin/outlet/branches:
  *   get:
  *     summary: List branches [Paginated]
@@ -696,6 +837,36 @@ OutletRouter.get(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listBranches
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/export:
+ *   get:
+ *     summary: Export branches as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportBranches
 );
 
 /**
@@ -748,11 +919,11 @@ OutletRouter.get(
  * @swagger
  * /api/admin/outlet/states:
  *   get:
- *     summary: List Nigerian states
+ *     summary: Get all states
  *     tags: [admin-outlet]
  *     responses:
  *       200:
- *         description: States retrieved successfully
+ *         description: List of states retrieved successfully
  *         content:
  *           application/json:
  *             schema:
@@ -760,18 +931,57 @@ OutletRouter.get(
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
- *                   type: object
- *                   properties:
- *                     states:
- *                       type: array
- *                       items:
- *                         type: string
- *                       example: ["Abia", "Adamawa", "Akwa Ibom", "Lagos", "Abuja"]
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["Abia", "Adamawa", "Akwa Ibom", "Lagos", "Abuja"]
  */
 OutletRouter.get(
   "/states",
   outletController.listNigeriaStates
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/states/{state}/cities:
+ *   get:
+ *     summary: Get cities by state
+ *     tags: [admin-outlet]
+ *     parameters:
+ *       - in: path
+ *         name: state
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Name of the state (e.g. Lagos)
+ *     responses:
+ *       200:
+ *         description: List of cities retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["Ikeja", "Surulere", "Epe"]
+ *       404:
+ *         description: State not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/states/:state/cities",
+  outletController.listNigeriaCitiesByState
 );
 
 /**
@@ -1039,8 +1249,7 @@ OutletRouter.get(
  *             required: [status]
  *             properties:
  *               status:
- *                 type: string
- *                 enum: [Active, Deactivated, Pending]
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Branch status updated
@@ -1052,6 +1261,94 @@ OutletRouter.patch(
   authenticate,
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.updateBranchStatus
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/agents:
+ *   get:
+ *     summary: List agents under a branch
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: Branch agents retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/:id/agents",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listBranchAgents
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/branches/{id}/agents/export:
+ *   get:
+ *     summary: Export branch agents as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+OutletRouter.get(
+  "/branches/:id/agents/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "export" }),
+  outletController.exportBranchAgents
 );
 
 /**

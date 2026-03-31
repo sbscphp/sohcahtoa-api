@@ -106,7 +106,7 @@ else
     echo "🔍 Found failed migration. Attempting to resolve..."
 
     # List of migrations that might fail (space-separated for POSIX sh compatibility)
-    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default"
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default 20260323145900_add_escrow_accounts 20260326095000_store_currency_type_for_escrow_accounts"
 
     # Try to mark each potentially failed migration as rolled back
     for migration in $MIGRATIONS_TO_RESOLVE; do
@@ -147,6 +147,8 @@ else
       npx prisma migrate resolve --applied 20260303131500_add_department_is_default 2>&1 || true
       npx prisma migrate resolve --applied 20260227112539_add_user_created_by_agent 2>&1 || true
       npx prisma migrate resolve --applied 20260305094327_add_transaction_mode 2>&1 || true
+      npx prisma migrate resolve --applied 20260323145900_add_escrow_accounts 2>&1 || true
+      npx prisma migrate resolve --applied 20260326095000_store_currency_type_for_escrow_accounts 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."
@@ -205,7 +207,39 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
+CREATE INDEX IF NOT EXISTS "tickets_createdByAgentId_idx" ON "tickets"("createdByAgentId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tickets_createdByAgentId_fkey') THEN
+    ALTER TABLE "tickets"
+      ADD CONSTRAINT "tickets_createdByAgentId_fkey"
+      FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
+
+-- Ensure escrow accounts table exists (migration fallback)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'EscrowAccountStatus') THEN
+    CREATE TYPE "EscrowAccountStatus" AS ENUM ('ACTIVE', 'INACTIVE');
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "escrow_accounts" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "currency" TEXT NOT NULL DEFAULT 'NGN - Naira',
+  "bankName" TEXT NOT NULL,
+  "accountNumber" TEXT NOT NULL,
+  "accountName" TEXT NOT NULL,
+  "status" "EscrowAccountStatus" NOT NULL DEFAULT 'ACTIVE',
+  "createdBy" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "escrow_accounts_accountNumber_key" ON "escrow_accounts"("accountNumber");
+CREATE INDEX IF NOT EXISTS "escrow_accounts_status_idx" ON "escrow_accounts"("status");
 
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$
@@ -558,6 +592,15 @@ echo ""
 echo "🔧 Regenerating Prisma Client..."
 npx prisma generate > /dev/null 2>&1
 echo "✅ Prisma Client regenerated"
+echo ""
+
+# Seed pickup locations (if needed)
+echo "🌱 Seeding pickup locations..."
+if [ -f "/app/dist/seeds/pickup-locations.seed.js" ]; then
+  node /app/dist/seeds/pickup-locations.seed.js || echo "⚠️  Pickup locations seed skipped (may already exist)"
+else
+  echo "⚠️  Pickup locations seed file not found"
+fi
 echo ""
 
 # Start the application

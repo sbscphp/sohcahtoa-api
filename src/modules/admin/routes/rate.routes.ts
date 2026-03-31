@@ -61,6 +61,19 @@ RateRouter.get(
  *         schema:
  *           type: string
  *           enum: [all, active, schedule]
+ *         description: Filter by rate status (default is all)
+ *       - in: query
+ *         name: fromCurrency
+ *         schema:
+ *           type: string
+ *         description: Filter by source currency (e.g., USD, EUR, GBP)
+ *         example: USD
+ *       - in: query
+ *         name: toCurrency
+ *         schema:
+ *           type: string
+ *         description: Filter by target currency (e.g., NGN)
+ *         example: NGN
  *       - in: query
  *         name: page
  *         schema:
@@ -72,6 +85,50 @@ RateRouter.get(
  *     responses:
  *       200:
  *         description: Rates retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       fromCurrency:
+ *                         type: string
+ *                         example: USD
+ *                       toCurrency:
+ *                         type: string
+ *                         example: NGN
+ *                       buyRate:
+ *                         type: number
+ *                         example: 1450.50
+ *                       sellRate:
+ *                         type: number
+ *                         example: 1465.75
+ *                       validFrom:
+ *                         type: string
+ *                         format: date-time
+ *                       validUntil:
+ *                         type: string
+ *                         format: date-time
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
  */
 RateRouter.get(
   "/",

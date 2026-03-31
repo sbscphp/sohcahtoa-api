@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { userManagementController } from "../controllers/user-management.controller";
 import { authenticate, requirePermission } from "../../../shared/middleware";
+import { addUserValidationStore, validate } from "../validations/user-management.validation";
 
 const UserManagementRouter: Router = Router();
 
@@ -31,6 +32,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getUserStats
 );
+
 /**
  * @swagger
  * /api/admin/management/users:
@@ -110,6 +112,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "export" }),
   userManagementController.exportUsersCsv
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}:
@@ -138,6 +141,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getUser
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}/activities:
@@ -174,6 +178,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getUserActivities
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}/activities/export:
@@ -200,6 +205,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "export" }),
   userManagementController.exportUserActivitiesCsv
 );
+
 /**
  * @swagger
  * /api/admin/management/roles/export:
@@ -220,6 +226,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "export" }),
   userManagementController.exportRolesCsv
 );
+
 /**
  * @swagger
  * /api/admin/management/departments/export:
@@ -240,6 +247,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "export" }),
   userManagementController.exportDepartmentsCsv
 );
+
 /**
  * @swagger
  * /api/admin/management/lookups:
@@ -285,7 +293,6 @@ UserManagementRouter.get(
 UserManagementRouter.get(
   "/profile",
   authenticate,
-  requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.getProfile
 );
 
@@ -310,6 +317,8 @@ UserManagementRouter.get(
  *                 type: string
  *               phoneNumber:
  *                 type: string
+ *                 example: +2348012345678
+ *                 pattern: '^\\+234\\d{10}$'
  *               role:
  *                 type: string
  *               department:
@@ -322,6 +331,8 @@ UserManagementRouter.get(
  *               altPhoneNumber:
  *                 type: string
  *                 nullable: true
+ *                 example: +2348012345678
+ *                 pattern: '^\\+234\\d{10}$'
  *     responses:
  *       200:
  *         description: Admin user created
@@ -332,8 +343,11 @@ UserManagementRouter.post(
   "/add-user",
   authenticate,
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "create" }),
+  addUserValidationStore,
+  validate,
   userManagementController.addUser
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}/status:
@@ -377,6 +391,7 @@ UserManagementRouter.patch(
   requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "edit" }),
   userManagementController.toggleUserActive
 );
+
 /**
  * @swagger
  * /api/admin/management/users/{id}:
@@ -852,6 +867,7 @@ UserManagementRouter.put(
   requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "edit" }),
   userManagementController.updateRole
 );
+
 /**
  * @swagger
  * /api/admin/management/roles/{id}:
@@ -925,6 +941,7 @@ UserManagementRouter.post(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "create" }),
   userManagementController.createDepartment
 );
+
 /**
  * @swagger
  * /api/admin/management/departments:
@@ -962,6 +979,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "view" }),
   userManagementController.getDepartments
 );
+
 /**
  * @swagger
  * /api/admin/management/departments/stats:
@@ -982,6 +1000,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "view" }),
   userManagementController.getDepartmentStats
 );
+
 /**
  * @swagger
  * /api/admin/management/departments/{id}/status:
@@ -1020,6 +1039,7 @@ UserManagementRouter.patch(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "edit" }),
   userManagementController.toggleDepartmentActive
 );
+
 /**
  * @swagger
  * /api/admin/management/departments/{id}:
@@ -1048,6 +1068,7 @@ UserManagementRouter.get(
   requirePermission({ module: "USER_MANAGEMENT", feature: "DEPARTMENTS", action: "view" }),
   userManagementController.getDepartment
 );
+
 /**
  * @swagger
  * /api/admin/management/departments/{id}:

@@ -27,6 +27,9 @@ RUN npx prisma generate
 # Build TypeScript
 RUN npm run build
 
+# Compile seed scripts
+RUN npx tsc prisma/seeds/pickup-locations.seed.ts --outDir dist/seeds --esModuleInterop --resolveJsonModule --skipLibCheck
+
 # Stage 2: Production
 FROM node:18-slim
 

@@ -46,57 +46,13 @@ services:
     container_name: sochatoa-api
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      # Server Configuration
-      NODE_ENV: production
-      PORT: 3000
-      HOST: 0.0.0.0
-      SERVICE_NAME: sochatoa-api-monolith
-
-      # Database Configuration
+      # Database Configuration - using Docker service names
       DATABASE_URL: postgresql://postgres:password@postgres:5432/sochatoa_db?schema=public
-
-      # Redis Configuration
+      # Redis Configuration - using Docker service name
       REDIS_URL: redis://redis:6379
-
-      # JWT Secrets (CHANGE IN PRODUCTION!)
-      JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
-      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
-      JWT_ACCESS_EXPIRY: 1d
-      JWT_REFRESH_EXPIRY: 7d
-
-      # SMTP Configuration (Optional - configure for email sending)
-      SMTP_USER: oladeletobiadedoyin@gmail.com
-      # sbscproject2@gmail.com
-      SMTP_PASSWORD: mebjzgbonwzpqqcb
-      # dzbrzbgsxirzjrzj
-      SMTP_HOST: smtp.gmail.com
-      SMTP_PORT: 465
-      SMTP_SECURE: true
-      SMTP_FROM: sbscproject2@gmail.com
-      SMTP_PASS: true
-
-      # API Configuration
-      CORS_ORIGIN: "*"
-      API_BASE_URL: http://localhost:3000
-      API_BASE_PATH: ""
-
-      # SMS Configuration (Optional - Termii)
-      # TERMII_API_KEY: your-termii-api-key
-      # TERMII_SENDER_ID: Sochatoa
-
-      # Cloudinary Configuration (Optional - for document uploads)
-      
-      CLOUDINARY_API_KEY: 348432696833351
-      CLOUDINARY_API_SECRET: lfIsuQFDy3uBPoyuLSHTlnd_SyA
-      CLOUDINARY_CLOUD_NAME: dlcenmo5x
-      CLOUDINARY_URL: cloudinary://348432696833351:lfIsuQFDy3uBPoyuLSHTlnd_SyA@dlcenmo5x
-
-      # CLOUDINARY_API_KEY: your-api-key
-      # CLOUDINARY_API_SECRET: your-api-secret
-      MOBILE_ACCESS_TOKEN_EXPIRY: 1d
-      ACCESS_TOKEN_EXPIRY: 1d
-
     depends_on:
       postgres:
         condition: service_healthy

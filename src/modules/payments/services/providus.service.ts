@@ -134,10 +134,11 @@ export class ProvidusService {
 
   /**
    * Generate authentication signature for Providus API
-   * Format: clientId:clientSecret
+   * Format: SHA512(ClientId:ClientSecret)
    */
   private generateAuthSignature(): string {
-    return `${this.config.clientId}:${this.config.clientSecret}`;
+    const payload = `${this.config.clientId}:${this.config.clientSecret}`;
+    return crypto.createHash('sha512').update(payload).digest('hex').toUpperCase();
   }
 
   /**
@@ -149,7 +150,7 @@ export class ProvidusService {
       logger.info('Creating dynamic account', { accountName });
 
       const response = await this.client.post<CreateDynamicAccountResponse>(
-        '/api/PiPCreateDynamicAccountNumber',
+        '/PiPCreateDynamicAccountNumber',
         { account_name: accountName }
       );
 
@@ -190,7 +191,7 @@ export class ProvidusService {
       logger.info('Creating reserved account', { accountName, bvn });
 
       const response = await this.client.post<CreateReservedAccountResponse>(
-        '/api/PiPCreateReservedAccountNumber',
+        '/PiPCreateReservedAccountNumber',
         {
           account_name: accountName,
           bvn: bvn || '',
@@ -233,7 +234,7 @@ export class ProvidusService {
       logger.info('Updating account name', { accountNumber, accountName });
 
       const response = await this.client.post<UpdateAccountNameResponse>(
-        '/api/PiPUpdateAccountName',
+        '/PiPUpdateAccountName',
         {
           account_number: accountNumber,
           account_name: accountName,
@@ -266,7 +267,7 @@ export class ProvidusService {
       logger.info('Verifying transaction by session ID', { sessionId });
 
       const response = await this.client.get<VerifyTransactionResponse>(
-        '/api/PiPverifyTransaction',
+        '/PiPverifyTransaction',
         {
           params: { session_id: sessionId },
         }
@@ -299,7 +300,7 @@ export class ProvidusService {
       logger.info('Verifying transaction by settlement ID', { settlementId });
 
       const response = await this.client.get<VerifyTransactionResponse>(
-        '/api/PiPverifyTransaction_settlementid',
+        '/PiPverifyTransaction_settlementid',
         {
           params: { settlement_id: settlementId },
         }
@@ -335,7 +336,7 @@ export class ProvidusService {
       logger.info('Updating account blacklist status', { accountNumber, blacklist });
 
       const response = await this.client.post<BlacklistAccountResponse>(
-        '/api/PiPBlacklistAccount',
+        '/PiPBlacklistAccount',
         {
           account_number: accountNumber,
           blacklist_flg: blacklist ? 1 : 0,

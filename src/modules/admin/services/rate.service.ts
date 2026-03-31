@@ -1,47 +1,44 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
+import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere } from "../../../shared/utils/rate-filters";
 
 const prisma: PrismaClient = getDatabase();
 
 class RateService {
-  private isActiveWhere() {
-    const now = new Date();
-    return { isActive: true, validFrom: { lte: now }, validUntil: { gt: now } };
-  }
-
-  private isScheduledWhere() {
-    const now = new Date();
-    return { isActive: true, validFrom: { gt: now } };
-  }
 
   async stats() {
     const now = new Date();
-    const [all, active, scheduled] = await Promise.all([
-      prisma.exchangeRate.count(),
-      prisma.exchangeRate.count({ where: { isActive: true, validFrom: { lte: now }, validUntil: { gt: now } } }),
-      prisma.exchangeRate.count({ where: { isActive: true, validFrom: { gt: now } } }),
+    const [active, scheduled, all] = await Promise.all([
+      prisma.exchangeRate.count({ where: isActiveWhere() }),
+      prisma.exchangeRate.count({ where: isScheduledWhere() }),
+      prisma.exchangeRate.count({
+        where: {
+          isActive: true,
+          OR: [
+            { validFrom: { lte: now }, validUntil: { gt: now } },
+            { validFrom: { gt: now } },
+          ],
+        },
+      }),
     ]);
     return { all, active, scheduled };
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
-    const status = (filters.status || "all").toString();
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { fromCurrency: { contains: search, mode: "insensitive" } },
-        { toCurrency: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (status === "active") Object.assign(where, this.isActiveWhere());
-    if (status === "schedule") Object.assign(where, this.isScheduledWhere());
+    const where = buildRateWhereClause({
+      search: ((filters || {}).search ?? (filters || {}).q) || undefined,
+      status: filters.status,
+      fromCurrency: filters.fromCurrency,
+      toCurrency: filters.toCurrency,
+    });
+
     const skip = (page - 1) * limit;
     const client: any = prisma as any;
     const [total, items] = await Promise.all([
       client.exchangeRate.count({ where }),
       client.exchangeRate.findMany({
         where,
+        select: rateSelectFields,
         orderBy: { updatedAt: "desc" },
         skip,
         take: limit,
@@ -95,17 +92,12 @@ class RateService {
   }
 
   async export(filters: any = {}) {
-    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
-    const status = (filters.status || "all").toString();
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { fromCurrency: { contains: search, mode: "insensitive" } },
-        { toCurrency: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (status === "active") Object.assign(where, this.isActiveWhere());
-    if (status === "schedule") Object.assign(where, this.isScheduledWhere());
+    const where = buildRateWhereClause({
+      search: ((filters || {}).search ?? (filters || {}).q) || undefined,
+      status: filters.status,
+      fromCurrency: filters.fromCurrency,
+      toCurrency: filters.toCurrency,
+    });
     const client: any = prisma as any;
     const items = await client.exchangeRate.findMany({
       where,
