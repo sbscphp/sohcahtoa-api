@@ -53,6 +53,20 @@ class AdminAuthController {
     const result = await adminAuthService.resendForgotOtp(email);
     res.json(successResponse(result));
   });
+
+  verifyOldPassword = asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.userId as string;
+    const { oldPassword } = req.body as { oldPassword: string };
+    const result = await adminAuthService.verifyOldPassword(userId, oldPassword);
+    res.json(successResponse(result));
+  });
+
+  submitPasswordChange = asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.userId as string;
+    const { changeToken, newPassword } = req.body as { changeToken: string; newPassword: string };
+    const result = await adminAuthService.submitPasswordChange(userId, changeToken, newPassword);
+    res.json(successResponse(result));
+  });
 }
 
 export const adminAuthController = new AdminAuthController();

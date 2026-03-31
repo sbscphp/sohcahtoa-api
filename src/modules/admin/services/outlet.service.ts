@@ -838,6 +838,48 @@ class OutletService {
         isActive: true,
       },
     });
+    try {
+      const name = (agentName || "").toString().trim();
+      const emailAddr = (agentEmail || "").toString().trim();
+      const phoneNum = (agentPhoneNumber || "").toString().trim();
+      if (name && (emailAddr || phoneNum)) {
+        const existingAgent =
+          (emailAddr || phoneNum)
+            ? await db.agent.findFirst({
+                where: {
+                  OR: [
+                    ...(emailAddr ? [{ email: emailAddr }] : []),
+                    ...(phoneNum ? [{ phoneNumber: phoneNum }] : []),
+                  ],
+                },
+                select: { id: true },
+              })
+            : null;
+        if (existingAgent?.id) {
+          await db.agent.update({
+            where: { id: existingAgent.id },
+            data: { branchId: created.id },
+          });
+        } else {
+          await db.agent.create({
+            data: {
+              name,
+              email: emailAddr || undefined,
+              phoneNumber: phoneNum || undefined,
+              branchId: created.id,
+              isApproved: false,
+            },
+          });
+        }
+      }
+    } catch (_e) {
+      logger.warn("Failed to attach/create initial agent for branch", {
+        branchId: created.id,
+        agentName,
+        agentEmail,
+        agentPhoneNumber,
+      });
+    }
     return created;
   }
 
@@ -976,6 +1018,43 @@ class OutletService {
     }));
 
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportPickupStations(query: PickupStationQueryDto) {
+    const where: any = {};
+
+    const search = (query.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { region: { contains: search, mode: "insensitive" } },
+        { state: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (query.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query.region) where.region = { equals: query.region, mode: "insensitive" };
+    if (query.status) where.status = query.status;
+
+    const rows = await db.pickupStation.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+    });
+
+    return (rows || []).map((s: any) => ({
+      id: s.id,
+      stationName: s.name,
+      stationEmail: s.email,
+      phoneNumber: s.phoneNumber,
+      state: s.state,
+      region: s.region,
+      physicalAddress: s.address,
+      status: s.status,
+      isActive: s.isActive,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
   }
 
   async createPickupStation(payload: CreatePickupStationDto) {

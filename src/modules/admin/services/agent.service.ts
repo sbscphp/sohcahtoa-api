@@ -418,6 +418,7 @@ class AgentService {
       },
     });
   }
+  
   async create(data: { name: string; email: string; phoneNumber: string; branch: string; attachment?: { fileUrl: string; fileName?: string; fileSize?: number; mimeType?: string } }) {
     if (!data.name || !data.email || !data.phoneNumber || !data.branch) {
       throw new ValidationError("name, email, phoneNumber, branch are required");
