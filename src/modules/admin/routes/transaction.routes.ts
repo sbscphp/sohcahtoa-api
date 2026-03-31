@@ -442,8 +442,6 @@ TransactionRouter.post(
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-// Transactions - Buy FX lifecycle (review, approve, reject, settle)
-
 TransactionRouter.post(
   "/:id/review",
   authenticate,
@@ -568,6 +566,51 @@ TransactionRouter.post(
 
 /**
  * @swagger
+ * /api/admin/transactions/{id}/documents/{documentId}/reject:
+ *   post:
+ *     summary: Reject a transaction document
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Document rejected successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/documents/:documentId/reject",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.rejectDocument
+);
+
+/**
+ * @swagger
  * /api/admin/transactions/{id}/documents/{documentId}/request-info:
  *   post:
  *     summary: Request more information on a transaction document
@@ -644,32 +687,3 @@ TransactionRouter.post(
   adminTransactionsController.settle
 );
 
-/**
- * @swagger
- * /api/admin/deposits/{transactionId}/confirm:
- *   post:
- *     summary: Confirm a deposit
- *     tags: [admin-transactions]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: transactionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               confirmationDetails:
- *                 type: object
- *     responses:
- *       200:
- *         description: Deposit confirmed successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- */
- 

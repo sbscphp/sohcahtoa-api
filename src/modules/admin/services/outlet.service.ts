@@ -182,6 +182,13 @@ class OutletService {
   }
 
   async updateFranchiseStatus(id: string, status: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
     const updated = await db.franchise.update({
       where: { id },
       data: { status, isActive: status === "Active" },
@@ -190,6 +197,13 @@ class OutletService {
   }
 
   async approveFranchise(id: string) {
+    if (!id) {
+      throw new ValidationError("id is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
     const updated = await db.franchise.update({
       where: { id },
       data: { status: "Active", isActive: true },
@@ -273,6 +287,39 @@ class OutletService {
     }));
   }
 
+  async exportBranches(filters: { search?: string; status?: string } = {}) {
+    const where: any = {};
+    const search = (filters.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (filters.status) where.status = filters.status;
+    const rows = await db.branch.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        branchManager: true,
+        email: true,
+        address: true,
+        status: true,
+      },
+    });
+    return (rows || []).map((b: any) => ({
+      id: b.id,
+      branchName: b.name,
+      branchManager: b.branchManager,
+      email: b.email,
+      address: b.address,
+      status: b.status,
+    }));
+  }
+
   async getBranchStats() {
     const total = await db.branch.count();
     const active = await db.branch.count({ where: { status: "Active" } });
@@ -300,6 +347,7 @@ class OutletService {
       email: b.email,
       address: b.address,
       status: b.status,
+      isActive: b.isActive,
     }));
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
@@ -317,9 +365,9 @@ class OutletService {
       where,
       orderBy: { name: "asc" },
       take: 10_000,
-      select: { id: true, name: true },
+      select: { id: true, name: true, isActive: true },
     });
-    const items = rows.map((b: any) => ({ id: b.id, name: b.name }));
+    const items = rows.map((b: any) => ({ id: b.id, name: b.name, isActive: b.isActive }));
     items.sort((a: any, b: any) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
     return items;
   }
@@ -355,6 +403,7 @@ class OutletService {
       email: b.email,
       address: b.address,
       status: b.status,
+      isActive: b.isActive,
     }));
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
@@ -390,6 +439,52 @@ class OutletService {
       email: b.email,
       address: b.address,
       status: b.status,
+      isActive: b.isActive,
+    }));
+  }
+
+  async exportBranchesByFranchise(franchiseId: string, query: any) {
+    if (!franchiseId) {
+      throw new ValidationError("franchiseId is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id: franchiseId }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+
+    const where: any = { franchiseId };
+    const q = ((query?.search as string) || "").toString().trim();
+    if (q.length > 0) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { address: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    if (query?.status) where.status = query.status;
+
+    const rows = await db.branch.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        branchManager: true,
+        email: true,
+        address: true,
+        status: true,
+        isActive: true,
+      },
+    });
+
+    return (rows || []).map((b: any) => ({
+      id: b.id,
+      branchName: b.name,
+      branchManager: b.branchManager,
+      email: b.email,
+      address: b.address,
+      status: b.status,
+      isActive: b.isActive,
     }));
   }
 
@@ -496,6 +591,112 @@ class OutletService {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  async exportTransactionsByFranchise(franchiseId: string, filters: any) {
+    if (!franchiseId) {
+      throw new ValidationError("franchiseId is required");
+    }
+    const franchise = await db.franchise.findUnique({ where: { id: franchiseId }, select: { id: true } });
+    if (!franchise) {
+      throw new NotFoundError("Franchise not found");
+    }
+
+    const where: any = {
+      createdByAgent: {
+        is: {
+          branch: {
+            is: { franchiseId },
+          },
+        },
+      },
+    };
+
+    if (filters?.status) where.status = filters.status;
+    if (filters?.step) where.currentStep = filters.step;
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const search = (filters?.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orderBy: any = {};
+    const sortBy = filters?.sortBy || "createdAt";
+    const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    const items = await prisma.transaction.findMany({
+      where,
+      orderBy,
+      take: 10_000,
+      select: {
+        id: true,
+        userId: true,
+        referenceNumber: true,
+        type: true,
+        currentStep: true,
+        status: true,
+        nairaEquivalent: true,
+        foreignAmount: true,
+        createdAt: true,
+      },
+    });
+
+    const uniqueUserIds = Array.from(new Set(items.map((t: any) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return items.map((t: any) => {
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+      const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      return {
+        id: t.id,
+        customerName: name,
+        dateAndId: { date: t.createdAt, reference: t.referenceNumber },
+        transactionType: t.type,
+        transactionStage: t.currentStep,
+        workflowStage: t.status,
+        transactionValue: value,
+        status: t.status,
+      };
+    });
   }
 
   async listTransactionsByBranch(branchId: string, filters: any, page = 1, limit = 20) {
@@ -637,6 +838,48 @@ class OutletService {
         isActive: true,
       },
     });
+    try {
+      const name = (agentName || "").toString().trim();
+      const emailAddr = (agentEmail || "").toString().trim();
+      const phoneNum = (agentPhoneNumber || "").toString().trim();
+      if (name && (emailAddr || phoneNum)) {
+        const existingAgent =
+          (emailAddr || phoneNum)
+            ? await db.agent.findFirst({
+                where: {
+                  OR: [
+                    ...(emailAddr ? [{ email: emailAddr }] : []),
+                    ...(phoneNum ? [{ phoneNumber: phoneNum }] : []),
+                  ],
+                },
+                select: { id: true },
+              })
+            : null;
+        if (existingAgent?.id) {
+          await db.agent.update({
+            where: { id: existingAgent.id },
+            data: { branchId: created.id },
+          });
+        } else {
+          await db.agent.create({
+            data: {
+              name,
+              email: emailAddr || undefined,
+              phoneNumber: phoneNum || undefined,
+              branchId: created.id,
+              isApproved: false,
+            },
+          });
+        }
+      }
+    } catch (_e) {
+      logger.warn("Failed to attach/create initial agent for branch", {
+        branchId: created.id,
+        agentName,
+        agentEmail,
+        agentPhoneNumber,
+      });
+    }
     return created;
   }
 
@@ -717,6 +960,13 @@ class OutletService {
   }
 
   async updateBranchStatus(id: string, status: string) {
+    if (!id) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
     const updated = await db.branch.update({
       where: { id },
       data: { status, isActive: status === "Active" },
@@ -768,6 +1018,43 @@ class OutletService {
     }));
 
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportPickupStations(query: PickupStationQueryDto) {
+    const where: any = {};
+
+    const search = (query.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { region: { contains: search, mode: "insensitive" } },
+        { state: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (query.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query.region) where.region = { equals: query.region, mode: "insensitive" };
+    if (query.status) where.status = query.status;
+
+    const rows = await db.pickupStation.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+    });
+
+    return (rows || []).map((s: any) => ({
+      id: s.id,
+      stationName: s.name,
+      stationEmail: s.email,
+      phoneNumber: s.phoneNumber,
+      state: s.state,
+      region: s.region,
+      physicalAddress: s.address,
+      status: s.status,
+      isActive: s.isActive,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
   }
 
   async createPickupStation(payload: CreatePickupStationDto) {
@@ -888,8 +1175,123 @@ class OutletService {
   //   return { message: "Export generated", url: "/exports/branches.csv" };
   // }
 
+  async listBranchAgents(branchId: string, query: any = {}) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const page = parseInt((query.page || "1") as string);
+    const limit = parseInt((query.limit || "20") as string);
+    const skip = (page - 1) * limit;
+
+    const search = (query.search || query.q || "").toString().trim();
+    const where: any = { branchId };
+    if (query.isActive !== undefined) where.isActive = String(query.isActive) === "true";
+    if (query.isApproved !== undefined) where.isApproved = String(query.isApproved) === "true";
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      db.agent.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phoneNumber: true,
+          isActive: true,
+          isApproved: true,
+          branchId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      db.agent.count({ where }),
+    ]);
+
+    return { items: rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportBranchAgents(branchId: string, query: any = {}) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    const where: any = { branchId };
+    if (query.isActive !== undefined) where.isActive = String(query.isActive) === "true";
+    if (query.isApproved !== undefined) where.isApproved = String(query.isApproved) === "true";
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const rows = await db.agent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        isActive: true,
+        isApproved: true,
+        branchId: true,
+        createdAt: true,
+      },
+    });
+
+    return rows;
+  }
+
   async addAgentsToBranch(id: string, agentIds: string[]) {
-    return { message: "Agents added", branchId: id, count: agentIds?.length || 0 };
+    if (!id) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+    const ids = Array.isArray(agentIds) ? agentIds.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];
+    if (ids.length === 0) {
+      return { message: "Agents added", branchId: id, count: 0 };
+    }
+
+    const existing = await db.agent.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    const existingIds = new Set((existing || []).map((a: any) => a.id));
+    const missingIds = ids.filter((x) => !existingIds.has(x));
+    if (missingIds.length) {
+      throw new NotFoundError(`Agent(s) not found: ${missingIds.join(", ")}`);
+    }
+
+    const result = await db.agent.updateMany({
+      where: { id: { in: ids } },
+      data: { branchId: id },
+    });
+    return { message: "Agents added", branchId: id, count: result.count };
   }
 
   async listNigeriaStates() {

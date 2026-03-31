@@ -95,6 +95,48 @@ AgentRouter.get(
 
 /**
  * @swagger
+ * /api/admin/agent/all:
+ *   get:
+ *     summary: List agents (unpaginated)
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: isApproved
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: branch
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: branchId
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Agents retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentRouter.get(
+  "/all",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.listAll
+);
+
+/**
+ * @swagger
  * /api/admin/agent/export:
  *   get:
  *     summary: Export agents as CSV
@@ -243,7 +285,7 @@ AgentRouter.patch(
   authenticate,
   requirePermission({ module: "AGENTS", feature: "MODULE", action: "edit" }),
   uploadAgentAttachment,
-  uploadAgentAttachment, agentController.update
+  agentController.update
 );
 
 /**
@@ -302,6 +344,123 @@ AgentRouter.get(
 
 /**
  * @swagger
+ * /api/admin/agent/{id}/transactions/export:
+ *   get:
+ *     summary: Export agent transactions as CSV
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Transaction status filter (e.g., DRAFT, APPROVED, COMPLETED)
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/export",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "export" }),
+  agentController.exportTransactionsCsv
+);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions/{transactionId}/receipt/download:
+ *   get:
+ *     summary: Download transaction receipt
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Receipt file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/:transactionId/receipt/download",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.downloadTransactionReceipt
+);
+
+/**
+ * @swagger
+ * /api/admin/agent/{id}/transactions/{transactionId}/documents/{documentId}/download:
+ *   get:
+ *     summary: Download a transaction document
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Document file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+AgentRouter.get(
+  "/:id/transactions/:transactionId/documents/:documentId/download",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
+  agentController.downloadTransactionDocument
+);
+
+/**
+ * @swagger
  * /api/admin/agent/{id}/transactions/{transactionId}:
  *   get:
  *     summary: Get single agent transaction details
@@ -322,6 +481,61 @@ AgentRouter.get(
  *     responses:
  *       200:
  *         description: Agent transaction details retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     transactionId:
+ *                       type: string
+ *                     referenceNumber:
+ *                       type: string
+ *                       nullable: true
+ *                     type:
+ *                       type: string
+ *                       nullable: true
+ *                     status:
+ *                       type: string
+ *                       nullable: true
+ *                     stage:
+ *                       type: string
+ *                       nullable: true
+ *                     currency:
+ *                       type: string
+ *                       nullable: true
+ *                     amounts:
+ *                       type: object
+ *                       properties:
+ *                         nairaEquivalent:
+ *                           type: number
+ *                         foreignAmount:
+ *                           type: number
+ *                         pickupAmount:
+ *                           type: number
+ *                         value:
+ *                           type: number
+ *                     pickup:
+ *                       nullable: true
+ *                     meta:
+ *                       type: object
+ *                       properties:
+ *                         documents:
+ *                           type: object
+ *                           properties:
+ *                             count:
+ *                               type: integer
+ *                         destinationCountry:
+ *                           type: string
+ *                           nullable: true
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:

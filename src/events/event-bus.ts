@@ -129,6 +129,7 @@ export const EventTypes = {
   NOTIFICATION_SEND_SMS: 'notification.send.sms',
 
   // Admin events
+  ADMIN_REVIEW_REQUIRED: 'admin.review.required',
   ADMIN_ACTION_PERFORMED: 'admin.action.performed',
   USER_SUSPENDED: 'admin.user.suspended',
   USER_ACTIVATED: 'admin.user.activated',

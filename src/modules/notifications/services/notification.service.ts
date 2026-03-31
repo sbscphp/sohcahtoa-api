@@ -428,21 +428,27 @@ export class NotificationService {
    */
   async markAsRead(notificationId: string, userId: string) {
     try {
+      const existing = await prisma.inAppNotification.findFirst({
+        where: { id: notificationId, userId },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        throw new AppError(ErrorCode.NOT_FOUND, 'Notification not found', 404);
+      }
+
       const notification = await prisma.inAppNotification.update({
-        where: {
-          id: notificationId,
-          userId, // Ensure user owns the notification
-        },
-        data: {
-          isRead: true,
-          readAt: new Date(),
-        },
+        where: { id: notificationId },
+        data: { isRead: true, readAt: new Date() },
       });
 
       logger.info(`Notification ${notificationId} marked as read`);
       return notification;
     } catch (error) {
       logger.error('Error marking notification as read:', error);
+      if (error instanceof AppError) {
+        throw error;
+      }
       throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to mark notification as read', 500);
     }
   }

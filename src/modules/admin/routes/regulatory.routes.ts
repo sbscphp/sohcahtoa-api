@@ -393,19 +393,45 @@ RegulatoryRouter.get(
  *     parameters:
  *       - in: query
  *         name: search
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *         description: Search text
  *       - in: query
  *         name: severity
- *         schema: { type: string, enum: [ALL, INFO, WARNING, ERROR, CRITICAL], default: ALL }
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - INFO
+ *             - WARNING
+ *             - ERROR
+ *             - CRITICAL
+ *           default: ALL
+ *         description: Filter by severity
  *       - in: query
  *         name: category
- *         schema: { type: string, enum: [ALL, AUTHENTICATION, TRANSACTION, PAYMENT, COMPLIANCE, ADMIN, SYSTEM], default: ALL }
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - AUTHENTICATION
+ *             - TRANSACTION
+ *             - PAYMENT
+ *             - COMPLIANCE
+ *             - ADMIN
+ *             - SYSTEM
+ *           default: ALL
+ *         description: Filter by category
  *       - in: query
  *         name: page
- *         schema: { type: integer, default: 1 }
+ *         schema:
+ *           type: integer
+ *           default: 1
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 20 }
+ *         schema:
+ *           type: integer
+ *           default: 20
  *     responses:
  *       200:
  *         description: Audit logs retrieved
@@ -415,6 +441,61 @@ RegulatoryRouter.get(
   authenticate,
   requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
   regulatoryController.auditLogsList
+);
+
+/**
+ * @swagger
+ * /api/admin/regulatory/logs/audit/export:
+ *   get:
+ *     summary: Export audit logs (CSV)
+ *     tags: [admin-regulatory]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search text
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - INFO
+ *             - WARNING
+ *             - ERROR
+ *             - CRITICAL
+ *           default: ALL
+ *         description: Filter by severity
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - AUTHENTICATION
+ *             - TRANSACTION
+ *             - PAYMENT
+ *             - COMPLIANCE
+ *             - ADMIN
+ *             - SYSTEM
+ *           default: ALL
+ *         description: Filter by category
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ */
+RegulatoryRouter.get(
+  "/logs/audit/export",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
+  regulatoryController.exportAuditLogs
 );
 
 /**
@@ -452,25 +533,82 @@ RegulatoryRouter.get(
  *     parameters:
  *       - in: query
  *         name: search
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *         description: Search text
  *       - in: query
  *         name: status
- *         schema: { type: string, enum: [ALL, PENDING, COMPLETED, FAILED], default: ALL }
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - PENDING
+ *             - COMPLETED
+ *             - FAILED
+ *           default: ALL
+ *         description: Filter by status
  *       - in: query
  *         name: page
- *         schema: { type: integer, default: 1 }
+ *         schema:
+ *           type: integer
+ *           default: 1
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 20 }
+ *         schema:
+ *           type: integer
+ *           default: 20
  *     responses:
  *       200:
  *         description: Regulatory logs retrieved
+ *         content:
+ *           application/json:
+ *             description: Each item may include fileUrl when available for download
  */
 RegulatoryRouter.get(
   "/logs/regulatory",
   authenticate,
   requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "view" }),
   regulatoryController.regulatoryLogsList
+);
+
+/**
+ * @swagger
+ * /api/admin/regulatory/logs/regulatory/export:
+ *   get:
+ *     summary: Export regulatory logs (CSV)
+ *     tags: [admin-regulatory]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search text
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - ALL
+ *             - PENDING
+ *             - COMPLETED
+ *             - FAILED
+ *           default: ALL
+ *         description: Filter by status
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ */
+RegulatoryRouter.get(
+  "/logs/regulatory/export",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
+  regulatoryController.exportRegulatoryLogs
 );
 
 /**

@@ -142,9 +142,11 @@ export class AdminTransactionsService {
         customerName: name,
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
+        transactionMode: t.transactionMode,
         transactionStage: t.currentStep,
         workflowStage: t.status,
         transactionValue: value,
+        currency: t.currency,
         status: t.status,
       };
     });
@@ -184,9 +186,9 @@ export class AdminTransactionsService {
       {
         where: { id },
         include: {
-          steps: true,
+          steps: { orderBy: { createdAt: "asc" } },
           documents: true,
-          history: true,
+          history: { orderBy: { createdAt: "asc" } },
           receipt: true,
           cashPickup: true,
         },
@@ -217,6 +219,75 @@ export class AdminTransactionsService {
         : trx.status === TransactionStatus.APPROVED
         ? "Approved"
         : "Pending";
+
+    const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
+    const steps = Array.isArray((trx as any).steps) ? (trx as any).steps : [];
+    const actorIds = new Set<string>();
+    for (const h of history) {
+      if (h?.performedBy) actorIds.add(String(h.performedBy));
+    }
+    for (const s of steps) {
+      const d = s?.data as any;
+      const candidates = [d?.reviewedBy, d?.confirmedBy, d?.settledBy, d?.approvedBy, d?.rejectedBy].filter(Boolean);
+      for (const c of candidates) actorIds.add(String(c));
+    }
+    const adminUsers = actorIds.size
+      ? await prisma.adminUser.findMany({
+          where: { id: { in: Array.from(actorIds) } },
+          select: {
+            id: true,
+            fullName: true,
+            position: true,
+            role: { select: { name: true } },
+          },
+        })
+      : [];
+    const adminMap: Record<string, { fullName: string; position: string | null; roleName: string | null }> = {};
+    for (const a of adminUsers) {
+      adminMap[a.id] = {
+        fullName: a.fullName,
+        position: a.position || null,
+        roleName: (a as any).role?.name || null,
+      };
+    }
+    const toTitle = (action: string) => {
+      if (action === "ADMIN_REVIEW_COMPLETED") return "Review Completed";
+      if (action === "TRANSACTION_APPROVED") return "Approved";
+      if (action === "TRANSACTION_REJECTED") return "Rejected";
+      if (action === "TRANSACTION_SETTLED") return "Settled";
+      if (action === "DEPOSIT_CONFIRMED") return "Deposit Confirmed";
+      if (action === "DOCUMENT_MORE_INFO_REQUESTED") return "More Info Requested";
+      return action;
+    };
+    const toOutcome = (action: string) => {
+      if (action.includes("REJECT")) return "Rejected";
+      if (action.includes("APPROV")) return "Approved";
+      if (action.includes("COMPLETED")) return "Review Completed";
+      if (action.includes("CONFIRMED")) return "Confirmed";
+      return "Action Taken";
+    };
+    const workflowLine = history
+      .filter((h: any) => Boolean(h?.performedBy))
+      .map((h: any) => {
+        const adminId = String(h.performedBy);
+        const admin = adminMap[adminId];
+        return {
+          id: h.id,
+          timestamp: h.createdAt,
+          adminId,
+          adminName: admin?.fullName || adminId,
+          adminRole: admin?.position || admin?.roleName || null,
+          title: toTitle(String(h.action || "")),
+          outcome: toOutcome(String(h.action || "")),
+          comment: h.notes || null,
+          action: h.action,
+        };
+      });
+    const decoratedHistory = history.map((h: any) => {
+      const adminId = h?.performedBy ? String(h.performedBy) : "";
+      const admin = adminId ? adminMap[adminId] : undefined;
+      return { ...h, performedBy: admin?.fullName || adminId || null };
+    });
     return {
       id: trx.id,
       reference: trx.referenceNumber,
@@ -232,12 +303,14 @@ export class AdminTransactionsService {
       details: {
         transactionValueFx: valueFx,
         transactionValueNgn: valueNgn,
+        transactionCurrency: trx.currency,
         requesterType: "Customer Direct",
         bvnNumber: maskedBvn,
         numberOfDocuments: docCount,
         pickupLocation: pickup?.pickupLocation || null,
       },
-      raw: trx,
+      workflowLine,
+      raw: { ...(trx as any), history: decoratedHistory },
     };
   }
 
@@ -287,7 +360,42 @@ export class AdminTransactionsService {
       } as any,
     });
 
-    
+    const stageCandidates = await prisma.workflowStage.findMany({
+      where: { name: { contains: "Review", mode: "insensitive" } },
+      select: { id: true, name: true },
+    });
+    const stageIds = stageCandidates.map((s: any) => s.id);
+    const assignees = stageIds.length
+      ? await prisma.workflowAssignee.findMany({
+          where: { stageId: { in: stageIds } },
+          select: { adminId: true },
+        })
+      : [];
+    let adminIds = assignees.map((a: any) => a.adminId);
+    if (adminIds.length === 0) {
+      const fallbackAdmins = await prisma.adminUser.findMany({
+        where: { isActive: true },
+        select: { id: true, position: true, role: { select: { name: true } } },
+      });
+      const wanted = ["Internal Control", "Finance Manager", "Settlement"];
+      adminIds = fallbackAdmins
+        .filter((u: any) => {
+          const pos = (u.position || "").toString();
+          const role = ((u as any).role?.name || "").toString();
+          return wanted.some((w) => pos.includes(w) || role.includes(w));
+        })
+        .map((u: any) => u.id);
+    }
+    if (adminIds.length > 0) {
+      const txBrief = await prisma.transaction.findUnique({
+        where: { id: transactionId },
+        select: { id: true, referenceNumber: true, type: true, foreignAmount: true, nairaEquivalent: true },
+      });
+      eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+        adminIds,
+        transaction: txBrief,
+      });
+    }
 
     return { message: "Transaction reviewed successfully" };
   }
@@ -413,6 +521,65 @@ export class AdminTransactionsService {
         transactionId,
         documentType: updated.documentType,
         verifiedBy: adminId,
+        transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+      });
+    }
+
+    return updated;
+  }
+
+  async rejectTransactionDocument(transactionId: string, documentId: string, adminId: string, reason: string) {
+    const document = await prisma.transactionDocument.findFirst({
+      where: { id: documentId, transactionId },
+      select: { id: true, transactionId: true, documentType: true },
+    });
+    if (!document) throw new Error("Document not found");
+
+    const updated = await prisma.transactionDocument.update({
+      where: { id: documentId },
+      data: {
+        verificationStatus: VerificationStatus.FAILED as any,
+        verificationNotes: reason || null,
+        verifiedAt: new Date(),
+        verifiedBy: adminId,
+      } as any,
+      select: {
+        id: true,
+        transactionId: true,
+        documentType: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        verificationStatus: true,
+        verificationNotes: true,
+        verifiedAt: true,
+        verifiedBy: true,
+        uploadedAt: true,
+      },
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_REJECTED",
+        performedBy: adminId,
+        notes: reason,
+        metadata: { documentId, documentType: updated.documentType },
+      } as any,
+    });
+
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, id: true, referenceNumber: true },
+    });
+    if (tx) {
+      eventBus.publish(EventTypes.DOCUMENT_REJECTED, {
+        userId: tx.userId,
+        documentId: updated.id,
+        transactionId,
+        documentType: updated.documentType,
+        rejectedBy: adminId,
+        reason,
         transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
       });
     }

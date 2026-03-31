@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import axios from "axios";
 import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
@@ -9,6 +10,25 @@ import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
 
 class AgentController {
+  private safeFilename(name: string) {
+    return String(name || "download")
+      .replace(/[\r\n"]/g, "")
+      .replace(/[\/\\?%*:|<>]/g, "-")
+      .trim();
+  }
+
+  private async pipeRemoteFile(res: Response, url: string, filename: string) {
+    const upstream = await axios.get(url, { responseType: "stream" });
+    const contentType = upstream.headers?.["content-type"] || "application/octet-stream";
+    const contentLength = upstream.headers?.["content-length"];
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${this.safeFilename(filename)}"`);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    upstream.data.pipe(res);
+  }
+
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
     let attachment;
     if (req.file) {
@@ -71,6 +91,11 @@ class AgentController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  listAll = asyncHandler(async (req: Request, res: Response) => {
+    const result = await agentService.listAll(req.query);
+    res.json(successResponse(result));
+  });
+
   getTransactions = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -83,9 +108,57 @@ class AgentController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  exportTransactionsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const filters = {
+      status: req.query.status,
+      dateFrom: req.query.dateFrom,
+      dateTo: req.query.dateTo,
+    };
+    const rows = await agentService.exportTransactions(req.params.id, filters);
+    streamCsv(
+      res,
+      "agent-transactions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.transactionId },
+        { header: "Reference Number", select: (r: any) => r.referenceNumber || "" },
+        { header: "Type", select: (r: any) => r.type || "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Stage", select: (r: any) => r.stage || "" },
+        { header: "Value", select: (r: any) => r.value },
+        { header: "Currency", select: (r: any) => r.currency || "" },
+        { header: "Pickup Code", select: (r: any) => r.pickup?.code || "" },
+        { header: "Pickup Location", select: (r: any) => r.pickup?.location || "" },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
   getTransaction = asyncHandler(async (req: Request, res: Response) => {
     const result = await agentService.transaction(req.params.id, req.params.transactionId);
     res.json(successResponse(result));
+  });
+
+  downloadTransactionReceipt = asyncHandler(async (req: Request, res: Response) => {
+    const { url, filename } = await agentService.getReceiptDownload(req.params.id, req.params.transactionId);
+    try {
+      await this.pipeRemoteFile(res, url, filename);
+    } catch (err: any) {
+      throw new ValidationError(err?.message || "Unable to download receipt");
+    }
+  });
+
+  downloadTransactionDocument = asyncHandler(async (req: Request, res: Response) => {
+    const { url, filename } = await agentService.getDocumentDownload(
+      req.params.id,
+      req.params.transactionId,
+      req.params.documentId
+    );
+    try {
+      await this.pipeRemoteFile(res, url, filename);
+    } catch (err: any) {
+      throw new ValidationError(err?.message || "Unable to download document");
+    }
   });
 
   get = asyncHandler(async (req: Request, res: Response) => {
@@ -134,7 +207,12 @@ class AgentController {
   });
 
   update = asyncHandler(async (req: AuthRequest, res: Response) => {
-    let attachment;
+    const normalizeOptionalText = (v: unknown) => {
+      if (v == null) return undefined;
+      const s = String(v).trim();
+      return s ? s : undefined;
+    };
+    let attachment; 
     if (req.file) {
       if (typeof req.file.size === "number" && req.file.size > 2 * 1024 * 1024) {
         throw new ValidationError("Attachment exceeds 2MB limit");
@@ -158,13 +236,12 @@ class AgentController {
     }
     const before = await agentService.get(req.params.id);
     const updated = await agentService.update(req.params.id, {
-      name: req.body.name,
-      email: req.body.email,
-      phoneNumber: req.body.phoneNumber,
-      branch: req.body.branch,
+      name: normalizeOptionalText(req.body.name),
+      email: normalizeOptionalText(req.body.email),
+      phoneNumber: normalizeOptionalText(req.body.phoneNumber),
+      branch: normalizeOptionalText(req.body.branch),
       attachment,
     });
-    const enriched = await agentService.get(req.params.id);
     if (req.user) {
       await auditTrailService.logAction({
         adminId: req.user.userId,
@@ -173,13 +250,13 @@ class AgentController {
         resourceType: "AGENT",
         resourceId: updated.id,
         previousState: before,
-        newState: enriched,
+        newState: updated,
         status: "SUCCESS",
         userAgent: req.headers["user-agent"] as string,
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
       });
     }
-    res.json(successResponse(enriched));
+    res.json(successResponse(updated));
   });
 
   deactivate = asyncHandler(async (req: AuthRequest, res: Response) => {
