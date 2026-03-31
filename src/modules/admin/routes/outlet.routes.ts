@@ -1228,6 +1228,70 @@ OutletRouter.get(
 
 /**
  * @swagger
+ * /api/admin/outlet/branches/{id}/transactions/export:
+ *   get:
+ *     summary: Export branch transactions as CSV
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/branches/:id/transactions/export",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "export" }),
+  outletController.exportBranchTransactions
+);
+
+/**
+ * @swagger
  * /api/admin/outlet/branches/{id}/status:
  *   patch:
  *     summary: Update branch status (activate/deactivate)
@@ -1388,45 +1452,5 @@ OutletRouter.post(
   requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
   outletController.addAgents
 );
-
-// /**
-//  * @swagger
-//  * /api/admin/outlet/branches/export:
-//  *   get:
-//  *     summary: Export branches
-//  *     tags: [admin-outlet]
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Export generated
-//  *       401:
-//  *         $ref: '#/components/responses/UnauthorizedError'
-//  */
-// // OutletRouter.get("/branches/export", authenticate, authorize(UserRole.SUPER_ADMIN), outletController.exportBranches);
-
-/**
- * @swagger
- * /api/admin/outlet/{name}:
- *   get:
- *     summary: Get outlet details and recent pickups
- *     tags: [admin-outlet]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: name
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Outlet details retrieved successfully
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
- *       404:
- *         $ref: '#/components/responses/NotFoundError'
- */
-// OutletRouter.get("/:name", authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN), outletController.get);
 
 export default OutletRouter;
