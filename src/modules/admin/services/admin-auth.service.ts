@@ -1,4 +1,4 @@
-import { createLogger, emailService, generateSecureOtp } from "../../../shared/utils";
+import { BadRequestError, createLogger, emailService, generateSecureOtp } from "../../../shared/utils";
 import { ServiceName, UserRole } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
@@ -33,7 +33,7 @@ class AdminAuthService {
     if (!user.password) throw new UnauthorizedError("Password not set. Please complete registration first.");
 
     const ok = await comparePassword(oldPassword, user.password);
-    if (!ok) throw new UnauthorizedError("Invalid password");
+    if (!ok) throw new BadRequestError("Invalid password");
 
     const now = new Date();
     const changeToken = generateId();
