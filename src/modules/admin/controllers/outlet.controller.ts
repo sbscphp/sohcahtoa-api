@@ -315,6 +315,26 @@ class OutletController {
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
+  exportBranchTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportTransactionsByBranch(req.params.id, req.query);
+    streamCsv(
+      res,
+      "branch-transactions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.id },
+        { header: "Reference Number", select: (r: any) => r.dateAndId?.reference || "" },
+        { header: "Customer Name", select: (r: any) => r.customerName || "" },
+        { header: "Transaction Type", select: (r: any) => r.transactionType || "" },
+        { header: "Transaction Stage", select: (r: any) => r.transactionStage || "" },
+        { header: "Workflow Stage", select: (r: any) => r.workflowStage || "" },
+        { header: "Transaction Value", select: (r: any) => r.transactionValue ?? "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Created At", select: (r: any) => (r.dateAndId?.date ? new Date(r.dateAndId.date).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
   createBranch = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.createBranch(req.body as CreateBranchDto);
     const adminId = (req as any).user?.userId as string;

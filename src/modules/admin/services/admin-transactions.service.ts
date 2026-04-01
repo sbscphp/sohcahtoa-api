@@ -13,6 +13,38 @@ type ReviewPayload = {
   amlDecision?: "PASS" | "FAIL" | "ESCALATE";
 };
 
+const BUY_GROUP_TYPES = ["PTA", "BTA", "SCHOOL_FEES", "MEDICAL", "PROFESSIONAL_BODY"];
+const SELL_GROUP_TYPES = ["RESIDENT_FX", "EXPATRIATE_FX"];
+
+function appendOrFilter(where: any, orClauses: any[]) {
+  if (Array.isArray(where.AND)) {
+    where.AND.push({ OR: orClauses });
+    return;
+  }
+
+  if (where.OR) {
+    const existingOr = where.OR;
+    delete where.OR;
+    where.AND = [{ OR: existingOr }, { OR: orClauses }];
+    return;
+  }
+
+  where.OR = orClauses;
+}
+
+function applyBuySellFxFilter(where: any, rawType: string) {
+  if (rawType === "buyfx" || rawType === "sellfx") {
+    const mode = rawType === "buyfx" ? TransactionMode.BUY : TransactionMode.SELL;
+    const group = rawType === "buyfx" ? BUY_GROUP_TYPES : SELL_GROUP_TYPES;
+    appendOrFilter(where, [
+      { AND: [{ type: "TOURIST_FX" }, { transactionMode: mode as any }] },
+      { type: { in: group as any } },
+    ]);
+    return true;
+  }
+  return false;
+}
+
 type SettlePayload = {
   disbursementMethod: string;
   settlementReference: string;
@@ -66,11 +98,7 @@ export class AdminTransactionsService {
     if (filters.step) where.currentStep = filters.step;
 
     const rawType = (filters.type || "").toString().trim().toLowerCase();
-    if (rawType === "buyfx") {
-      where.transactionMode = TransactionMode.BUY;
-    } else if (rawType === "sellfx") {
-      where.transactionMode = TransactionMode.SELL;
-    } else if (rawType) {
+    if (!applyBuySellFxFilter(where, rawType) && rawType) {
       where.type = (filters.type as string).toUpperCase();
     }
 
@@ -164,13 +192,17 @@ export class AdminTransactionsService {
 
   async listBuyTransactions(filters: any, page = 1, limit = 20) {
     const { where, orderBy } = await this.buildTransactionsListQuery(filters);
-    where.transactionMode = TransactionMode.BUY;
+    delete where.type;
+    delete where.transactionMode;
+    applyBuySellFxFilter(where, "buyfx");
     return this.fetchTransactionsList(where, orderBy, page, limit);
   }
 
   async listSellTransactions(filters: any, page = 1, limit = 20) {
     const { where, orderBy } = await this.buildTransactionsListQuery(filters);
-    where.transactionMode = TransactionMode.SELL;
+    delete where.type;
+    delete where.transactionMode;
+    applyBuySellFxFilter(where, "sellfx");
     where.status = { in: [TransactionStatus.DISBURSEMENT_IN_PROGRESS, TransactionStatus.COMPLETED] };
     return this.fetchTransactionsList(where, orderBy, page, limit);
   }
