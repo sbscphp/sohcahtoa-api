@@ -703,6 +703,108 @@ OutletRouter.get(
 
 /**
  * @swagger
+ * /api/admin/outlet/pickup-stations/{id}/requests:
+ *   get:
+ *     summary: List pickup station requests [Paginated]
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Pickup station requests retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/pickup-stations/:id/requests",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.listPickupStationRequests
+);
+
+/**
+ * @swagger
+ * /api/admin/outlet/pickup-stations/{id}/requests/export:
+ *   get:
+ *     summary: Export pickup station requests [CSV]
+ *     tags: [admin-outlet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV export
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+OutletRouter.get(
+  "/pickup-stations/:id/requests/export",
+  authenticate,
+  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  outletController.exportPickupStationRequests
+);
+
+/**
+ * @swagger
  * /api/admin/outlet/pickup-stations/{id}:
  *   put:
  *     summary: Update pick-up station details
