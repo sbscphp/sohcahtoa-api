@@ -1208,6 +1208,320 @@ class OutletService {
     return station;
   }
 
+  async listPickupStationRequests(pickupStationId: string, query: any = {}) {
+    if (!pickupStationId) {
+      throw new ValidationError("pickupStationId is required");
+    }
+
+    const station = await db.pickupStation.findUnique({
+      where: { id: pickupStationId },
+      select: { id: true, name: true },
+    });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+
+    const page = parseInt((query.page || "1") as any);
+    const limit = parseInt((query.limit || "20") as any);
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      AND: [
+        {
+          OR: [{ pickupLocationId: station.id }, { pickupLocation: station.name }],
+        },
+      ],
+    };
+
+    const status = (query.status || "").toString().trim();
+    if (status) {
+      where.AND.push({ status });
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      const createdAt: any = {};
+      if (query.dateFrom) createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) createdAt.lte = new Date(query.dateTo);
+      where.AND.push({ createdAt });
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+
+      const searchOr: any[] = [
+        { pickupCode: { contains: search, mode: "insensitive" } },
+        { recipientName: { contains: search, mode: "insensitive" } },
+        { recipientPhone: { contains: search, mode: "insensitive" } },
+        { transaction: { is: { referenceNumber: { contains: search, mode: "insensitive" } } } },
+      ];
+      if (userIds.length) {
+        searchOr.push({ transaction: { is: { userId: { in: userIds } } } });
+      }
+
+      where.AND.push({ OR: searchOr });
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.cashPickup.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          pickupCode: true,
+          pickupLocation: true,
+          pickupLocationId: true,
+          pickupState: true,
+          pickupCity: true,
+          recipientName: true,
+          recipientPhone: true,
+          amount: true,
+          currency: true,
+          status: true,
+          scheduledPickupDate: true,
+          scheduledPickupTime: true,
+          expiryDate: true,
+          pickedUpAt: true,
+          createdAt: true,
+          updatedAt: true,
+          transaction: {
+            select: {
+              id: true,
+              userId: true,
+              referenceNumber: true,
+              type: true,
+              transactionMode: true,
+            },
+          },
+        },
+      }),
+      prisma.cashPickup.count({ where }),
+    ]);
+
+    const uniqueUserIds = Array.from(new Set((rows || []).map((r: any) => r.transaction?.userId).filter(Boolean)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
+
+    const items = (rows || []).map((r: any) => {
+      const u: any = r.transaction?.userId ? userMap.get(r.transaction.userId) : undefined;
+      const customerName =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+
+      return {
+        requestId: r.id,
+        pickupStationId: station.id,
+        pickupStationName: station.name,
+        pickupCode: r.pickupCode,
+        status: r.status,
+        amount: r.amount,
+        currency: r.currency,
+        recipientName: r.recipientName,
+        recipientPhone: r.recipientPhone,
+        pickupState: r.pickupState,
+        pickupCity: r.pickupCity,
+        scheduledPickupDate: r.scheduledPickupDate,
+        scheduledPickupTime: r.scheduledPickupTime,
+        expiryDate: r.expiryDate,
+        pickedUpAt: r.pickedUpAt,
+        createdAt: r.createdAt,
+        customer: r.transaction?.userId
+          ? {
+              id: r.transaction.userId,
+              name: customerName,
+              email: u?.email,
+              phoneNumber: u?.phoneNumber,
+            }
+          : null,
+        transaction: r.transaction
+          ? {
+              id: r.transaction.id,
+              referenceNumber: r.transaction.referenceNumber,
+              type: r.transaction.type,
+              transactionMode: r.transaction.transactionMode,
+            }
+          : null,
+      };
+    });
+
+    return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportPickupStationRequests(pickupStationId: string, query: any = {}) {
+    if (!pickupStationId) {
+      throw new ValidationError("pickupStationId is required");
+    }
+
+    const station = await db.pickupStation.findUnique({
+      where: { id: pickupStationId },
+      select: { id: true, name: true },
+    });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+
+    const where: any = {
+      AND: [
+        {
+          OR: [{ pickupLocationId: station.id }, { pickupLocation: station.name }],
+        },
+      ],
+    };
+
+    const status = (query.status || "").toString().trim();
+    if (status) {
+      where.AND.push({ status });
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      const createdAt: any = {};
+      if (query.dateFrom) createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) createdAt.lte = new Date(query.dateTo);
+      where.AND.push({ createdAt });
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+
+      const searchOr: any[] = [
+        { pickupCode: { contains: search, mode: "insensitive" } },
+        { recipientName: { contains: search, mode: "insensitive" } },
+        { recipientPhone: { contains: search, mode: "insensitive" } },
+        { transaction: { is: { referenceNumber: { contains: search, mode: "insensitive" } } } },
+      ];
+      if (userIds.length) {
+        searchOr.push({ transaction: { is: { userId: { in: userIds } } } });
+      }
+
+      where.AND.push({ OR: searchOr });
+    }
+
+    const rows = await prisma.cashPickup.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+      select: {
+        id: true,
+        pickupCode: true,
+        pickupLocation: true,
+        pickupLocationId: true,
+        pickupState: true,
+        pickupCity: true,
+        recipientName: true,
+        recipientPhone: true,
+        amount: true,
+        currency: true,
+        status: true,
+        scheduledPickupDate: true,
+        scheduledPickupTime: true,
+        expiryDate: true,
+        pickedUpAt: true,
+        createdAt: true,
+        updatedAt: true,
+        transaction: {
+          select: {
+            id: true,
+            userId: true,
+            referenceNumber: true,
+            type: true,
+            transactionMode: true,
+          },
+        },
+      },
+    });
+
+    const uniqueUserIds = Array.from(new Set((rows || []).map((r: any) => r.transaction?.userId).filter(Boolean)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
+
+    return (rows || []).map((r: any) => {
+      const u: any = r.transaction?.userId ? userMap.get(r.transaction.userId) : undefined;
+      const customerName =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+
+      return {
+        requestId: r.id,
+        pickupStationId: station.id,
+        pickupStationName: station.name,
+        pickupCode: r.pickupCode,
+        status: r.status,
+        amount: r.amount,
+        currency: r.currency,
+        recipientName: r.recipientName,
+        recipientPhone: r.recipientPhone,
+        pickupState: r.pickupState,
+        pickupCity: r.pickupCity,
+        scheduledPickupDate: r.scheduledPickupDate,
+        scheduledPickupTime: r.scheduledPickupTime,
+        expiryDate: r.expiryDate,
+        pickedUpAt: r.pickedUpAt,
+        createdAt: r.createdAt,
+        customer: r.transaction?.userId
+          ? {
+              id: r.transaction.userId,
+              name: customerName,
+              email: u?.email,
+              phoneNumber: u?.phoneNumber,
+            }
+          : null,
+        transaction: r.transaction
+          ? {
+              id: r.transaction.id,
+              referenceNumber: r.transaction.referenceNumber,
+              type: r.transaction.type,
+              transactionMode: r.transaction.transactionMode,
+            }
+          : null,
+      };
+    });
+  }
+
   async updatePickupStation(id: string, payload: UpdatePickupStationDto) {
     if (!id) {
       throw new ValidationError("id is required");
