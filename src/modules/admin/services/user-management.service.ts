@@ -157,13 +157,17 @@ class UserManagementService {
 
     getProfile = async (userId: string) => {
         try {
-            const user = await this.prisma.adminUser.findUnique({ where: { id: userId } });
+            const user = await this.prisma.adminUser.findUnique({
+                where: { id: userId },
+                include: { role: { select: { name: true } } },
+            });
             if (!user) {
                 throw new NotFoundError("User not found");
             }
-            const { password: _password, ...userWithoutPassword } = user;
+            const roleName = (user as any).role?.name || null;
+            const { password: _password, role: _role, ...userWithoutPassword } = user as any;
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
-            return { ...userWithoutPassword, rolePermissions };
+            return { ...userWithoutPassword, roleName, rolePermissions };
         } catch (error) {
             logger.error("Failed to get admin profile", {
                 userId,
