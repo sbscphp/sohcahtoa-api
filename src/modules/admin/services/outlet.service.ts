@@ -800,6 +800,108 @@ class OutletService {
     };
   }
 
+  async exportTransactionsByBranch(branchId: string, filters: any) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const where: any = {
+      createdByAgent: {
+        is: { branchId },
+      },
+    };
+
+    if (filters?.status) where.status = filters.status;
+    if (filters?.step) where.currentStep = filters.step;
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const search = (filters?.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orderBy: any = {};
+    const sortBy = filters?.sortBy || "createdAt";
+    const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    const items = await prisma.transaction.findMany({
+      where,
+      orderBy,
+      take: 10_000,
+      select: {
+        id: true,
+        userId: true,
+        referenceNumber: true,
+        type: true,
+        currentStep: true,
+        status: true,
+        nairaEquivalent: true,
+        foreignAmount: true,
+        createdAt: true,
+      },
+    });
+
+    const uniqueUserIds = Array.from(new Set(items.map((t: any) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return items.map((t: any) => {
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+      const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      return {
+        id: t.id,
+        customerName: name,
+        dateAndId: { date: t.createdAt, reference: t.referenceNumber },
+        transactionType: t.type,
+        transactionStage: t.currentStep,
+        workflowStage: t.status,
+        transactionValue: value,
+        status: t.status,
+      };
+    });
+  }
+
   async createBranch(payload: CreateBranchDto) {
     const { branchName, branchEmail, state, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {

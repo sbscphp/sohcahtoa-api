@@ -241,6 +241,26 @@ CREATE TABLE IF NOT EXISTS "escrow_accounts" (
 CREATE UNIQUE INDEX IF NOT EXISTS "escrow_accounts_accountNumber_key" ON "escrow_accounts"("accountNumber");
 CREATE INDEX IF NOT EXISTS "escrow_accounts_status_idx" ON "escrow_accounts"("status");
 
+-- Ensure pickup stations table exists (migration fallback)
+CREATE TABLE IF NOT EXISTS "pickup_stations" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "phoneNumber" TEXT NOT NULL,
+  "state" TEXT NOT NULL,
+  "region" TEXT NOT NULL,
+  "address" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS "pickup_stations_name_idx" ON "pickup_stations"("name");
+CREATE INDEX IF NOT EXISTS "pickup_stations_state_idx" ON "pickup_stations"("state");
+CREATE INDEX IF NOT EXISTS "pickup_stations_region_idx" ON "pickup_stations"("region");
+CREATE INDEX IF NOT EXISTS "pickup_stations_status_idx" ON "pickup_stations"("status");
+
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$
 DECLARE
