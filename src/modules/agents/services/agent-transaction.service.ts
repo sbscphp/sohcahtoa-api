@@ -12,12 +12,6 @@ import { generateId } from "../../../shared/utils";
 import { createLogger } from "../../../shared/utils/logger";
 import { resolveDashboardDateRange } from "../../../shared/utils/date-range-presets";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
-import type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
-import {
-  formatProfileAddress,
-  mapDocSnippet,
-  pickLatestDocumentByType,
-} from "./agent-transaction-view.helpers";
 
 const prisma = getDatabase();
 const logger = createLogger("agent-transaction-service");
@@ -124,40 +118,10 @@ export interface AgentRecordDisbursementInput {
 
 export type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
 
-export interface AgentTransactionDetailView {
-  timestamp: string;
-  identification: {
-    full_name: string | null;
-    email_address: string;
-    phone_number: string;
-    address: string | null;
-  };
-  transaction_details: {
-    transaction_id: string;
-    amount: number | null;
-    equivalent_amount: number | null;
-    currency: string;
-    date_initiated: string;
-  };
-  beneficiary_details: {
-    beneficiary_full_name: string | null;
-    beneficiary_bank: string | null;
-    routing_number: string | null;
-    bank_address: string | null;
-    swift_code: string | null;
-    account_number: string | null;
-    beneficiary_address: string | null;
-  };
-  required_documents: {
-    bvn: string | null;
-    nin: string | null;
-    admission_type: string | null;
-    form_a_id: string | null;
-    evidence_of_admission: AgentTransactionDetailUploadedDoc | null;
-    school_invoice: AgentTransactionDetailUploadedDoc | null;
-    international_passport_number: string | null;
-  };
-}
+/** Same payload as GET /api/customer/transactions/:transactionId (customer transaction detail). */
+export type AgentTransactionDetailView = Awaited<
+  ReturnType<typeof customerTransactionService.getTransactionDetails>
+>;
 
 class AgentTransactionService {
   /**
@@ -406,7 +370,7 @@ class AgentTransactionService {
   }
 
   /**
-   * Full transaction detail for agent (scoped to createdByAgentId). BVN/NIN are unmasked.
+   * Same response as customer GET transaction by id; only transactions created by this agent.
    */
   async getTransactionById(
     agentUserId: string,
@@ -414,144 +378,16 @@ class AgentTransactionService {
   ): Promise<AgentTransactionDetailView> {
     const agent = await this.resolveAgent(agentUserId);
 
-    const transaction = await prisma.transaction.findFirst({
+    const row = await prisma.transaction.findFirst({
       where: { id: transactionId, createdByAgentId: agent.id },
-      include: {
-        documents: {
-          select: {
-            id: true,
-            documentType: true,
-            fileName: true,
-            fileUrl: true,
-            verificationStatus: true,
-            uploadedAt: true,
-          },
-        },
-        steps: {
-          where: { step: TransactionStep.PERSONAL_INFO },
-          orderBy: { createdAt: "asc" },
-        },
-      },
+      select: { id: true, userId: true },
     });
 
-    if (!transaction) {
+    if (!row) {
       throw new NotFoundError("Transaction not found or you are not the creating agent");
     }
 
-    const [user, outbound] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: transaction.userId },
-        select: {
-          email: true,
-          phoneNumber: true,
-          profile: {
-            select: {
-              firstName: true,
-              lastName: true,
-              address: true,
-              city: true,
-              state: true,
-              country: true,
-              postalCode: true,
-            },
-          },
-          kyc: {
-            select: {
-              bvn: true,
-              nin: true,
-              passportNumber: true,
-            },
-          },
-        },
-      }),
-      prisma.outboundSettlement.findFirst({
-        where: { transactionId: transaction.id },
-        select: {
-          beneficiaryName: true,
-          beneficiaryBank: true,
-          beneficiaryAccount: true,
-          beneficiarySwift: true,
-          beneficiaryAddress: true,
-        },
-      }),
-    ]);
-
-    if (!user) {
-      throw new NotFoundError("Customer not found for this transaction");
-    }
-
-    const personalInfoStep = transaction.steps[0];
-    const personalInfoData = (personalInfoStep?.data as Record<string, unknown> | null) || null;
-    const stepBeneficiary = personalInfoData?.beneficiaryDetails as
-      | {
-          name?: string;
-          accountNumber?: string;
-          accountName?: string;
-          bankName?: string;
-          iban?: string;
-        }
-      | undefined;
-
-    const amount =
-      transaction.foreignAmount != null ? Number(transaction.foreignAmount) : null;
-    const equivalentAmount =
-      transaction.nairaEquivalent != null ? Number(transaction.nairaEquivalent) : null;
-
-    const admissionType =
-      personalInfoData?.admissionType != null
-        ? String(personalInfoData.admissionType)
-        : null;
-
-    const evidenceDoc = pickLatestDocumentByType(transaction.documents, "SCHOOL_ADMISSION");
-    const invoiceDoc = pickLatestDocumentByType(transaction.documents, "INVOICE");
-
-    const profile = user.profile;
-    const fullName = profile
-      ? `${profile.firstName || ""} ${profile.lastName || ""}`.trim() || null
-      : null;
-
-    return {
-      timestamp: transaction.createdAt.toISOString(),
-      identification: {
-        full_name: fullName,
-        email_address: user.email,
-        phone_number: user.phoneNumber,
-        address: formatProfileAddress(profile),
-      },
-      transaction_details: {
-        transaction_id: transaction.id,
-        amount,
-        equivalent_amount: equivalentAmount,
-        currency: transaction.currency,
-        date_initiated: transaction.createdAt.toISOString(),
-      },
-      beneficiary_details: {
-        beneficiary_full_name:
-          outbound?.beneficiaryName ||
-          stepBeneficiary?.name ||
-          stepBeneficiary?.accountName ||
-          null,
-        beneficiary_bank: outbound?.beneficiaryBank || stepBeneficiary?.bankName || null,
-        routing_number: null,
-        bank_address: null,
-        swift_code: outbound?.beneficiarySwift || null,
-        account_number:
-          outbound?.beneficiaryAccount ||
-          stepBeneficiary?.accountNumber ||
-          stepBeneficiary?.iban ||
-          null,
-        beneficiary_address: outbound?.beneficiaryAddress || null,
-      },
-      required_documents: {
-        bvn: user.kyc?.bvn ?? null,
-        nin: user.kyc?.nin ?? null,
-        admission_type: admissionType,
-        form_a_id: transaction.formAId ?? null,
-        evidence_of_admission: mapDocSnippet(evidenceDoc),
-        school_invoice: mapDocSnippet(invoiceDoc),
-        international_passport_number: user.kyc?.passportNumber ?? null,
-      },
-    };
+    return customerTransactionService.getTransactionDetails(row.id, row.userId);
   }
 
   async recordDisbursement(
