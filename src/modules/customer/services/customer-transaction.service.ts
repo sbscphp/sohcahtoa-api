@@ -1215,6 +1215,9 @@ export class CustomerTransactionService {
         steps: {
           orderBy: { createdAt: 'asc' },
         },
+        history: {
+          orderBy: { createdAt: 'asc' },
+        },
         cashPickup: true,
         prepaidCard: true,
       },
@@ -1263,6 +1266,33 @@ export class CustomerTransactionService {
     // Get transaction amount for documents > $10k check
     const transactionAmount = transaction.foreignAmount ? Number(transaction.foreignAmount) : null;
 
+    const historyRows = transaction.history ?? [];
+    const performerIds = [
+      ...new Set(
+        historyRows.map((h) => h.performedBy).filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const admins =
+      performerIds.length > 0
+        ? await prisma.adminUser.findMany({
+            where: { id: { in: performerIds } },
+            select: { id: true, fullName: true },
+          })
+        : [];
+    const adminNameById = Object.fromEntries(admins.map((a) => [a.id, a.fullName]));
+
+    const comments = historyRows.map((h) => ({
+      id: h.id,
+      action: h.action,
+      message: h.notes,
+      createdAt: h.createdAt,
+      performedBy: h.performedBy,
+      performedByName: h.performedBy ? adminNameById[h.performedBy] ?? null : null,
+      previousValue: h.previousValue,
+      newValue: h.newValue,
+      metadata: h.metadata,
+    }));
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -1305,10 +1335,41 @@ export class CustomerTransactionService {
       ),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
-      steps: transaction.steps,
+      steps: this.sanitizeStepsForResponse(transaction.steps),
+      comments,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
     };
+  }
+
+  private sanitizeStepDataForResponse(data: unknown): unknown {
+    if (data === null || data === undefined) return data;
+    if (typeof data !== 'object' || Array.isArray(data)) return data;
+    const o = { ...(data as Record<string, unknown>) };
+    for (const key of ['bvn', 'nin'] as const) {
+      const v = o[key];
+      if (typeof v === 'string' && v.length > 4 && !v.startsWith('***')) {
+        o[key] = `***${v.slice(-4)}`;
+      }
+    }
+    return o;
+  }
+
+  private sanitizeStepsForResponse(
+    steps: Array<{
+      id: string;
+      transactionId: string;
+      step: string;
+      status: string;
+      data: unknown;
+      completedAt: Date | null;
+      createdAt: Date;
+    }>
+  ) {
+    return steps.map((s) => ({
+      ...s,
+      data: this.sanitizeStepDataForResponse(s.data),
+    }));
   }
 
   /**

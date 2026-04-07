@@ -480,7 +480,10 @@ AgentRouter.get(
  *           type: string
  *     responses:
  *       200:
- *         description: Agent transaction details retrieved
+ *         description: >
+ *           Full transaction detail (same shape as customer GET /transactions/:transactionId),
+ *           including requiredDocuments, steps, cashPickup, prepaidCard, and comments from
+ *           transaction history (notes, actions, performer).
  *         content:
  *           application/json:
  *             schema:
@@ -491,51 +494,9 @@ AgentRouter.get(
  *                   example: true
  *                 data:
  *                   type: object
- *                   properties:
- *                     transactionId:
- *                       type: string
- *                     referenceNumber:
- *                       type: string
- *                       nullable: true
- *                     type:
- *                       type: string
- *                       nullable: true
- *                     status:
- *                       type: string
- *                       nullable: true
- *                     stage:
- *                       type: string
- *                       nullable: true
- *                     currency:
- *                       type: string
- *                       nullable: true
- *                     amounts:
- *                       type: object
- *                       properties:
- *                         nairaEquivalent:
- *                           type: number
- *                         foreignAmount:
- *                           type: number
- *                         pickupAmount:
- *                           type: number
- *                         value:
- *                           type: number
- *                     pickup:
- *                       nullable: true
- *                     meta:
- *                       type: object
- *                       properties:
- *                         documents:
- *                           type: object
- *                           properties:
- *                             count:
- *                               type: integer
- *                         destinationCountry:
- *                           type: string
- *                           nullable: true
- *                     createdAt:
- *                       type: string
- *                       format: date-time
+ *                   description: Transaction detail payload
+ *                 metadata:
+ *                   type: object
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:

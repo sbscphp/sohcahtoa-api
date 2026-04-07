@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import { ValidationError, NotFoundError } from "../../../shared/utils/errors";
+import customerTransactionService from "../../customer/services/customer-transaction.service";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -617,153 +618,24 @@ class AgentService {
     });
   }
 
+  /**
+   * Full transaction detail (same shape as customer/agent GET transaction by id).
+   */
   async transaction(agentId: string, transactionId: string) {
     const client: any = prisma as any;
     const agent = await client.agent.findUnique({
       where: { id: agentId },
-      select: { id: true, name: true, email: true, phoneNumber: true },
+      select: { id: true },
     });
     if (!agent) throw new NotFoundError("Agent not found");
+
     const row = await client.transaction.findFirst({
       where: { id: transactionId, createdByAgentId: agentId },
-      select: {
-        id: true,
-        referenceNumber: true,
-        type: true,
-        status: true,
-        currentStep: true,
-        currency: true,
-        createdAt: true,
-        updatedAt: true,
-        destinationCountry: true,
-        nairaEquivalent: true,
-        foreignAmount: true,
-        userId: true,
-        documents: { select: { id: true, documentType: true, fileName: true, fileUrl: true } },
-        cashPickup: {
-          select: {
-            id: true,
-            status: true,
-            currency: true,
-            createdAt: true,
-            pickupCode: true,
-            pickupLocation: true,
-            pickupLocationId: true,
-            pickupCity: true,
-            pickupState: true,
-            amount: true,
-          },
-        },
-        receipt: { select: { id: true, receiptNumber: true, pdfUrl: true, generatedAt: true } },
-      },
+      select: { id: true, userId: true },
     });
     if (!row) throw new NotFoundError("Transaction not found for this agent");
-    const pickup = (row as any).cashPickup || null;
-    const currency = (row.currency || "").toString().trim();
-    let nairaEquivalent = Number(row.nairaEquivalent || 0);
-    let foreignAmount = Number(row.foreignAmount || 0);
-    const pickupAmount = Number(pickup?.amount || 0);
-    if (currency.toUpperCase() === "NGN" && nairaEquivalent === 0 && foreignAmount > 0) {
-      nairaEquivalent = foreignAmount;
-      foreignAmount = 0;
-    }
-    const value = Number(nairaEquivalent || foreignAmount || pickupAmount || 0);
-    const docCount = Array.isArray((row as any).documents) ? (row as any).documents.length : 0;
-    const documents =
-      ((row as any).documents || []).map((d: any) => ({
-        id: d.id,
-        type: d.documentType,
-        fileName: d.fileName,
-        fileUrl: d.fileUrl,
-      })) || [];
 
-    const user = await client.user.findUnique({
-      where: { id: row.userId },
-      select: {
-        kyc: { select: { bvn: true, tin: true } },
-        profile: { select: { firstName: true, lastName: true } },
-      },
-    });
-    const customerName =
-      user?.profile ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim() : null;
-    const bvn = user?.kyc?.bvn || null;
-    const tin = user?.kyc?.tin || null;
-
-    const settlement = await client.settlement.findUnique({
-      where: { transactionId: row.id },
-      select: {
-        id: true,
-        status: true,
-        paymentMethod: true,
-        amount: true,
-        currency: true,
-        confirmedAt: true,
-        proofOfPayment: true,
-        bankDetails: { select: { bankName: true, accountName: true, accountNumber: true, reference: true } },
-      },
-    });
-
-    return {
-      transactionId: row.id,
-      referenceNumber: row.referenceNumber || null,
-      type: row.type || null,
-      status: row.status || null,
-      stage: row.currentStep || null,
-      currency: row.currency || null,
-      amounts: {
-        nairaEquivalent,
-        foreignAmount,
-        pickupAmount,
-        value,
-      },
-      pickup: pickup
-        ? {
-            id: pickup.id,
-            location: pickup.pickupLocation,
-            locationId: pickup.pickupLocationId,
-            code: pickup.pickupCode,
-            status: pickup.status,
-            createdAt: pickup.createdAt,
-            address: [pickup.pickupLocation, pickup.pickupCity, pickup.pickupState].filter(Boolean).join(", "),
-          }
-        : null,
-      agent: {
-        id: agent.id,
-        name: agent.name || null,
-        email: agent.email || null,
-        phoneNumber: agent.phoneNumber || null,
-      },
-      customer: {
-        name: customerName,
-        bvn,
-        tin,
-      },
-      receipt: row.receipt
-        ? {
-            receiptNumber: (row as any).receipt?.receiptNumber,
-            pdfUrl: (row as any).receipt?.pdfUrl || null,
-            generatedAt: (row as any).receipt?.generatedAt || null,
-          }
-        : null,
-      settlement: settlement
-        ? {
-            id: settlement.id,
-            status: settlement.status,
-            paymentMethod: settlement.paymentMethod,
-            amount: Number(settlement.amount || 0),
-            currency: settlement.currency,
-            confirmedAt: settlement.confirmedAt || null,
-            proofOfPayment: settlement.proofOfPayment || null,
-            bankDetails: settlement.bankDetails || null,
-          }
-        : null,
-      meta: {
-        documents: { count: docCount },
-        documentsList: documents,
-        destinationCountry: row.destinationCountry || null,
-      },
-      createdAt: row.createdAt,
-    };
+    return customerTransactionService.getTransactionDetails(row.id, row.userId);
   }
 
   async getReceiptDownload(agentId: string, transactionId: string) {

@@ -903,7 +903,7 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  * /api/customer/transactions/{transactionId}:
  *   get:
  *     summary: Get transaction details
- *     description: Get full details of a specific transaction including financial info, document verification status, rejection reason, cash pickup details, prepaid card info, and workflow step history.
+ *     description: Get full details of a specific transaction including financial info, document verification status, rejection reason, cash pickup details, prepaid card info, workflow step history (BVN/NIN in step data masked), and comments from transaction history.
  *     tags: [Customer Transactions]
  *     security:
  *       - bearerAuth: []
@@ -1036,6 +1036,29 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                       description: Ordered workflow step history for this transaction
  *                       items:
  *                         type: object
+ *                     comments:
+ *                       type: array
+ *                       description: Transaction history entries (notes, actions, state changes)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           action:
+ *                             type: string
+ *                           message:
+ *                             type: string
+ *                             nullable: true
+ *                             description: Free-text note from history (e.g. admin comment)
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           performedBy:
+ *                             type: string
+ *                             nullable: true
+ *                           performedByName:
+ *                             type: string
+ *                             nullable: true
  *                     createdAt:
  *                       type: string
  *                       format: date-time
