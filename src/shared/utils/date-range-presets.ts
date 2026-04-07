@@ -61,3 +61,49 @@ export function resolveDashboardDateRange(preset: string): { start: Date; end: D
       );
   }
 }
+
+/** Agent cash stats: calendar last month, or rolling windows for multi-month presets. */
+export const AGENT_CASH_STATS_PERIODS = [
+  "last_month",
+  "last_3_months",
+  "last_6_months",
+  "last_year",
+] as const;
+
+export type AgentCashStatsPeriodPreset = (typeof AGENT_CASH_STATS_PERIODS)[number];
+
+/** Previous calendar month (UTC), from 00:00:00 first day to last ms of last day. */
+function lastCalendarMonthRange(now: Date): { start: Date; end: Date } {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
+  const endExclusive = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+  const end = new Date(endExclusive.getTime() - 1);
+  return { start, end };
+}
+
+/**
+ * Resolves agent cash-stats period query. `last_month` is the prior full calendar month (UTC);
+ * other presets roll back from now by days (90 / 180 / 365).
+ */
+export function resolveAgentCashStatsDateRange(preset: string): { start: Date; end: Date } {
+  const trimmed = preset?.trim();
+  if (!trimmed || !AGENT_CASH_STATS_PERIODS.includes(trimmed as AgentCashStatsPeriodPreset)) {
+    throw new ValidationError(`Invalid period. Use one of: ${AGENT_CASH_STATS_PERIODS.join(", ")}`);
+  }
+
+  const endNow = new Date();
+
+  switch (trimmed as AgentCashStatsPeriodPreset) {
+    case "last_month":
+      return lastCalendarMonthRange(endNow);
+    case "last_3_months":
+      return { start: addDaysUtc(endNow, -90), end: endNow };
+    case "last_6_months":
+      return { start: addDaysUtc(endNow, -180), end: endNow };
+    case "last_year":
+      return { start: addDaysUtc(endNow, -365), end: endNow };
+    default:
+      throw new ValidationError(`Invalid period. Use one of: ${AGENT_CASH_STATS_PERIODS.join(", ")}`);
+  }
+}
