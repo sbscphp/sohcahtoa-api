@@ -48,6 +48,27 @@ class AgentDashboardController {
       next(error);
     }
   };
+
+  getCashStats = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const authUser = req.user;
+      if (!authUser) {
+        throw new ValidationError("Authentication required");
+      }
+
+      const period = (req.query.period as string | undefined)?.trim();
+      if (!period) {
+        throw new ValidationError("period is required (last_month, last_3_months, last_6_months, last_year)");
+      }
+
+      const currency = (req.query.currency as string | undefined)?.trim();
+
+      const data = await agentTransactionService.getCashStats(authUser.userId, period, currency);
+      res.json(successResponse(data));
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export default new AgentDashboardController();
