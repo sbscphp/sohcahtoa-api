@@ -47,6 +47,7 @@ import {
 import bvnService from './bvn.service';
 import passportVerificationService from './passport-verification.service';
 import auditService from '../../audit/services/audit.service';
+import { smsClient } from '../../../integrations';
 
 const prisma = getDatabase();
 
@@ -1492,7 +1493,16 @@ export class AuthService {
       });
     }
 
-    // TODO: Send OTP via SMS using Termii or similar service for phone verification
+    // Send OTP via SMS (Termii) when phone number is available
+    if (data.phoneNumber && process.env.SMS_API_KEY) {
+      try {
+        await smsClient.sendOtp(data.phoneNumber, otp, data.purpose);
+        logger.info('OTP sent via SMS', { phoneNumber: data.phoneNumber, purpose: data.purpose });
+      } catch (smsError: any) {
+        logger.error('Failed to send OTP via SMS', { phoneNumber: data.phoneNumber, error: smsError.message });
+        // Don't throw — OTP is still valid, email may have been sent
+      }
+    }
 
     return {
       message: 'OTP sent successfully',

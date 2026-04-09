@@ -17,7 +17,7 @@ export class SMSClient {
     this.apiKey = process.env.SMS_API_KEY || '';
 
     const baseUrls: Record<string, string> = {
-      termii: 'https://api.ng.termii.com/api',
+      termii: 'https://v3.api.termii.com/api',
       infobip: 'https://api.infobip.com',
     };
 
