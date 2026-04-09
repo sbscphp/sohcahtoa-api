@@ -207,6 +207,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
+CREATE INDEX IF NOT EXISTS "tickets_createdByAgentId_idx" ON "tickets"("createdByAgentId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tickets_createdByAgentId_fkey') THEN
+    ALTER TABLE "tickets"
+      ADD CONSTRAINT "tickets_createdByAgentId_fkey"
+      FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
 
 -- Ensure escrow accounts table exists (migration fallback)
@@ -230,6 +240,26 @@ CREATE TABLE IF NOT EXISTS "escrow_accounts" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "escrow_accounts_accountNumber_key" ON "escrow_accounts"("accountNumber");
 CREATE INDEX IF NOT EXISTS "escrow_accounts_status_idx" ON "escrow_accounts"("status");
+
+-- Ensure pickup stations table exists (migration fallback)
+CREATE TABLE IF NOT EXISTS "pickup_stations" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL,
+  "phoneNumber" TEXT NOT NULL,
+  "state" TEXT NOT NULL,
+  "region" TEXT NOT NULL,
+  "address" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS "pickup_stations_name_idx" ON "pickup_stations"("name");
+CREATE INDEX IF NOT EXISTS "pickup_stations_state_idx" ON "pickup_stations"("state");
+CREATE INDEX IF NOT EXISTS "pickup_stations_region_idx" ON "pickup_stations"("region");
+CREATE INDEX IF NOT EXISTS "pickup_stations_status_idx" ON "pickup_stations"("status");
 
 -- Seed a default USD->NGN exchange rate if none exist
 DO $$

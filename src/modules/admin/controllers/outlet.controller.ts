@@ -43,6 +43,68 @@ class OutletController {
     res.json(successResponse(data.items, { pagination: data.pagination }));
   });
 
+  listPickupStationRequests = asyncHandler(async (req: Request, res: Response) => {
+    const data = await outletService.listPickupStationRequests(req.params.id, req.query);
+    res.json(successResponse(data.items, { pagination: data.pagination }));
+  });
+
+  exportPickupStationRequests = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportPickupStationRequests(req.params.id, req.query);
+    streamCsv(
+      res,
+      "pickup-station-requests.csv",
+      [
+        { header: "Request ID", select: (r: any) => r.requestId },
+        { header: "Pickup Station ID", select: (r: any) => r.pickupStationId },
+        { header: "Pickup Station Name", select: (r: any) => r.pickupStationName },
+        { header: "Pickup Code", select: (r: any) => r.pickupCode },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Amount", select: (r: any) => (r.amount != null ? r.amount.toString() : "") },
+        { header: "Currency", select: (r: any) => r.currency },
+        { header: "Recipient Name", select: (r: any) => r.recipientName },
+        { header: "Recipient Phone", select: (r: any) => r.recipientPhone },
+        { header: "Customer ID", select: (r: any) => r.customer?.id || "" },
+        { header: "Customer Name", select: (r: any) => r.customer?.name || "" },
+        { header: "Customer Email", select: (r: any) => r.customer?.email || "" },
+        { header: "Customer Phone", select: (r: any) => r.customer?.phoneNumber || "" },
+        { header: "Transaction ID", select: (r: any) => r.transaction?.id || "" },
+        { header: "Reference Number", select: (r: any) => r.transaction?.referenceNumber || "" },
+        { header: "Transaction Type", select: (r: any) => r.transaction?.type || "" },
+        { header: "Transaction Mode", select: (r: any) => r.transaction?.transactionMode || "" },
+        { header: "Pickup State", select: (r: any) => r.pickupState || "" },
+        { header: "Pickup City", select: (r: any) => r.pickupCity || "" },
+        { header: "Scheduled Date", select: (r: any) => (r.scheduledPickupDate ? new Date(r.scheduledPickupDate).toISOString() : "") },
+        { header: "Scheduled Time", select: (r: any) => r.scheduledPickupTime || "" },
+        { header: "Expiry Date", select: (r: any) => (r.expiryDate ? new Date(r.expiryDate).toISOString() : "") },
+        { header: "Picked Up At", select: (r: any) => (r.pickedUpAt ? new Date(r.pickedUpAt).toISOString() : "") },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
+  exportPickupStations = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportPickupStations(req.query as unknown as PickupStationQueryDto);
+    streamCsv(
+      res,
+      "pickup-stations.csv",
+      [
+        { header: "Station ID", select: (r: any) => r.id },
+        { header: "Station Name", select: (r: any) => r.stationName },
+        { header: "Station Email", select: (r: any) => r.stationEmail },
+        { header: "Phone Number", select: (r: any) => r.phoneNumber },
+        { header: "State", select: (r: any) => r.state },
+        { header: "Region", select: (r: any) => r.region },
+        { header: "Physical Address", select: (r: any) => r.physicalAddress },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Active", select: (r: any) => (r.isActive ? "Active" : "Deactivated") },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+        { header: "Updated At", select: (r: any) => (r.updatedAt ? new Date(r.updatedAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
+  });
+
   createFranchise = asyncHandler(async (req: Request, res: Response) => {
     const data = await outletService.createFranchise(req.body as CreateFranchiseDto);
     const adminId = (req as any).user?.userId as string;
@@ -291,6 +353,26 @@ class OutletController {
     const limit = parseInt(req.query.limit as string) || 20;
     const result = await outletService.listTransactionsByBranch(req.params.id, req.query, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
+  });
+
+  exportBranchTransactions = asyncHandler(async (req: Request, res: Response) => {
+    const rows = await outletService.exportTransactionsByBranch(req.params.id, req.query);
+    streamCsv(
+      res,
+      "branch-transactions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.id },
+        { header: "Reference Number", select: (r: any) => r.dateAndId?.reference || "" },
+        { header: "Customer Name", select: (r: any) => r.customerName || "" },
+        { header: "Transaction Type", select: (r: any) => r.transactionType || "" },
+        { header: "Transaction Stage", select: (r: any) => r.transactionStage || "" },
+        { header: "Workflow Stage", select: (r: any) => r.workflowStage || "" },
+        { header: "Transaction Value", select: (r: any) => r.transactionValue ?? "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Created At", select: (r: any) => (r.dateAndId?.date ? new Date(r.dateAndId.date).toISOString() : "") },
+      ],
+      rows as any[]
+    );
   });
 
   createBranch = asyncHandler(async (req: Request, res: Response) => {

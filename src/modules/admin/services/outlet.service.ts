@@ -800,6 +800,108 @@ class OutletService {
     };
   }
 
+  async exportTransactionsByBranch(branchId: string, filters: any) {
+    if (!branchId) {
+      throw new ValidationError("branchId is required");
+    }
+    const branch = await db.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) {
+      throw new NotFoundError("Branch not found");
+    }
+
+    const where: any = {
+      createdByAgent: {
+        is: { branchId },
+      },
+    };
+
+    if (filters?.status) where.status = filters.status;
+    if (filters?.step) where.currentStep = filters.step;
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      where.type = (filters.type as string).toUpperCase();
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+
+    const search = (filters?.search || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+      ];
+    }
+
+    const orderBy: any = {};
+    const sortBy = filters?.sortBy || "createdAt";
+    const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
+    orderBy[sortBy] = sortOrder;
+
+    const items = await prisma.transaction.findMany({
+      where,
+      orderBy,
+      take: 10_000,
+      select: {
+        id: true,
+        userId: true,
+        referenceNumber: true,
+        type: true,
+        currentStep: true,
+        status: true,
+        nairaEquivalent: true,
+        foreignAmount: true,
+        createdAt: true,
+      },
+    });
+
+    const uniqueUserIds = Array.from(new Set(items.map((t: any) => t.userId)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return items.map((t: any) => {
+      const u: any = userMap.get(t.userId);
+      const name =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+      const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      return {
+        id: t.id,
+        customerName: name,
+        dateAndId: { date: t.createdAt, reference: t.referenceNumber },
+        transactionType: t.type,
+        transactionStage: t.currentStep,
+        workflowStage: t.status,
+        transactionValue: value,
+        status: t.status,
+      };
+    });
+  }
+
   async createBranch(payload: CreateBranchDto) {
     const { branchName, branchEmail, state, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {
@@ -838,6 +940,48 @@ class OutletService {
         isActive: true,
       },
     });
+    try {
+      const name = (agentName || "").toString().trim();
+      const emailAddr = (agentEmail || "").toString().trim();
+      const phoneNum = (agentPhoneNumber || "").toString().trim();
+      if (name && (emailAddr || phoneNum)) {
+        const existingAgent =
+          (emailAddr || phoneNum)
+            ? await db.agent.findFirst({
+                where: {
+                  OR: [
+                    ...(emailAddr ? [{ email: emailAddr }] : []),
+                    ...(phoneNum ? [{ phoneNumber: phoneNum }] : []),
+                  ],
+                },
+                select: { id: true },
+              })
+            : null;
+        if (existingAgent?.id) {
+          await db.agent.update({
+            where: { id: existingAgent.id },
+            data: { branchId: created.id },
+          });
+        } else {
+          await db.agent.create({
+            data: {
+              name,
+              email: emailAddr || undefined,
+              phoneNumber: phoneNum || undefined,
+              branchId: created.id,
+              isApproved: false,
+            },
+          });
+        }
+      }
+    } catch (_e) {
+      logger.warn("Failed to attach/create initial agent for branch", {
+        branchId: created.id,
+        agentName,
+        agentEmail,
+        agentPhoneNumber,
+      });
+    }
     return created;
   }
 
@@ -978,6 +1122,43 @@ class OutletService {
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
+  async exportPickupStations(query: PickupStationQueryDto) {
+    const where: any = {};
+
+    const search = (query.search || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { region: { contains: search, mode: "insensitive" } },
+        { state: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (query.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query.region) where.region = { equals: query.region, mode: "insensitive" };
+    if (query.status) where.status = query.status;
+
+    const rows = await db.pickupStation.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+    });
+
+    return (rows || []).map((s: any) => ({
+      id: s.id,
+      stationName: s.name,
+      stationEmail: s.email,
+      phoneNumber: s.phoneNumber,
+      state: s.state,
+      region: s.region,
+      physicalAddress: s.address,
+      status: s.status,
+      isActive: s.isActive,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+  }
+
   async createPickupStation(payload: CreatePickupStationDto) {
     const { stationName, stationEmail, phoneNumber, state, region, physicalAddress, status } = payload || ({} as any);
     if (!stationName || !stationEmail || !phoneNumber || !state || !region || !physicalAddress) {
@@ -1025,6 +1206,320 @@ class OutletService {
       throw new NotFoundError("Pick-up station not found");
     }
     return station;
+  }
+
+  async listPickupStationRequests(pickupStationId: string, query: any = {}) {
+    if (!pickupStationId) {
+      throw new ValidationError("pickupStationId is required");
+    }
+
+    const station = await db.pickupStation.findUnique({
+      where: { id: pickupStationId },
+      select: { id: true, name: true },
+    });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+
+    const page = parseInt((query.page || "1") as any);
+    const limit = parseInt((query.limit || "20") as any);
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      AND: [
+        {
+          OR: [{ pickupLocationId: station.id }, { pickupLocation: station.name }],
+        },
+      ],
+    };
+
+    const status = (query.status || "").toString().trim();
+    if (status) {
+      where.AND.push({ status });
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      const createdAt: any = {};
+      if (query.dateFrom) createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) createdAt.lte = new Date(query.dateTo);
+      where.AND.push({ createdAt });
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+
+      const searchOr: any[] = [
+        { pickupCode: { contains: search, mode: "insensitive" } },
+        { recipientName: { contains: search, mode: "insensitive" } },
+        { recipientPhone: { contains: search, mode: "insensitive" } },
+        { transaction: { is: { referenceNumber: { contains: search, mode: "insensitive" } } } },
+      ];
+      if (userIds.length) {
+        searchOr.push({ transaction: { is: { userId: { in: userIds } } } });
+      }
+
+      where.AND.push({ OR: searchOr });
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.cashPickup.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          pickupCode: true,
+          pickupLocation: true,
+          pickupLocationId: true,
+          pickupState: true,
+          pickupCity: true,
+          recipientName: true,
+          recipientPhone: true,
+          amount: true,
+          currency: true,
+          status: true,
+          scheduledPickupDate: true,
+          scheduledPickupTime: true,
+          expiryDate: true,
+          pickedUpAt: true,
+          createdAt: true,
+          updatedAt: true,
+          transaction: {
+            select: {
+              id: true,
+              userId: true,
+              referenceNumber: true,
+              type: true,
+              transactionMode: true,
+            },
+          },
+        },
+      }),
+      prisma.cashPickup.count({ where }),
+    ]);
+
+    const uniqueUserIds = Array.from(new Set((rows || []).map((r: any) => r.transaction?.userId).filter(Boolean)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
+
+    const items = (rows || []).map((r: any) => {
+      const u: any = r.transaction?.userId ? userMap.get(r.transaction.userId) : undefined;
+      const customerName =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+
+      return {
+        requestId: r.id,
+        pickupStationId: station.id,
+        pickupStationName: station.name,
+        pickupCode: r.pickupCode,
+        status: r.status,
+        amount: r.amount,
+        currency: r.currency,
+        recipientName: r.recipientName,
+        recipientPhone: r.recipientPhone,
+        pickupState: r.pickupState,
+        pickupCity: r.pickupCity,
+        scheduledPickupDate: r.scheduledPickupDate,
+        scheduledPickupTime: r.scheduledPickupTime,
+        expiryDate: r.expiryDate,
+        pickedUpAt: r.pickedUpAt,
+        createdAt: r.createdAt,
+        customer: r.transaction?.userId
+          ? {
+              id: r.transaction.userId,
+              name: customerName,
+              email: u?.email,
+              phoneNumber: u?.phoneNumber,
+            }
+          : null,
+        transaction: r.transaction
+          ? {
+              id: r.transaction.id,
+              referenceNumber: r.transaction.referenceNumber,
+              type: r.transaction.type,
+              transactionMode: r.transaction.transactionMode,
+            }
+          : null,
+      };
+    });
+
+    return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async exportPickupStationRequests(pickupStationId: string, query: any = {}) {
+    if (!pickupStationId) {
+      throw new ValidationError("pickupStationId is required");
+    }
+
+    const station = await db.pickupStation.findUnique({
+      where: { id: pickupStationId },
+      select: { id: true, name: true },
+    });
+    if (!station) {
+      throw new NotFoundError("Pick-up station not found");
+    }
+
+    const where: any = {
+      AND: [
+        {
+          OR: [{ pickupLocationId: station.id }, { pickupLocation: station.name }],
+        },
+      ],
+    };
+
+    const status = (query.status || "").toString().trim();
+    if (status) {
+      where.AND.push({ status });
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      const createdAt: any = {};
+      if (query.dateFrom) createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) createdAt.lte = new Date(query.dateTo);
+      where.AND.push({ createdAt });
+    }
+
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      const matchedUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      });
+      const userIds = matchedUsers.map((u) => u.id);
+
+      const searchOr: any[] = [
+        { pickupCode: { contains: search, mode: "insensitive" } },
+        { recipientName: { contains: search, mode: "insensitive" } },
+        { recipientPhone: { contains: search, mode: "insensitive" } },
+        { transaction: { is: { referenceNumber: { contains: search, mode: "insensitive" } } } },
+      ];
+      if (userIds.length) {
+        searchOr.push({ transaction: { is: { userId: { in: userIds } } } });
+      }
+
+      where.AND.push({ OR: searchOr });
+    }
+
+    const rows = await prisma.cashPickup.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+      select: {
+        id: true,
+        pickupCode: true,
+        pickupLocation: true,
+        pickupLocationId: true,
+        pickupState: true,
+        pickupCity: true,
+        recipientName: true,
+        recipientPhone: true,
+        amount: true,
+        currency: true,
+        status: true,
+        scheduledPickupDate: true,
+        scheduledPickupTime: true,
+        expiryDate: true,
+        pickedUpAt: true,
+        createdAt: true,
+        updatedAt: true,
+        transaction: {
+          select: {
+            id: true,
+            userId: true,
+            referenceNumber: true,
+            type: true,
+            transactionMode: true,
+          },
+        },
+      },
+    });
+
+    const uniqueUserIds = Array.from(new Set((rows || []).map((r: any) => r.transaction?.userId).filter(Boolean)));
+    const users = uniqueUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
+
+    return (rows || []).map((r: any) => {
+      const u: any = r.transaction?.userId ? userMap.get(r.transaction.userId) : undefined;
+      const customerName =
+        u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
+
+      return {
+        requestId: r.id,
+        pickupStationId: station.id,
+        pickupStationName: station.name,
+        pickupCode: r.pickupCode,
+        status: r.status,
+        amount: r.amount,
+        currency: r.currency,
+        recipientName: r.recipientName,
+        recipientPhone: r.recipientPhone,
+        pickupState: r.pickupState,
+        pickupCity: r.pickupCity,
+        scheduledPickupDate: r.scheduledPickupDate,
+        scheduledPickupTime: r.scheduledPickupTime,
+        expiryDate: r.expiryDate,
+        pickedUpAt: r.pickedUpAt,
+        createdAt: r.createdAt,
+        customer: r.transaction?.userId
+          ? {
+              id: r.transaction.userId,
+              name: customerName,
+              email: u?.email,
+              phoneNumber: u?.phoneNumber,
+            }
+          : null,
+        transaction: r.transaction
+          ? {
+              id: r.transaction.id,
+              referenceNumber: r.transaction.referenceNumber,
+              type: r.transaction.type,
+              transactionMode: r.transaction.transactionMode,
+            }
+          : null,
+      };
+    });
   }
 
   async updatePickupStation(id: string, payload: UpdatePickupStationDto) {
