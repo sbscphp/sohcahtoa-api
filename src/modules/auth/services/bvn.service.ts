@@ -1,4 +1,8 @@
 import { ValidationError, validateBvn } from '../../../shared/utils';
+import { nibssClient } from '../../../integrations/nibss/nibss.client';
+import { createLogger } from '../../../shared/utils/logger';
+
+const logger = createLogger('BvnService');
 
 export interface BvnVerificationResult {
   success: boolean;
@@ -12,38 +16,112 @@ export interface BvnVerificationResult {
     address?: string;
     gender?: string;
     nationality?: string;
+    stateOfOrigin?: string;
+    watchListed?: boolean;
+    enrollmentBank?: string;
   };
   message: string;
   error?: string;
 }
 
 export class BvnService {
-  async verifyBvn(bvn: string): Promise<BvnVerificationResult> {
+  /**
+   * Verify BVN using NIBSS BIVS API
+   *
+   * @param bvn - Bank Verification Number (11 digits)
+   * @param phoneNumber - Optional phone number for additional verification
+   * @param dateOfBirth - Optional date of birth in YYYY-MM-DD format
+   * @param firstName - Optional first name for verification
+   * @param lastName - Optional last name for verification
+   */
+  async verifyBvn(
+    bvn: string,
+    phoneNumber?: string,
+    dateOfBirth?: string,
+    firstName?: string,
+    lastName?: string
+  ): Promise<BvnVerificationResult> {
     // Validate BVN format
     if (!validateBvn(bvn)) {
       throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
     }
 
     try {
-      // TODO: Replace with actual CBN TRMS API integration
-      // This is a mock implementation for development
-      const mockBvnData = await this.mockBvnVerification(bvn);
+      logger.info('Initiating BVN verification via NIBSS', {
+        bvn: `***${bvn.slice(-4)}`,
+        hasPhoneNumber: !!phoneNumber,
+        hasDoB: !!dateOfBirth,
+        hasFirstName: !!firstName,
+        hasLastName: !!lastName,
+      });
 
-      if (!mockBvnData.success) {
+      // Check if NIBSS is configured
+      const isNibssConfigured = process.env.NIBSS_BIVS_CLIENT_ID && process.env.NIBSS_BIVS_CLIENT_SECRET;
+
+      if (!isNibssConfigured) {
+        logger.error('NIBSS credentials not configured. BVN verification unavailable.');
+        throw new ValidationError('BVN verification service is not configured. Please contact support.');
+      }
+
+      // Call NIBSS BIVS API
+      const nibssResponse = await nibssClient.verifyBvn({
+        BVN: bvn,
+        PhoneNumber: phoneNumber,
+        DoB: dateOfBirth,
+        FirstName: firstName,
+        LastName: lastName,
+      });
+
+      if (!nibssResponse.verified) {
+        logger.warn('BVN verification failed via NIBSS', {
+          bvn: `***${bvn.slice(-4)}`,
+          message: nibssResponse.message,
+        });
+
         return {
           success: false,
-          message: mockBvnData.message,
-          error: mockBvnData.error,
+          message: nibssResponse.message,
+          error: nibssResponse.message,
         };
       }
 
+      logger.info('BVN verified successfully via NIBSS', {
+        bvn: `***${bvn.slice(-4)}`,
+        firstName: nibssResponse.data?.firstName,
+        lastName: nibssResponse.data?.lastName,
+      });
+
       return {
         success: true,
-        data: mockBvnData.data,
+        data: {
+          firstName: nibssResponse.data!.firstName,
+          lastName: nibssResponse.data!.lastName,
+          middleName: nibssResponse.data!.middleName,
+          dateOfBirth: nibssResponse.data!.dateOfBirth,
+          phoneNumber: nibssResponse.data!.phoneNumber,
+          email: nibssResponse.data!.email,
+          gender: nibssResponse.data!.gender,
+          stateOfOrigin: nibssResponse.data!.stateOfOrigin,
+          nationality: nibssResponse.data!.nationality,
+          watchListed: nibssResponse.data!.watchListed,
+          enrollmentBank: nibssResponse.data!.enrollmentBank,
+          address: undefined, // NIBSS doesn't provide full address in BIVS response
+        },
         message: 'BVN verified successfully',
       };
     } catch (error: any) {
-      console.error('BVN verification error:', error);
+      logger.error('BVN verification error', {
+        bvn: `***${bvn.slice(-4)}`,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      // Don't fall back to mock - NIBSS is the only verification method
+      // if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      //   logger.warn('Falling back to mock BVN verification due to error');
+      //   return await this.mockBvnVerification(bvn);
+      // }
+
       return {
         success: false,
         message: 'BVN verification failed',
@@ -52,9 +130,20 @@ export class BvnService {
     }
   }
 
+  /**
+   * Mock BVN verification for development/testing
+   * This generates consistent data based on the BVN input
+   *
+   * NOTE: This is commented out - NIBSS is now the only verification method
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async mockBvnVerification(bvn: string): Promise<BvnVerificationResult> {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    logger.info('Using mock BVN verification', {
+      bvn: `***${bvn.slice(-4)}`,
+    });
 
     // Generate dynamic user data based on BVN
     // This ensures each BVN generates consistent but unique data
@@ -66,11 +155,11 @@ export class BvnService {
     const middleNames = ['Emmanuel', 'Mohammed', 'Oluwaseun', 'Ahmed', 'Chukwuemeka', 'Abubakar', 'Oluwakemi', 'Hassan'];
     const genders = ['Male', 'Female'];
     const cities = [
-      { city: 'Lagos', street: 'Victoria Island' },
-      { city: 'Abuja', street: 'Wuse' },
-      { city: 'Port Harcourt', street: 'GRA' },
-      { city: 'Kano', street: 'Sabon Gari' },
-      { city: 'Ibadan', street: 'Bodija' },
+      { city: 'Lagos', street: 'Victoria Island', state: 'Lagos' },
+      { city: 'Abuja', street: 'Wuse', state: 'FCT' },
+      { city: 'Port Harcourt', street: 'GRA', state: 'Rivers' },
+      { city: 'Kano', street: 'Sabon Gari', state: 'Kano' },
+      { city: 'Ibadan', street: 'Bodija', state: 'Oyo' },
     ];
 
     const firstNameIndex = bvnHash % firstNames.length;
@@ -113,43 +202,91 @@ export class BvnService {
       address,
       gender,
       nationality: 'Nigerian',
+      stateOfOrigin: location.state,
+      watchListed: false,
+      enrollmentBank: 'First Bank of Nigeria',
     };
+
+    logger.info('Mock BVN verification completed', {
+      bvn: `***${bvn.slice(-4)}`,
+      firstName,
+      lastName,
+    });
 
     return {
       success: true,
       data: bvnData,
-      message: 'BVN verified successfully',
+      message: 'BVN verified successfully (mock)',
     };
   }
 
   /**
-   * Production implementation would look like this:
+   * Verify BVN with consent management
+   * This method requests consent before verification
    *
-   * private async callCbnTrmsApi(bvn: string, phone: string): Promise<BvnVerificationResult> {
-   *   const apiUrl = process.env.CBN_TRMS_API_URL;
-   *   const apiKey = process.env.CBN_TRMS_API_KEY;
-   *
-   *   const response = await fetch(`${apiUrl}/verify-bvn`, {
-   *     method: 'POST',
-   *     headers: {
-   *       'Content-Type': 'application/json',
-   *       'Authorization': `Bearer ${apiKey}`,
-   *     },
-   *     body: JSON.stringify({ bvn, phone }),
-   *   });
-   *
-   *   if (!response.ok) {
-   *     throw new Error('BVN verification failed');
-   *   }
-   *
-   *   const data = await response.json();
-   *   return {
-   *     success: data.verified,
-   *     data: data.customerInfo,
-   *     message: data.message,
-   *   };
-   * }
+   * @param bvn - Bank Verification Number
+   * @param userId - User ID for consent tracking
+   * @param purpose - Purpose of BVN verification
    */
+  async verifyBvnWithConsent(
+    bvn: string,
+    userId: string,
+    purpose: string = 'KYC Verification'
+  ): Promise<BvnVerificationResult> {
+    // Validate BVN format
+    if (!validateBvn(bvn)) {
+      throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
+    }
+
+    try {
+      logger.info('Initiating BVN verification with consent', {
+        bvn: `***${bvn.slice(-4)}`,
+        userId,
+        purpose,
+      });
+
+      // Request consent via NIBSS ConsentMgmt
+      const consentResponse = await nibssClient.requestConsent({
+        customerId: userId,
+        serviceType: 'BVN_VERIFICATION',
+        duration: 30, // 30 days
+        purpose,
+      });
+
+      if (!consentResponse.success) {
+        logger.warn('Consent request failed', {
+          userId,
+          message: consentResponse.message,
+        });
+
+        return {
+          success: false,
+          message: `Consent request failed: ${consentResponse.message}`,
+          error: consentResponse.message,
+        };
+      }
+
+      logger.info('Consent obtained successfully', {
+        userId,
+        consentId: consentResponse.consentId,
+      });
+
+      // Proceed with BVN verification
+      return await this.verifyBvn(bvn);
+    } catch (error: any) {
+      logger.error('BVN verification with consent error', {
+        bvn: `***${bvn.slice(-4)}`,
+        userId,
+        error: error.message,
+      });
+
+      return {
+        success: false,
+        message: 'BVN verification with consent failed',
+        error: error.message,
+      };
+    }
+  }
 }
 
 export default new BvnService();
