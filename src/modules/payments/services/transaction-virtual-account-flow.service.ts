@@ -165,9 +165,29 @@ export class TransactionVirtualAccountFlowService {
     transactionId: string,
     pathContext: VirtualAccountPathContext = 'customer'
   ) {
-    await this.assertTransactionBelongsToCustomer(transactionId, customerUserId);
+    const transaction = await this.assertTransactionBelongsToCustomer(transactionId, customerUserId);
 
-    const virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    let virtualAccount;
+    try {
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 404) {
+        // Auto-create VA if transaction is approved but no VA exists yet
+        if (transaction.status === 'APPROVED') {
+          logger.info('No virtual account found for approved transaction, auto-creating', { transactionId, customerUserId });
+          const result = await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+          virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+        } else {
+          throw new AppError(
+            ErrorCode.VALIDATION_ERROR,
+            'Virtual account not yet created. Please wait for transaction approval.',
+            400
+          );
+        }
+      } else {
+        throw error;
+      }
+    }
 
     const isExpired =
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
@@ -182,7 +202,7 @@ export class TransactionVirtualAccountFlowService {
       expiresAt: virtualAccount.expiresAt,
       createdAt: virtualAccount.createdAt,
       isExpired,
-      deposits: virtualAccount.deposits?.map((deposit) => ({
+      deposits: virtualAccount.deposits?.map((deposit: any) => ({
         id: deposit.id,
         amount: deposit.amount,
         settledAmount: deposit.settledAmount,
@@ -209,7 +229,19 @@ export class TransactionVirtualAccountFlowService {
       );
     }
 
-    const virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    let virtualAccount;
+    try {
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 404) {
+        // Auto-create VA if transaction is approved but no VA exists yet
+        logger.info('No virtual account found, auto-creating for approved transaction', { transactionId, customerUserId });
+        await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+        virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+      } else {
+        throw error;
+      }
+    }
 
     const isExpired =
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
