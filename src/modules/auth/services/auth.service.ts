@@ -1754,10 +1754,12 @@ export class AuthService {
       kyc: user.kyc ? {
         status: user.kyc.status,
         bvn: user.kyc.bvn ? partiallyRedactField(user.kyc.bvn, 'bvn') : null,
+        nin: user.kyc.nin ? partiallyRedactField(user.kyc.nin, 'nin') : null,
         tin: user.kyc.tin,
         passportNumber: user.kyc.passportNumber,
         passportDocumentUrl: user.kyc.passportDocumentUrl,
         bvnVerified: user.kyc.bvnVerified,
+        ninVerified: user.kyc.ninVerified,
         tinVerified: user.kyc.tinVerified,
         passportVerified: user.kyc.passportVerified,
         verifiedAt: user.kyc.verifiedAt,

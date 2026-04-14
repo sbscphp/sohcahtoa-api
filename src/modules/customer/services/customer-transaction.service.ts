@@ -1280,17 +1280,15 @@ export class CustomerTransactionService {
         : [];
     const adminNameById = Object.fromEntries(admins.map((a) => [a.id, a.fullName]));
 
-    const comments = historyRows.map((h) => ({
-      id: h.id,
-      action: h.action,
-      message: h.notes,
-      createdAt: h.createdAt,
-      performedBy: h.performedBy,
-      performedByName: h.performedBy ? adminNameById[h.performedBy] ?? null : null,
-      previousValue: h.previousValue,
-      newValue: h.newValue,
-      metadata: h.metadata,
-    }));
+    const comments = historyRows
+      .filter((h) => Boolean(h.notes))
+      .map((h) => ({
+        id: h.id,
+        action: h.action,
+        message: h.notes,
+        addedBy: h.performedBy ? adminNameById[h.performedBy] ?? 'Admin' : 'Admin',
+        createdAt: h.createdAt,
+      }));
 
     return {
       transactionId: transaction.id,
@@ -1534,8 +1532,8 @@ export class CustomerTransactionService {
    * Get available pickup terminals filtered by state and city (region)
    */
   async getPickupTerminals(params: {
-    state: string;
-    city: string;
+    state?: string;
+    city?: string;
     pickupDate?: string;
     pickupTime?: string;
   }): Promise<any[]> {
@@ -1543,12 +1541,12 @@ export class CustomerTransactionService {
 
     logger.info(`[getPickupTerminals] Fetching pickup terminals`, { state, city, pickupDate, pickupTime });
 
+    const where: any = { isActive: true };
+    if (state) where.state = { equals: state, mode: 'insensitive' };
+    if (city) where.region = { equals: city, mode: 'insensitive' };
+
     const stations = await prisma.pickupStation.findMany({
-      where: {
-        state: { equals: state, mode: 'insensitive' },
-        region: { equals: city, mode: 'insensitive' },
-        isActive: true,
-      },
+      where,
       select: {
         id: true,
         name: true,
