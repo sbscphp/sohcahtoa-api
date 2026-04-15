@@ -150,6 +150,7 @@ class AgentService {
       return {
         ...agentWithoutBranchObj,
         branchName,
+        status: a.isActive ? "Active" : "Deactivated",
         totalTransactions: totals.count,
         totalTransactionsVolume: totals.volume,
       };

@@ -140,7 +140,7 @@ export class TicketsService {
       include: {
         attachments: true,
         comments: true,
-        assignedAgent: { select: { id: true, fullName: true } },
+        assignedAgent: { select: { id: true, fullName: true, email: true } },
         customer: {
           select: {
             id: true,
@@ -184,6 +184,13 @@ export class TicketsService {
             fullName: customerName,
             email: t.customer.email,
             phoneNumber: t.customer.phoneNumber,
+          }
+        : null,
+      assignedAgent: t.assignedAgent
+        ? {
+            id: t.assignedAgent.id,
+            fullName: t.assignedAgent.fullName,
+            email: t.assignedAgent.email,
           }
         : null,
     };
