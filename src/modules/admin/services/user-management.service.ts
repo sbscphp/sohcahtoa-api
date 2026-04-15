@@ -159,15 +159,36 @@ class UserManagementService {
         try {
             const user = await this.prisma.adminUser.findUnique({
                 where: { id: userId },
-                include: { role: { select: { name: true } } },
+                include: { 
+                    role: { select: { name: true } },
+                    department: { select: { name: true } }
+                },
             });
             if (!user) {
                 throw new NotFoundError("User not found");
             }
+            
+            // Get last active time from most recent admin action
+            const lastAction = await this.prisma.adminAction.findFirst({
+                where: { adminId: userId },
+                orderBy: { performedAt: 'desc' },
+                select: { performedAt: true }
+            });
+            
             const roleName = (user as any).role?.name || null;
-            const { password: _password, role: _role, ...userWithoutPassword } = user as any;
+            const departmentName = (user as any).department?.name || null;
+            const lastActive = lastAction?.performedAt || null;
+            
+            const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user as any;
             const rolePermissions = await this.getRolePermissions(user.roleId, "grouped");
-            return { ...userWithoutPassword, roleName, rolePermissions };
+            
+            return { 
+                ...userWithoutPassword, 
+                roleName, 
+                departmentName,
+                lastActive,
+                rolePermissions 
+            };
         } catch (error) {
             logger.error("Failed to get admin profile", {
                 userId,

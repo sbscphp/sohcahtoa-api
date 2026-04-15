@@ -1,7 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
-import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode } from "../../../shared/types";
+import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 
@@ -40,6 +40,10 @@ function applyBuySellFxFilter(where: any, rawType: string) {
       { AND: [{ type: "TOURIST_FX" }, { transactionMode: mode as any }] },
       { type: { in: group as any } },
     ]);
+    return true;
+  }
+  if (rawType === "receivefx") {
+    where.disbursementMethod = DisbursementMethod.IMTO;
     return true;
   }
   return false;
