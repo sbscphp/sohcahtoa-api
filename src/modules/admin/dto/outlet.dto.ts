@@ -33,6 +33,7 @@ export class UpdateFranchiseDto {
 export class PickupStationQueryDto {
   page?: number;
   limit?: number;
+  q?: string;
   search?: string;
   state?: string;
   region?: string;

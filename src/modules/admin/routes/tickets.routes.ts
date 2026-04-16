@@ -94,22 +94,42 @@ TicketsRouter.get(
  *           type: integer
  *           default: 20
  *       - in: query
+ *         name: reference
+ *         schema:
+ *           type: string
+ *         description: Search by ticket reference ID
+ *       - in: query
+ *         name: customerId
+ *         schema:
+ *           type: string
+ *         description: Filter by customer ID
+ *       - in: query
+ *         name: assignedAgentId
+ *         schema:
+ *           type: string
+ *         description: Filter by assigned agent ID
+ *       - in: query
  *         name: search
  *         schema:
  *           type: string
+ *         description: Keyword search in reference, description, and caseType
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *           enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+ *         description: Filter by ticket status (case-insensitive)
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
+ *         description: Filter by case type category
  *       - in: query
  *         name: priority
  *         schema:
  *           type: string
  *           enum: [LOW, MEDIUM, HIGH]
+ *         description: Filter by priority level (case-insensitive)
  *     responses:
  *       200:
  *         description: Tickets retrieved successfully
@@ -132,6 +152,18 @@ TicketsRouter.get(
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: query
+ *         name: reference
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: customerId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: assignedAgentId
+ *         schema:
+ *           type: string
  *       - in: query
  *         name: search
  *         schema:

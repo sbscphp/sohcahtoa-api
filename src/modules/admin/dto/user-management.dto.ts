@@ -22,8 +22,8 @@ export class UpdateRoleDto {
     name?: string;
     description?: string;
     permissions?: string[] | Record<string, Record<string, string[]>>;
-    branches?: string[];
-    departments?: string[];
+    branch?: string;
+    department?: string;
     isDefault?: boolean;
     isActive?: boolean;
 }
@@ -32,7 +32,7 @@ export class RoleQueryDto {
     page?: number;
     limit?: number;
     search?: string;
-    isActive?: boolean;
+    isActive?: any;
 }
 
 export class CreateDepartmentDto {
@@ -56,8 +56,20 @@ export class DepartmentQueryDto {
     page?: number;
     limit?: number;
     search?: string;
-    isActive?: boolean;
+    isActive?: any;
 }
+
+export class AdminUserQueryDto {
+    page?: number;
+    limit?: number;
+    search?: string;
+    fullName?: string;
+    email?: string;
+    role?: string;
+    department?: string;
+    isActive?: any;
+}
+
 
 export class UpdateAdminUserDto {
     email?: string;

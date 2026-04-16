@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import { ValidationError, NotFoundError } from "../../../shared/utils/errors";
+import authService from "../../auth/services/auth.service";
+import { OtpPurpose } from "../../../shared/types";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -16,15 +18,27 @@ class AgentService {
     return { total, active, deactivated, pendingApproval };
   }
 
-  async listAll(filters: any = {}) {
-    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
+  private async getAgentWhereClause(filters: any = {}) {
     const where: any = {};
-    if (filters.isActive !== undefined) where.isActive = String(filters.isActive) === "true";
-    if (filters.isApproved !== undefined) where.isApproved = String(filters.isApproved) === "true";
+    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
+    
+    // Status / Active filter
+    const isActiveRaw = (filters.isActive ?? filters.status ?? "").toString().trim().toLowerCase();
+    if (isActiveRaw === "true" || isActiveRaw === "active") {
+      where.isActive = true;
+    } else if (isActiveRaw === "false" || isActiveRaw === "deactivated") {
+      where.isActive = false;
+    }
+
+    // Approval filter
+    if (filters.isApproved !== undefined && filters.isApproved !== "") {
+      where.isApproved = String(filters.isApproved) === "true";
+    }
+
+    // Branch filter
     const branchRaw = ((filters || {}).branch ?? (filters || {}).branchId ?? "").toString().trim();
     if (branchRaw) {
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchRaw);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchRaw);
       if (isUuid) {
         where.branchId = branchRaw;
       } else {
@@ -32,12 +46,35 @@ class AgentService {
           where: { name: { equals: branchRaw, mode: "insensitive" } },
           select: { id: true },
         });
-        if (!branch) {
-          throw new ValidationError("Branch not found", { branch: branchRaw });
+        if (branch) {
+          where.branchId = branch.id;
+        } else {
+          // If branch not found by name, we ensure zero results are returned instead of throwing
+          // or we can throw if that's the preferred behavior. Given this is a filter, zero results is safer.
+          where.branchId = "non-existent-id"; 
         }
-        where.branchId = branch.id;
       }
     }
+
+    // Date range filter
+    const fromDateRaw = (filters.fromDate || filters.dateFrom || "").toString().trim();
+    const toDateRaw = (filters.toDate || filters.dateTo || "").toString().trim();
+    if (fromDateRaw || toDateRaw) {
+      const createdRange: any = {};
+      if (fromDateRaw) {
+        const d = new Date(fromDateRaw);
+        if (!isNaN(d.getTime())) createdRange.gte = d;
+      }
+      if (toDateRaw) {
+        const d = new Date(toDateRaw);
+        if (!isNaN(d.getTime())) createdRange.lte = d;
+      }
+      if (Object.keys(createdRange).length > 0) {
+        where.createdAt = createdRange;
+      }
+    }
+
+    // Search filter
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
@@ -45,6 +82,12 @@ class AgentService {
         { phoneNumber: { contains: search, mode: "insensitive" } },
       ];
     }
+
+    return where;
+  }
+
+  async listAll(filters: any = {}) {
+    const where = await this.getAgentWhereClause(filters);
 
     const items = await (prisma as any).agent.findMany({
       where,
@@ -75,30 +118,7 @@ class AgentService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
-    const where: any = {};
-    if (filters.isActive !== undefined) where.isActive = filters.isActive === "true";
-    const fromDateRaw = (filters.fromDate || "").toString().trim();
-    const toDateRaw = (filters.toDate || "").toString().trim();
-    const createdRange: any = {};
-    if (fromDateRaw) {
-      const d = new Date(fromDateRaw);
-      if (!isNaN(d.getTime())) createdRange.gte = d;
-    }
-    if (toDateRaw) {
-      const d = new Date(toDateRaw);
-      if (!isNaN(d.getTime())) createdRange.lte = d;
-    }
-    if (createdRange.gte || createdRange.lte) {
-      where.createdAt = createdRange;
-    }
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { phoneNumber: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    const where = await this.getAgentWhereClause(filters);
     const skip = (page - 1) * limit;
     const sortOrder = ((filters.sort || "").toString().toLowerCase() === "asc" ? "asc" : "desc") as "asc" | "desc";
     const [total, items] = await Promise.all([
@@ -116,6 +136,7 @@ class AgentService {
           isActive: true,
           isApproved: true,
           createdAt: true,
+          branch: { select: { id: true, name: true } },
         },
       }),
     ]);
@@ -159,33 +180,7 @@ class AgentService {
   }
   
   async export(filters: any = {}) {
-    const where: any = {};
-    const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
-    if (filters.isActive !== undefined) where.isActive = String(filters.isActive) === "true";
-    const branchRaw = ((filters || {}).branch ?? (filters || {}).branchId ?? "").toString().trim();
-    if (branchRaw) {
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchRaw);
-      if (isUuid) {
-        where.branchId = branchRaw;
-      } else {
-        const branch = await (prisma as any).branch.findFirst({
-          where: { name: { equals: branchRaw, mode: "insensitive" } },
-          select: { id: true },
-        });
-        if (!branch) {
-          throw new ValidationError("Branch not found", { branch: branchRaw });
-        }
-        where.branchId = branch.id;
-      }
-    }
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { phoneNumber: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    const where = await this.getAgentWhereClause(filters);
     const sortOrder = ((filters.sort || "").toString().toLowerCase() === "asc" ? "asc" : "desc") as "asc" | "desc";
     const client: any = prisma as any;
     const agents = await client.agent.findMany({
@@ -198,6 +193,8 @@ class AgentService {
         email: true,
         phoneNumber: true,
         isActive: true,
+        branchId: true,
+        branch: { select: { name: true } },
       },
     });
     const results = await Promise.all(
@@ -224,6 +221,7 @@ class AgentService {
         return {
           agentName: a.name,
           agentId: a.id,
+          branchName: a.branch?.name || null,
           contactPhone: a.phoneNumber,
           contactEmail: a.email,
           totalTransactions: count,
@@ -470,6 +468,17 @@ class AgentService {
       },
       include: { attachments: true, branch: true },
     });
+
+    // Send welcome email to the agent
+    authService.sendOtp({
+      email: created.email,
+      phoneNumber: created.phoneNumber,
+      purpose: OtpPurpose.AGENT_SET_PASSWORD
+    }).catch(err => {
+      // Log error but don't fail the agent creation
+      console.error(`Failed to send welcome email to agent ${created.email}:`, err);
+    });
+
     return created;
   }
 
@@ -481,11 +490,20 @@ class AgentService {
     }
 
     const where: any = { createdByAgentId: agentId };
+    const search = (filters.search || filters.q || filters.keyword || "").toString().trim();
     if (filters.status) where.status = filters.status;
-    if (filters.dateFrom || filters.dateTo) {
+    const fromDate = (filters.dateFrom || filters.fromDate || "").toString().trim();
+    const toDate = (filters.dateTo || filters.toDate || "").toString().trim();
+    if (fromDate || toDate) {
       where.createdAt = {};
-      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+      if (fromDate) where.createdAt.gte = new Date(fromDate);
+      if (toDate) where.createdAt.lte = new Date(toDate);
+    }
+    if (search) {
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        { type: { contains: search.toUpperCase(), mode: "insensitive" } },
+      ];
     }
 
     const skip = (page - 1) * limit;
@@ -556,11 +574,20 @@ class AgentService {
     }
 
     const where: any = { createdByAgentId: agentId };
+    const search = (filters.search || filters.q || filters.keyword || "").toString().trim();
     if (filters.status) where.status = filters.status;
-    if (filters.dateFrom || filters.dateTo) {
+    const fromDate = (filters.dateFrom || filters.fromDate || "").toString().trim();
+    const toDate = (filters.dateTo || filters.toDate || "").toString().trim();
+    if (fromDate || toDate) {
       where.createdAt = {};
-      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+      if (fromDate) where.createdAt.gte = new Date(fromDate);
+      if (toDate) where.createdAt.lte = new Date(toDate);
+    }
+    if (search) {
+      where.OR = [
+        { referenceNumber: { contains: search, mode: "insensitive" } },
+        { type: { contains: search.toUpperCase(), mode: "insensitive" } },
+      ];
     }
 
     const rows = await client.transaction.findMany({
