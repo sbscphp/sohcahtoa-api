@@ -266,25 +266,11 @@ class CustomerTransactionController {
     try {
       const { state, city, pickupDate, pickupTime } = req.query;
 
-      if (!state || typeof state !== 'string') {
-        return res.status(400).json({
-          success: false,
-          message: 'State parameter is required',
-        });
-      }
-
-      if (!city || typeof city !== 'string') {
-        return res.status(400).json({
-          success: false,
-          message: 'City parameter is required',
-        });
-      }
-
       const terminals = await customerTransactionService.getPickupTerminals({
-        state,
-        city,
-        pickupDate: pickupDate as string,
-        pickupTime: pickupTime as string,
+        state: state as string | undefined,
+        city: city as string | undefined,
+        pickupDate: pickupDate as string | undefined,
+        pickupTime: pickupTime as string | undefined,
       });
 
       return res.json(successResponse({ terminals }));

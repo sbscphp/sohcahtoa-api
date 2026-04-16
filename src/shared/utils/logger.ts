@@ -19,6 +19,17 @@ const colors = {
 
 winston.addColors(colors);
 
+const safeStringify = (obj: unknown): string => {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (_key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return '[Circular]';
+      seen.add(value);
+    }
+    return value;
+  });
+};
+
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.colorize({ all: true }),
@@ -28,7 +39,7 @@ const format = winston.format.combine(
 
     // Add metadata if present
     if (Object.keys(metadata).length > 0) {
-      log += ` ${JSON.stringify(metadata)}`;
+      log += ` ${safeStringify(metadata)}`;
     }
 
     return log;

@@ -184,4 +184,48 @@ AgentDashboardRouter.get("/recent-transactions", agentDashboardController.listRe
  */
 AgentDashboardRouter.get("/transactions-by-type", agentDashboardController.getTransactionsByType);
 
+/**
+ * @swagger
+ * /api/agent/dashboard/cash-stats:
+ *   get:
+ *     summary: Cash received and disbursed (agent-created transactions)
+ *     description: |
+ *       Totals in one currency for settlements linked to transactions `createdByAgentId` = this agent.
+ *       **Customer:** `CASH_DEPOSIT` confirmed by the agent user (branch cash), or `BANK_TRANSFER` with
+ *       `confirmedBy` SYSTEM (Providus / virtual-account deposit).
+ *       **Admin:** `CONFIRMED` settlements where `confirmedBy` is an AdminUser id.
+ *       **Disbursed:** `COMPLETED` `outbound_settlements` with `initiatedBy` = this agent profile id,
+ *       filtered by `updatedAt` in the period.
+ *       **last_month** = previous full calendar month (UTC). Other periods roll back from now (90 / 180 / 365 days).
+ *     tags: [Agent Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: period
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - last_month
+ *             - last_3_months
+ *             - last_6_months
+ *             - last_year
+ *       - in: query
+ *         name: currency
+ *         required: false
+ *         schema:
+ *           type: string
+ *           default: NGN
+ *         description: Reporting currency (matches settlement/outbound `currency` column)
+ *     responses:
+ *       200:
+ *         description: Aggregated cash stats
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentDashboardRouter.get("/cash-stats", agentDashboardController.getCashStats);
+
 export default AgentDashboardRouter;

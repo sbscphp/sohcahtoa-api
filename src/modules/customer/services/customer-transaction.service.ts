@@ -75,8 +75,10 @@ interface PickupPoint {
   id: string;
   name: string;
   location: string;
+  city: string;
   address: string;
-  branch: string;
+  phoneNumber: string;
+  email: string;
 }
 
 export class CustomerTransactionService {
@@ -839,33 +841,30 @@ export class CustomerTransactionService {
   async getPickupPoints(): Promise<PickupPoint[]> {
     logger.info(`[getPickupPoints] Fetching available pickup points`);
 
-    // Get all active branches as pickup points
-    const branches = await prisma.branch.findMany({
-      where: {
-        isActive: true,
-        status: 'Active',
-      },
+    const stations = await prisma.pickupStation.findMany({
+      where: { isActive: true },
       select: {
         id: true,
         name: true,
         state: true,
+        region: true,
         address: true,
-        branchManager: true,
+        phoneNumber: true,
+        email: true,
       },
       orderBy: { name: 'asc' },
     });
 
-    logger.info(`[getPickupPoints] Found ${branches.length} active pickup points`, {
-      branchCount: branches.length,
-    });
+    logger.info(`[getPickupPoints] Found ${stations.length} active pickup points`);
 
-    // Transform branches to PickupPoint format
-    return branches.map((branch) => ({
-      id: branch.id,
-      name: branch.name,
-      location: branch.state,
-      address: branch.address,
-      branch: branch.branchManager,
+    return stations.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      location: s.state,
+      city: s.region,
+      address: s.address,
+      phoneNumber: s.phoneNumber,
+      email: s.email,
     }));
   }
 
@@ -1215,6 +1214,9 @@ export class CustomerTransactionService {
         steps: {
           orderBy: { createdAt: 'asc' },
         },
+        history: {
+          orderBy: { createdAt: 'asc' },
+        },
         cashPickup: true,
         prepaidCard: true,
       },
@@ -1263,6 +1265,31 @@ export class CustomerTransactionService {
     // Get transaction amount for documents > $10k check
     const transactionAmount = transaction.foreignAmount ? Number(transaction.foreignAmount) : null;
 
+    const historyRows = transaction.history ?? [];
+    const performerIds = [
+      ...new Set(
+        historyRows.map((h) => h.performedBy).filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const admins =
+      performerIds.length > 0
+        ? await prisma.adminUser.findMany({
+            where: { id: { in: performerIds } },
+            select: { id: true, fullName: true },
+          })
+        : [];
+    const adminNameById = Object.fromEntries(admins.map((a) => [a.id, a.fullName]));
+
+    const comments = historyRows
+      .filter((h) => Boolean(h.notes))
+      .map((h) => ({
+        id: h.id,
+        action: h.action,
+        message: h.notes,
+        addedBy: h.performedBy ? adminNameById[h.performedBy] ?? 'Admin' : 'Admin',
+        createdAt: h.createdAt,
+      }));
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -1305,10 +1332,41 @@ export class CustomerTransactionService {
       ),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
-      steps: transaction.steps,
+      steps: this.sanitizeStepsForResponse(transaction.steps),
+      comments,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
     };
+  }
+
+  private sanitizeStepDataForResponse(data: unknown): unknown {
+    if (data === null || data === undefined) return data;
+    if (typeof data !== 'object' || Array.isArray(data)) return data;
+    const o = { ...(data as Record<string, unknown>) };
+    for (const key of ['bvn', 'nin'] as const) {
+      const v = o[key];
+      if (typeof v === 'string' && v.length > 4 && !v.startsWith('***')) {
+        o[key] = `***${v.slice(-4)}`;
+      }
+    }
+    return o;
+  }
+
+  private sanitizeStepsForResponse(
+    steps: Array<{
+      id: string;
+      transactionId: string;
+      step: string;
+      status: string;
+      data: unknown;
+      completedAt: Date | null;
+      createdAt: Date;
+    }>
+  ) {
+    return steps.map((s) => ({
+      ...s,
+      data: this.sanitizeStepDataForResponse(s.data),
+    }));
   }
 
   /**
@@ -1439,170 +1497,81 @@ export class CustomerTransactionService {
   async getPickupStates(): Promise<string[]> {
     logger.info(`[getPickupStates] Fetching available pickup states`);
 
-    const states = await prisma.branch.findMany({
-      where: {
-        isActive: true,
-        status: 'APPROVED',
-      },
-      select: {
-        state: true,
-      },
+    const stations = await prisma.pickupStation.findMany({
+      where: { isActive: true },
+      select: { state: true },
       distinct: ['state'],
-      orderBy: {
-        state: 'asc',
-      },
+      orderBy: { state: 'asc' },
     });
 
-    logger.info(`[getPickupStates] Found ${states.length} states with pickup terminals`, {
-      stateCount: states.length,
-      states: states.map((s) => s.state),
-    });
+    logger.info(`[getPickupStates] Found ${stations.length} states with pickup stations`);
 
-    return states.map((s) => s.state);
+    return stations.map((s: any) => s.state);
   }
 
   /**
-   * Get cities in a specific state where pickup terminals are located
+   * Get cities (regions) in a specific state where pickup stations are located
    */
   async getPickupCities(state: string): Promise<string[]> {
     logger.info(`[getPickupCities] Fetching cities in state: ${state}`, { state });
 
-    // Since we don't have a separate city field, we'll extract from address
-    // For now, return unique branch names as "cities" or use address parsing
-    const branches = await prisma.branch.findMany({
-      where: {
-        state,
-        isActive: true,
-        status: 'APPROVED',
-      },
-      select: {
-        address: true,
-        name: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
+    const stations = await prisma.pickupStation.findMany({
+      where: { state: { equals: state, mode: 'insensitive' }, isActive: true },
+      select: { region: true },
+      distinct: ['region'],
+      orderBy: { region: 'asc' },
     });
 
-    logger.debug(`[getPickupCities] Found ${branches.length} branches in state`, {
-      state,
-      branchCount: branches.length,
-    });
-
-    // Extract unique cities from addresses (assuming format like "City, State")
-    // This is a simplified approach - adjust based on your address format
-    const cities = new Set<string>();
-    branches.forEach((branch) => {
-      // Try to extract city from address
-      const addressParts = branch.address.split(',');
-      if (addressParts.length > 0) {
-        const city = addressParts[0].trim();
-        if (city) cities.add(city);
-      }
-    });
-
-    const cityList = Array.from(cities).sort();
-    logger.info(`[getPickupCities] Found ${cityList.length} unique cities`, {
-      state,
-      cityCount: cityList.length,
-      cities: cityList,
-    });
+    const cityList = stations.map((s: any) => s.region);
+    logger.info(`[getPickupCities] Found ${cityList.length} unique cities`, { state, cityCount: cityList.length });
 
     return cityList;
   }
 
   /**
-   * Get available pickup terminals filtered by state, city, date, and time
+   * Get available pickup terminals filtered by state and city (region)
    */
   async getPickupTerminals(params: {
-    state: string;
-    city: string;
+    state?: string;
+    city?: string;
     pickupDate?: string;
     pickupTime?: string;
   }): Promise<any[]> {
     const { state, city, pickupDate, pickupTime } = params;
 
-    logger.info(`[getPickupTerminals] Fetching pickup terminals`, {
-      state,
-      city,
-      pickupDate,
-      pickupTime,
-    });
+    logger.info(`[getPickupTerminals] Fetching pickup terminals`, { state, city, pickupDate, pickupTime });
 
-    // Get all branches in the specified state and city
-    const branches = await prisma.branch.findMany({
-      where: {
-        state,
-        isActive: true,
-        status: 'APPROVED',
-        address: {
-          contains: city,
-          mode: 'insensitive',
-        },
-      },
+    const where: any = { isActive: true };
+    if (state) where.state = { equals: state, mode: 'insensitive' };
+    if (city) where.region = { equals: city, mode: 'insensitive' };
+
+    const stations = await prisma.pickupStation.findMany({
+      where,
       select: {
         id: true,
         name: true,
         address: true,
         state: true,
+        region: true,
         email: true,
         phoneNumber: true,
-        branchManager: true,
       },
-      orderBy: {
-        name: 'asc',
-      },
+      orderBy: { name: 'asc' },
     });
 
-    logger.debug(`[getPickupTerminals] Found ${branches.length} branches`, {
-      state,
-      city,
-      branchCount: branches.length,
-    });
+    logger.info(`[getPickupTerminals] Found ${stations.length} stations`, { state, city });
 
     // If date and time are provided, filter by availability
     if (pickupDate && pickupTime) {
-      logger.info(`[getPickupTerminals] Filtering by availability`, {
-        pickupDate,
-        pickupTime,
-      });
-
       const availableTerminals = [];
-
-      for (const branch of branches) {
-        const isAvailable = await this.checkTerminalAvailability(branch.id, pickupDate, pickupTime);
-
-        if (isAvailable) {
-          availableTerminals.push({
-            ...branch,
-            available: true,
-          });
-        }
+      for (const station of stations) {
+        const isAvailable = await this.checkTerminalAvailability(station.id, pickupDate, pickupTime);
+        if (isAvailable) availableTerminals.push({ ...station, city: station.region, available: true });
       }
-
-      logger.info(`[getPickupTerminals] Found ${availableTerminals.length} available terminals`, {
-        state,
-        city,
-        pickupDate,
-        pickupTime,
-        availableCount: availableTerminals.length,
-        totalCount: branches.length,
-      });
-
       return availableTerminals;
     }
 
-    logger.info(`[getPickupTerminals] Returning all terminals without availability check`, {
-      state,
-      city,
-      terminalCount: branches.length,
-    });
-
-    // Return all terminals with availability unknown
-    return branches.map((branch) => ({
-      ...branch,
-      available: true,
-    }));
+    return stations.map((s: any) => ({ ...s, city: s.region, available: true }));
   }
 
   /**
@@ -1619,19 +1588,13 @@ export class CustomerTransactionService {
       pickupTime,
     });
 
-    // Check if the branch exists and is active
-    const branch = await prisma.branch.findFirst({
-      where: {
-        id: terminalId,
-        isActive: true,
-        status: 'APPROVED',
-      },
+    // Check if the pickup station exists and is active
+    const station = await prisma.pickupStation.findFirst({
+      where: { id: terminalId, isActive: true },
     });
 
-    if (!branch) {
-      logger.warn(`[checkTerminalAvailability] Branch not found or inactive`, {
-        terminalId,
-      });
+    if (!station) {
+      logger.warn(`[checkTerminalAvailability] Pickup station not found or inactive`, { terminalId });
       return false;
     }
 
