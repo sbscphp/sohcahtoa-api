@@ -1,5 +1,5 @@
 import { getDatabase } from "../../../config/database";
-import { createLogger, NotFoundError, ValidationError } from "../../../shared/utils";
+import { createLogger, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import {
   CreateFranchiseDto,
@@ -91,7 +91,16 @@ class OutletService {
     const limit = parseInt((query.limit || "20") as string);
     const skip = (page - 1) * limit;
     const where: any = {};
-    if (query.search) where.OR = [{ name: { contains: query.search, mode: "insensitive" } }, { address: { contains: query.search, mode: "insensitive" } }];
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { contactPersonName: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
+      ];
+    }
     if (query.status) where.status = query.status;
 
     const [rows, total] = await Promise.all([
@@ -128,6 +137,9 @@ class OutletService {
     if (!franchiseName || !state || !address || !contactPersonName || !email || !phoneNumber) {
       throw new ValidationError("franchiseName, state, address, contactPersonName, email, phoneNumber are required");
     }
+    if (!validateEmail(email)) {
+      throw new ValidationError("Invalid email format");
+    }
     const created = await db.franchise.create({
       data: {
         name: franchiseName,
@@ -162,7 +174,13 @@ class OutletService {
     if (typeof payload.contactPersonName === "string" && payload.contactPersonName.trim()) {
       patch.contactPersonName = payload.contactPersonName.trim();
     }
-    if (typeof payload.email === "string" && payload.email.trim()) patch.email = payload.email.trim();
+    if (typeof payload.email === "string" && payload.email.trim()) {
+      const email = payload.email.trim();
+      if (!validateEmail(email)) {
+        throw new ValidationError("Invalid email format");
+      }
+      patch.email = email;
+    }
     if (typeof payload.phoneNumber === "string" && payload.phoneNumber.trim()) patch.phoneNumber = payload.phoneNumber.trim();
     if (typeof payload.altPhoneNumber === "string") {
       patch.altPhoneNumber = payload.altPhoneNumber.trim() || null;
@@ -332,7 +350,15 @@ class OutletService {
     const limit = parseInt((query.limit || "20") as string);
     const skip = (page - 1) * limit;
     const where: any = {};
-    if (query.search) where.OR = [{ name: { contains: query.search, mode: "insensitive" } }, { address: { contains: query.search, mode: "insensitive" } }];
+    const search = (query.search || query.q || "").toString().trim();
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { address: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { branchManager: { contains: search, mode: "insensitive" } },
+      ];
+    }
     if (query.status) where.status = query.status;
 
     const [rows, total] = await Promise.all([
@@ -382,11 +408,13 @@ class OutletService {
     }
     const skip = (page - 1) * limit;
     const where: any = { franchiseId };
-    const q = ((query?.search as string) || "").toString().trim();
+    const q = (query?.search || query?.q || "").toString().trim();
     if (q.length > 0) {
       where.OR = [
         { name: { contains: q, mode: "insensitive" } },
         { address: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
     if (query?.status) where.status = query.status;
@@ -417,11 +445,13 @@ class OutletService {
       throw new NotFoundError("Franchise not found");
     }
     const where: any = { franchiseId };
-    const q = ((query?.search as string) || "").toString().trim();
+    const q = (query?.search || query?.q || "").toString().trim();
     if (q.length > 0) {
       where.OR = [
         { name: { contains: q, mode: "insensitive" } },
         { address: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
     if (query?.status) where.status = query.status;
@@ -453,11 +483,13 @@ class OutletService {
     }
 
     const where: any = { franchiseId };
-    const q = ((query?.search as string) || "").toString().trim();
+    const q = (query?.search || query?.q || "").toString().trim();
     if (q.length > 0) {
       where.OR = [
         { name: { contains: q, mode: "insensitive" } },
         { address: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
     if (query?.status) where.status = query.status;
@@ -910,6 +942,15 @@ class OutletService {
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {
       throw new ValidationError("branchName, state, address, branchManager, email, phoneNumber are required");
     }
+    if (!validateEmail(email)) {
+      throw new ValidationError("Invalid manager email format");
+    }
+    if (branchEmail && !validateEmail(branchEmail)) {
+      throw new ValidationError("Invalid branch email format");
+    }
+    if (agentEmail && !validateEmail(agentEmail)) {
+      throw new ValidationError("Invalid agent email format");
+    }
     const existingByName = await db.branch.findFirst({
       where: { name: { equals: branchName, mode: "insensitive" } },
       select: { id: true },
@@ -1037,10 +1078,22 @@ class OutletService {
     if (typeof payload.state === "string" && payload.state.trim()) patch.state = payload.state.trim();
     if (typeof payload.address === "string" && payload.address.trim()) patch.address = payload.address.trim();
     if (typeof payload.branchManager === "string" && payload.branchManager.trim()) patch.branchManager = payload.branchManager.trim();
-    if (typeof payload.email === "string" && payload.email.trim()) patch.email = payload.email.trim();
+    if (typeof payload.email === "string" && payload.email.trim()) {
+      const email = payload.email.trim();
+      if (!validateEmail(email)) {
+        throw new ValidationError("Invalid manager email format");
+      }
+      patch.email = email;
+    }
     if (typeof payload.phoneNumber === "string" && payload.phoneNumber.trim()) patch.phoneNumber = payload.phoneNumber.trim();
     if (typeof payload.agentName === "string") patch.agentName = payload.agentName.trim() || null;
-    if (typeof payload.agentEmail === "string") patch.agentEmail = payload.agentEmail.trim() || null;
+    if (typeof payload.agentEmail === "string") {
+      const agentEmail = payload.agentEmail.trim();
+      if (agentEmail && !validateEmail(agentEmail)) {
+        throw new ValidationError("Invalid agent email format");
+      }
+      patch.agentEmail = agentEmail || null;
+    }
     if (typeof payload.agentPhoneNumber === "string") patch.agentPhoneNumber = payload.agentPhoneNumber.trim() || null;
 
     if (typeof payload.franchiseId === "string" && payload.franchiseId.trim()) {
@@ -1085,11 +1138,13 @@ class OutletService {
     const skip = (page - 1) * limit;
     const where: any = {};
 
-    const search = (query.search || "").toString().trim();
+    const search = (query.search || query.q || "").toString().trim();
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { address: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { phoneNumber: { contains: search, mode: "insensitive" } },
         { region: { contains: search, mode: "insensitive" } },
         { state: { contains: search, mode: "insensitive" } },
       ];
@@ -1166,6 +1221,9 @@ class OutletService {
     const { stationName, stationEmail, phoneNumber, state, region, physicalAddress, status } = payload || ({} as any);
     if (!stationName || !stationEmail || !phoneNumber || !state || !region || !physicalAddress) {
       throw new ValidationError("stationName, stationEmail, phoneNumber, state, region, physicalAddress are required");
+    }
+    if (!validateEmail(stationEmail)) {
+      throw new ValidationError("Invalid station email format");
     }
 
     const existingByName = await db.pickupStation.findFirst({
@@ -1550,6 +1608,9 @@ class OutletService {
 
     const stationEmail = typeof payload.stationEmail === "string" ? payload.stationEmail.trim() : "";
     if (stationEmail && stationEmail.toLowerCase() !== (station.email || "").toLowerCase()) {
+      if (!validateEmail(stationEmail)) {
+        throw new ValidationError("Invalid station email format");
+      }
       const existingByEmail = await db.pickupStation.findFirst({
         where: { email: { equals: stationEmail, mode: "insensitive" }, NOT: { id } },
         select: { id: true },

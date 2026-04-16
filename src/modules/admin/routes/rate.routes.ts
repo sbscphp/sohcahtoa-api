@@ -60,7 +60,7 @@ RateRouter.get(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [all, active, schedule]
+ *           enum: [all, active, scheduled, expired, deactivated]
  *         description: Filter by rate status (default is all)
  *       - in: query
  *         name: fromCurrency

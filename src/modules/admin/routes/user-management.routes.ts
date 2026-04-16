@@ -52,6 +52,36 @@ UserManagementRouter.get(
  *         schema:
  *           type: integer
  *           default: 10
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Keyword search across name, email and phone number
+ *       - in: query
+ *         name: fullName
+ *         schema:
+ *           type: string
+ *         description: Search by full name
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Search by email
+ *       - in: query
+ *         name: department
+ *         schema:
+ *           type: string
+ *         description: Filter by department name or ID
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *         description: Filter by role name or ID
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: string
+ *         description: Filter by status (Active, Deactivated, or generic boolean true/false)
  *     responses:
  *       200:
  *         description: Users retrieved successfully
@@ -302,6 +332,8 @@ UserManagementRouter.get(
  *   post:
  *     summary: Create a new admin user
  *     tags: [admin-user-management]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -581,7 +613,8 @@ UserManagementRouter.post(
  *       - in: query
  *         name: isActive
  *         schema:
- *           type: boolean
+ *           type: string
+ *         description: Filter by status (Active, Deactivated, or generic boolean true/false)
  *     responses:
  *       200:
  *         description: Roles retrieved successfully
@@ -966,7 +999,8 @@ UserManagementRouter.post(
  *       - in: query
  *         name: isActive
  *         schema:
- *           type: boolean
+ *           type: string
+ *         description: Filter by status (Active, Deactivated, or generic boolean true/false)
  *     responses:
  *       200:
  *         description: Departments retrieved successfully

@@ -33,6 +33,14 @@ export const errorHandler = (logger: Logger) => {
       );
     }
 
+    // Handle JSON syntax errors
+    if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
+      logger.error('JSON Syntax error:', err);
+      return res.status(400).json(
+        errorResponse(ErrorCode.VALIDATION_ERROR, 'Invalid JSON payload')
+      );
+    }
+
     // Default error
     logger.error('Unhandled error:', err);
     return res.status(500).json(

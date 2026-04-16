@@ -1,3 +1,4 @@
+import PDFDocument from "pdfkit";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import { buildCsv } from "../../../shared/utils/csv";
@@ -55,148 +56,315 @@ class ReportService {
     return client.reportJob.findUnique({ where: { id } });
   }
 
-  private escapePdfString(input: string): string {
-    return (input || "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  }
+  private async generateProfessionalPdf(params: {
+    title: string;
+    columns: { header: string; width: number }[];
+    rows: string[][];
+    dateRange: string;
+  }): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      const chunks: Buffer[] = [];
 
-  private buildSimplePdf(lines: string[]): Buffer {
-    const pageWidth = 612;
-    const pageHeight = 792;
-    const marginLeft = 48;
-    const topY = 760;
-    const lineHeight = 14;
-    const maxLines = Math.floor((topY - 48) / lineHeight);
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
 
-    const safeLines = (lines || []).slice(0, Math.max(0, maxLines));
-    const contentOps: string[] = [];
-    if (safeLines.length > 0) {
-      contentOps.push(`${marginLeft} ${topY} Td (${this.escapePdfString(safeLines[0])}) Tj`);
-      for (let i = 1; i < safeLines.length; i++) {
-        contentOps.push(`0 -${lineHeight} Td (${this.escapePdfString(safeLines[i])}) Tj`);
+      // Header
+      doc.fillColor("#1a1a1a").fontSize(20).text(params.title, { align: "left" });
+      doc.fontSize(10).fillColor("#666").text(`Date Range: ${params.dateRange}`, { align: "left" });
+      doc.moveDown();
+
+      // Table Header Background
+      const tableTop = 130;
+      doc.rect(50, tableTop, 500, 20).fill("#f3f4f6");
+
+      // Table Headers
+      doc.fillColor("#374151").fontSize(9).font("Helvetica-Bold");
+      let currentX = 50;
+      params.columns.forEach((col) => {
+        doc.text(col.header, currentX + 5, tableTop + 6, { width: col.width - 10 });
+        currentX += col.width;
+      });
+
+      // Rows
+      doc.font("Helvetica").fillColor("#1f2937");
+      let currentY = tableTop + 20;
+
+      params.rows.forEach((row, i) => {
+        // Paging check
+        if (currentY > 750) {
+          doc.addPage();
+          currentY = 50;
+        }
+
+        // Color row bg for zebra striping
+        if (i % 2 === 1) {
+          doc.rect(50, currentY, 500, 15).fill("#f9fafb");
+        }
+
+        doc.fillColor("#1f2937");
+        let cellX = 50;
+        row.forEach((cell, cellIndex) => {
+          doc.text(cell || "", cellX + 5, currentY + 4, {
+            width: params.columns[cellIndex].width - 10,
+            ellipsis: true,
+          });
+          cellX += params.columns[cellIndex].width;
+        });
+
+        currentY += 15;
+      });
+
+      // Footer
+      const pages = (doc as any).bufferedPageRange();
+      for (let i = 0; i < pages.count; i++) {
+        doc.switchToPage(i);
+        doc
+          .fontSize(8)
+          .fillColor("#9ca3af")
+          .text(`Sohcahtoa Admin Management System - Page ${i + 1} of ${pages.count}`, 50, 780, {
+            align: "center",
+            width: 500,
+          });
       }
-    }
 
-    const stream = `BT\n/F1 10 Tf\n${contentOps.join("\n")}\nET\n`;
-
-    const objects: string[] = [];
-    objects.push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-    objects.push("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-    objects.push(
-      `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n`
-    );
-    objects.push(`4 0 obj\n<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}endstream\nendobj\n`);
-    objects.push("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
-
-    let pdf = "%PDF-1.4\n";
-    const offsets: number[] = [0];
-    for (const obj of objects) {
-      offsets.push(Buffer.byteLength(pdf, "utf8"));
-      pdf += obj;
-    }
-
-    const xrefStart = Buffer.byteLength(pdf, "utf8");
-    pdf += "xref\n0 6\n";
-    pdf += "0000000000 65535 f \n";
-    for (let i = 1; i <= 5; i++) {
-      const off = offsets[i];
-      pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
-    }
-    pdf += "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n";
-    pdf += `${xrefStart}\n%%EOF\n`;
-
-    return Buffer.from(pdf, "utf8");
+      doc.end();
+    });
   }
 
   async buildGeneratedReport(params: { module: string; startDate: Date; endDate: Date }) {
-    const where: any = {
-      performedAt: { gte: params.startDate, lte: params.endDate },
-    };
-
     const moduleKey = (params.module || "").toString().toUpperCase();
-    if (moduleKey === "INCIDENT") {
-      where.resourceType = "INCIDENCE";
-    } else if (moduleKey === "FRANCHISE") {
-      where.resourceType = "OUTLET";
-      where.actionType = { startsWith: "FRANCHISE_" };
-    } else if (moduleKey === "OUTLET") {
-      where.resourceType = "OUTLET";
-    } else if (moduleKey === "BRANCH") {
-      where.resourceType = "BRANCH";
-    } else if (moduleKey === "AGENT") {
-      where.resourceType = "AGENT";
-    } else if (moduleKey === "RATE") {
-      where.resourceType = "RATE";
-    } else if (moduleKey === "TRANSACTION") {
-      where.resourceType = "TRANSACTION";
-    } else if (moduleKey === "WORKFLOW") {
-      where.resourceType = "WORKFLOW";
-    } else {
-      where.resourceType = moduleKey;
+    const dateRange = { gte: params.startDate, lte: params.endDate };
+
+    let data: any[] = [];
+    let columns: { header: string; select: (r: any) => any }[] = [];
+    let pdfColumns: { header: string; width: number }[] = [];
+    let pdfRows: string[][] = [];
+
+    switch (moduleKey) {
+      case "TRANSACTION": {
+        const rows = await (prisma as any).transaction.findMany({
+          where: { createdAt: dateRange },
+          orderBy: { createdAt: "desc" },
+          include: { user: { include: { profile: true } } },
+        });
+        data = rows;
+        columns = [
+          { header: "Date", select: (r) => r.createdAt },
+          { header: "Reference", select: (r) => r.referenceNumber },
+          { header: "Customer", select: (r) => r.user?.profile ? `${r.user.profile.firstName} ${r.user.profile.lastName}` : r.user?.email },
+          { header: "Type", select: (r) => r.type },
+          { header: "Amount", select: (r) => r.nairaEquivalent || r.foreignAmount },
+          { header: "Status", select: (r) => r.status },
+        ];
+        pdfColumns = [
+          { header: "Date", width: 100 },
+          { header: "Ref", width: 90 },
+          { header: "Customer", width: 120 },
+          { header: "Type", width: 70 },
+          { header: "Amount", width: 60 },
+          { header: "Status", width: 60 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
+          r.referenceNumber || "",
+          (r.user?.profile ? `${r.user.profile.firstName} ${r.user.profile.lastName}` : r.user?.email || "").slice(0, 20),
+          r.type || "",
+          r.nairaEquivalent?.toString() || r.foreignAmount?.toString() || "0",
+          r.status || "",
+        ]);
+        break;
+      }
+
+      case "AGENT": {
+        const rows = await (prisma as any).agent.findMany({
+          where: { createdAt: dateRange },
+          orderBy: { name: "asc" },
+          include: { branch: true },
+        });
+        data = rows;
+        columns = [
+          { header: "Name", select: (r) => r.name },
+          { header: "Email", select: (r) => r.email },
+          { header: "Phone", select: (r) => r.phoneNumber },
+          { header: "Branch", select: (r) => r.branch?.name },
+          { header: "Status", select: (r) => (r.isActive ? "Active" : "Inactive") },
+          { header: "Created At", select: (r) => r.createdAt },
+        ];
+        pdfColumns = [
+          { header: "Name", width: 120 },
+          { header: "Email", width: 130 },
+          { header: "Phone", width: 90 },
+          { header: "Branch", width: 100 },
+          { header: "Status", width: 60 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.name || "",
+          r.email || "",
+          r.phoneNumber || "",
+          r.branch?.name || "N/A",
+          r.isActive ? "Active" : "Inactive",
+        ]);
+        break;
+      }
+
+      case "RATE": {
+        const rows = await (prisma as any).exchangeRate.findMany({
+          where: { createdAt: dateRange },
+          orderBy: { updatedAt: "desc" },
+        });
+        data = rows;
+        columns = [
+          { header: "From", select: (r) => r.fromCurrency },
+          { header: "To", select: (r) => r.toCurrency },
+          { header: "Rate", select: (r) => r.rate },
+          { header: "Buy", select: (r) => r.buyRate },
+          { header: "Sell", select: (r) => r.sellRate },
+          { header: "Valid From", select: (r) => r.validFrom },
+          { header: "Valid Until", select: (r) => r.validUntil },
+        ];
+        pdfColumns = [
+          { header: "From", width: 70 },
+          { header: "To", width: 70 },
+          { header: "Rate", width: 80 },
+          { header: "Buy", width: 80 },
+          { header: "Sell", width: 80 },
+          { header: "Updated", width: 120 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.fromCurrency || "",
+          r.toCurrency || "",
+          r.rate?.toString() || "",
+          r.buyRate?.toString() || "",
+          r.sellRate?.toString() || "",
+          r.updatedAt ? new Date(r.updatedAt).toISOString().slice(0, 16).replace("T", " ") : "",
+        ]);
+        break;
+      }
+
+      case "INCIDENT":
+      case "TICKET": {
+        const rows = await (prisma as any).ticket.findMany({
+          where: { createdAt: dateRange },
+          orderBy: { createdAt: "desc" },
+          include: { customer: { include: { profile: true } }, assignedAgent: true },
+        });
+        data = rows;
+        columns = [
+          { header: "Ref", select: (r) => r.reference },
+          { header: "Customer", select: (r) => r.customer?.profile ? `${r.customer.profile.firstName} ${r.customer.profile.lastName}` : r.customer?.email },
+          { header: "Type", select: (r) => r.caseType },
+          { header: "Priority", select: (r) => r.priority },
+          { header: "Status", select: (r) => r.status },
+          { header: "Assigned To", select: (r) => r.assignedAgent?.fullName },
+        ];
+        pdfColumns = [
+          { header: "Ref", width: 90 },
+          { header: "Customer", width: 120 },
+          { header: "Type", width: 90 },
+          { header: "Prio", width: 60 },
+          { header: "Status", width: 60 },
+          { header: "Assignee", width: 80 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.reference || "",
+          (r.customer?.profile ? `${r.customer.profile.firstName} ${r.customer.profile.lastName}` : r.customer?.email || "").slice(0, 20),
+          r.caseType || "",
+          r.priority || "",
+          r.status || "",
+          (r.assignedAgent?.fullName || "Unassigned").slice(0, 15),
+        ]);
+        break;
+      }
+
+      case "OUTLET":
+      case "BRANCH": {
+        const rows = await (prisma as any).branch.findMany({
+          where: { createdAt: dateRange },
+          orderBy: { state: "asc" },
+          include: { franchise: true },
+        });
+        data = rows;
+        columns = [
+          { header: "Branch Name", select: (r) => r.name },
+          { header: "Email", select: (r) => r.branchEmail },
+          { header: "State", select: (r) => r.state },
+          { header: "Manager", select: (r) => r.branchManager },
+          { header: "Franchise", select: (r) => r.franchise?.name },
+          { header: "Status", select: (r) => r.status },
+        ];
+        pdfColumns = [
+          { header: "Name", width: 120 },
+          { header: "State", width: 80 },
+          { header: "Manager", width: 100 },
+          { header: "Franchise", width: 100 },
+          { header: "Status", width: 100 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.name || "",
+          r.state || "",
+          r.branchManager || "",
+          r.franchise?.name || "Independent",
+          r.status || "",
+        ]);
+        break;
+      }
+
+      default: {
+        // Fallback to AdminActions if no specific module matcher is found
+        const rows = await (prisma as any).adminAction.findMany({
+          where: { performedAt: dateRange, resourceType: moduleKey },
+          orderBy: { performedAt: "desc" },
+          include: { admin: true },
+        });
+        data = rows;
+        columns = [
+          { header: "Time", select: (r) => r.performedAt },
+          { header: "Admin", select: (r) => r.admin?.fullName },
+          { header: "Action", select: (r) => r.actionLabel },
+          { header: "Status", select: (r) => r.status },
+          { header: "Resource ID", select: (r) => r.resourceId },
+        ];
+        pdfColumns = [
+          { header: "Time", width: 120 },
+          { header: "Admin", width: 100 },
+          { header: "Action", width: 140 },
+          { header: "Status", width: 60 },
+          { header: "ID", width: 80 },
+        ];
+        pdfRows = rows.map((r: any) => [
+          r.performedAt ? new Date(r.performedAt).toISOString().slice(0, 19).replace("T", " ") : "",
+          (r.admin?.fullName || "").slice(0, 15),
+          (r.actionLabel || "").slice(0, 30),
+          r.status || "",
+          (r.resourceId || "").slice(0, 15),
+        ]);
+      }
     }
-
-    const rows = await (prisma as any).adminAction.findMany({
-      where,
-      orderBy: { performedAt: "desc" },
-      take: 10_000,
-      select: {
-        performedAt: true,
-        actionType: true,
-        actionLabel: true,
-        resourceType: true,
-        resourceId: true,
-        status: true,
-        reason: true,
-        admin: { select: { fullName: true, email: true } },
-      },
-    });
-
-    const data = (rows || []).map((r: any) => ({
-      performedAt: r.performedAt,
-      adminName: r.admin?.fullName || r.admin?.email || "",
-      actionType: r.actionType || "",
-      actionLabel: r.actionLabel || "",
-      resourceType: r.resourceType || "",
-      resourceId: r.resourceId || "",
-      status: r.status || "",
-      reason: r.reason || "",
-    }));
-
-    const columns = [
-      { header: "Performed At", select: (r: any) => r.performedAt },
-      { header: "Admin", select: (r: any) => r.adminName },
-      { header: "Action Type", select: (r: any) => r.actionType },
-      { header: "Action Label", select: (r: any) => r.actionLabel },
-      { header: "Resource Type", select: (r: any) => r.resourceType },
-      { header: "Resource ID", select: (r: any) => r.resourceId },
-      { header: "Status", select: (r: any) => r.status },
-      { header: "Reason", select: (r: any) => r.reason },
-    ];
 
     const filenameBase = `${moduleKey.toLowerCase()}-${params.startDate.toISOString().slice(0, 10)}-${params.endDate.toISOString().slice(0, 10)}`;
 
     const csv = buildCsv(columns as any, data as any);
 
-    const pdfLines = [
-      `${moduleKey} report`,
-      `Date range: ${params.startDate.toISOString()} - ${params.endDate.toISOString()}`,
-      "",
-      "Performed At | Admin | Action Label | Status | Resource ID",
-      ...data.map((r: any) => {
-        const ts = r.performedAt ? new Date(r.performedAt).toISOString() : "";
-        const admin = (r.adminName || "").slice(0, 40);
-        const label = (r.actionLabel || "").slice(0, 50);
-        const status = (r.status || "").slice(0, 20);
-        const rid = (r.resourceId || "").slice(0, 36);
-        return `${ts} | ${admin} | ${label} | ${status} | ${rid}`;
-      }),
-    ];
-
-    const pdf = this.buildSimplePdf(pdfLines);
+    const pdf = await this.generateProfessionalPdf({
+      title: `${moduleKey} Data Report`,
+      dateRange: `${params.startDate.toISOString().slice(0, 10)} to ${params.endDate.toISOString().slice(0, 10)}`,
+      columns: pdfColumns,
+      rows: pdfRows,
+    });
 
     return { filenameBase, csv, pdf, rowCount: data.length };
   }
 
-  async generate(data: { module: string; startDate: Date; endDate: Date; format: "CSV" | "PDF"; requestedBy: string; metadata?: any }) {
+  async generate(data: {
+    module: string;
+    startDate: Date;
+    endDate: Date;
+    format: "CSV" | "PDF";
+    requestedBy: string;
+    metadata?: any;
+  }) {
     const client: any = prisma as any;
     const reportName = `${data.module} report`;
     const job = await client.reportJob.create({

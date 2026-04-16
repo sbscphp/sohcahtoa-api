@@ -103,6 +103,8 @@ class AgentController {
       status: req.query.status,
       dateFrom: req.query.dateFrom,
       dateTo: req.query.dateTo,
+      search: req.query.search,
+      q: req.query.q,
     };
     const result = await agentService.transactions(req.params.id, filters, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
@@ -113,6 +115,8 @@ class AgentController {
       status: req.query.status,
       dateFrom: req.query.dateFrom,
       dateTo: req.query.dateTo,
+      search: req.query.search,
+      q: req.query.q,
     };
     const rows = await agentService.exportTransactions(req.params.id, filters);
     streamCsv(
@@ -287,6 +291,7 @@ class AgentController {
       [
         { header: "Agent", select: (r: any) => r.agentName },
         { header: "Agent ID", select: (r: any) => r.agentId },
+        { header: "Branch", select: (r: any) => r.branchName },
         { header: "Contact Phone", select: (r: any) => r.contactPhone },
         { header: "Contact Email", select: (r: any) => r.contactEmail },
         { header: "Total Transactions", select: (r: any) => r.totalTransactions },

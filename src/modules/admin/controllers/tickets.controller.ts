@@ -7,6 +7,7 @@ import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/clo
 import notificationService from "../../notifications/services/notification.service";
 import NotificationTemplates from "../../notifications/templates/notification-templates";
 import { NotificationType, NotificationChannel } from "@prisma/client";
+import { ActionType } from "../../../shared/types/action-type";
 
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -71,9 +72,9 @@ class TicketsController {
       const result = await ticketsService.update(req.params.id, payload, adminId);
       await auditTrailService.logAction({
         adminId,
-        actionType: "INCIDENCE_UPDATE",
+        actionType: ActionType.TICKET_UPDATE,
         actionLabel: "Update ticket",
-        resourceType: "INCIDENCE",
+        resourceType: "TICKET",
         resourceId: req.params.id,
         previousState: result.previous,
         newState: result.updated,
@@ -89,53 +90,55 @@ class TicketsController {
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
-  let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+    let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
 
-  try {
-    if (req.file) {
-      try {
-        uploadedFile = await uploadToCloudinary(req.file.buffer, {
-          folder: 'tickets',
-          resourceType: 'auto',
-          allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],
-          maxFileSize: 2 * 1024 * 1024,
-        });
-      } catch (e: any) {
-        throw new ServiceUnavailableError('Attachment upload failed');
+    try {
+      if (req.file) {
+        try {
+          uploadedFile = await uploadToCloudinary(req.file.buffer, {
+            folder: "tickets",
+            resourceType: "auto",
+            allowedFormats: ["jpg", "jpeg", "png", "pdf"],
+            maxFileSize: 2 * 1024 * 1024,
+          });
+        } catch (e: any) {
+          throw new ServiceUnavailableError("Attachment upload failed");
+        }
       }
-    }
 
-    const payload: CreateTicketPayload = {
-      customer: req.body.customer,
-      caseType: req.body.caseType,
-      priorityLevel: req.body.priorityLevel,
-      description: req.body.description,
-      attachment: uploadedFile
-        ? {
-            url: uploadedFile.secureUrl,
-            format: req.file?.mimetype || '',
-            bytes: uploadedFile.bytes,
-            publicId: uploadedFile.publicId,
-          }
-        : undefined,
-    };
+      const payload: CreateTicketPayload = {
+        customer: req.body.customer,
+        caseType: req.body.caseType,
+        priorityLevel: req.body.priorityLevel ?? req.body.priority,
+        description: req.body.description,
+        attachment: uploadedFile
+          ? {
+              url: uploadedFile.secureUrl,
+              format: req.file?.mimetype || "",
+              bytes: uploadedFile.bytes,
+              publicId: uploadedFile.publicId,
+            }
+          : undefined,
+      };
 
-      const created = await ticketsService.create(payload);
       const adminId = (req as any).user?.userId as string;
+      const created = await ticketsService.create(payload, adminId);
+
       await auditTrailService.logAction({
         adminId,
-        actionType: "INCIDENCE_CREATE",
+        actionType: ActionType.TICKET_CREATE,
         actionLabel: "Create ticket",
-        resourceType: "INCIDENCE",
+        resourceType: "TICKET",
         resourceId: created.id,
         newState: created,
       });
+
       return res.status(201).json(successResponse(created));
     } catch (error) {
       // Prevent orphaned uploads if DB fails
       if (uploadedFile?.publicId) {
         await CloudinaryService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {
-        // Optional: log cleanup failure
+          // Optional: log cleanup failure
         });
       }
 
@@ -149,9 +152,9 @@ class TicketsController {
     const updated = await ticketsService.updateStatus(req.params.id, req.body.status, undefined, adminId);
     await auditTrailService.logAction({
       adminId,
-      actionType: "INCIDENCE_UPDATE",
+      actionType: ActionType.TICKET_STATUS_UPDATE,
       actionLabel: "Update ticket status",
-      resourceType: "INCIDENCE",
+      resourceType: "TICKET",
       resourceId: req.params.id,
       metadata: { status: req.body.status },
     });
@@ -163,15 +166,18 @@ class TicketsController {
     const updated = await ticketsService.assignAgent(req.params.id, adminId);
     await auditTrailService.logAction({
       adminId,
-      actionType: "INCIDENCE_ASSIGN",
+      actionType: ActionType.TICKET_ASSIGN,
       actionLabel: "Assign ticket",
-      resourceType: "INCIDENCE",
+      resourceType: "TICKET",
       resourceId: req.params.id,
       metadata: { assignedAgentId: adminId },
     });
+    const fullTicket = await ticketsService.get(updated.id);
     const template = NotificationTemplates.TICKET_ASSIGNED_ADMIN({
-      ticketReference: (updated as any)?.reference || req.params.id,
-      ticketId: updated.id,
+      ticketReference: fullTicket.reference || req.params.id,
+      ticketId: fullTicket.id,
+      customerName: (fullTicket.customer as any)?.fullName,
+      priority: fullTicket.priority,
     });
     await notificationService.sendNotification({
       userId: adminId,
@@ -183,7 +189,7 @@ class TicketsController {
       data: { actionUrl: template.actionUrl },
       ticketId: updated.id,
     });
-    res.json(successResponse(updated));
+    res.json(successResponse(fullTicket));
   });
 
   assignTo = asyncHandler(async (req: Request, res: Response) => {
@@ -195,15 +201,18 @@ class TicketsController {
     const updated = await ticketsService.assignAgent(req.params.id, assigneeId);
     await auditTrailService.logAction({
       adminId: assignedBy,
-      actionType: "INCIDENCE_ASSIGN",
+      actionType: ActionType.TICKET_ASSIGN,
       actionLabel: "Assign ticket to admin",
-      resourceType: "INCIDENCE",
+      resourceType: "TICKET",
       resourceId: req.params.id,
       metadata: { assignedAgentId: assigneeId, assignedBy },
     });
+    const fullTicket = await ticketsService.get(updated.id);
     const template = NotificationTemplates.TICKET_ASSIGNED_ADMIN({
-      ticketReference: (updated as any)?.reference || req.params.id,
-      ticketId: updated.id,
+      ticketReference: fullTicket.reference || req.params.id,
+      ticketId: fullTicket.id,
+      customerName: (fullTicket.customer as any)?.fullName,
+      priority: fullTicket.priority,
     });
     await notificationService.sendNotification({
       userId: assigneeId,
@@ -215,7 +224,7 @@ class TicketsController {
       data: { actionUrl: template.actionUrl },
       ticketId: updated.id,
     });
-    res.json(successResponse(updated));
+    res.json(successResponse(fullTicket));
   });
 
   comment = asyncHandler(async (req: Request, res: Response) => {
@@ -223,9 +232,9 @@ class TicketsController {
     const comment = await ticketsService.addComment(req.params.id, adminId, req.body.message);
     await auditTrailService.logAction({
       adminId,
-      actionType: "INCIDENCE_COMMENT",
+      actionType: ActionType.TICKET_COMMENT,
       actionLabel: "Comment on ticket",
-      resourceType: "INCIDENCE",
+      resourceType: "TICKET",
       resourceId: req.params.id,
       metadata: { message: req.body.message },
     });
@@ -249,9 +258,11 @@ class TicketsController {
       "tickets.csv",
       [
         { header: "Incident ID", select: (r: any) => r.incidentId },
-        { header: "Customer", select: (r: any) => r.customer },
-        { header: "Date", select: (r: any) => r.date },
-        { header: "Assigned to", select: (r: any) => r.assignedTo },
+        { header: "Date", select: (r: any) => (r.date ? new Date(r.date).toISOString() : "") },
+        { header: "Customer Name", select: (r: any) => r.customerName },
+        { header: "Customer Email", select: (r: any) => r.customerEmail },
+        { header: "Assigned Agent", select: (r: any) => r.assignedAgentName },
+        { header: "Agent Role", select: (r: any) => r.assignedAgentRole },
         { header: "Status", select: (r: any) => r.status },
         { header: "Priority", select: (r: any) => r.priority },
       ],

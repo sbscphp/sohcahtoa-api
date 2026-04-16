@@ -423,14 +423,41 @@ export class AdminTransactionsService {
         .map((u: any) => u.id);
     }
     if (adminIds.length > 0) {
-      const txBrief = await prisma.transaction.findUnique({
+      const txBrief: any = await prisma.transaction.findUnique({
         where: { id: transactionId },
-        select: { id: true, referenceNumber: true, type: true, foreignAmount: true, nairaEquivalent: true },
+        select: {
+          id: true,
+          referenceNumber: true,
+          type: true,
+          foreignAmount: true,
+          nairaEquivalent: true,
+          userId: true,
+        },
       });
-      eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
-        adminIds,
-        transaction: txBrief,
-      });
+
+      if (txBrief) {
+        const user = await prisma.user.findUnique({
+          where: { id: txBrief.userId },
+          select: {
+            profile: {
+              select: { firstName: true, lastName: true },
+            },
+            email: true,
+          },
+        });
+
+        const customerName = user?.profile
+          ? `${user.profile.firstName} ${user.profile.lastName}`.trim()
+          : user?.email;
+
+        eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+          adminIds,
+          transaction: {
+            ...txBrief,
+            customerName,
+          },
+        });
+      }
     }
 
     return { message: "Transaction reviewed successfully" };

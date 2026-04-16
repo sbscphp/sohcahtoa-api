@@ -1,7 +1,7 @@
 import { createLogger } from "../../../shared/utils";
 import { EventType, ServiceName, UserRole } from "../../../shared/types";
 import { PrismaClient, AdminUser, Prisma } from "@prisma/client";
-import { CreateAdminUserDto, CreateRoleDto, UpdateRoleDto, RoleQueryDto, CreateDepartmentDto, DepartmentQueryDto, UpdateDepartmentDto } from "../dto/user-management.dto";
+import { CreateAdminUserDto, CreateRoleDto, UpdateRoleDto, RoleQueryDto, CreateDepartmentDto, DepartmentQueryDto, UpdateDepartmentDto, AdminUserQueryDto } from "../dto/user-management.dto";
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { generateId, DuplicateError, NotFoundError, BadRequestError, paginate, hashPassword, generateSecureOtp } from '../../../shared/utils';
@@ -198,11 +198,60 @@ class UserManagementService {
         }
     };
 
-    getAllUsers = async (page: number = 1, limit: number = 10) => {
+    getAllUsers = async (query: AdminUserQueryDto) => {
         try {
+            const { page = 1, limit = 10, search, fullName, email, role, department, isActive } = query;
+            const where: Prisma.AdminUserWhereInput = {};
+
+            if (search) {
+                where.OR = [
+                    { fullName: { contains: search, mode: "insensitive" } },
+                    { email: { contains: search, mode: "insensitive" } },
+                    { phoneNumber: { contains: search, mode: "insensitive" } },
+                ];
+            }
+
+            if (fullName) {
+                where.fullName = { contains: fullName, mode: "insensitive" };
+            }
+
+            if (email) {
+                where.email = { contains: email, mode: "insensitive" };
+            }
+
+            if (isActive !== undefined && isActive !== null && isActive !== "") {
+                const s = String(isActive).trim().toLowerCase();
+                if (s === "pending") {
+                    where.password = null;
+                    where.isActive = true;
+                } else if (s === "active" || s === "activated" || s === "true" || s === "1") {
+                    where.isActive = true;
+                    where.password = { not: null };
+                } else if (s === "deactivated" || s === "inactive" || s === "false" || s === "0") {
+                    where.isActive = false;
+                }
+            }
+
+            if (role) {
+                where.OR = [
+                    ...(where.OR || []),
+                    { roleId: role },
+                    { role: { name: { equals: role, mode: "insensitive" } } }
+                ];
+            }
+
+            if (department) {
+                where.OR = [
+                    ...(where.OR || []),
+                    { departmentId: department },
+                    { department: { name: { equals: department, mode: "insensitive" } } }
+                ];
+            }
+
             return await paginate(
                 this.prisma.adminUser,
                 {
+                    where,
                     orderBy: { createdAt: 'desc' },
                     include: {
                         role: { select: { name: true } },
@@ -699,11 +748,18 @@ class UserManagementService {
                 where.name = { contains: search, mode: "insensitive" };
             }
 
-            if (isActive !== undefined) {
-                where.isActive =
-                    typeof isActive === "string"
-                        ? isActive === "true"
-                        : Boolean(isActive);
+            if (isActive !== undefined && isActive !== null && isActive !== "") {
+                const parseActiveFilter = (value: any): boolean | undefined => {
+                    const s = String(value).trim().toLowerCase();
+                    if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
+                    if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
+                    return undefined;
+                };
+
+                const parsed = parseActiveFilter(isActive);
+                if (parsed !== undefined) {
+                    where.isActive = parsed;
+                }
             }
 
             const countPermissions = (p: any) => {
@@ -808,6 +864,15 @@ class UserManagementService {
                 });
             }
 
+            let departmentId: string | undefined = undefined;
+            if (sanitized.department) {
+                const department = await this.prisma.department.findFirst({
+                    where: { name: { equals: sanitized.department, mode: "insensitive" }, isActive: true },
+                });
+                if (!department) throw new NotFoundError(`Department '${sanitized.department}' not found`);
+                departmentId = department.id;
+            }
+
             const normalizePermissions = (perms?: string[] | Record<string, Record<string, string[]>>) => {
                 const allowed = new Set(["view", "edit", "create", "update", "delete", "export"]);
                 const sanitize = (value: string): string | null => {
@@ -879,7 +944,19 @@ class UserManagementService {
                 if (hasPermissions && countPermissions(normalized) < 1) {
                     throw new BadRequestError("At least one permission is required");
                 }
-                const { permissions: _permissions, ...roleData } = sanitized ?? {};
+                const { permissions: _permissions, department: _dept, ...rest } = sanitized ?? {};
+                
+                // Whitelist only valid Role model fields for Prisma update
+                const roleData: any = {};
+                const validFields = ["name", "description", "branch", "isActive", "isDefault"];
+                for (const field of validFields) {
+                    if (Object.prototype.hasOwnProperty.call(rest, field)) {
+                        roleData[field] = (rest as any)[field];
+                    }
+                }
+                if (departmentId) {
+                    roleData.departmentId = departmentId;
+                }
 
                 const roleRes = await tx.role.update({
                     where: { id },
@@ -1096,16 +1173,11 @@ class UserManagementService {
                 where.name = { contains: search, mode: "insensitive" };
             }
 
-            if (isActive !== undefined) {
+            if (isActive !== undefined && isActive !== null && isActive !== "") {
                 const parseActiveFilter = (value: any): boolean | undefined => {
-                    if (value === undefined || value === null) return undefined;
-                    if (typeof value === "boolean") return value;
                     const s = String(value).trim().toLowerCase();
-                    if (s === "true" || s === "1") return true;
-                    if (s === "false" || s === "0") return false;
-                    if (s === "active" || s === "activated" || s === "enabled") return true;
-                    if (s === "deactivated" || s === "dectivated" || s === "inactive" || s === "disabled") return false;
-                    if (s === "all" || s === "any") return undefined;
+                    if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
+                    if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
                     return undefined;
                 };
 

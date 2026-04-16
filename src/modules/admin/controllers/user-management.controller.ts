@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { userManagementService } from "../services/user-management.service";
 import { successResponse } from "../../../shared/utils";
 import { streamCsv, toCsvValue } from "../../../shared/utils";
-import { CreateAdminUserDto, CreateDepartmentDto, CreateRoleDto, DepartmentQueryDto, RoleQueryDto, UpdateDepartmentDto, UpdateRoleDto } from "../dto/user-management.dto";
+import { CreateAdminUserDto, CreateDepartmentDto, CreateRoleDto, DepartmentQueryDto, RoleQueryDto, UpdateDepartmentDto, UpdateRoleDto, AdminUserQueryDto } from "../dto/user-management.dto";
 import { asyncHandler } from "../../../shared/middleware";
 import adminService from "../services/admin.service";
 import { auditTrailService } from "../services/audit-trail.service";
@@ -64,9 +64,18 @@ class UserManagementController {
     });
 
     getAllUsers = asyncHandler(async (req: Request, res: Response) => {
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
-        const result = await userManagementService.getAllUsers(page, limit);
+        const query: AdminUserQueryDto = {
+            page: req.query.page ? Number(req.query.page) : 1,
+            limit: req.query.limit ? Number(req.query.limit) : 10,
+            search: req.query.search as string,
+            fullName: req.query.fullName as string,
+            email: req.query.email as string,
+            role: req.query.role as string,
+            department: req.query.department as string,
+            isActive: req.query.isActive as any,
+        };
+
+        const result = await userManagementService.getAllUsers(query);
         res.json(successResponse(result.data, { pagination: result.meta }));
     });
 

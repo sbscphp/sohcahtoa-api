@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
-import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere } from "../../../shared/utils/rate-filters";
+import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere } from "../../../shared/utils/rate-filters";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -8,20 +8,14 @@ class RateService {
 
   async stats() {
     const now = new Date();
-    const [active, scheduled, all] = await Promise.all([
-      prisma.exchangeRate.count({ where: isActiveWhere() }),
-      prisma.exchangeRate.count({ where: isScheduledWhere() }),
-      prisma.exchangeRate.count({
-        where: {
-          isActive: true,
-          OR: [
-            { validFrom: { lte: now }, validUntil: { gt: now } },
-            { validFrom: { gt: now } },
-          ],
-        },
-      }),
+    const [active, scheduled, expired, deactivated, all] = await Promise.all([
+      prisma.exchangeRate.count({ where: isActiveWhere(now) }),
+      prisma.exchangeRate.count({ where: isScheduledWhere(now) }),
+      prisma.exchangeRate.count({ where: isExpiredWhere(now) }),
+      prisma.exchangeRate.count({ where: isDeactivatedWhere() }),
+      prisma.exchangeRate.count({}),
     ]);
-    return { all, active, scheduled };
+    return { all, active, scheduled, expired, deactivated };
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
@@ -44,7 +38,29 @@ class RateService {
         take: limit,
       }),
     ]);
-    return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+
+    const now = new Date();
+    const formattedItems = items.map((r: any) => {
+      let status = "DEACTIVATED";
+      if (r.isActive !== false) {
+        if (new Date(r.validFrom) > now) {
+          status = "SCHEDULED";
+        } else if (new Date(r.validUntil) <= now) {
+          status = "EXPIRED";
+        } else {
+          status = "ACTIVE";
+        }
+      }
+
+      return {
+        ...r,
+        status,
+        buyRate: Number(r.buyRate || 0),
+        sellRate: Number(r.sellRate || 0),
+      };
+    });
+
+    return { data: formattedItems, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
   async get(id: string) {
