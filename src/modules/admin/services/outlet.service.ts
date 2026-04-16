@@ -584,6 +584,9 @@ class OutletService {
         workflowStage: t.status,
         transactionValue: value,
         status: t.status,
+        currency: t.currency,
+        foreignAmount: t.foreignAmount ? Number(t.foreignAmount) : null,
+        nairaEquivalent: t.nairaEquivalent ? Number(t.nairaEquivalent) : null,
       };
     });
 
