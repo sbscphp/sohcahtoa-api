@@ -875,11 +875,8 @@ class AgentTransactionService {
       throw new ValidationError("Cannot record disbursement for a completed or cancelled transaction");
     }
 
-    if (
-      transaction.status !== TransactionStatus.APPROVED &&
-      transaction.status !== (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
-    ) {
-      throw new ValidationError("Disbursement can only be recorded for APPROVED or DISBURSEMENT_IN_PROGRESS transactions");
+    if (transaction.status !== (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)) {
+      throw new ValidationError("Disbursement can only be recorded for DISBURSEMENT_IN_PROGRESS transactions");
     }
 
     const uploaded = await uploadFile(input.receiptFile, {
@@ -891,7 +888,7 @@ class AgentTransactionService {
         where: { id: input.transactionId },
         data: {
           disbursementMethod: input.disbursementMethod,
-          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          status: TransactionStatus.PENDING_RECORD_VALIDATION as any,
           currentStep: TransactionStep.DISBURSEMENT as any,
           updatedAt: new Date(),
           history: {
@@ -1016,10 +1013,11 @@ class AgentTransactionService {
       TransactionStatus.APPROVED,
       TransactionStatus.AWAITING_DEPOSIT,
       TransactionStatus.DEPOSIT_PENDING,
+      TransactionStatus.DEPOSIT_CONFIRMED,
     ];
     if (!payableStatuses.includes(transaction.status as string)) {
       throw new ValidationError(
-        `Cannot record inbound payment while transaction status is ${transaction.status}. Expected one of: ${payableStatuses.join(", ")}.`
+        `Cannot record payment while transaction status is ${transaction.status}. Expected one of: ${payableStatuses.join(", ")}.`
       );
     }
 
@@ -1063,8 +1061,8 @@ class AgentTransactionService {
       const updatedTransaction = await tx.transaction.update({
         where: { id: input.transactionId },
         data: {
-          status: TransactionStatus.DEPOSIT_CONFIRMED as any,
-          currentStep: TransactionStep.DEPOSIT_CONFIRMATION as any,
+          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          currentStep: TransactionStep.DISBURSEMENT as any,
           updatedAt: new Date(),
         },
       });
@@ -1072,7 +1070,7 @@ class AgentTransactionService {
       await tx.transactionStepLog.create({
         data: {
           transactionId: input.transactionId,
-          step: TransactionStep.DEPOSIT_CONFIRMATION as any,
+          step: TransactionStep.DISBURSEMENT as any,
           status: "COMPLETED",
           data: {
             source: "AGENT_INBOUND_PAYMENT",
@@ -1089,7 +1087,7 @@ class AgentTransactionService {
       await tx.transactionHistory.create({
         data: {
           transactionId: input.transactionId,
-          action: "DEPOSIT_CONFIRMED",
+          action: "DISBURSEMENT_IN_PROGRESS",
           performedBy: agentUserId,
           notes: input.notes ?? paymentReference,
           newValue: JSON.stringify({
