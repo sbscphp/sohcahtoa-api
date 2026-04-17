@@ -1483,7 +1483,17 @@ export class AuthService {
 
     // Send OTP via email if email service is configured
     if (emailService.isReady() && data.email) {
-      await emailService.sendOtpEmail(data.email, otp, data.purpose);
+      if (data.purpose === OtpPurpose.AGENT_SET_PASSWORD) {
+        // Special welcome email for new agents
+        const client: any = prisma as any;
+        const agent = await client.agent.findUnique({
+          where: { email: data.email },
+          select: { name: true },
+        });
+        await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp);
+      } else {
+        await emailService.sendOtpEmail(data.email, otp, data.purpose);
+      }
     } else {
       // Log OTP for development
       logger.info('OTP generated for development', {

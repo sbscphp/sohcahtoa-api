@@ -402,4 +402,61 @@ router.get(
   customerController.getCustomerTransactions
 );
 
+/**
+ * @swagger
+ * /api/admin/customers/{userId}/transactions/export:
+ *   get:
+ *     summary: Export customer transactions to CSV
+ *     tags: [Admin - Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the customer
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [buyfx, sellfx, receivefx]
+ *           description: "Filter by type. Accepts 'buyfx', 'sellfx', or 'receivefx' to filter by transaction mode/method, or a TransactionType value like PTA, BTA. Case-insensitive."
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by transaction status
+ *       - in: query
+ *         name: dateFrom
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter transactions from this date (YYYY-MM-DD)
+ *       - in: query
+ *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter transactions to this date (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: CSV file with customer transactions
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+router.get(
+  "/:userId/transactions/export",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
+  customerController.exportCustomerTransactions
+);
+
 export default router;

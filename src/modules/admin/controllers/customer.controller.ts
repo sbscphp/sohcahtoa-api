@@ -171,6 +171,36 @@ class CustomerController {
       next(error);
     }
   };
+
+  exportCustomerTransactions = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId } = req.params;
+      const filters = { ...req.query, userId };
+      
+      // Get all transactions for the customer (no pagination for export)
+      const result = await adminTransactionsService.listTransactions(filters, 1, 10000);
+      const transactions = result.data;
+      
+      streamCsv(
+        res,
+        `customer-${userId}-transactions.csv`,
+        [
+          { header: "Date", select: (r: any) => r.createdAt || "" },
+          { header: "Reference", select: (r: any) => r.referenceNumber || "" },
+          { header: "Type", select: (r: any) => r.type || "" },
+          { header: "Status", select: (r: any) => r.status || "" },
+          { header: "Currency", select: (r: any) => r.currency || "" },
+          { header: "Foreign Amount", select: (r: any) => r.foreignAmount || "" },
+          { header: "Naira Equivalent", select: (r: any) => r.nairaEquivalent || "" },
+          { header: "Transaction Mode", select: (r: any) => r.transactionMode || "" },
+          { header: "Current Step", select: (r: any) => r.currentStep || "" },
+        ],
+        transactions as any[]
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export default new CustomerController();

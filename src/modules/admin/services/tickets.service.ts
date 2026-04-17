@@ -65,17 +65,7 @@ export class TicketsService {
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
-    const search = (filters.search || "").toString().trim();
-    const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.category) where.caseType = filters.category;
-    if (filters.priority) where.priority = filters.priority;
-    if (search) {
-      where.OR = [
-        { caseType: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    const where = this.buildTicketWhereClause(filters);
     const skip = (page - 1) * limit;
     const client: any = prisma as any;
     const [total, items] = await Promise.all([
@@ -103,6 +93,7 @@ export class TicketsService {
           assignedAgent: {
             select: {
               fullName: true,
+              role: { select: { name: true } },
             },
           },
         },
@@ -113,7 +104,9 @@ export class TicketsService {
         t?.customer?.profile
           ? `${t.customer.profile.firstName || ""} ${t.customer.profile.lastName || ""}`.trim()
           : t?.customer?.email || null;
+      const customerEmail = t?.customer?.email || null;
       const assignedAdminName = t?.assignedAgent?.fullName || null;
+      const assignedAgentRole = t?.assignedAgent?.role?.name || null;
       return {
         id: t.id,
         reference: t.reference,
@@ -124,7 +117,9 @@ export class TicketsService {
         assignedAgentId: t.assignedAgentId,
         customerId: t.customerId,
         customerName,
+        customerEmail,
         assignedAdminName,
+        assignedAgentRole,
       };
     });
     return {
@@ -196,7 +191,7 @@ export class TicketsService {
     };
   }
 
-  async create(payload: CreateTicketPayload) {
+  async create(payload: CreateTicketPayload, adminId?: string) {
     const normalizedPayload: CreateTicketPayload = {
       customer: (payload?.customer ?? "").toString(),
       caseType: (payload?.caseType ?? "").toString(),
@@ -229,6 +224,7 @@ export class TicketsService {
           description,
           priority: prio as any,
           status: 'OPEN',
+          createdByAdminId: adminId || undefined,
           attachments: normalizedPayload.attachment
             ? {
               create: {
@@ -238,6 +234,12 @@ export class TicketsService {
               },
             }
           : undefined,
+          comments: {
+            create: {
+              message: description,
+              adminId: adminId || undefined,
+            },
+          },
       },
       include: {
         attachments: true,
@@ -500,17 +502,7 @@ private validateAttachment(attachment: {
   }
 
   async export(filters: any = {}) {
-    const search = (filters.search || "").toString().trim();
-    const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.category) where.caseType = filters.category;
-    if (filters.priority) where.priority = filters.priority;
-    if (search) {
-      where.OR = [
-        { caseType: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    const where = this.buildTicketWhereClause(filters);
     const client: any = prisma as any;
     const items = await client.ticket.findMany({
       where,
@@ -565,23 +557,87 @@ private validateAttachment(attachment: {
     };
     return (items || []).map((t: any) => {
       const u = userMap.get(t.customerId);
-      const name =
+      const customerName =
         u && u.profile
           ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim()
           : "";
-      const email = u?.email || "";
+      const customerEmail = u?.email || "";
       const a = agentMap.get(t.assignedAgentId);
-      const roleOrDept = a?.role?.name || a?.department?.name || "";
-      const assignedTo = a ? `${a.fullName}${roleOrDept ? `\n${roleOrDept}` : ""}` : "";
+      const assignedToName = a?.fullName || "";
+      const assignedAgentRole = a?.role?.name || a?.department?.name || "";
+      
       return {
         incidentId: t.reference ? `ID: ${t.reference}` : `ID: ${t.id}`,
-        customer: [name, email].filter(Boolean).join("\n"),
         date: t.createdAt,
-        assignedTo,
+        customerName,
+        customerEmail,
+        assignedAgentName: assignedToName,
+        assignedAgentRole,
         status: titleCase(t.status),
         priority: titleCase(t.priority),
       };
     });
+  }
+
+  private buildTicketWhereClause(filters: any) {
+    const search = (filters.search || filters.q || filters.keyword || "").toString().trim();
+    const where: any = {};
+
+    const validStatuses = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+    const validPriorities = ["LOW", "MEDIUM", "HIGH"];
+
+    if (filters.status) {
+      const s = filters.status.toString().toUpperCase();
+      if (validStatuses.includes(s)) {
+        where.status = s;
+      }
+    }
+
+    if (filters.category) {
+      where.caseType = filters.category;
+    }
+
+    const prio = (filters.priority || filters.priorityLevel || "").toString().toUpperCase();
+    if (prio && validPriorities.includes(prio)) {
+      where.priority = prio;
+    }
+
+    if (filters.reference) {
+      where.reference = { contains: filters.reference, mode: "insensitive" };
+    }
+
+    if (filters.customer || filters.customerId) {
+      where.customerId = filters.customer || filters.customerId;
+    }
+
+    if (filters.assignedTo || filters.assignedAgentId) {
+      where.assignedAgentId = filters.assignedTo || filters.assignedAgentId;
+    }
+
+    if (search) {
+      where.OR = [
+        ...(where.OR || []),
+        { reference: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { caseType: { contains: search, mode: "insensitive" } },
+        {
+          customer: {
+            OR: [
+              { email: { contains: search, mode: "insensitive" } },
+              { profile: { firstName: { contains: search, mode: "insensitive" } } },
+              { profile: { lastName: { contains: search, mode: "insensitive" } } },
+            ],
+          },
+        },
+        {
+          assignedAgent: {
+            fullName: { contains: search, mode: "insensitive" },
+          },
+        },
+      ];
+    }
+
+    return where;
   }
 }
 

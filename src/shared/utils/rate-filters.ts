@@ -12,14 +12,20 @@ export interface RateFilterOptions {
 /**
  * Helper functions for rate status filters
  */
-export const isActiveWhere = () => {
-  const now = new Date();
+export const isActiveWhere = (now: Date = new Date()) => {
   return { isActive: true, validFrom: { lte: now }, validUntil: { gt: now } };
 };
 
-export const isScheduledWhere = () => {
-  const now = new Date();
+export const isScheduledWhere = (now: Date = new Date()) => {
   return { isActive: true, validFrom: { gt: now } };
+};
+
+export const isExpiredWhere = (now: Date = new Date()) => {
+  return { isActive: true, validUntil: { lte: now } };
+};
+
+export const isDeactivatedWhere = () => {
+  return { isActive: false };
 };
 
 /**
@@ -49,11 +55,15 @@ export const buildRateWhereClause = (filters: RateFilterOptions = {}) => {
   }
 
   // Filter by status
-  const status = (filters.status || "all").toString();
+  const status = (filters.status || "all").toString().toLowerCase();
   if (status === "active") {
     Object.assign(where, isActiveWhere());
-  } else if (status === "schedule") {
+  } else if (status === "scheduled" || status === "schedule") {
     Object.assign(where, isScheduledWhere());
+  } else if (status === "expired") {
+    Object.assign(where, isExpiredWhere());
+  } else if (status === "deactivated") {
+    Object.assign(where, isDeactivatedWhere());
   }
 
   return where;
@@ -71,4 +81,5 @@ export const rateSelectFields = {
   sellRate: true,
   validFrom: true,
   validUntil: true,
+  isActive: true,
 };
