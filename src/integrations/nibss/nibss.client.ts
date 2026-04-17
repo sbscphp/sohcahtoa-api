@@ -216,8 +216,37 @@ export class NIBSSClient {
         baseUrl: this.bivsBaseUrl,
       });
 
-      // Try method 1: OAuth2 with form data
+      // Try method 1: Basic Authentication
       try {
+        const basicAuth = Buffer.from(`${this.bivsClientId}:${this.bivsClientSecret}`).toString('base64');
+
+        const response = await axios.post<NIBSSTokenResponse>(
+          `${this.bivsBaseUrl}/token`,
+          { grant_type: 'client_credentials' },
+          {
+            headers: {
+              'Authorization': `Basic ${basicAuth}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          }
+        );
+
+        this.bivsToken = response.data.access_token;
+        this.bivsTokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
+
+        logger.info('BIVS access token obtained successfully (Basic Auth)', {
+          expiresIn: response.data.expires_in,
+        });
+
+        return this.bivsToken;
+      } catch (basicAuthError: any) {
+        logger.warn('Basic Auth token request failed, trying OAuth2', {
+          error: basicAuthError.message,
+          status: basicAuthError.response?.status,
+        });
+
+        // Try method 2: OAuth2 with form data
         const params = new URLSearchParams();
         params.append('grant_type', 'client_credentials');
         params.append('client_id', this.bivsClientId);
@@ -238,35 +267,6 @@ export class NIBSSClient {
         this.bivsTokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
 
         logger.info('BIVS access token obtained successfully (OAuth2)', {
-          expiresIn: response.data.expires_in,
-        });
-
-        return this.bivsToken;
-      } catch (oauthError: any) {
-        logger.warn('OAuth2 token request failed, trying Basic Auth', {
-          error: oauthError.message,
-          status: oauthError.response?.status,
-        });
-
-        // Try method 2: Basic Authentication
-        const basicAuth = Buffer.from(`${this.bivsClientId}:${this.bivsClientSecret}`).toString('base64');
-
-        const response = await axios.post<NIBSSTokenResponse>(
-          `${this.bivsBaseUrl}/token`,
-          { grant_type: 'client_credentials' },
-          {
-            headers: {
-              'Authorization': `Basic ${basicAuth}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 10000,
-          }
-        );
-
-        this.bivsToken = response.data.access_token;
-        this.bivsTokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
-
-        logger.info('BIVS access token obtained successfully (Basic Auth)', {
           expiresIn: response.data.expires_in,
         });
 
