@@ -877,9 +877,9 @@ class AgentTransactionService {
 
     if (
       transaction.status !== TransactionStatus.APPROVED &&
-      transaction.status !== (TransactionStatus.PENDING_RECORD_VALIDATION as any)
+      transaction.status !== (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
     ) {
-      throw new ValidationError("Disbursement can only be recorded for APPROVED or PENDING_RECORD_VALIDATION transactions");
+      throw new ValidationError("Disbursement can only be recorded for APPROVED or DISBURSEMENT_IN_PROGRESS transactions");
     }
 
     const uploaded = await uploadFile(input.receiptFile, {
