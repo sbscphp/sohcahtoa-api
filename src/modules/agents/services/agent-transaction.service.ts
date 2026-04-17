@@ -888,7 +888,7 @@ class AgentTransactionService {
         where: { id: input.transactionId },
         data: {
           disbursementMethod: input.disbursementMethod,
-          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          status: TransactionStatus.PENDING_RECORD_VALIDATION as any,
           currentStep: TransactionStep.DISBURSEMENT as any,
           updatedAt: new Date(),
           history: {
