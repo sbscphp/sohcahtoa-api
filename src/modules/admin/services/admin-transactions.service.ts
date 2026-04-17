@@ -254,6 +254,8 @@ export class AdminTransactionsService {
         ? "Rejected"
         : trx.status === TransactionStatus.APPROVED
         ? "Approved"
+        : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
+        ? "Pending Record Validation"
         : "Pending";
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
