@@ -875,8 +875,11 @@ class AgentTransactionService {
       throw new ValidationError("Cannot record disbursement for a completed or cancelled transaction");
     }
 
-    if (transaction.status !== TransactionStatus.APPROVED) {
-      throw new ValidationError("Disbursement can only be recorded for APPROVED transactions");
+    if (
+      transaction.status !== TransactionStatus.APPROVED &&
+      transaction.status !== (TransactionStatus.PENDING_RECORD_VALIDATION as any)
+    ) {
+      throw new ValidationError("Disbursement can only be recorded for APPROVED or PENDING_RECORD_VALIDATION transactions");
     }
 
     const uploaded = await uploadFile(input.receiptFile, {
