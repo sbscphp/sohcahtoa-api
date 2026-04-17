@@ -256,6 +256,8 @@ export class AdminTransactionsService {
         ? "Approved"
         : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
         ? "Pending Record Validation"
+        : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
+        ? "Disbursement In Progress"
         : "Pending";
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
