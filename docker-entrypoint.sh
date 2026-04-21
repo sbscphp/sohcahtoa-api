@@ -106,7 +106,7 @@ else
     echo "🔍 Found failed migration. Attempting to resolve..."
 
     # List of migrations that might fail (space-separated for POSIX sh compatibility)
-    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default 20260323145900_add_escrow_accounts 20260326095000_store_currency_type_for_escrow_accounts"
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default 20260323145900_add_escrow_accounts 20260326095000_store_currency_type_for_escrow_accounts 20260417000000_add_bank_verification_doc_and_pending_record_validation"
 
     # Try to mark each potentially failed migration as rolled back
     for migration in $MIGRATIONS_TO_RESOLVE; do
@@ -214,6 +214,16 @@ DO $$ BEGIN
     ALTER TABLE "tickets"
       ADD CONSTRAINT "tickets_createdByAgentId_fkey"
       FOREIGN KEY ("createdByAgentId") REFERENCES "agents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdByAdminId" TEXT;
+CREATE INDEX IF NOT EXISTS "tickets_createdByAdminId_idx" ON "tickets"("createdByAdminId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tickets_createdByAdminId_fkey') THEN
+    ALTER TABLE "tickets"
+      ADD CONSTRAINT "tickets_createdByAdminId_fkey"
+      FOREIGN KEY ("createdByAdminId") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 END $$;
 
@@ -410,6 +420,16 @@ END $$;
 
 DO $$ BEGIN
   ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'DIGITAL_SIGNATURE';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'BANK_VERIFICATION';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'PENDING_RECORD_VALIDATION';
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

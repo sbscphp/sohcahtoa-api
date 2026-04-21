@@ -707,6 +707,7 @@ export class NotificationHandler {
           referenceNumber: transaction.referenceNumber,
           amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
           type: String(transaction.type || ""),
+          customerName: transaction.customerName,
         });
 
         for (const adminId of adminIds) {

@@ -58,6 +58,20 @@ WorkflowRouter.get(
   workflowController.actions
 );
 
+/**
+ * @swagger
+ * /api/admin/workflow/actions/export:
+ *   get:
+ *     summary: Export workflow actions as CSV
+ *     tags: [admin-workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 WorkflowRouter.get(
   "/actions/export",
   authenticate,

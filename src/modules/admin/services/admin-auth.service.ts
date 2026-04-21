@@ -286,11 +286,11 @@ class AdminAuthService {
     throw new ValidationError("OTP locked due to multiple failed attempts");
   }
 
-  const metadata = matchedToken.metadata as { purpose?: string };
+  // const metadata = matchedToken.metadata as { purpose?: string };
 
-  if (metadata?.purpose !== "PASSWORD_RESET") {
-    throw new ValidationError("Invalid OTP purpose");
-  }
+  // if (metadata?.purpose !== "PASSWORD_RESET") {
+  //   throw new ValidationError("Invalid OTP purpose");
+  // }
 
   const resetToken = generateId();
   const hashedResetToken = await hashPassword(resetToken);

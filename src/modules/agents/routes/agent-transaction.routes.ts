@@ -57,6 +57,105 @@ router.get("/stats", agentTransactionController.getTransactionStats);
 
 /**
  * @swagger
+ * /api/agent/transactions/payments/movements:
+ *   get:
+ *     summary: List payment movements (cash disbursed or received)
+ *     description: |
+ *       Paginated cash movements for transactions created by this agent (same definitions as dashboard cash-stats).
+ *       **cash_disbursed:** completed outbound settlements initiated by this agent for those transactions.
+ *       **cash_received_from_admin:** confirmed settlements on those transactions where `confirmedBy` is an admin user.
+ *       **cash_received_from_customer:** agent-recorded cash deposit or Providus virtual-account deposit (BANK_TRANSFER + SYSTEM).
+ *       Response `data` item shape depends on `type` (see oneOf below).
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - cash_disbursed
+ *             - cash_received_from_admin
+ *             - cash_received_from_customer
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *     responses:
+ *       200:
+ *         description: Paginated movements; each item matches the selected type
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     oneOf:
+ *                       - type: object
+ *                         description: When type=cash_disbursed
+ *                         properties:
+ *                           transaction_id:
+ *                             type: string
+ *                             format: uuid
+ *                           customer_full_name:
+ *                             type: string
+ *                           amount_disbursed:
+ *                             type: number
+ *                           currency_pair:
+ *                             type: string
+ *                             example: USD/NGN
+ *                           prepaid_amount:
+ *                             type: number
+ *                             nullable: true
+ *                           transaction_type:
+ *                             type: string
+ *                           transaction_date:
+ *                             type: string
+ *                             format: date-time
+ *                       - type: object
+ *                         description: When type=cash_received_from_admin or cash_received_from_customer
+ *                         properties:
+ *                           sender_full_name:
+ *                             type: string
+ *                           amount_received:
+ *                             type: number
+ *                           transaction_date:
+ *                             type: string
+ *                             format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/payments/movements", agentTransactionController.listPaymentMovements);
+
+/**
+ * @swagger
  * /api/agent/transactions/export:
  *   get:
  *     summary: Export transactions as CSV
@@ -213,13 +312,117 @@ router.get("/", agentTransactionController.listTransactions);
 
 /**
  * @swagger
+ * /api/agent/transactions/{transactionId}/virtual-account:
+ *   post:
+ *     summary: Create virtual account for an approved agent-created transaction
+ *     description: Same behavior as customer POST virtual-account; only for transactions created by this agent.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Virtual account already exists
+ *       201:
+ *         description: Virtual account created
+ *       400:
+ *         description: Transaction not approved
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ *   get:
+ *     summary: Get virtual account for an agent-created transaction
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Virtual account details
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.post(
+  "/:transactionId/virtual-account",
+  agentTransactionController.createTransactionVirtualAccount
+);
+router.get(
+  "/:transactionId/virtual-account",
+  agentTransactionController.getTransactionVirtualAccount
+);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/deposit-instructions:
+ *   get:
+ *     summary: Deposit instructions for an agent-created transaction
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Deposit instructions
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.get(
+  "/:transactionId/deposit-instructions",
+  agentTransactionController.getDepositInstructions
+);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/deposit-status:
+ *   get:
+ *     summary: Deposit status for an agent-created transaction
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Deposit status
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.get(
+  "/:transactionId/deposit-status",
+  agentTransactionController.getDepositStatus
+);
+
+/**
+ * @swagger
  * /api/agent/transactions/{transactionId}:
  *   get:
  *     summary: Get transaction detail by ID (agent)
  *     description: |
- *       Returns identification, transaction amounts, beneficiary details, and required-document fields
- *       for a transaction created by the authenticated agent. BVN and NIN are returned in full.
- *       Only transactions with createdByAgentId matching this agent are accessible.
+ *       Returns the same `data` shape as **GET /api/customer/transactions/{transactionId}**
+ *       (reference number, status, required documents, steps, cash pickup, prepaid card, masked BVN/NIN, etc.).
+ *       Only transactions with `createdByAgentId` matching the authenticated agent are accessible.
  *     tags: [Agent Transactions]
  *     security:
  *       - bearerAuth: []
@@ -243,61 +446,8 @@ router.get("/", agentTransactionController.listTransactions);
  *                   example: true
  *                 data:
  *                   type: object
- *                   properties:
- *                     timestamp:
- *                       type: string
- *                       format: date-time
- *                     identification:
- *                       type: object
- *                       properties:
- *                         full_name: { type: string, nullable: true }
- *                         email_address: { type: string }
- *                         phone_number: { type: string }
- *                         address: { type: string, nullable: true }
- *                     transaction_details:
- *                       type: object
- *                       properties:
- *                         transaction_id: { type: string, format: uuid }
- *                         amount: { type: number, nullable: true }
- *                         equivalent_amount: { type: number, nullable: true }
- *                         currency: { type: string }
- *                         date_initiated: { type: string, format: date-time }
- *                     beneficiary_details:
- *                       type: object
- *                       properties:
- *                         beneficiary_full_name: { type: string, nullable: true }
- *                         beneficiary_bank: { type: string, nullable: true }
- *                         routing_number: { type: string, nullable: true }
- *                         bank_address: { type: string, nullable: true }
- *                         swift_code: { type: string, nullable: true }
- *                         account_number: { type: string, nullable: true }
- *                         beneficiary_address: { type: string, nullable: true }
- *                     required_documents:
- *                       type: object
- *                       properties:
- *                         bvn: { type: string, nullable: true }
- *                         nin: { type: string, nullable: true }
- *                         admission_type: { type: string, nullable: true }
- *                         form_a_id: { type: string, nullable: true }
- *                         evidence_of_admission:
- *                           oneOf:
- *                             - type: object
- *                               properties:
- *                                 id: { type: string }
- *                                 file_name: { type: string }
- *                                 file_url: { type: string }
- *                                 verification_status: { type: string }
- *                             - type: 'null'
- *                         school_invoice:
- *                           oneOf:
- *                             - type: object
- *                               properties:
- *                                 id: { type: string }
- *                                 file_name: { type: string }
- *                                 file_url: { type: string }
- *                                 verification_status: { type: string }
- *                             - type: 'null'
- *                         international_passport_number: { type: string, nullable: true }
+ *                   description: Same schema as Customer Transactions GET /api/customer/transactions/{transactionId}
+ *                   additionalProperties: true
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       404:
@@ -580,6 +730,64 @@ router.post(
   "/:transactionId/disbursement/record",
   uploadAgentDisbursementReceipt,
   agentTransactionController.recordDisbursement
+);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/payment/record:
+ *   post:
+ *     summary: Record inbound customer payment (non-virtual-account only)
+ *     description: |
+ *       Records NGN **cash** received from the customer with proof-of-payment (branch / in-person collection).
+ *       Updates `settlements` and sets the transaction to DEPOSIT_CONFIRMED.
+ *       **Not available** if a virtual account exists for this transaction — use the Providus / VA deposit flow instead.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - method
+ *               - amount
+ *               - paymentReceipt
+ *             properties:
+ *               method:
+ *                 type: string
+ *                 enum: [CASH_PICKUP]
+ *                 description: Must be CASH_PICKUP (cash collection; VA deposits are automatic)
+ *               amount:
+ *                 type: number
+ *                 description: NGN amount received
+ *               notes:
+ *                 type: string
+ *               paymentReceipt:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Payment recorded
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.post(
+  "/:transactionId/payment/record",
+  uploadAgentDisbursementReceipt,
+  agentTransactionController.recordInboundPayment
 );
 
 export default router;

@@ -1,7 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
-import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode } from "../../../shared/types";
+import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 
@@ -40,6 +40,10 @@ function applyBuySellFxFilter(where: any, rawType: string) {
       { AND: [{ type: "TOURIST_FX" }, { transactionMode: mode as any }] },
       { type: { in: group as any } },
     ]);
+    return true;
+  }
+  if (rawType === "receivefx") {
+    where.disbursementMethod = DisbursementMethod.IMTO;
     return true;
   }
   return false;
@@ -250,6 +254,10 @@ export class AdminTransactionsService {
         ? "Rejected"
         : trx.status === TransactionStatus.APPROVED
         ? "Approved"
+        : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
+        ? "Pending Record Validation"
+        : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
+        ? "Disbursement In Progress"
         : "Pending";
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
@@ -419,14 +427,41 @@ export class AdminTransactionsService {
         .map((u: any) => u.id);
     }
     if (adminIds.length > 0) {
-      const txBrief = await prisma.transaction.findUnique({
+      const txBrief: any = await prisma.transaction.findUnique({
         where: { id: transactionId },
-        select: { id: true, referenceNumber: true, type: true, foreignAmount: true, nairaEquivalent: true },
+        select: {
+          id: true,
+          referenceNumber: true,
+          type: true,
+          foreignAmount: true,
+          nairaEquivalent: true,
+          userId: true,
+        },
       });
-      eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
-        adminIds,
-        transaction: txBrief,
-      });
+
+      if (txBrief) {
+        const user = await prisma.user.findUnique({
+          where: { id: txBrief.userId },
+          select: {
+            profile: {
+              select: { firstName: true, lastName: true },
+            },
+            email: true,
+          },
+        });
+
+        const customerName = user?.profile
+          ? `${user.profile.firstName} ${user.profile.lastName}`.trim()
+          : user?.email;
+
+        eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+          adminIds,
+          transaction: {
+            ...txBrief,
+            customerName,
+          },
+        });
+      }
     }
 
     return { message: "Transaction reviewed successfully" };

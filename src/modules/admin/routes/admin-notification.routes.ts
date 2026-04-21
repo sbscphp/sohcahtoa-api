@@ -82,4 +82,36 @@ AdminNotificationRouter.get("/unread", authenticate, adminNotificationController
  */
 AdminNotificationRouter.post("/:id/read", authenticate, adminNotificationController.markAsRead);
 
+/**
+ * @swagger
+ * /api/admin/notifications/unread-count:
+ *   get:
+ *     summary: Get unread admin notification count
+ *     tags: [admin-core]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Unread count retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminNotificationRouter.get("/unread-count", authenticate, adminNotificationController.getUnreadCount);
+
+/**
+ * @swagger
+ * /api/admin/notifications/read-all:
+ *   post:
+ *     summary: Mark all admin notifications as read
+ *     tags: [admin-core]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All notifications marked as read
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AdminNotificationRouter.post("/read-all", authenticate, adminNotificationController.markAllAsRead);
+
 export default AdminNotificationRouter;

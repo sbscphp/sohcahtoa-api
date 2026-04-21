@@ -322,9 +322,10 @@ export const NotificationTemplates = {
     referenceNumber: string;
     amount: string;
     type: string;
+    customerName?: string;
   }): NotificationTemplate => ({
     title: 'New Transaction Requires Review',
-    body: `${data.type} transaction ${data.referenceNumber} for NGN ${data.amount} requires your review.`,
+    body: `${data.type} transaction ${data.referenceNumber} for NGN ${data.amount}${data.customerName ? ` from ${data.customerName}` : ''} requires your review.`,
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.HIGH,
     actionUrl: `/admin/transactions/${data.referenceNumber}`,
@@ -349,9 +350,14 @@ export const NotificationTemplates = {
     actionUrl: `/admin/settlements/${data.referenceNumber}`,
   }),
 
-  TICKET_ASSIGNED_ADMIN: (data: { ticketReference: string; ticketId: string }): NotificationTemplate => ({
-    title: 'Ticket Assigned',
-    body: `Support ticket ${data.ticketReference} has been assigned to you.`,
+  TICKET_ASSIGNED_ADMIN: (data: {
+    ticketReference: string;
+    ticketId: string;
+    customerName?: string;
+    priority?: string;
+  }): NotificationTemplate => ({
+    title: `${data.priority ? `[${data.priority}] ` : ''}Ticket Assigned`,
+    body: `Support ticket ${data.ticketReference}${data.customerName ? ` for ${data.customerName}` : ''} has been assigned to you.`,
     channel: NotificationChannel.IN_APP,
     priority: NotificationPriority.HIGH,
     actionUrl: `/admin/tickets/${data.ticketId}`,

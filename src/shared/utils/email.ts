@@ -148,6 +148,21 @@ class EmailService {
     return result.success;
   }
 
+  async sendAgentWelcomeEmail(email: string, fullName: string, otp: string): Promise<boolean> {
+    const subject = 'Welcome to FX Platform - Complete Your Agent Setup';
+    const html = this.getAgentWelcomeEmailTemplate(fullName, otp);
+    const text = `Welcome to FX Platform, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}`;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject,
+      text,
+      html,
+    });
+
+    return result.success;
+  }
+
 
   private getOtpSubject(purpose: string): string {
     switch (purpose) {
@@ -159,6 +174,8 @@ class EmailService {
         return 'Password Reset Code - FX Platform';
       case 'TRANSACTION_VERIFICATION':
         return 'Transaction Verification Code - FX Platform';
+      case 'AGENT_SET_PASSWORD':
+        return 'Complete Your Agent Setup - FX Platform';
       default:
         return 'Verification Code - FX Platform';
     }
@@ -171,7 +188,9 @@ class EmailService {
         ? 'complete your login'
         : purpose === 'PASSWORD_RESET'
           ? 'reset your password'
-          : 'verify your transaction';
+          : purpose === 'AGENT_SET_PASSWORD'
+            ? 'set your agent password'
+            : 'verify your transaction';
 
     return `
       <!DOCTYPE html>
@@ -363,6 +382,54 @@ class EmailService {
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
             <p style="color: #999; font-size: 12px; text-align: center;">
               FX Platform | Secure Foreign Exchange Transactions
+            </p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  private getAgentWelcomeEmailTemplate(fullName: string, otp: string): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Welcome to FX Platform</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0;">Welcome to FX Platform</h1>
+          </div>
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0;">Hello ${fullName},</h2>
+            <p>Your account as an <strong>Agent</strong> on the FX Platform has been successfully created.</p>
+            <p>To get started and set up your password, please use the following verification code:</p>
+            
+            <div style="background: white; padding: 20px; text-align: center; border-radius: 5px; margin: 20px 0; border: 2px dashed #1a2a6c;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1a2a6c;">${otp}</span>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">Enter this code on the set-password page to complete your account activation.</p>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107; margin: 20px 0;">
+              <p style="margin: 0; color: #856404; font-size: 14px;">
+                <strong>Security Note:</strong> For your protection, this code will expire in 10 minutes.
+              </p>
+            </div>
+            
+            <p>As an agent, you will have access to:</p>
+            <ul style="color: #666;">
+              <li>Process foreign exchange transactions for customers</li>
+              <li>Manage customer profiles and KYC documents</li>
+              <li>Track your transaction history and performance</li>
+              <li>Real-time exchange rate monitoring</li>
+            </ul>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              FX Platform | Robust Foreign Exchange Management
             </p>
           </div>
         </body>

@@ -129,6 +129,7 @@ enum TransactionStatus {
   ADMIN_APPROVAL_PENDING
   APPROVED
   DISBURSEMENT_IN_PROGRESS
+  PENDING_RECORD_VALIDATION
   COMPLETED
   REJECTED
   CANCELLED
@@ -187,6 +188,7 @@ enum DocumentType {
   PROOF_OF_FUNDS
   SOURCE_OF_FUNDS_DECLARATION
   DIGITAL_SIGNATURE
+  BANK_VERIFICATION
 }
 
 // Payment Service
@@ -491,6 +493,7 @@ model AdminUser {
   tokens                   Token[]
   assignedTickets          Ticket[]           @relation("TicketAssignedAgent")
   ticketComments           TicketComment[]    @relation("TicketCommentAdmin")
+  ticketsCreated           Ticket[]           @relation("TicketCreatedByAdmin")
   createdWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateCreator")
   workflowAssignees        WorkflowAssignee[]
 
@@ -608,6 +611,7 @@ model Agent {
   createdCustomers User[]            @relation("AgentCreatedCustomers")
   createdTransactions Transaction[] @relation("AgentCreatedTransactions")
   createdTickets   Ticket[]         @relation("TicketCreatedByAgent")
+
 
   @@index([branchId])
   @@index([name])
@@ -1406,12 +1410,15 @@ model Ticket {
   status          TicketStatus   @default(OPEN)
   assignedAgentId String?
   createdByAgentId String?
+  createdByAdminId  String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   customer      User       @relation("TicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
   assignedAgent AdminUser? @relation("TicketAssignedAgent", fields: [assignedAgentId], references: [id])
   createdByAgent Agent?   @relation("TicketCreatedByAgent", fields: [createdByAgentId], references: [id])
+  createdByAdmin AdminUser? @relation("TicketCreatedByAdmin", fields: [createdByAdminId], references: [id])
+
 
   attachments TicketAttachment[]
   comments    TicketComment[]

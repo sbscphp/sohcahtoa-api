@@ -10,14 +10,11 @@ import {
 import { uploadFile } from "../../../shared/utils/file-upload";
 import { generateId } from "../../../shared/utils";
 import { createLogger } from "../../../shared/utils/logger";
-import { resolveDashboardDateRange } from "../../../shared/utils/date-range-presets";
-import customerTransactionService from "../../customer/services/customer-transaction.service";
-import type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
 import {
-  formatProfileAddress,
-  mapDocSnippet,
-  pickLatestDocumentByType,
-} from "./agent-transaction-view.helpers";
+  resolveAgentCashStatsDateRange,
+  resolveDashboardDateRange,
+} from "../../../shared/utils/date-range-presets";
+import customerTransactionService from "../../customer/services/customer-transaction.service";
 
 const prisma = getDatabase();
 const logger = createLogger("agent-transaction-service");
@@ -51,6 +48,43 @@ export interface AgentTransactionStats {
   settled: number;
   rejected: number;
 }
+
+export interface AgentCashStatsResult {
+  currency: string;
+  currencyName: string;
+  period: { preset: string; start: string; end: string };
+  totalCashReceivedFromCustomer: number;
+  totalCashReceivedFromAdmin: number;
+  totalCashDisbursed: number;
+}
+
+export const AGENT_PAYMENT_MOVEMENT_TYPES = [
+  "cash_disbursed",
+  "cash_received_from_admin",
+  "cash_received_from_customer",
+] as const;
+
+export type AgentPaymentMovementType = (typeof AGENT_PAYMENT_MOVEMENT_TYPES)[number];
+
+/** Completed outbound settlement row for agent payment movements list */
+export interface AgentPaymentMovementDisbursedRow {
+  transaction_id: string;
+  customer_full_name: string;
+  amount_disbursed: number;
+  currency_pair: string;
+  prepaid_amount: number | null;
+  transaction_type: string;
+  transaction_date: string;
+}
+
+/** Inbound settlement row (from admin or from customer) */
+export interface AgentPaymentMovementInboundRow {
+  sender_full_name: string;
+  amount_received: number;
+  transaction_date: string;
+}
+
+export type AgentPaymentMovementRow = AgentPaymentMovementDisbursedRow | AgentPaymentMovementInboundRow;
 
 export interface AgentDashboardRecentTransactionItem {
   transactionId: string;
@@ -122,42 +156,21 @@ export interface AgentRecordDisbursementInput {
   receiptFile: Express.Multer.File;
 }
 
+/** Inbound NGN cash payment recorded by agent (non-VA only; virtual-account deposits use Providus). */
+export interface AgentRecordInboundPaymentInput {
+  transactionId: string;
+  amount: number;
+  method: "CASH_PICKUP";
+  notes?: string;
+  receiptFile: Express.Multer.File;
+}
+
 export type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
 
-export interface AgentTransactionDetailView {
-  timestamp: string;
-  identification: {
-    full_name: string | null;
-    email_address: string;
-    phone_number: string;
-    address: string | null;
-  };
-  transaction_details: {
-    transaction_id: string;
-    amount: number | null;
-    equivalent_amount: number | null;
-    currency: string;
-    date_initiated: string;
-  };
-  beneficiary_details: {
-    beneficiary_full_name: string | null;
-    beneficiary_bank: string | null;
-    routing_number: string | null;
-    bank_address: string | null;
-    swift_code: string | null;
-    account_number: string | null;
-    beneficiary_address: string | null;
-  };
-  required_documents: {
-    bvn: string | null;
-    nin: string | null;
-    admission_type: string | null;
-    form_a_id: string | null;
-    evidence_of_admission: AgentTransactionDetailUploadedDoc | null;
-    school_invoice: AgentTransactionDetailUploadedDoc | null;
-    international_passport_number: string | null;
-  };
-}
+/** Same payload as GET /api/customer/transactions/:transactionId (customer transaction detail). */
+export type AgentTransactionDetailView = Awaited<
+  ReturnType<typeof customerTransactionService.getTransactionDetails>
+>;
 
 class AgentTransactionService {
   /**
@@ -406,7 +419,382 @@ class AgentTransactionService {
   }
 
   /**
-   * Full transaction detail for agent (scoped to createdByAgentId). BVN/NIN are unmasked.
+   * Cash movement stats for transactions created by this agent (one reporting currency).
+   * - Customer: agent-recorded cash (`CASH_DEPOSIT` + confirmedBy agent user) or VA/Providus (`BANK_TRANSFER` + SYSTEM).
+   * - Admin: inbound settlements confirmed by an AdminUser.
+   * - Disbursed: completed outbound settlements initiated by this agent (`Agent.id`).
+   */
+  async getCashStats(
+    agentUserId: string,
+    periodPreset: string,
+    currencyParam?: string
+  ): Promise<AgentCashStatsResult> {
+    const agent = await this.resolveAgent(agentUserId);
+    const { start, end } = resolveAgentCashStatsDateRange(periodPreset);
+    const currency = (currencyParam || "NGN").trim().toUpperCase();
+
+    const currencyNames: Record<string, string> = {
+      NGN: "Nigerian Naira",
+      USD: "US Dollar",
+      GBP: "British Pound Sterling",
+      EUR: "Euro",
+    };
+    const currencyName = currencyNames[currency] || currency;
+
+    const agentTransactions = await prisma.transaction.findMany({
+      where: { createdByAgentId: agent.id },
+      select: { id: true },
+    });
+    const agentTransactionIds = agentTransactions.map((t) => t.id);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    if (agentTransactionIds.length === 0) {
+      return {
+        currency,
+        currencyName,
+        period: {
+          preset: periodPreset.trim(),
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+        totalCashReceivedFromCustomer: 0,
+        totalCashReceivedFromAdmin: 0,
+        totalCashDisbursed: 0,
+      };
+    }
+
+    const txIdFilter = { in: agentTransactionIds };
+    const confirmedAtRange = { gte: start, lte: end };
+
+    const adminRows = await prisma.adminUser.findMany({ select: { id: true } });
+    const adminIds = adminRows.map((a) => a.id);
+
+    const [fromCustomerAgg, disbursedAgg] = await Promise.all([
+      prisma.settlement.aggregate({
+        where: {
+          status: "CONFIRMED",
+          currency,
+          transactionId: txIdFilter,
+          confirmedAt: confirmedAtRange,
+          OR: [
+            { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
+            { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
+          ],
+        },
+        _sum: { amount: true },
+      }),
+      prisma.outboundSettlement.aggregate({
+        where: {
+          status: "COMPLETED",
+          currency,
+          transactionId: txIdFilter,
+          initiatedBy: agent.id,
+          updatedAt: confirmedAtRange,
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const fromAdminAgg =
+      adminIds.length > 0
+        ? await prisma.settlement.aggregate({
+            where: {
+              status: "CONFIRMED",
+              currency,
+              transactionId: txIdFilter,
+              confirmedAt: confirmedAtRange,
+              confirmedBy: { in: adminIds },
+            },
+            _sum: { amount: true },
+          })
+        : { _sum: { amount: null } };
+
+    return {
+      currency,
+      currencyName,
+      period: {
+        preset: periodPreset.trim(),
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      totalCashReceivedFromCustomer: round2(Number(fromCustomerAgg._sum?.amount ?? 0)),
+      totalCashReceivedFromAdmin: round2(Number(fromAdminAgg._sum?.amount ?? 0)),
+      totalCashDisbursed: round2(Number(disbursedAgg._sum?.amount ?? 0)),
+    };
+  }
+
+  /**
+   * Paginated cash movements for transactions created by this agent (same buckets as getCashStats).
+   */
+  async listPaymentMovements(
+    agentUserId: string,
+    type: AgentPaymentMovementType,
+    page: number,
+    limit: number
+  ): Promise<{
+    data: AgentPaymentMovementRow[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(100, Math.max(1, limit));
+    const skip = (safePage - 1) * safeLimit;
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const currencyPair = (currency: string) => `${currency}/NGN`;
+
+    const profileFullName = (profile: { firstName: string; lastName: string } | null | undefined) => {
+      if (!profile) return "Customer";
+      const name = `${profile.firstName || ""} ${profile.lastName || ""}`.trim();
+      return name || "Customer";
+    };
+
+    const agentTransactions = await prisma.transaction.findMany({
+      where: { createdByAgentId: agent.id },
+      select: { id: true },
+    });
+    const agentTransactionIds = agentTransactions.map((t) => t.id);
+    const txIdFilter = { in: agentTransactionIds };
+
+    if (agentTransactionIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: 0,
+          totalPages: 1,
+        },
+      };
+    }
+
+    if (type === "cash_disbursed") {
+      const where = {
+        status: "COMPLETED" as const,
+        initiatedBy: agent.id,
+        transactionId: txIdFilter,
+      };
+
+      const [rows, total] = await Promise.all([
+        prisma.outboundSettlement.findMany({
+          where,
+          select: {
+            amount: true,
+            completedAt: true,
+            updatedAt: true,
+            transactionId: true,
+          },
+          orderBy: { updatedAt: "desc" },
+          skip,
+          take: safeLimit,
+        }),
+        prisma.outboundSettlement.count({ where }),
+      ]);
+
+      const txIds = rows.map((r) => r.transactionId).filter((id): id is string => Boolean(id));
+      const txs =
+        txIds.length > 0
+          ? await prisma.transaction.findMany({
+              where: { id: { in: txIds } },
+              select: {
+                id: true,
+                type: true,
+                currency: true,
+                userId: true,
+                prepaidCard: { select: { amount: true } },
+              },
+            })
+          : [];
+
+      const userIds = [...new Set(txs.map((t) => t.userId))];
+      const users =
+        userIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: userIds } },
+              select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+            })
+          : [];
+      const profileByUserId = new Map(users.map((u) => [u.id, u.profile]));
+
+      const txById = new Map(txs.map((t) => [t.id, t]));
+
+      const data: AgentPaymentMovementDisbursedRow[] = rows.map((row) => {
+        const tx = row.transactionId ? txById.get(row.transactionId) : undefined;
+        const at = row.completedAt ?? row.updatedAt;
+        const customerName = profileFullName(tx?.userId ? profileByUserId.get(tx.userId) : undefined);
+        return {
+          transaction_id: row.transactionId as string,
+          customer_full_name: customerName,
+          amount_disbursed: round2(Number(row.amount)),
+          currency_pair: tx ? currencyPair(tx.currency) : "NGN/NGN",
+          prepaid_amount: tx?.prepaidCard ? round2(Number(tx.prepaidCard.amount)) : null,
+          transaction_type: tx ? String(tx.type) : "",
+          transaction_date: at.toISOString(),
+        };
+      });
+
+      return {
+        data,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total,
+          totalPages: Math.ceil(total / safeLimit) || 1,
+        },
+      };
+    }
+
+    if (type === "cash_received_from_admin") {
+      const adminRows = await prisma.adminUser.findMany({ select: { id: true, fullName: true } });
+      const adminIds = adminRows.map((a) => a.id);
+      const adminNameById = new Map(adminRows.map((a) => [a.id, a.fullName]));
+
+      if (adminIds.length === 0) {
+        return {
+          data: [],
+          pagination: { page: safePage, limit: safeLimit, total: 0, totalPages: 1 },
+        };
+      }
+
+      const where = {
+        status: "CONFIRMED" as const,
+        transactionId: txIdFilter,
+        confirmedBy: { in: adminIds },
+      };
+
+      const [rows, total] = await Promise.all([
+        prisma.settlement.findMany({
+          where,
+          select: {
+            amount: true,
+            confirmedAt: true,
+            confirmedBy: true,
+          },
+          orderBy: { confirmedAt: "desc" },
+          skip,
+          take: safeLimit,
+        }),
+        prisma.settlement.count({ where }),
+      ]);
+
+      const data: AgentPaymentMovementInboundRow[] = rows.map((row) => ({
+        sender_full_name: (row.confirmedBy && adminNameById.get(row.confirmedBy)) || "Admin",
+        amount_received: round2(Number(row.amount)),
+        transaction_date: (row.confirmedAt ?? new Date(0)).toISOString(),
+      }));
+
+      return {
+        data,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total,
+          totalPages: Math.ceil(total / safeLimit) || 1,
+        },
+      };
+    }
+
+    // cash_received_from_customer
+    const where = {
+      status: "CONFIRMED" as const,
+      transactionId: txIdFilter,
+      OR: [
+        { paymentMethod: "CASH_DEPOSIT" as const, confirmedBy: agentUserId },
+        { paymentMethod: "BANK_TRANSFER" as const, confirmedBy: "SYSTEM" },
+      ],
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.settlement.findMany({
+        where,
+        select: {
+          transactionId: true,
+          amount: true,
+          paymentMethod: true,
+          paymentReference: true,
+          confirmedAt: true,
+        },
+        orderBy: { confirmedAt: "desc" },
+        skip,
+        take: safeLimit,
+      }),
+      prisma.settlement.count({ where }),
+    ]);
+
+    const custTxIds = [...new Set(rows.map((r) => r.transactionId))];
+    const custTxs =
+      custTxIds.length > 0
+        ? await prisma.transaction.findMany({
+            where: { id: { in: custTxIds } },
+            select: { id: true, userId: true },
+          })
+        : [];
+    const userIdByTxId = new Map(custTxs.map((t) => [t.id, t.userId]));
+    const custUserIds = [...new Set(custTxs.map((t) => t.userId))];
+    const custUsers =
+      custUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: custUserIds } },
+            select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+          })
+        : [];
+    const custProfileByUserId = new Map(custUsers.map((u) => [u.id, u.profile]));
+
+    const sessionIds = rows
+      .filter(
+        (r) =>
+          r.paymentMethod === "BANK_TRANSFER" &&
+          r.paymentReference != null &&
+          String(r.paymentReference).length > 0
+      )
+      .map((r) => r.paymentReference as string);
+    const uniqueSessionIds = [...new Set(sessionIds)];
+
+    const deposits =
+      uniqueSessionIds.length > 0
+        ? await prisma.providusDeposit.findMany({
+            where: { sessionId: { in: uniqueSessionIds } },
+            select: { sessionId: true, sourceAccountName: true },
+          })
+        : [];
+    const sourceNameBySession = new Map(
+      deposits.map((d) => [d.sessionId, d.sourceAccountName ?? ""])
+    );
+
+    const data: AgentPaymentMovementInboundRow[] = rows.map((row) => {
+      const userId = userIdByTxId.get(row.transactionId);
+      const customerName = profileFullName(userId ? custProfileByUserId.get(userId) : undefined);
+
+      let senderFullName = customerName;
+      if (row.paymentMethod === "BANK_TRANSFER" && row.paymentReference) {
+        const fromProvidus = sourceNameBySession.get(row.paymentReference);
+        if (fromProvidus && fromProvidus.trim()) {
+          senderFullName = fromProvidus.trim();
+        }
+      }
+
+      return {
+        sender_full_name: senderFullName,
+        amount_received: round2(Number(row.amount)),
+        transaction_date: (row.confirmedAt ?? new Date(0)).toISOString(),
+      };
+    });
+
+    return {
+      data,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.ceil(total / safeLimit) || 1,
+      },
+    };
+  }
+
+  /**
+   * Same response as customer GET transaction by id; only transactions created by this agent.
    */
   async getTransactionById(
     agentUserId: string,
@@ -414,144 +802,37 @@ class AgentTransactionService {
   ): Promise<AgentTransactionDetailView> {
     const agent = await this.resolveAgent(agentUserId);
 
-    const transaction = await prisma.transaction.findFirst({
+    const row = await prisma.transaction.findFirst({
       where: { id: transactionId, createdByAgentId: agent.id },
-      include: {
-        documents: {
-          select: {
-            id: true,
-            documentType: true,
-            fileName: true,
-            fileUrl: true,
-            verificationStatus: true,
-            uploadedAt: true,
-          },
-        },
-        steps: {
-          where: { step: TransactionStep.PERSONAL_INFO },
-          orderBy: { createdAt: "asc" },
-        },
-      },
+      select: { id: true, userId: true },
     });
 
-    if (!transaction) {
+    if (!row) {
       throw new NotFoundError("Transaction not found or you are not the creating agent");
     }
 
-    const [user, outbound] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: transaction.userId },
-        select: {
-          email: true,
-          phoneNumber: true,
-          profile: {
-            select: {
-              firstName: true,
-              lastName: true,
-              address: true,
-              city: true,
-              state: true,
-              country: true,
-              postalCode: true,
-            },
-          },
-          kyc: {
-            select: {
-              bvn: true,
-              nin: true,
-              passportNumber: true,
-            },
-          },
-        },
-      }),
-      prisma.outboundSettlement.findFirst({
-        where: { transactionId: transaction.id },
-        select: {
-          beneficiaryName: true,
-          beneficiaryBank: true,
-          beneficiaryAccount: true,
-          beneficiarySwift: true,
-          beneficiaryAddress: true,
-        },
-      }),
-    ]);
+    return customerTransactionService.getTransactionDetails(row.id, row.userId);
+  }
 
-    if (!user) {
-      throw new NotFoundError("Customer not found for this transaction");
+  /**
+   * Resolve the customer user id for a transaction created by this agent (e.g. virtual account flows).
+   */
+  async getCustomerUserIdForAgentTransaction(
+    agentUserId: string,
+    transactionId: string
+  ): Promise<{ customerUserId: string }> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const row = await prisma.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agent.id },
+      select: { userId: true },
+    });
+
+    if (!row) {
+      throw new NotFoundError("Transaction not found or you are not the creating agent");
     }
 
-    const personalInfoStep = transaction.steps[0];
-    const personalInfoData = (personalInfoStep?.data as Record<string, unknown> | null) || null;
-    const stepBeneficiary = personalInfoData?.beneficiaryDetails as
-      | {
-          name?: string;
-          accountNumber?: string;
-          accountName?: string;
-          bankName?: string;
-          iban?: string;
-        }
-      | undefined;
-
-    const amount =
-      transaction.foreignAmount != null ? Number(transaction.foreignAmount) : null;
-    const equivalentAmount =
-      transaction.nairaEquivalent != null ? Number(transaction.nairaEquivalent) : null;
-
-    const admissionType =
-      personalInfoData?.admissionType != null
-        ? String(personalInfoData.admissionType)
-        : null;
-
-    const evidenceDoc = pickLatestDocumentByType(transaction.documents, "SCHOOL_ADMISSION");
-    const invoiceDoc = pickLatestDocumentByType(transaction.documents, "INVOICE");
-
-    const profile = user.profile;
-    const fullName = profile
-      ? `${profile.firstName || ""} ${profile.lastName || ""}`.trim() || null
-      : null;
-
-    return {
-      timestamp: transaction.createdAt.toISOString(),
-      identification: {
-        full_name: fullName,
-        email_address: user.email,
-        phone_number: user.phoneNumber,
-        address: formatProfileAddress(profile),
-      },
-      transaction_details: {
-        transaction_id: transaction.id,
-        amount,
-        equivalent_amount: equivalentAmount,
-        currency: transaction.currency,
-        date_initiated: transaction.createdAt.toISOString(),
-      },
-      beneficiary_details: {
-        beneficiary_full_name:
-          outbound?.beneficiaryName ||
-          stepBeneficiary?.name ||
-          stepBeneficiary?.accountName ||
-          null,
-        beneficiary_bank: outbound?.beneficiaryBank || stepBeneficiary?.bankName || null,
-        routing_number: null,
-        bank_address: null,
-        swift_code: outbound?.beneficiarySwift || null,
-        account_number:
-          outbound?.beneficiaryAccount ||
-          stepBeneficiary?.accountNumber ||
-          stepBeneficiary?.iban ||
-          null,
-        beneficiary_address: outbound?.beneficiaryAddress || null,
-      },
-      required_documents: {
-        bvn: user.kyc?.bvn ?? null,
-        nin: user.kyc?.nin ?? null,
-        admission_type: admissionType,
-        form_a_id: transaction.formAId ?? null,
-        evidence_of_admission: mapDocSnippet(evidenceDoc),
-        school_invoice: mapDocSnippet(invoiceDoc),
-        international_passport_number: user.kyc?.passportNumber ?? null,
-      },
-    };
+    return { customerUserId: row.userId };
   }
 
   async recordDisbursement(
@@ -594,8 +875,8 @@ class AgentTransactionService {
       throw new ValidationError("Cannot record disbursement for a completed or cancelled transaction");
     }
 
-    if (transaction.status !== TransactionStatus.APPROVED) {
-      throw new ValidationError("Disbursement can only be recorded for APPROVED transactions");
+    if (transaction.status !== (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)) {
+      throw new ValidationError("Disbursement can only be recorded for DISBURSEMENT_IN_PROGRESS transactions");
     }
 
     const uploaded = await uploadFile(input.receiptFile, {
@@ -607,7 +888,7 @@ class AgentTransactionService {
         where: { id: input.transactionId },
         data: {
           disbursementMethod: input.disbursementMethod,
-          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          status: TransactionStatus.PENDING_RECORD_VALIDATION as any,
           currentStep: TransactionStep.DISBURSEMENT as any,
           updatedAt: new Date(),
           history: {
@@ -687,6 +968,158 @@ class AgentTransactionService {
     });
 
     return result;
+  }
+
+  /**
+   * Record customer inbound payment (cash or non-VA bank proof) for an agent-created transaction.
+   * Rejected when a virtual account exists for the transaction (use VA / Providus deposit flow instead).
+   */
+  async recordInboundPayment(agentUserId: string, input: AgentRecordInboundPaymentInput) {
+    if (!input.transactionId) {
+      throw new ValidationError("transactionId is required");
+    }
+    if (!input.amount || input.amount <= 0) {
+      throw new ValidationError("amount must be a positive number");
+    }
+    if (!input.receiptFile) {
+      throw new ValidationError("paymentReceipt file is required");
+    }
+    if (input.method !== "CASH_PICKUP") {
+      throw new ValidationError("method must be CASH_PICKUP (cash collection only; non-VA)");
+    }
+
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: input.transactionId, createdByAgentId: agent.id },
+      select: { id: true, status: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundError("Transaction not found or you are not the creating agent");
+    }
+
+    const existingVa = await prisma.virtualAccount.findUnique({
+      where: { transactionId: input.transactionId },
+      select: { id: true },
+    });
+    if (existingVa) {
+      throw new ValidationError(
+        "This transaction uses a virtual account for deposits. Payment is confirmed automatically when funds arrive; this endpoint is only for non-virtual-account (cash or manual) payments."
+      );
+    }
+
+    const payableStatuses: string[] = [
+      TransactionStatus.APPROVED,
+      TransactionStatus.AWAITING_DEPOSIT,
+      TransactionStatus.DEPOSIT_PENDING,
+      TransactionStatus.DEPOSIT_CONFIRMED,
+    ];
+    if (!payableStatuses.includes(transaction.status as string)) {
+      throw new ValidationError(
+        `Cannot record payment while transaction status is ${transaction.status}. Expected one of: ${payableStatuses.join(", ")}.`
+      );
+    }
+
+    const uploaded = await uploadFile(input.receiptFile, {
+      folder: "agent-inbound-payments",
+    });
+
+    const paymentMethodPrisma = "CASH_DEPOSIT";
+    const paymentReference = `AGENT-IN-${generateId()}`;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const settlement = await tx.settlement.upsert({
+        where: { transactionId: input.transactionId },
+        create: {
+          transactionId: input.transactionId,
+          amount: input.amount as any,
+          currency: "NGN",
+          status: "CONFIRMED",
+          paymentMethod: paymentMethodPrisma as any,
+          paymentReference,
+          proofOfPayment: uploaded.fileUrl,
+          depositedAt: new Date(),
+          confirmedAt: new Date(),
+          confirmedBy: agentUserId,
+          notes: input.notes ?? null,
+        },
+        update: {
+          amount: input.amount as any,
+          currency: "NGN",
+          status: "CONFIRMED",
+          paymentMethod: paymentMethodPrisma as any,
+          paymentReference,
+          proofOfPayment: uploaded.fileUrl,
+          depositedAt: new Date(),
+          confirmedAt: new Date(),
+          confirmedBy: agentUserId,
+          notes: input.notes ?? null,
+        },
+      });
+
+      const updatedTransaction = await tx.transaction.update({
+        where: { id: input.transactionId },
+        data: {
+          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          currentStep: TransactionStep.DISBURSEMENT as any,
+          updatedAt: new Date(),
+        },
+      });
+
+      await tx.transactionStepLog.create({
+        data: {
+          transactionId: input.transactionId,
+          step: TransactionStep.DISBURSEMENT as any,
+          status: "COMPLETED",
+          data: {
+            source: "AGENT_INBOUND_PAYMENT",
+            recordedByAgentUserId: agentUserId,
+            paymentReference,
+            method: input.method,
+            amount: input.amount,
+            receiptUrl: uploaded.fileUrl,
+          },
+          completedAt: new Date(),
+        },
+      });
+
+      await tx.transactionHistory.create({
+        data: {
+          transactionId: input.transactionId,
+          action: "DISBURSEMENT_IN_PROGRESS",
+          performedBy: agentUserId,
+          notes: input.notes ?? paymentReference,
+          newValue: JSON.stringify({
+            amount: input.amount,
+            method: input.method,
+            receiptUrl: uploaded.fileUrl,
+            paymentReference,
+          }),
+        },
+      });
+
+      return { settlement, transaction: updatedTransaction };
+    });
+
+    logger.info("[recordInboundPayment] Inbound payment recorded by agent", {
+      transactionId: input.transactionId,
+      agentUserId,
+      amount: input.amount,
+      method: input.method,
+    });
+
+    return {
+      transactionId: input.transactionId,
+      status: result.transaction.status,
+      currentStep: result.transaction.currentStep,
+      paymentReference,
+      amount: input.amount,
+      currency: "NGN",
+      method: input.method,
+      proofOfPaymentUrl: uploaded.fileUrl,
+      settlementId: result.settlement.id,
+    };
   }
 
   /**
