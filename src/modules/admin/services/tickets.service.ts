@@ -594,7 +594,7 @@ private validateAttachment(attachment: {
     }
 
     if (filters.category) {
-      where.caseType = filters.category;
+      where.caseType = { equals: filters.category, mode: "insensitive" };
     }
 
     const prio = (filters.priority || filters.priorityLevel || "").toString().toUpperCase();

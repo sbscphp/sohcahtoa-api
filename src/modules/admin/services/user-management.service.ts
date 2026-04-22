@@ -94,7 +94,7 @@ class UserManagementService {
         if (emailService.isReady()) {
             const otp = generateSecureOtp();
             const hashedOtp = await hashPassword(otp);
-            const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
             await this.prisma.$transaction([
                 this.prisma.token.updateMany({
@@ -114,7 +114,7 @@ class UserManagementService {
             ]);
 
             const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000";
-            const url = new URL("/admin/reset-password", baseUrl);
+            const url = new URL("/admin/auth/reset-password", baseUrl);
             url.searchParams.set("otp", otp);
             const resetPasswordUrl = url.toString();
 
@@ -1022,6 +1022,35 @@ class UserManagementService {
         }
     };
 
+    setDefaultRole = async (id: string) => {
+        try {
+            const role = await this.prisma.role.findUnique({ where: { id } });
+            if (!role) {
+                throw new NotFoundError("Role not found");
+            }
+            if (!role.isActive) {
+                throw new BadRequestError("Cannot set an inactive role as default");
+            }
+
+            const result = await this.prisma.$transaction(async (tx) => {
+                await tx.role.updateMany({
+                    where: { isDefault: true },
+                    data: { isDefault: false },
+                });
+
+                return await tx.role.update({
+                    where: { id },
+                    data: { isDefault: true },
+                });
+            });
+
+            return result;
+        } catch (error) {
+            logger.error("Failed to set default role", { id, error });
+            throw error;
+        }
+    };
+
     getRoleStats = async () => {
         try {
             const [totalRoles, activeRoles, inactiveRoles] = await this.prisma.$transaction([
@@ -1062,6 +1091,33 @@ class UserManagementService {
         try {
             const role = await this.prisma.role.findUnique({ where: { id: roleId } });
             if (!role) throw new NotFoundError("Role not found");
+
+            if (role.name === "SUPER_ADMIN") {
+                const allPermissions = await this.prisma.permission.findMany({
+                    where: { isActive: true },
+                    orderBy: { module: "asc" }
+                });
+
+                if (format === "flat") {
+                    return allPermissions.map(p => ({
+                        module: p.module,
+                        featureKey: p.featureKey,
+                        action: p.action,
+                        label: p.label || `${p.featureKey} ${p.action}`,
+                    }));
+                }
+
+                const grouped: Record<string, Record<string, string[]>> = {};
+                for (const p of allPermissions) {
+                    const mod = p.module;
+                    const feat = p.featureKey;
+                    const action = p.action.toLowerCase();
+                    grouped[mod] = grouped[mod] || {};
+                    grouped[mod][feat] = grouped[mod][feat] || [];
+                    if (!grouped[mod][feat].includes(action)) grouped[mod][feat].push(action);
+                }
+                return grouped;
+            }
 
             const links = await this.prisma.rolePermission.findMany({
                 where: { roleId },

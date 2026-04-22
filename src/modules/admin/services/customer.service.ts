@@ -462,9 +462,9 @@ export class CustomerService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.type) where.type = filters.type;
-    if (filters.severity) where.severity = filters.severity;
+    if (filters.status) where.status = String(filters.status).toUpperCase();
+    if (filters.type) where.type = String(filters.type).toUpperCase();
+    if (filters.severity) where.severity = String(filters.severity).toUpperCase();
     if (filters.userId) where.userId = filters.userId;
 
     const [data, total] = await Promise.all([

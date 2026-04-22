@@ -1290,6 +1290,12 @@ export class CustomerTransactionService {
         createdAt: h.createdAt,
       }));
 
+    // Fetch settlement details if they exist
+    const settlement = await prisma.settlement.findUnique({
+      where: { transactionId },
+      include: { bankDetails: true },
+    }).catch(() => null);
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -1332,6 +1338,30 @@ export class CustomerTransactionService {
       ),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
+      settlement: settlement
+        ? {
+            id: settlement.id,
+            amount: settlement.amount,
+            currency: settlement.currency,
+            status: settlement.status,
+            paymentMethod: settlement.paymentMethod,
+            paymentReference: settlement.paymentReference,
+            depositedAt: settlement.depositedAt,
+            confirmedAt: settlement.confirmedAt,
+            proofOfPayment: settlement.proofOfPayment,
+            notes: settlement.notes,
+            createdAt: settlement.createdAt,
+            updatedAt: settlement.updatedAt,
+            bankDetails: settlement.bankDetails
+              ? {
+                  bankName: settlement.bankDetails.bankName,
+                  accountNumber: settlement.bankDetails.accountNumber,
+                  accountName: settlement.bankDetails.accountName,
+                  reference: settlement.bankDetails.reference,
+                }
+              : null,
+          }
+        : null,
       steps: this.sanitizeStepsForResponse(transaction.steps),
       comments,
       createdAt: transaction.createdAt,

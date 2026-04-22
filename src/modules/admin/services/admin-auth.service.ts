@@ -514,16 +514,30 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
-    const userPermissions = (user.role?.rolePermissions || [])
-      .map((rp: any) => rp.permission)
-      .filter((p: any) => p && p.isActive)
-      .map((p: any) => ({
-        id: p.id,
-        module: p.module,
-        featureKey: p.featureKey,
-        action: p.action,
-        label: p.label,
-      }));
+    let userPermissions = [];
+    if (user.role?.name === "SUPER_ADMIN") {
+      userPermissions = await this.prisma.permission.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          module: true,
+          featureKey: true,
+          action: true,
+          label: true,
+        },
+      });
+    } else {
+      userPermissions = (user.role?.rolePermissions || [])
+        .map((rp: any) => rp.permission)
+        .filter((p: any) => p && p.isActive)
+        .map((p: any) => ({
+          id: p.id,
+          module: p.module,
+          featureKey: p.featureKey,
+          action: p.action,
+          label: p.label,
+        }));
+    }
 
     const { password: _password, role: _role, ...userWithoutPassword } = user as any;
     return { ...userWithoutPassword, userPermissions, accessToken, refreshToken };

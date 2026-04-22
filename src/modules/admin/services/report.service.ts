@@ -19,6 +19,18 @@ class ReportService {
     ];
   }
 
+  private async normalizeModule(input: string): Promise<string> {
+    const modules = await this.modules();
+    const normalizedInput = input.trim().toUpperCase();
+
+    // Find module by key or name
+    const module = modules.find(
+      (m) => m.key === normalizedInput || m.name.toUpperCase() === normalizedInput,
+    );
+
+    return module ? module.key : normalizedInput;
+  }
+
   async stats() {
     const client: any = prisma as any;
     const [all, pending] = await Promise.all([
@@ -30,8 +42,8 @@ class ReportService {
 
   async list(filters: any = {}, page = 1, limit = 20) {
     const where: any = {};
-    if (filters.module) where.module = filters.module;
-    if (filters.status) where.status = filters.status;
+    if (filters.module) where.module = { equals: filters.module, mode: "insensitive" };
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
@@ -134,7 +146,8 @@ class ReportService {
   }
 
   async buildGeneratedReport(params: { module: string; startDate: Date; endDate: Date }) {
-    const moduleKey = (params.module || "").toString().toUpperCase();
+    const normalizedModule = await this.normalizeModule(params.module);
+    const moduleKey = (normalizedModule || "").toString().toUpperCase();
     const dateRange = { gte: params.startDate, lte: params.endDate };
 
     let data: any[] = [];
@@ -366,10 +379,11 @@ class ReportService {
     metadata?: any;
   }) {
     const client: any = prisma as any;
+    const normalizedModule = await this.normalizeModule(data.module);
     const reportName = `${data.module} report`;
     const job = await client.reportJob.create({
       data: {
-        module: data.module,
+        module: normalizedModule,
         format: data.format,
         startDate: data.startDate,
         endDate: data.endDate,
