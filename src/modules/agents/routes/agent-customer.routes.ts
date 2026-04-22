@@ -102,6 +102,14 @@ AgentCustomerRouter.use(authenticate, authorize(UserRole.AGENT));
  *                       kycStatus:
  *                         type: string
  *                         enum: [NOT_STARTED, IN_PROGRESS, PENDING_VERIFICATION, VERIFIED, REJECTED]
+ *                       bvn:
+ *                         type: string
+ *                         nullable: true
+ *                         description: Customer BVN from KYC profile
+ *                       nin:
+ *                         type: string
+ *                         nullable: true
+ *                         description: Customer NIN from KYC profile
  *                 meta:
  *                   type: object
  *                   properties:

@@ -145,6 +145,8 @@ export interface AgentCustomerSummary {
   lastTransactionType?: TransactionType | null;
   registeredAt: string;
   kycStatus?: KycStatus;
+  bvn?: string | null;
+  nin?: string | null;
 }
 
 export interface AgentCustomerListMeta {
