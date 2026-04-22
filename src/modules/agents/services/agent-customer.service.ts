@@ -184,6 +184,8 @@ export class AgentCustomerService {
         lastTransactionType: (user.lastTransactionType as TransactionType | undefined) ?? null,
         registeredAt: user.createdAt.toISOString(),
         kycStatus: user.kyc?.status as KycStatus | undefined,
+        bvn: user.kyc?.bvn ?? null,
+        nin: user.kyc?.nin ?? null,
       };
     });
 
