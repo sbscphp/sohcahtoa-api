@@ -399,7 +399,14 @@ export class AdminTransactionsService {
 
     const trx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { type: true, branchId: true, workflowTemplateId: true, currentWorkflowStageId: true },
+      select: { 
+        type: true, 
+        workflowTemplateId: true, 
+        currentWorkflowStageId: true,
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      },
     });
 
     let workflow = null;
@@ -412,7 +419,7 @@ export class AdminTransactionsService {
       // Find applicable workflow
       workflow = await workflowService.findApplicableWorkflow({
         type: trx?.type || "",
-        branchId: trx?.branchId || undefined,
+        branchId: trx?.createdByAgent?.branchId || undefined,
         action: "Transaction Approval",
       });
     }
