@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../../../shared/middleware";
 import { workflowController } from "../controllers/workflow.controller";
+import { createWorkflowValidation, validate } from "../validations/workflow.validation";
 
 const WorkflowRouter: Router = Router();
 
@@ -120,6 +121,8 @@ WorkflowRouter.post(
   "/templates",
   authenticate,
   requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "create" }),
+  createWorkflowValidation,
+  validate,
   workflowController.createTemplate
 );
 
@@ -149,6 +152,8 @@ WorkflowRouter.post(
   "/templates/draft",
   authenticate,
   requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "create" }),
+  createWorkflowValidation,
+  validate,
   workflowController.saveDraft
 );
 
@@ -232,6 +237,8 @@ WorkflowRouter.patch(
   "/templates/:id",
   authenticate,
   requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  createWorkflowValidation,
+  validate,
   workflowController.updateTemplate
 );
 

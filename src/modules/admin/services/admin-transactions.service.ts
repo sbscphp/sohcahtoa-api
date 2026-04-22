@@ -3,6 +3,7 @@ const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
+import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const logger = createLogger(ServiceName.ADMIN);
@@ -400,19 +401,52 @@ export class AdminTransactionsService {
       } as any,
     });
 
-    const stageCandidates = await prisma.workflowStage.findMany({
-      where: { name: { contains: "Review", mode: "insensitive" } },
-      select: { id: true, name: true },
+    const trx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { type: true, branchId: true, workflowTemplateId: true, currentWorkflowStageId: true },
     });
-    const stageIds = stageCandidates.map((s: any) => s.id);
-    const assignees = stageIds.length
-      ? await prisma.workflowAssignee.findMany({
-          where: { stageId: { in: stageIds } },
-          select: { adminId: true },
-        })
-      : [];
-    let adminIds = assignees.map((a: any) => a.adminId);
-    if (adminIds.length === 0) {
+
+    let workflow = null;
+    if (trx?.workflowTemplateId) {
+      workflow = await prisma.workflowTemplate.findUnique({
+        where: { id: trx.workflowTemplateId },
+        include: { stages: { orderBy: { order: "asc" }, include: { assignees: true } } },
+      });
+    } else {
+      // Find applicable workflow
+      workflow = await workflowService.findApplicableWorkflow({
+        type: trx?.type || "",
+        branchId: trx?.branchId || undefined,
+        action: "Transaction Approval",
+      });
+    }
+
+    let adminIds: string[] = [];
+    let nextStageId: string | null = null;
+
+    if (workflow) {
+      const stages = workflow.stages;
+      const currentIndex = trx?.currentWorkflowStageId 
+        ? stages.findIndex((s: any) => s.id === trx.currentWorkflowStageId)
+        : -1;
+      
+      const nextStage = stages[currentIndex + 1];
+      if (nextStage) {
+        adminIds = nextStage.assignees.map((a: any) => a.adminId);
+        nextStageId = nextStage.id;
+      }
+
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          workflowTemplateId: workflow.id,
+          currentWorkflowStageId: nextStageId,
+        },
+      });
+    }
+
+    if (adminIds.length === 0 && !workflow) {
+      // Fallback to legacy logic if no workflow found
       const fallbackAdmins = await prisma.adminUser.findMany({
         where: { isActive: true },
         select: { id: true, position: true, role: { select: { name: true } } },
@@ -426,6 +460,7 @@ export class AdminTransactionsService {
         })
         .map((u: any) => u.id);
     }
+
     if (adminIds.length > 0) {
       const txBrief: any = await prisma.transaction.findUnique({
         where: { id: transactionId },

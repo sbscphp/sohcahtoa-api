@@ -623,6 +623,29 @@ CREATE TABLE IF NOT EXISTS "settlement_reconciliations" (
 
 CREATE INDEX IF NOT EXISTS "settlement_reconciliations_settlementId_idx" ON "settlement_reconciliations"("settlementId");
 CREATE INDEX IF NOT EXISTS "settlement_reconciliations_status_idx" ON "settlement_reconciliations"("status");
+-- Ensure WorkflowProcessType enum exists
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WorkflowProcessType') THEN
+    CREATE TYPE "WorkflowProcessType" AS ENUM ('RIGID_LINEAR', 'FLEXIBLE');
+  END IF;
+END $$;
+
+-- Update workflow_templates
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "processType" "WorkflowProcessType" NOT NULL DEFAULT 'RIGID_LINEAR';
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "action" TEXT;
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
+CREATE INDEX IF NOT EXISTS "workflow_templates_branchId_idx" ON "workflow_templates"("branchId");
+
+-- Update workflow_stages
+ALTER TABLE "workflow_stages" ADD COLUMN IF NOT EXISTS "type" "WorkflowType";
+
+-- Update workflow_assignees
+ALTER TABLE "workflow_assignees" ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NULL DEFAULT 1;
+
+-- Update transactions
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
 EOF
 
 echo "✅ Schema verification completed"
