@@ -565,6 +565,7 @@ model Branch {
 
   franchise Franchise? @relation(fields: [franchiseId], references: [id])
   agents    Agent[]
+  workflowTemplates WorkflowTemplate[]
 
   @@unique([franchiseId, name])
   @@index([franchiseId])
@@ -803,6 +804,9 @@ model Transaction {
   completedAt        DateTime?
   rejectedAt         DateTime?
   rejectionReason    String?
+
+  workflowTemplateId String?
+  currentWorkflowStageId String?
 
   createdByAgent Agent?              @relation("AgentCreatedTransactions", fields: [createdByAgentId], references: [id])
   steps       TransactionStepLog[]
@@ -1834,6 +1838,11 @@ enum WorkflowType {
   APPROVAL
 }
 
+enum WorkflowProcessType {
+  RIGID_LINEAR
+  FLEXIBLE
+}
+
 enum WorkflowTemplateStatus {
   ACTIVE
   DRAFT
@@ -1843,7 +1852,12 @@ enum WorkflowTemplateStatus {
 model WorkflowTemplate {
   id                String                 @id @default(uuid())
   name              String
+  description       String?
   type              WorkflowType
+  processType       WorkflowProcessType    @default(RIGID_LINEAR)
+  action            String?
+  branchId          String?
+  branch            Branch?                @relation(fields: [branchId], references: [id])
   departmentId      String?
   department        Department?            @relation(fields: [departmentId], references: [id])
   escalationMinutes Int                    @default(0)
@@ -1858,6 +1872,7 @@ model WorkflowTemplate {
 
   @@index([status])
   @@index([departmentId])
+  @@index([branchId])
   @@map("workflow_templates")
 }
 
@@ -1866,6 +1881,7 @@ model WorkflowStage {
   templateId        String
   template          WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   name              String
+  type              WorkflowType?
   order             Int
   escalationMinutes Int              @default(0)
   createdAt         DateTime         @default(now())
@@ -1883,6 +1899,7 @@ model WorkflowAssignee {
   stage     WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
   adminId   String
   admin     AdminUser     @relation(fields: [adminId], references: [id])
+  order     Int           @default(1)
   createdAt DateTime      @default(now())
 
   @@unique([stageId, adminId])
