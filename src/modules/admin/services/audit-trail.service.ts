@@ -102,9 +102,9 @@ class AuditTrailService {
       ];
     }
     if (filters.module) {
-      where.resourceType = filters.module;
+      where.resourceType = { equals: filters.module, mode: "insensitive" };
     }
-    if (filters.status) where.status = filters.status;
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters.dateFrom || filters.dateTo) {
       where.performedAt = {};
       if (filters.dateFrom) where.performedAt.gte = new Date(filters.dateFrom);
@@ -146,9 +146,9 @@ class AuditTrailService {
       ];
     }
     if (filters.module) {
-      where.resourceType = filters.module;
+      where.resourceType = { equals: filters.module, mode: "insensitive" };
     }
-    if (filters.status) where.status = filters.status;
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters.dateFrom || filters.dateTo) {
       where.performedAt = {};
       if (filters.dateFrom) where.performedAt.gte = new Date(filters.dateFrom);

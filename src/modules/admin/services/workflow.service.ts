@@ -277,7 +277,7 @@ export class WorkflowService {
   async listTemplates(status: string | undefined, page = 1, limit = 20) {
     const client: any = prisma as any;
     const where: any = {};
-    if (status && status !== "ALL") where.status = status;
+    if (status && status !== "ALL") where.status = { equals: status, mode: "insensitive" };
     const [total, templates] = await Promise.all([
       client.workflowTemplate.count({ where }),
       client.workflowTemplate.findMany({
@@ -385,8 +385,8 @@ export class WorkflowService {
     const client: any = prisma as any;
     const where: any = {};
     if (filters.status && filters.status !== "ALL") {
-      if (filters.status === "DEACTIVATED") where.status = "ARCHIVED";
-      else where.status = filters.status;
+      if (filters.status.toUpperCase() === "DEACTIVATED") where.status = { equals: "ARCHIVED", mode: "insensitive" };
+      else where.status = { equals: filters.status, mode: "insensitive" };
     }
     const s = ((((filters as any) || {}).search ?? (filters.q || "") ) as string).toString().trim();
     if (s) {

@@ -754,6 +754,35 @@ UserManagementRouter.patch(
 
 /**
  * @swagger
+ * /api/admin/management/roles/{id}/default:
+ *   patch:
+ *     summary: Set role as system default
+ *     tags: [admin-user-management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Role set as default
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+UserManagementRouter.patch(
+  "/roles/:id/default",
+  authenticate,
+  requirePermission({ module: "USER_MANAGEMENT", feature: "ROLES", action: "edit" }),
+  userManagementController.setDefaultRole
+);
+
+/**
+ * @swagger
  * /api/admin/management/permissions:
  *   get:
  *     summary: Get all permissions

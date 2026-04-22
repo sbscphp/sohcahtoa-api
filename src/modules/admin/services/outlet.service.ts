@@ -101,7 +101,7 @@ class OutletService {
         { phoneNumber: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (query.status) where.status = query.status;
+    if (query.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const [rows, total] = await Promise.all([
       db.franchise.findMany({
@@ -279,7 +279,7 @@ class OutletService {
         { phoneNumber: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (filters.status) where.status = filters.status;
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     const rows = await db.franchise.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -314,7 +314,7 @@ class OutletService {
         { address: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (filters.status) where.status = filters.status;
+    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
     const rows = await db.branch.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -359,7 +359,7 @@ class OutletService {
         { branchManager: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (query.status) where.status = query.status;
+    if (query.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const [rows, total] = await Promise.all([
       db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
@@ -417,7 +417,7 @@ class OutletService {
         { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
-    if (query?.status) where.status = query.status;
+    if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const [rows, total] = await Promise.all([
       db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
@@ -454,7 +454,7 @@ class OutletService {
         { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
-    if (query?.status) where.status = query.status;
+    if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const rows = await db.branch.findMany({
       where,
@@ -492,7 +492,7 @@ class OutletService {
         { branchManager: { contains: q, mode: "insensitive" } },
       ];
     }
-    if (query?.status) where.status = query.status;
+    if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const rows = await db.branch.findMany({
       where,
@@ -540,7 +540,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters?.step) where.currentStep = filters.step;
 
     const rawType = (filters?.type || "").toString().trim().toLowerCase();
@@ -647,7 +647,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters?.step) where.currentStep = filters.step;
 
     const rawType = (filters?.type || "").toString().trim().toLowerCase();
@@ -750,7 +750,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters?.step) where.currentStep = filters.step;
 
     const rawType = (filters?.type || "").toString().trim().toLowerCase();
@@ -850,7 +850,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = filters.status;
+    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
     if (filters?.step) where.currentStep = filters.step;
 
     const rawType = (filters?.type || "").toString().trim().toLowerCase();
@@ -1151,7 +1151,7 @@ class OutletService {
     }
     if (query.state) where.state = { equals: query.state, mode: "insensitive" };
     if (query.region) where.region = { equals: query.region, mode: "insensitive" };
-    if (query.status) where.status = query.status;
+    if (query.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const [rows, total] = await Promise.all([
       db.pickupStation.findMany({
@@ -1194,7 +1194,7 @@ class OutletService {
     }
     if (query.state) where.state = { equals: query.state, mode: "insensitive" };
     if (query.region) where.region = { equals: query.region, mode: "insensitive" };
-    if (query.status) where.status = query.status;
+    if (query.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const rows = await db.pickupStation.findMany({
       where,

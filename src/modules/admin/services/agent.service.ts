@@ -24,10 +24,17 @@ class AgentService {
     const search = (((filters || {}).search ?? (filters || {}).q) || "").toString().trim();
     
     // Status / Active filter
-    const isActiveRaw = (filters.isActive ?? filters.status ?? "").toString().trim().toLowerCase();
-    if (isActiveRaw === "true" || isActiveRaw === "active") {
+    const statusRaw = (filters.status ?? filters.isActive ?? "").toString().trim().toLowerCase();
+    if (statusRaw === "active") {
       where.isActive = true;
-    } else if (isActiveRaw === "false" || isActiveRaw === "deactivated") {
+      where.isApproved = true;
+    } else if (statusRaw === "deactivated") {
+      where.isActive = false;
+    } else if (statusRaw === "pending") {
+      where.isApproved = false;
+    } else if (statusRaw === "true") {
+      where.isActive = true;
+    } else if (statusRaw === "false") {
       where.isActive = false;
     }
 
@@ -171,7 +178,7 @@ class AgentService {
       return {
         ...agentWithoutBranchObj,
         branchName,
-        status: a.isActive ? "Active" : "Deactivated",
+        status: !a.isApproved ? "Pending" : a.isActive ? "Active" : "Deactivated",
         totalTransactions: totals.count,
         totalTransactionsVolume: totals.volume,
       };
@@ -227,7 +234,7 @@ class AgentService {
           contactEmail: a.email,
           totalTransactions: count,
           transactionVolume: vol,
-          status: a.isActive ? "Active" : "Deactivated",
+          status: !a.isApproved ? "Pending" : a.isActive ? "Active" : "Deactivated",
         };
       })
     );
