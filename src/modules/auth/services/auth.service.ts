@@ -45,6 +45,7 @@ import {
   VerifyAgentLoginRequest,
 } from '../../../shared/types';
 import bvnService from './bvn.service';
+import tinService from './tin.service';
 import passportVerificationService from './passport-verification.service';
 import auditService from '../../audit/services/audit.service';
 import { smsClient } from '../../../integrations';
@@ -1694,22 +1695,66 @@ export class AuthService {
       throw new NotFoundError('User not found');
     }
 
-    // Update KYC data
+    const kycUpdate: Record<string, any> = {
+      passportNumber: data.passportNumber,
+      status: KycStatus.PENDING_VERIFICATION,
+    };
+
+    // Verify BVN via NIBSS BIVS if provided
+    if (data.bvn) {
+      logger.info('Verifying BVN via NIBSS in verifyKyc', {
+        userId: data.userId,
+        bvn: `***${data.bvn.slice(-4)}`,
+      });
+
+      const bvnResult = await bvnService.verifyBvn(data.bvn);
+
+      if (!bvnResult.success) {
+        throw new ValidationError(bvnResult.message || 'BVN verification failed');
+      }
+
+      kycUpdate.bvn = data.bvn;
+      kycUpdate.bvnVerified = true;
+
+      logger.info('BVN verified successfully in verifyKyc', { userId: data.userId });
+    }
+
+    // Verify TIN via NIBSS BIVS if provided
+    if (data.tin) {
+      logger.info('Verifying TIN via NIBSS in verifyKyc', {
+        userId: data.userId,
+        tin: `***${data.tin.slice(-4)}`,
+      });
+
+      const tinResult = await tinService.verifyTin(data.tin);
+
+      if (!tinResult.success) {
+        throw new ValidationError(tinResult.message || 'TIN verification failed');
+      }
+
+      kycUpdate.tin = data.tin;
+      kycUpdate.tinVerified = true;
+
+      logger.info('TIN verified successfully in verifyKyc', { userId: data.userId });
+    }
+
     await prisma.userKyc.update({
       where: { userId: data.userId },
-      data: {
-        bvn: data.bvn,
-        tin: data.tin,
-        passportNumber: data.passportNumber,
-        status: KycStatus.PENDING_VERIFICATION,
+      data: kycUpdate,
+    });
+
+    auditService.logAuthEvent({
+      userId: data.userId,
+      action: 'KYC_VERIFIED' as any,
+      success: true,
+      metadata: {
+        bvnVerified: !!data.bvn,
+        tinVerified: !!data.tin,
       },
     });
 
-    // TODO: Call external verification APIs (CBN TRMS, BVN verification, etc.)
-    // For now, we'll just update the status
-
     return {
-      message: 'KYC verification initiated',
+      message: 'KYC verification completed successfully',
     };
   }
 

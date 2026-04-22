@@ -11,10 +11,12 @@ export class SMSClient {
   private client: AxiosInstance;
   private provider: string;
   private apiKey: string;
+  private emailConfigId: string;
 
   constructor() {
     this.provider = process.env.SMS_PROVIDER || 'termii';
     this.apiKey = process.env.SMS_API_KEY || '';
+    this.emailConfigId = process.env.TERMII_EMAIL_CONFIG_ID || '';
 
     const baseUrls: Record<string, string> = {
       termii: 'https://v3.api.termii.com/api',
@@ -112,6 +114,79 @@ export class SMSClient {
       success: response.data.messages?.[0]?.status?.groupId === 1,
       messageId: response.data.messages?.[0]?.messageId,
     };
+  }
+
+  /**
+   * Send an OTP/verification code via Termii email
+   * Uses Termii's dedicated email OTP endpoint with a pre-configured template
+   */
+  async sendEmailOtp(to: string, code: string): Promise<{
+    success: boolean;
+    messageId?: string;
+  }> {
+    try {
+      if (this.provider !== 'termii') {
+        throw new Error(`Email OTP via ${this.provider} is not supported`);
+      }
+
+      logger.info('Sending OTP email via Termii', { to });
+
+      const response = await this.client.post('/email/otp/send', {
+        api_key: this.apiKey,
+        email_address: to,
+        code,
+        email_configuration_id: this.emailConfigId,
+      });
+
+      const success = response.status === 200 || response.data?.message_id !== undefined;
+
+      logger.info('Termii OTP email sent', { to, success });
+
+      return {
+        success,
+        messageId: response.data?.message_id,
+      };
+    } catch (error: any) {
+      logger.error('Termii OTP email failed', { to, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Send a plain-text email via Termii messaging channel
+   */
+  async sendEmail(to: string, message: string): Promise<{
+    success: boolean;
+    messageId?: string;
+  }> {
+    try {
+      if (this.provider !== 'termii') {
+        throw new Error(`Email via ${this.provider} is not supported`);
+      }
+
+      logger.info('Sending email via Termii', { to });
+
+      const response = await this.client.post('/sms/send', {
+        api_key: this.apiKey,
+        to,
+        from: process.env.SMS_SENDER_ID || 'Sochatoa',
+        sms: message,
+        type: 'plain',
+        channel: 'email',
+      });
+
+      const success = response.data?.message_id !== undefined;
+
+      logger.info('Termii email sent', { to, success });
+
+      return {
+        success,
+        messageId: response.data?.message_id,
+      };
+    } catch (error: any) {
+      logger.error('Termii email failed', { to, error: error.message });
+      throw error;
+    }
   }
 }
 

@@ -68,6 +68,42 @@ interface ConsentResponse {
   ExpiryDate?: string;
 }
 
+interface FASLookupResponse {
+  ResponseCode: string;
+  ResponseDescription: string;
+  FinancialAddress?: string;
+  AccountNumber?: string;
+  AccountName?: string;
+  BankCode?: string;
+  BankName?: string;
+  Currency?: string;
+}
+
+interface FASRegisterRequest {
+  financialAddress: string;
+  accountNumber: string;
+  bankCode: string;
+  accountName: string;
+  bvn?: string;
+}
+
+interface ConsentHubRequest {
+  customerId: string;
+  consentType: string;
+  duration: number; // in days
+  purpose: string;
+  scope: string[];
+}
+
+interface ConsentHubResponse {
+  ResponseCode: string;
+  ResponseDescription: string;
+  ConsentId?: string;
+  Status?: string;
+  ExpiryDate?: string;
+  ConsentUrl?: string;
+}
+
 /**
  * NIBSS API Client
  * Handles integration with Nigeria Inter-Bank Settlement System for:
@@ -91,6 +127,8 @@ export class NIBSSClient {
   private consentClientSecret: string;
   private consentBaseUrl: string;
 
+  private institutionCode: string;
+
   private bivsToken: string | null = null;
   private bivsTokenExpiry: number = 0;
 
@@ -103,10 +141,13 @@ export class NIBSSClient {
     this.bivsClientSecret = process.env.NIBSS_BIVS_CLIENT_SECRET || '';
     this.bivsBaseUrl = process.env.NIBSS_BIVS_BASE_URL || 'https://apitest.nibss-plc.com.ng:1443';
 
-    // ConsentMgmt Configuration
+    // ConsentMgmt / Consent Hub Configuration (shared credentials)
     this.consentClientId = process.env.NIBSS_CONSENT_CLIENT_ID || '';
     this.consentClientSecret = process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
     this.consentBaseUrl = process.env.NIBSS_CONSENT_BASE_URL || 'https://apitest.nibss-plc.com.ng:1443';
+
+    // Institution Code (used across FAS and Consent Hub)
+    this.institutionCode = process.env.NIBSS_INSTITUTION_CODE || '';
 
     // Initialize BIVS client
     this.bivsClient = axios.create({
@@ -114,15 +155,17 @@ export class NIBSSClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
+        'institutionCode': this.institutionCode,
       },
     });
 
-    // Initialize ConsentMgmt client
+    // Initialize ConsentMgmt / Consent Hub / FAS client (shared base URL and credentials)
     this.consentClient = axios.create({
       baseURL: this.consentBaseUrl,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
+        'institutionCode': this.institutionCode,
       },
     });
 
@@ -707,6 +750,309 @@ export class NIBSSClient {
         response: error.response?.data
       });
       throw new Error(`Bank list fetch failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Look up a financial address via NIBSS FAS
+   */
+  async lookupFinancialAddress(financialAddress: string): Promise<{
+    found: boolean;
+    data?: {
+      financialAddress: string;
+      accountNumber: string;
+      accountName: string;
+      bankCode: string;
+      bankName: string;
+      currency?: string;
+    };
+    message: string;
+  }> {
+    try {
+      const token = await this.getBivsToken();
+
+      logger.info('Looking up financial address', {
+        financialAddress: `***${financialAddress.slice(-4)}`,
+      });
+
+      const response = await this.bivsClient.get<FASLookupResponse>(
+        `/fas/api/v1/financialaddress/${encodeURIComponent(financialAddress)}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      );
+
+      const isFound = response.data.ResponseCode === '00';
+
+      if (!isFound) {
+        logger.warn('Financial address lookup failed', {
+          responseCode: response.data.ResponseCode,
+          description: response.data.ResponseDescription,
+        });
+
+        return {
+          found: false,
+          message: response.data.ResponseDescription || 'Financial address not found',
+        };
+      }
+
+      logger.info('Financial address found', {
+        bankName: response.data.BankName,
+        accountName: response.data.AccountName,
+      });
+
+      return {
+        found: true,
+        data: {
+          financialAddress: response.data.FinancialAddress || financialAddress,
+          accountNumber: response.data.AccountNumber || '',
+          accountName: response.data.AccountName || '',
+          bankCode: response.data.BankCode || '',
+          bankName: response.data.BankName || '',
+          currency: response.data.Currency,
+        },
+        message: 'Financial address found',
+      };
+    } catch (error: any) {
+      logger.error('Financial address lookup error', {
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      return {
+        found: false,
+        message: `Financial address lookup failed: ${error.response?.data?.ResponseDescription || error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Register a financial address via NIBSS FAS
+   */
+  async registerFinancialAddress(request: FASRegisterRequest): Promise<{
+    success: boolean;
+    financialAddress?: string;
+    message: string;
+  }> {
+    try {
+      const token = await this.getBivsToken();
+
+      logger.info('Registering financial address', {
+        accountNumber: `***${request.accountNumber.slice(-4)}`,
+        bankCode: request.bankCode,
+      });
+
+      const response = await this.bivsClient.post<FASLookupResponse>(
+        '/fas/api/v1/financialaddress',
+        {
+          FinancialAddress: request.financialAddress,
+          AccountNumber: request.accountNumber,
+          BankCode: request.bankCode,
+          AccountName: request.accountName,
+          BVN: request.bvn,
+        },
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      );
+
+      const isSuccess = response.data.ResponseCode === '00';
+
+      if (!isSuccess) {
+        logger.warn('Financial address registration failed', {
+          responseCode: response.data.ResponseCode,
+          description: response.data.ResponseDescription,
+        });
+
+        return {
+          success: false,
+          message: response.data.ResponseDescription || 'Financial address registration failed',
+        };
+      }
+
+      logger.info('Financial address registered successfully', {
+        financialAddress: response.data.FinancialAddress,
+      });
+
+      return {
+        success: true,
+        financialAddress: response.data.FinancialAddress,
+        message: 'Financial address registered successfully',
+      };
+    } catch (error: any) {
+      logger.error('Financial address registration error', {
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      return {
+        success: false,
+        message: `Financial address registration failed: ${error.response?.data?.ResponseDescription || error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Create a consent request via NIBSS Consent Hub
+   */
+  async createConsentHubRequest(request: ConsentHubRequest): Promise<{
+    success: boolean;
+    consentId?: string;
+    consentUrl?: string;
+    expiryDate?: string;
+    message: string;
+  }> {
+    try {
+      const token = await this.getConsentToken();
+
+      logger.info('Creating Consent Hub request', {
+        customerId: request.customerId,
+        consentType: request.consentType,
+        duration: request.duration,
+      });
+
+      const response = await this.consentClient.post<ConsentHubResponse>(
+        '/consenthub/api/v1/consent',
+        {
+          CustomerId: request.customerId,
+          ConsentType: request.consentType,
+          Duration: request.duration,
+          Purpose: request.purpose,
+          Scope: request.scope,
+        },
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      );
+
+      const isSuccess = response.data.ResponseCode === '00';
+
+      if (!isSuccess) {
+        logger.warn('Consent Hub request failed', {
+          responseCode: response.data.ResponseCode,
+          description: response.data.ResponseDescription,
+        });
+
+        return {
+          success: false,
+          message: response.data.ResponseDescription || 'Consent Hub request failed',
+        };
+      }
+
+      logger.info('Consent Hub request created successfully', {
+        consentId: response.data.ConsentId,
+      });
+
+      return {
+        success: true,
+        consentId: response.data.ConsentId,
+        consentUrl: response.data.ConsentUrl,
+        expiryDate: response.data.ExpiryDate,
+        message: 'Consent Hub request created successfully',
+      };
+    } catch (error: any) {
+      logger.error('Consent Hub request error', {
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      return {
+        success: false,
+        message: `Consent Hub request failed: ${error.response?.data?.ResponseDescription || error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Get the status of a Consent Hub consent
+   */
+  async getConsentHubStatus(consentId: string): Promise<{
+    found: boolean;
+    status?: string;
+    expiryDate?: string;
+    message: string;
+  }> {
+    try {
+      const token = await this.getConsentToken();
+
+      logger.info('Fetching Consent Hub status', { consentId });
+
+      const response = await this.consentClient.get<ConsentHubResponse>(
+        `/consenthub/api/v1/consent/${consentId}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      );
+
+      const isFound = response.data.ResponseCode === '00';
+
+      if (!isFound) {
+        return {
+          found: false,
+          message: response.data.ResponseDescription || 'Consent not found',
+        };
+      }
+
+      return {
+        found: true,
+        status: response.data.Status,
+        expiryDate: response.data.ExpiryDate,
+        message: 'Consent status retrieved',
+      };
+    } catch (error: any) {
+      logger.error('Consent Hub status fetch error', {
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      return {
+        found: false,
+        message: `Consent Hub status fetch failed: ${error.response?.data?.ResponseDescription || error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Revoke a Consent Hub consent
+   */
+  async revokeConsentHub(consentId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const token = await this.getConsentToken();
+
+      logger.info('Revoking Consent Hub consent', { consentId });
+
+      const response = await this.consentClient.delete<ConsentHubResponse>(
+        `/consenthub/api/v1/consent/${consentId}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }
+      );
+
+      const isSuccess = response.data.ResponseCode === '00';
+
+      if (!isSuccess) {
+        return {
+          success: false,
+          message: response.data.ResponseDescription || 'Consent revocation failed',
+        };
+      }
+
+      logger.info('Consent Hub consent revoked', { consentId });
+
+      return { success: true, message: 'Consent revoked successfully' };
+    } catch (error: any) {
+      logger.error('Consent Hub revocation error', {
+        error: error.message,
+        response: error.response?.data,
+      });
+
+      return {
+        success: false,
+        message: `Consent revocation failed: ${error.response?.data?.ResponseDescription || error.message}`,
+      };
     }
   }
 

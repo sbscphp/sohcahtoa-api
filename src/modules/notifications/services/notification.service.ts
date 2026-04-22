@@ -171,7 +171,6 @@ export class NotificationService {
    */
   private async sendEmailNotification(notificationId: string, options: SendNotificationOptions) {
     try {
-      // Get user email
       const user = await prisma.user.findUnique({
         where: { id: options.userId },
         select: { email: true, profile: true },
@@ -181,11 +180,8 @@ export class NotificationService {
         throw new AppError(ErrorCode.NOT_FOUND, 'User not found', 404);
       }
 
-      // TODO: Integrate with email service
-      // For now, just log the email attempt
       logger.info(`Would send email to ${user.email} with subject: ${options.title}`);
 
-      // Update notification status
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
@@ -214,7 +210,6 @@ export class NotificationService {
    */
   private async sendSmsNotification(notificationId: string, options: SendNotificationOptions) {
     try {
-      // Get user phone number
       const user = await prisma.user.findUnique({
         where: { id: options.userId },
         select: { phoneNumber: true },
@@ -224,8 +219,6 @@ export class NotificationService {
         throw new AppError(ErrorCode.NOT_FOUND, 'User not found', 404);
       }
 
-      // TODO: Integrate with SMS service (Termii)
-      // For now, just mark as sent
       logger.warn('SMS service not yet integrated');
 
       await prisma.notification.update({

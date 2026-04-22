@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { smsClient } from '../../integrations/sms-gateway/sms.client';
 
 export interface EmailOptions {
   to: string;
@@ -26,6 +27,7 @@ class EmailService {
   private transporter: nodemailer.Transporter | null = null;
   private config: EmailConfig | null = null;
   private isConfigured = false;
+  private useTermii = process.env.EMAIL_PROVIDER === 'termii';
 
   configure(config: EmailConfig) {
     this.config = config;
@@ -43,6 +45,18 @@ class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    // Route through Termii if configured
+    if (this.useTermii) {
+      try {
+        const text = options.text || options.subject;
+        const result = await smsClient.sendEmail(options.to, text);
+        return result;
+      } catch (error: any) {
+        console.error('Termii email sending failed:', error);
+        return { success: false, error: error.message };
+      }
+    }
+
     if (!this.isConfigured || !this.transporter || !this.config) {
       console.warn('Email service not configured. Email not sent:', options);
       return {
@@ -74,6 +88,17 @@ class EmailService {
   }
 
   async sendOtpEmail(email: string, otp: string, purpose: string): Promise<boolean> {
+    // Route OTP emails through Termii's dedicated email OTP endpoint
+    if (this.useTermii) {
+      try {
+        const result = await smsClient.sendEmailOtp(email, otp);
+        return result.success;
+      } catch (error: any) {
+        console.error('Termii OTP email failed:', error);
+        return false;
+      }
+    }
+
     const subject = this.getOtpSubject(purpose);
     const html = this.getOtpEmailTemplate(otp, purpose);
     const text = `Your OTP is: ${otp}. It will expire in 10 minutes.`;
