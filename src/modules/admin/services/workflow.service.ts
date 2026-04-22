@@ -530,7 +530,7 @@ export class WorkflowService {
       return { t, score };
     });
 
-    const best = scored.sort((a, b) => b.score - a.score)[0];
+    const best = scored.sort((a: any, b: any) => b.score - a.score)[0];
     return best.score >= 0 ? best.t : null;
   }
 }
