@@ -469,7 +469,7 @@ export class AuthService {
 
     await client.agent.update({
       where: { id: agent.id },
-      data: { password: hashed },
+      data: { password: hashed, isApproved: true },
     });
 
     const existingUser = await prisma.user.findUnique({

@@ -151,6 +151,21 @@ class UserManagementController {
         res.json(successResponse(result));
     });
 
+    setDefaultRole = asyncHandler(async (req: Request, res: Response) => {
+        const { id } = req.params;
+        const result = await userManagementService.setDefaultRole(id);
+        const adminId = (req as any).user?.userId as string;
+        await auditTrailService.logAction({
+            adminId,
+            actionType: ActionType.ROLE_UPDATE,
+            actionLabel: "Set Role as Default",
+            resourceType: "USER_MANAGEMENT",
+            resourceId: id,
+            metadata: { isDefault: true },
+        });
+        res.json(successResponse(result));
+    });
+
     toggleRoleActive = asyncHandler(async (req: Request, res: Response) => {
         const { id } = req.params;
         const isActiveRaw = (req.body?.isActive ?? req.query?.isActive) as any;
@@ -397,7 +412,7 @@ class UserManagementController {
             "WORKFLOW",
             "INCIDENCE",
             "RATE",
-            "USER_ANAGEMENT",
+            "USER_MANAGEMENT",
             "REGULATORY",    
             "REPORTS",
             "AUDIT_TRAIL",

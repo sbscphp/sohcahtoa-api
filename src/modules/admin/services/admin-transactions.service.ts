@@ -98,8 +98,8 @@ export class AdminTransactionsService {
 
   private async buildTransactionsListQuery(filters: any) {
     const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.step) where.currentStep = filters.step;
+    if (filters.status) where.status = (filters.status as string).toUpperCase();
+    if (filters.step) where.currentStep = (filters.step as string).toUpperCase();
 
     const rawType = (filters.type || "").toString().trim().toLowerCase();
     if (!applyBuySellFxFilter(where, rawType) && rawType) {
