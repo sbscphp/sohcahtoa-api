@@ -26,8 +26,8 @@ export async function verifyCustomerBvnDuringOnboarding(
       bvn: `***${bvn.slice(-4)}`,
     });
 
-    // Option 1: Using the BVN service wrapper (recommended)
-    const result = await bvnService.verifyBvn(bvn, phoneNumber);
+    // Option 1: Initiate NIBSS consent (user must authenticate on consentUrl)
+    const result = await bvnService.initiateConsentForBvn(bvn) as any;
 
     if (!result.success) {
       logger.error('BVN verification failed', {
@@ -205,8 +205,8 @@ export async function verifyWithConsent(
       purpose,
     });
 
-    // Use the consent-enabled verification method
-    const result = await bvnService.verifyBvnWithConsent(userId, bvn, purpose);
+    // Use the consent-enabled verification method (initiates Consent Hub session)
+    const result = await bvnService.initiateConsentForBvn(bvn) as any;
 
     if (!result.success) {
       logger.error('Consent-based verification failed', {
@@ -271,7 +271,7 @@ export async function performCompleteTransactionVerification(params: {
     // Step 1: Verify BVN if provided
     if (params.bvn) {
       try {
-        const bvnResult = await bvnService.verifyBvn(params.bvn);
+        const bvnResult = await bvnService.initiateConsentForBvn(params.bvn) as any;
         verificationResults.verifications.bvn = {
           verified: bvnResult.success,
           data: bvnResult.data,

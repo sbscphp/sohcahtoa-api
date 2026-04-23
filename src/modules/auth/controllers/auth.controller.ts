@@ -26,15 +26,51 @@ export class AuthController {
     }
   }
 
-  // Nigerian Flow - Step 1: Verify BVN
+  // Nigerian Flow - Step 1: Initiate BVN consent
   async verifyBvn(req: Request, res: Response, next: NextFunction) {
     try {
-      const { bvn } = req.body;
-      if (!bvn) {
-        throw new Error('BVN is required');
-      }
-      const result = await authService.verifyBvnForSignup(bvn);
+      const { bvn, phoneNumber, email } = req.body;
+      if (!bvn) throw new Error('BVN is required');
+      if (!phoneNumber) throw new Error('Phone number is required');
+      if (!email) throw new Error('Email is required');
+      const result = await authService.verifyBvnForSignup(bvn, phoneNumber, email);
       res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Nigerian Flow - Step 1b: Poll BVN consent status (returns verificationToken when done)
+  async checkBvnConsentStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) throw new Error('sessionId is required');
+      const result = await authService.checkBvnConsentStatus(sessionId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // NIBSS Callback: NIBSS POSTs retrievalToken here after user authenticates on their portal
+  async nibssConsentCallback(req: Request, res: Response, next: NextFunction) {
+    try {
+      // NIBSS may send sessionId/retrievalToken in various field names — handle common variants
+      const sessionId = req.body.sessionId || req.body.session_id || req.query.sessionId as string;
+      const retrievalToken = req.body.retrievalToken || req.body.retrieval_token || req.body.token;
+
+      if (!sessionId || !retrievalToken) {
+        res.status(400).json({ success: false, message: 'sessionId and retrievalToken are required' });
+        return;
+      }
+
+      // Process asynchronously — respond 200 immediately so NIBSS doesn't retry
+      res.status(200).json({ success: true, message: 'Callback received' });
+
+      await authService.handleNibssConsentCallback(sessionId, retrievalToken).catch((err) => {
+        // Log but don't crash — response already sent
+        console.error('NIBSS callback processing error', err);
+      });
     } catch (error) {
       next(error);
     }

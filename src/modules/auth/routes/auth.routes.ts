@@ -123,8 +123,12 @@ router.post('/signup', authController.signup);
  *       429:
  *         description: Too many requests
  */
+// NIBSS Consent Hub callback (called by NIBSS after user authenticates on their portal)
+router.post('/nibss/callback', authController.nibssConsentCallback);
+
 // Nigerian signup flow (4 steps)
-router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1
+router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1: initiates consent, returns sessionId + consentUrl
+router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsentStatus); // Step 1b: poll until COMPLETED, returns verificationToken
 /**
  * @swagger
  * /api/auth/signup/nigerian/send-otp:

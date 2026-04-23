@@ -211,13 +211,8 @@ export class TinService {
         purpose,
       });
 
-      // Request consent via NIBSS ConsentMgmt
-      const consentResponse = await nibssClient.requestConsent({
-        customerId: userId,
-        serviceType: 'TIN_VERIFICATION',
-        duration: 30, // 30 days
-        purpose,
-      });
+      // Request consent via NIBSS Consent Hub
+      const consentResponse = await nibssClient.initiateConsent(userId, 'YYYY', false);
 
       if (!consentResponse.success) {
         logger.warn('Consent request failed', {
@@ -234,7 +229,7 @@ export class TinService {
 
       logger.info('Consent obtained successfully', {
         userId,
-        consentId: consentResponse.consentId,
+        sessionId: consentResponse.sessionId,
       });
 
       // Proceed with TIN verification
