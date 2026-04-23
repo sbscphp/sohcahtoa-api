@@ -13,6 +13,8 @@ type ListFilters = {
   module?: WorkflowModule;
 };
 
+import { CreateWorkflowDto, UpdateWorkflowDto } from "../dto/workflow.dto";
+
 export class WorkflowService {
   private toMinutesSince(date: Date) {
     const diffMs = Date.now() - date.getTime();
@@ -194,12 +196,16 @@ export class WorkflowService {
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
-  async createTemplate(payload: any, adminId: string) {
+  async createTemplate(payload: CreateWorkflowDto, adminId: string) {
     const client: any = prisma as any;
     const template = await client.workflowTemplate.create({
       data: {
         name: payload.name,
+        description: payload.description || null,
         type: payload.type,
+        processType: payload.processType || "RIGID_LINEAR",
+        action: payload.action || null,
+        branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
@@ -209,13 +215,14 @@ export class WorkflowService {
       select: { id: true, name: true, type: true, status: true },
     });
     if (Array.isArray(payload.stages) && payload.stages.length) {
-      for (const [order, st] of payload.stages.entries()) {
+      for (const st of payload.stages) {
         const stage = await client.workflowStage.create({
           data: {
             templateId: template.id,
-            name: st.name || `Stage ${order + 1}`,
+            name: st.name || `Stage ${st.order}`,
+            type: st.type || null,
             escalationMinutes: st.escalationMinutes || 0,
-            order: order + 1,
+            order: st.order,
           },
           select: { id: true },
         });
@@ -225,6 +232,7 @@ export class WorkflowService {
               data: {
                 stageId: stage.id,
                 adminId: ass.adminId,
+                order: ass.order || 1,
               },
             });
           }
@@ -234,12 +242,16 @@ export class WorkflowService {
     return { id: template.id, message: "Workflow created" };
   }
 
-  async saveDraft(payload: any, adminId: string) {
+  async saveDraft(payload: CreateWorkflowDto, adminId: string) {
     const client: any = prisma as any;
     const template = await client.workflowTemplate.create({
       data: {
         name: payload.name,
+        description: payload.description || null,
         type: payload.type,
+        processType: payload.processType || "RIGID_LINEAR",
+        action: payload.action || null,
+        branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
@@ -249,13 +261,14 @@ export class WorkflowService {
       select: { id: true },
     });
     if (Array.isArray(payload.stages) && payload.stages.length) {
-      for (const [order, st] of payload.stages.entries()) {
+      for (const st of payload.stages) {
         const stage = await client.workflowStage.create({
           data: {
             templateId: template.id,
-            name: st.name || `Stage ${order + 1}`,
+            name: st.name || `Stage ${st.order}`,
+            type: st.type || null,
             escalationMinutes: st.escalationMinutes || 0,
-            order: order + 1,
+            order: st.order,
           },
           select: { id: true },
         });
@@ -265,6 +278,7 @@ export class WorkflowService {
               data: {
                 stageId: stage.id,
                 adminId: ass.adminId,
+                order: ass.order || 1,
               },
             });
           }
@@ -295,34 +309,53 @@ export class WorkflowService {
     const client: any = prisma as any;
     const tpl = await client.workflowTemplate.findUnique({
       where: { id },
-      select: { id: true, name: true, type: true, status: true, escalationMinutes: true, hasPtaRequest: true, departmentId: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        type: true,
+        processType: true,
+        action: true,
+        status: true,
+        escalationMinutes: true,
+        hasPtaRequest: true,
+        departmentId: true,
+        branchId: true,
+      },
     });
     const stages = await client.workflowStage.findMany({
       where: { templateId: id },
       orderBy: { order: "asc" },
-      select: { id: true, name: true, escalationMinutes: true, order: true },
+      select: { id: true, name: true, type: true, escalationMinutes: true, order: true },
     });
     const stageIds = stages.map((s: any) => s.id);
     const assignees = stageIds.length
       ? await client.workflowAssignee.findMany({
           where: { stageId: { in: stageIds } },
-          select: { stageId: true, adminId: true },
+          select: { stageId: true, adminId: true, order: true },
+          orderBy: { order: "asc" },
         })
       : [];
     const stageWithAssignees = stages.map((s: any) => ({
       ...s,
-      assignees: assignees.filter((a: any) => a.stageId === s.id).map((a: any) => ({ adminId: a.adminId })),
+      assignees: assignees
+        .filter((a: any) => a.stageId === s.id)
+        .map((a: any) => ({ adminId: a.adminId, order: a.order })),
     }));
     return { ...tpl, stages: stageWithAssignees };
   }
 
-  async updateTemplate(id: string, payload: any) {
+  async updateTemplate(id: string, payload: UpdateWorkflowDto) {
     const client: any = prisma as any;
     await client.workflowTemplate.update({
       where: { id },
       data: {
         name: payload.name,
+        description: payload.description || null,
         type: payload.type,
+        processType: payload.processType || "RIGID_LINEAR",
+        action: payload.action || null,
+        branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
@@ -330,20 +363,25 @@ export class WorkflowService {
     });
     if (Array.isArray(payload.stages)) {
       await client.workflowStage.deleteMany({ where: { templateId: id } });
-      for (const [order, st] of payload.stages.entries()) {
+      for (const st of payload.stages) {
         const stage = await client.workflowStage.create({
           data: {
             templateId: id,
-            name: st.name || `Stage ${order + 1}`,
+            name: st.name || `Stage ${st.order}`,
+            type: st.type || null,
             escalationMinutes: st.escalationMinutes || 0,
-            order: order + 1,
+            order: st.order,
           },
           select: { id: true },
         });
         if (Array.isArray(st.assignees)) {
           for (const ass of st.assignees) {
             await client.workflowAssignee.create({
-              data: { stageId: stage.id, adminId: ass.adminId },
+              data: {
+                stageId: stage.id,
+                adminId: ass.adminId,
+                order: ass.order || 1,
+              },
             });
           }
         }
@@ -416,8 +454,7 @@ export class WorkflowService {
       stageCount[s.templateId] = (stageCount[s.templateId] || 0) + 1;
     });
     const data = templates.map((t: any) => {
-      const count = stageCount[t.id] || 0;
-      const workflowType = count > 1 ? "Flexible Workflow" : "Rigid Linear";
+      const workflowType = t.processType === "FLEXIBLE" ? "Flexible Workflow" : "Rigid Linear";
       const statusLabel =
         t.status === "ACTIVE" ? "Active" : t.status === "ARCHIVED" ? "Deactivated" : "Draft";
       return {
@@ -425,7 +462,7 @@ export class WorkflowService {
         displayId: this.displayId(t.id),
         workflowName: t.name,
         workflowType,
-        workflowAction: t.type === "APPROVAL" ? "Transaction Management" : "Settlement Management",
+        workflowAction: t.action || (t.type === "APPROVAL" ? "Transaction Management" : "Settlement Management"),
         status: statusLabel,
         dateCreated: t.createdAt,
       };
@@ -455,6 +492,46 @@ export class WorkflowService {
       select: { id: true, status: true },
     });
     return { jobId: job.id, status: job.status };
+  }
+
+  async findApplicableWorkflow(params: {
+    type: string;
+    branchId?: string;
+    departmentId?: string;
+    action?: string;
+  }) {
+    const client: any = prisma as any;
+    // Find active templates that match the criteria
+    // Priority: Branch + Department > Branch > Department > Generic
+    const templates = await client.workflowTemplate.findMany({
+      where: {
+        status: "ACTIVE",
+        action: params.action || "Transaction Approval", // Default action name
+      },
+      include: {
+        stages: {
+          orderBy: { order: "asc" },
+          include: { assignees: true },
+        },
+      },
+    });
+
+    if (!templates.length) return null;
+
+    // Filter and score
+    const scored = templates.map((t: any) => {
+      let score = 0;
+      if (t.branchId === params.branchId) score += 10;
+      else if (t.branchId && t.branchId !== params.branchId) score -= 100;
+
+      if (t.departmentId === params.departmentId) score += 5;
+      else if (t.departmentId && t.departmentId !== params.departmentId) score -= 100;
+
+      return { t, score };
+    });
+
+    const best = scored.sort((a: any, b: any) => b.score - a.score)[0];
+    return best.score >= 0 ? best.t : null;
   }
 }
 
