@@ -1152,6 +1152,12 @@ UserManagementRouter.get(
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               branch: { type: string }
+ *               departmentEmail: { type: string }
+ *               description: { type: string }
+ *               isDefault: { type: boolean }
  *     responses:
  *       200:
  *         description: Department updated

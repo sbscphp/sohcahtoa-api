@@ -36,6 +36,11 @@ const AuditRouter: Router = Router();
  *         schema:
  *           type: string
  *       - in: query
+ *         name: adminId
+ *         schema:
+ *           type: string
+ *         description: Filter by the admin who performed the action
+ *       - in: query
  *         name: dateFrom
  *         schema:
  *           type: string

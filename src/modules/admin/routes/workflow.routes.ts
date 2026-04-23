@@ -96,7 +96,11 @@ WorkflowRouter.get(
  *             type: object
  *             properties:
  *               name: { type: string }
+ *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
+ *               action: { type: string }
+ *               branchId: { type: string }
  *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
@@ -106,6 +110,8 @@ WorkflowRouter.get(
  *                   type: object
  *                   properties:
  *                     name: { type: string }
+ *                     type: { type: string, enum: [REVIEW, APPROVAL] }
+ *                     order: { type: integer }
  *                     escalationMinutes: { type: integer }
  *                     assignees:
  *                       type: array
@@ -113,6 +119,7 @@ WorkflowRouter.get(
  *                         type: object
  *                         properties:
  *                           adminId: { type: string }
+ *                           order: { type: integer }
  *     responses:
  *       200:
  *         description: Workflow created
@@ -142,7 +149,14 @@ WorkflowRouter.post(
  *             type: object
  *             properties:
  *               name: { type: string }
+ *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
+ *               action: { type: string }
+ *               branchId: { type: string }
+ *               departmentId: { type: string }
+ *               escalationMinutes: { type: integer }
+ *               hasPtaRequest: { type: boolean }
  *               stages: { type: array }
  *     responses:
  *       200:
@@ -229,6 +243,17 @@ WorkflowRouter.get(
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               description: { type: string }
+ *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
+ *               action: { type: string }
+ *               branchId: { type: string }
+ *               departmentId: { type: string }
+ *               escalationMinutes: { type: integer }
+ *               hasPtaRequest: { type: boolean }
+ *               stages: { type: array }
  *     responses:
  *       200:
  *         description: Template updated
