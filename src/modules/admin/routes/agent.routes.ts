@@ -193,9 +193,6 @@ AgentRouter.get(
  *             properties:
  *               name:
  *                 type: string
- *               password:
- *                 type: string
- *                 format: password
  *               email:
  *                 type: string
  *                 format: email
@@ -206,12 +203,6 @@ AgentRouter.get(
  *               attachment:
  *                 type: string
  *                 format: binary
- *               password:
- *                 type: string
- *                 format: password
- *               password:
- *                 type: string
- *                 format: password
  *     responses:
  *       201:
  *         description: Agent created
