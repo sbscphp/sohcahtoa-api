@@ -82,6 +82,12 @@ UserManagementRouter.get(
  *         schema:
  *           type: string
  *         description: Filter by status (Active, Deactivated, or generic boolean true/false)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, pending, deactivated]
+ *         description: Filter by user status
  *     responses:
  *       200:
  *         description: Users retrieved successfully

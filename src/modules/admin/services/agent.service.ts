@@ -299,7 +299,8 @@ class AgentService {
     const volPickup = Number((sumPickupAgg as any)?._sum?.amount || 0);
     const totalTransactionsVolume = volNaira + volForeign + volPickup;
     const { branchId: _omit, ...rest } = agent as any;
-    return { ...rest, totalTransactions, totalTransactionsVolume };
+    const status = !agent.isApproved ? "Pending" : agent.isActive ? "Active" : "Deactivated";
+    return { ...rest, status, totalTransactions, totalTransactionsVolume };
   }
 
   async update(id: string, data: { name?: string; email?: string; phoneNumber?: string; branch?: string; attachment?: { fileUrl: string; fileName?: string; fileSize?: number; mimeType?: string } }) {
@@ -660,7 +661,7 @@ class AgentService {
     const client: any = prisma as any;
     const agent = await client.agent.findUnique({
       where: { id: agentId },
-      select: { id: true },
+      select: { id: true, name: true, email: true, phoneNumber: true },
     });
     if (!agent) throw new NotFoundError("Agent not found");
 
@@ -670,7 +671,60 @@ class AgentService {
     });
     if (!row) throw new NotFoundError("Transaction not found for this agent");
 
-    return customerTransactionService.getTransactionDetails(row.id, row.userId);
+    const details = await customerTransactionService.getTransactionDetails(row.id, row.userId);
+
+    // Helper to find document URL by type
+    const getDocUrl = (type: string) => {
+      const doc = details.requiredDocuments.find((d: any) => d.type === type);
+      return doc?.uploaded?.fileUrl || null;
+    };
+
+    return {
+      agentDetails: {
+        agentId: agent.id,
+        agentName: agent.name || "—",
+        emailAddress: agent.email || "—",
+        phoneNumber: agent.phoneNumber || "—",
+      },
+      transactionDetails: {
+        transactionId: details.referenceNumber,
+        amountNgn: details.nairaEquivalent || "—",
+        equivalentAmount: details.foreignAmount ? `${details.currency} ${Number(details.foreignAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—",
+        exchangeRate: details.exchangeRate || "—",
+        dateInitiated: details.createdAt,
+        timeInitiated: details.createdAt,
+        purpose: details.purpose || "—",
+        destinationCountry: details.destinationCountry || "—",
+        formAId: details.formAId || "—",
+        disbursementMethod: details.disbursementMethod || "—",
+      },
+      requiredDocuments: {
+        bvn: details.personalInfo?.bvn || "—",
+        nin: details.personalInfo?.nin || "—",
+        taxClearanceNumber: details.taxClearanceNumber || "—",
+        documentsCount: details.requiredDocuments.filter((d: any) => d.uploaded).length,
+        visa: getDocUrl('VISA'),
+        returnTicket: getDocUrl('RETURN_TICKET'),
+      },
+      paymentDetails: {
+        transactionId: details.transactionId,
+        transactionDate: details.createdAt,
+        transactionTime: details.createdAt,
+        transactionReceipt: getDocUrl('RECEIPT'),
+        paidTo: details.settlement?.bankDetails?.accountName || "—",
+        bankName: details.settlement?.bankDetails?.bankName || "—",
+      },
+      transactionSettlement: {
+        settlementId: details.settlement?.id || "—",
+        settlementDate: details.settlement?.depositedAt || details.settlement?.createdAt || "—",
+        settlementTime: details.settlement?.depositedAt || details.settlement?.createdAt || "—",
+        settlementReceipt: details.settlement?.proofOfPayment || "—",
+        settlementStructureCash: "—",
+        settlementStructurePrepaidCard: "—",
+        seventyFivePercentPaidInto: "—",
+        settlementStatus: details.currentStep || details.status,
+      }
+    };
   }
 
   async getReceiptDownload(agentId: string, transactionId: string) {

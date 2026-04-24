@@ -247,12 +247,7 @@ class TicketsController {
   });
 
   exportCsv = asyncHandler(async (req: Request, res: Response) => {
-    const rows = await ticketsService.export({
-      search: (req.query.search as string) || (req.query.q as string) || "",
-      status: (req.query.status as string) || undefined,
-      category: (req.query.category as string) || undefined,
-      priority: (req.query.priority as string) || undefined,
-    });
+    const rows = await ticketsService.export(req.query);
     streamCsv(
       res,
       "tickets.csv",
