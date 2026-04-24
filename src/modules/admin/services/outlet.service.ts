@@ -86,10 +86,7 @@ class OutletService {
     return { total, active, deactivated, pendingApproval };
   }
 
-  async listFranchises(query: FranchiseQueryDto) {
-    const page = parseInt((query.page || "1") as string);
-    const limit = parseInt((query.limit || "20") as string);
-    const skip = (page - 1) * limit;
+  private buildFranchiseWhereClause(query: any) {
     const where: any = {};
     const search = (query.search || query.q || "").toString().trim();
     if (search) {
@@ -102,6 +99,14 @@ class OutletService {
       ];
     }
     if (query.status) where.status = { equals: query.status, mode: "insensitive" };
+    return where;
+  }
+
+  async listFranchises(query: FranchiseQueryDto) {
+    const page = parseInt((query.page || "1") as string);
+    const limit = parseInt((query.limit || "20") as string);
+    const skip = (page - 1) * limit;
+    const where = this.buildFranchiseWhereClause(query);
 
     const [rows, total] = await Promise.all([
       db.franchise.findMany({
@@ -267,19 +272,8 @@ class OutletService {
     };
   }
 
-  async exportFranchises(filters: { search?: string; status?: string } = {}) {
-    const where: any = {};
-    const search = (filters.search || "").toString().trim();
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { address: { contains: search, mode: "insensitive" } },
-        { contactPersonName: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { phoneNumber: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
+  async exportFranchises(query: any = {}) {
+    const where = this.buildFranchiseWhereClause(query);
     const rows = await db.franchise.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -305,16 +299,8 @@ class OutletService {
     }));
   }
 
-  async exportBranches(filters: { search?: string; status?: string } = {}) {
-    const where: any = {};
-    const search = (filters.search || "").toString().trim();
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { address: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (filters.status) where.status = { equals: filters.status, mode: "insensitive" };
+  async exportBranches(query: any = {}) {
+    const where = this.buildBranchWhereClause(query);
     const rows = await db.branch.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -345,10 +331,7 @@ class OutletService {
     return { total, active, deactivated };
   }
 
-  async listBranches(query: any) {
-    const page = parseInt((query.page || "1") as string);
-    const limit = parseInt((query.limit || "20") as string);
-    const skip = (page - 1) * limit;
+  private buildBranchWhereClause(query: any) {
     const where: any = {};
     const search = (query.search || query.q || "").toString().trim();
     if (search) {
@@ -360,6 +343,14 @@ class OutletService {
       ];
     }
     if (query.status) where.status = { equals: query.status, mode: "insensitive" };
+    return where;
+  }
+
+  async listBranches(query: any) {
+    const page = parseInt((query.page || "1") as string);
+    const limit = parseInt((query.limit || "20") as string);
+    const skip = (page - 1) * limit;
+    const where = this.buildBranchWhereClause(query);
 
     const [rows, total] = await Promise.all([
       db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),

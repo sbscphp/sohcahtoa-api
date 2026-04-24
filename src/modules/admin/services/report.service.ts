@@ -75,70 +75,125 @@ class ReportService {
     dateRange: string;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      const doc = new PDFDocument({
+        margin: 50,
+        size: "A4",
+        bufferPages: true,
+      });
       const chunks: Buffer[] = [];
 
       doc.on("data", (chunk) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", (err) => reject(err));
 
-      // Header
-      doc.fillColor("#1a1a1a").fontSize(20).text(params.title, { align: "left" });
-      doc.fontSize(10).fillColor("#666").text(`Date Range: ${params.dateRange}`, { align: "left" });
-      doc.moveDown();
+      // Colors
+      const primaryColor = "#0f172a"; // Deep Navy
+      const secondaryColor = "#64748b"; // Slate
+      const borderColor = "#e2e8f0";
+      const tableHeaderBg = "#f8fafc";
+      const zebraBg = "#fbfcfe";
 
-      // Table Header Background
-      const tableTop = 130;
-      doc.rect(50, tableTop, 500, 20).fill("#f3f4f6");
+      const drawHeader = () => {
+        // Top accent bar
+        doc.rect(0, 0, doc.page.width, 50).fill(primaryColor);
+        doc.fillColor("#ffffff").fontSize(16).font("Helvetica-Bold")
+          .text("SOHCAHTOA", 50, 18);
+        doc.fontSize(8).font("Helvetica")
+          .text("ADMIN MANAGEMENT SYSTEM", 150, 24, { characterSpacing: 1 });
 
-      // Table Headers
-      doc.fillColor("#374151").fontSize(9).font("Helvetica-Bold");
-      let currentX = 50;
-      params.columns.forEach((col) => {
-        doc.text(col.header, currentX + 5, tableTop + 6, { width: col.width - 10 });
-        currentX += col.width;
-      });
+        // Report Title & Info
+        doc.fillColor(primaryColor).fontSize(22).font("Helvetica-Bold")
+          .text(params.title.toUpperCase(), 50, 80);
+
+        doc.fontSize(9).fillColor(secondaryColor).font("Helvetica")
+          .text(`Date Range: ${params.dateRange}`, 50, 110);
+        doc.text(`Generated On: ${new Date().toLocaleString()}`, 50, 125);
+
+        // Divider
+        doc.moveTo(50, 145).lineTo(550, 145).strokeColor(borderColor).lineWidth(0.5).stroke();
+      };
+
+      const drawTableHeader = (y: number) => {
+        doc.rect(50, y, 500, 25).fill(tableHeaderBg);
+        doc.fillColor(primaryColor).fontSize(9).font("Helvetica-Bold");
+        let currentX = 50;
+        params.columns.forEach((col) => {
+          doc.text(col.header.toUpperCase(), currentX + 8, y + 8, {
+            width: col.width - 16,
+            align: "left",
+          });
+          currentX += col.width;
+        });
+
+        // Header Bottom Border
+        doc.moveTo(50, y + 25).lineTo(550, y + 25).strokeColor(borderColor).lineWidth(1).stroke();
+        return y + 25;
+      };
+
+      // Initial page setup
+      drawHeader();
+      let currentY = 160;
+      currentY = drawTableHeader(currentY);
 
       // Rows
-      doc.font("Helvetica").fillColor("#1f2937");
-      let currentY = tableTop + 20;
+      doc.font("Helvetica").fontSize(8).fillColor("#334155");
 
       params.rows.forEach((row, i) => {
-        // Paging check
-        if (currentY > 750) {
+        // Calculate required row height based on content
+        let maxRowHeight = 22;
+        row.forEach((cell, cellIndex) => {
+          const cellWidth = params.columns[cellIndex].width - 16;
+          const textHeight = doc.heightOfString(cell || "", { width: cellWidth });
+          if (textHeight + 12 > maxRowHeight) maxRowHeight = textHeight + 12;
+        });
+
+        // Check for page break (margin 750)
+        if (currentY + maxRowHeight > 750) {
           doc.addPage();
-          currentY = 50;
+          drawHeader();
+          currentY = 160;
+          currentY = drawTableHeader(currentY);
+          doc.font("Helvetica").fontSize(8).fillColor("#334155");
         }
 
-        // Color row bg for zebra striping
+        // Zebra striping
         if (i % 2 === 1) {
-          doc.rect(50, currentY, 500, 15).fill("#f9fafb");
+          doc.rect(50, currentY, 500, maxRowHeight).fill(zebraBg);
         }
 
-        doc.fillColor("#1f2937");
+        // Draw cell content
+        doc.fillColor("#334155");
         let cellX = 50;
         row.forEach((cell, cellIndex) => {
-          doc.text(cell || "", cellX + 5, currentY + 4, {
-            width: params.columns[cellIndex].width - 10,
-            ellipsis: true,
+          doc.text(cell || "", cellX + 8, currentY + 7, {
+            width: params.columns[cellIndex].width - 16,
+            lineBreak: true,
           });
           cellX += params.columns[cellIndex].width;
         });
 
-        currentY += 15;
+        // Row bottom border
+        doc.moveTo(50, currentY + maxRowHeight)
+          .lineTo(550, currentY + maxRowHeight)
+          .strokeColor(borderColor)
+          .lineWidth(0.5)
+          .stroke();
+
+        currentY += maxRowHeight;
       });
 
-      // Footer
+      // Footer numbering (buffered)
       const pages = (doc as any).bufferedPageRange();
       for (let i = 0; i < pages.count; i++) {
         doc.switchToPage(i);
-        doc
-          .fontSize(8)
-          .fillColor("#9ca3af")
-          .text(`Sohcahtoa Admin Management System - Page ${i + 1} of ${pages.count}`, 50, 780, {
-            align: "center",
-            width: 500,
-          });
+        doc.moveTo(50, 780).lineTo(550, 780).strokeColor(borderColor).lineWidth(0.5).stroke();
+        doc.fontSize(7).fillColor(secondaryColor)
+          .text(
+            `Sohcahtoa Admin - Confidential - Page ${i + 1} of ${pages.count}`,
+            50,
+            785,
+            { align: "center", width: 500 }
+          );
       }
 
       doc.end();

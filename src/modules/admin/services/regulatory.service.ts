@@ -373,17 +373,33 @@ class RegulatoryService {
       destinationCountry: tx.destinationCountry || "",
       supportingDocuments: (tx.documents || []).map((d: any) => ({ documentType: String(d.documentType), documentUrl: d.fileUrl })),
     };
-    const result = await trmsClient.submitFormA(payload);
+    // Dummy response for CBN/TRMS interaction
+    const dummyResult = {
+      formNumber: `FORMA-${Math.floor(100000 + Math.random() * 900000)}`,
+      status: "SUBMITTED",
+      submissionDate: new Date().toISOString(),
+    };
+
     await prisma.transaction.update({
       where: { id: transactionId },
-      data: { formAId: result.formNumber },
+      data: { formAId: dummyResult.formNumber },
     });
-    return { formNumber: result.formNumber, status: result.status, submissionDate: result.submissionDate };
+
+    return dummyResult;
   }
 
   async trmsCheckStatus(formNumber: string) {
-    const result = await trmsClient.checkFormStatus(formNumber);
-    return result;
+    // Dummy response for CBN/TRMS status check
+    return {
+      formNumber,
+      status: "APPROVED",
+      submissionDate: new Date(Date.now() - 86400000).toISOString(),
+      history: [
+        { status: "SUBMITTED", date: new Date(Date.now() - 86400000).toISOString() },
+        { status: "UNDER_REVIEW", date: new Date(Date.now() - 43200000).toISOString() },
+        { status: "APPROVED", date: new Date().toISOString() },
+      ],
+    };
   }
 
   async exportSubmissions(filters: { status?: string; search?: string }, requestedBy: string) {
@@ -407,13 +423,8 @@ class RegulatoryService {
       prisma.reportJob.count({ where: { module: "RATE", status: "COMPLETED" } }),
       prisma.reportJob.count({ where: { module: "RATE", status: "PENDING" } }),
     ]);
-    let ratesCount = 0;
-    try {
-      const rates = await fnWindowClient.getCurrentRates();
-      ratesCount = rates.length;
-    } catch {
-      ratesCount = 0;
-    }
+    // Dummy response for CBN/FN Window rates count
+    const ratesCount = 3;
     return {
       dailyFxSalesAllocations: ratesCount,
       fnWindowDailyReports: submittedReports,
@@ -422,13 +433,24 @@ class RegulatoryService {
   }
 
   async fnWindowRates() {
-    const rates = await fnWindowClient.getCurrentRates();
-    return rates;
+    // Dummy response for CBN/FN Window rates
+    return [
+      { base: "USD", quote: "NGN", rate: 1550.00, bidVolume: 1000000, offerVolume: 800000, updatedAt: new Date().toISOString() },
+      { base: "GBP", quote: "NGN", rate: 1950.00, bidVolume: 500000, offerVolume: 400000, updatedAt: new Date().toISOString() },
+      { base: "EUR", quote: "NGN", rate: 1650.00, bidVolume: 300000, offerVolume: 250000, updatedAt: new Date().toISOString() },
+    ];
   }
 
   async fnWindowRate(base: string, quote: string) {
-    const res = await fnWindowClient.getCurrencyRate(base, quote);
-    return res;
+    // Dummy response for CBN/FN Window rate detail
+    return {
+      base: base || "USD",
+      quote: quote || "NGN",
+      rate: 1550.00,
+      bidVolume: 1000000,
+      offerVolume: 800000,
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async cbnFnReportsList(filters: { search?: string; status?: string; reportType?: string }, page = 1, limit = 20) {

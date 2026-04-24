@@ -106,7 +106,7 @@ export class TicketsService {
           : t?.customer?.email || null;
       const customerEmail = t?.customer?.email || null;
       const assignedAdminName = t?.assignedAgent?.fullName || null;
-      const assignedAgentRole = t?.assignedAgent?.role?.name || null;
+      const assignedAdminRole = t?.assignedAgent?.role?.name || null;
       return {
         id: t.id,
         reference: t.reference,
@@ -119,7 +119,7 @@ export class TicketsService {
         customerName,
         customerEmail,
         assignedAdminName,
-        assignedAgentRole,
+        assignedAdminRole,
       };
     });
     return {
@@ -135,7 +135,7 @@ export class TicketsService {
       include: {
         attachments: true,
         comments: true,
-        assignedAgent: { select: { id: true, fullName: true, email: true } },
+        assignedAgent: { select: { id: true, fullName: true, email: true, role: { select: { name: true } } } },
         customer: {
           select: {
             id: true,
@@ -186,6 +186,7 @@ export class TicketsService {
             id: t.assignedAgent.id,
             fullName: t.assignedAgent.fullName,
             email: t.assignedAgent.email,
+            assignedAdminRole: (t.assignedAgent as any).role?.name || null,
           }
         : null,
     };

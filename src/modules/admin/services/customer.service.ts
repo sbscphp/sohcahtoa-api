@@ -18,23 +18,10 @@ type UpdateFlagStatusPayload = {
 
 export class CustomerService {
  
-  async listCustomers(
-    page = 1,
-    limit = 20,
-    q?: string,
-    filters: {
-      status?: any;
-      isActive?: any;
-      customerType?: any;
-      kycStatus?: any;
-      dateFrom?: any;
-      dateTo?: any;
-      sortBy?: any;
-      sortOrder?: any;
-    } = {}
-  ) {
+  private buildCustomerWhereClause(q: string | undefined, filters: any = {}) {
     const where: any = { role: "CUSTOMER" };
     const and: any[] = [];
+    
     if (filters.isActive !== undefined) {
       where.isActive =
         typeof filters.isActive === "string"
@@ -83,14 +70,25 @@ export class CustomerService {
       });
     }
 
+    if (and.length > 0) {
+      where.AND = and;
+    }
+
+    return where;
+  }
+
+  async listCustomers(
+    page = 1,
+    limit = 20,
+    q?: string,
+    filters: any = {}
+  ) {
+    const where = this.buildCustomerWhereClause(q, filters);
+
     const orderBy: any = {};
     const sortBy = (filters.sortBy || "createdAt").toString();
     const sortOrder = (filters.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
     orderBy[sortBy] = sortOrder;
-
-    if (and.length > 0) {
-      where.AND = and;
-    }
 
     return paginate(
       prisma.user,
@@ -293,22 +291,9 @@ export class CustomerService {
     return items;
   }
 
-  async exportCustomers(filters: { search?: string; status?: string } = {}) {
-    const where: any = { role: "CUSTOMER" };
-    const q = (filters.search || "").toString().trim();
-    if (q.length > 0) {
-      where.OR = [
-        { email: { contains: q, mode: "insensitive" } },
-        { phoneNumber: { contains: q, mode: "insensitive" } },
-        { profile: { firstName: { contains: q, mode: "insensitive" } } } as any,
-        { profile: { lastName: { contains: q, mode: "insensitive" } } } as any,
-      ];
-    }
-    if (filters.status) {
-      const s = String(filters.status).toUpperCase();
-      if (s === "ACTIVE") where.isActive = true;
-      if (s === "DEACTIVATED") where.isActive = false;
-    }
+  async exportCustomers(query: any = {}) {
+    const q = (query.search || query.q || "").toString().trim();
+    const where = this.buildCustomerWhereClause(q, query);
     const users = await prisma.user.findMany({
       where,
       include: { profile: true },

@@ -73,6 +73,7 @@ class UserManagementController {
             role: req.query.role as string,
             department: req.query.department as string,
             isActive: req.query.isActive as any,
+            status: req.query.status as any,
         };
 
         const result = await userManagementService.getAllUsers(query);
@@ -246,8 +247,8 @@ class UserManagementController {
         res.json(successResponse(result));
     });
 
-    exportUsersCsv = asyncHandler(async (_req: Request, res: Response) => {
-        const rows = await userManagementService.exportUsers();
+    exportUsersCsv = asyncHandler(async (req: Request, res: Response) => {
+        const rows = await userManagementService.exportUsers(req.query as any);
         streamCsv(
             res,
             "admin-users.csv",
@@ -265,8 +266,8 @@ class UserManagementController {
         );
     });
 
-    exportRolesCsv = asyncHandler(async (_req: Request, res: Response) => {
-        const rows = await userManagementService.exportRoles();
+    exportRolesCsv = asyncHandler(async (req: Request, res: Response) => {
+        const rows = await userManagementService.exportRoles(req.query as any);
         streamCsv(
             res,
             "admin-roles.csv",
@@ -286,8 +287,8 @@ class UserManagementController {
         );
     });
 
-    exportDepartmentsCsv = asyncHandler(async (_req: Request, res: Response) => {
-        const rows = await userManagementService.exportDepartments();
+    exportDepartmentsCsv = asyncHandler(async (req: Request, res: Response) => {
+        const rows = await userManagementService.exportDepartments(req.query as any);
         streamCsv(
             res,
             "admin-departments.csv",
