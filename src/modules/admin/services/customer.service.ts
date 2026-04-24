@@ -508,6 +508,49 @@ export class CustomerService {
       data,
     });
   }
+
+  // ── KYC Approval / Rejection ───────────────────────────────────────────────
+
+  async approveKyc(userId: string, adminId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, profile: { select: { firstName: true } } },
+    });
+    if (!user) throw new NotFoundError('Customer not found');
+
+    await prisma.userKyc.update({
+      where: { userId },
+      data: { status: 'VERIFIED', verifiedAt: new Date(), verifiedBy: adminId } as any,
+    });
+
+    eventBus.publish(EventTypes.KYC_APPROVED, {
+      userId: user.id,
+      firstName: user.profile?.firstName || 'User',
+    });
+
+    return { message: 'KYC approved successfully' };
+  }
+
+  async rejectKyc(userId: string, adminId: string, reason: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, profile: { select: { firstName: true } } },
+    });
+    if (!user) throw new NotFoundError('Customer not found');
+
+    await prisma.userKyc.update({
+      where: { userId },
+      data: { status: 'REJECTED', rejectedAt: new Date(), rejectedBy: adminId, rejectionReason: reason } as any,
+    });
+
+    eventBus.publish(EventTypes.KYC_REJECTED, {
+      userId: user.id,
+      firstName: user.profile?.firstName || 'User',
+      reason,
+    });
+
+    return { message: 'KYC rejected successfully' };
+  }
 }
 
 export default new CustomerService();

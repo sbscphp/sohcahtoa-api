@@ -5,6 +5,7 @@ import { ErrorCode } from '../../../shared/types/common';
 import providusService from './providus.service';
 import notificationService from '../../notifications/services/notification.service';
 import { NotificationType, NotificationChannel } from '@prisma/client';
+import { eventBus, EventTypes } from '../../../events/event-bus';
 
 const prisma = new PrismaClient();
 const logger = createLogger('SettlementService');
@@ -293,7 +294,7 @@ export class SettlementService {
         paymentReference: updated.paymentReference,
       });
 
-      // Send notification
+      // Publish event and notify customer
       if (settlement.transactionId) {
         const transaction = await prisma.transaction.findUnique({
           where: { id: settlement.transactionId },
@@ -310,6 +311,21 @@ export class SettlementService {
               transactionId: transaction.id,
               settlementId: settlement.id,
               amount: settlement.amount.toString(),
+            },
+          });
+
+          // Publish DISBURSEMENT_INITIATED so the notification handler sends the email
+          eventBus.publish(EventTypes.DISBURSEMENT_INITIATED, {
+            userId: transaction.userId,
+            transaction: {
+              id: transaction.id,
+              referenceNumber: transaction.referenceNumber,
+              amount: settlement.amount,
+              currency: settlement.currency,
+            },
+            settlement: {
+              id: settlement.id,
+              referenceNumber: settlement.referenceNumber,
             },
           });
         }
@@ -434,13 +450,37 @@ export class SettlementService {
         referenceNumber: updated.referenceNumber,
       });
 
-      // Update transaction status if linked
+      // Update transaction status if linked and publish completion event
       if (updated.transactionId) {
-        await prisma.transaction.update({
+        const transaction = await prisma.transaction.update({
           where: { id: updated.transactionId },
-          data: {
-            status: 'COMPLETED',
-            completedAt: new Date(),
+          data: { status: 'COMPLETED', completedAt: new Date() },
+          select: { id: true, userId: true, referenceNumber: true, foreignAmount: true, currency: true },
+        });
+
+        // Triggers push notification + payment receipt email in the notification handler
+        eventBus.publish(EventTypes.TRANSACTION_COMPLETED, {
+          userId: transaction.userId,
+          transaction: {
+            id: transaction.id,
+            referenceNumber: transaction.referenceNumber,
+            foreignAmount: transaction.foreignAmount,
+            currency: transaction.currency,
+          },
+        });
+
+        // Also publish DISBURSEMENT_COMPLETED for auditing/reporting
+        eventBus.publish(EventTypes.DISBURSEMENT_COMPLETED, {
+          userId: transaction.userId,
+          transaction: {
+            id: transaction.id,
+            referenceNumber: transaction.referenceNumber,
+          },
+          settlement: {
+            id: updated.id,
+            referenceNumber: updated.referenceNumber,
+            amount: updated.amount,
+            currency: updated.currency,
           },
         });
       }

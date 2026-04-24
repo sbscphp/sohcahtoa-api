@@ -3,20 +3,33 @@ import { createLogger } from '../../shared/utils/logger';
 
 const logger = createLogger('SMSClient');
 
+export interface SmsSendResult {
+  success: boolean;
+  messageId?: string;
+  balance?: number;
+}
+
 /**
- * SMS Gateway Client
- * Supports multiple providers: Termii, Infobip
+ * SMS Client — Termii Messaging API
+ * Docs: POST https://v3.api.termii.com/api/sms/send
+ *       POST https://v3.api.termii.com/api/sms/send/bulk
+ *
+ * Channels:
+ *   dnd      — transactional/OTP, bypasses DND restrictions (use for all critical messages)
+ *   generic  — promotional only, will not reach DND numbers, MTN restricted 8PM–8AM WAT
+ *   whatsapp — sends via WhatsApp channel
+ *   voice    — converts text to speech, delivered as a voice call
  */
 export class SMSClient {
   private client: AxiosInstance;
   private provider: string;
   private apiKey: string;
-  private emailConfigId: string;
+  private senderId: string;
 
   constructor() {
     this.provider = process.env.SMS_PROVIDER || 'termii';
     this.apiKey = process.env.SMS_API_KEY || '';
-    this.emailConfigId = process.env.TERMII_EMAIL_CONFIG_ID || '';
+    this.senderId = process.env.SMS_SENDER_ID || 'Sochatoa';
 
     const baseUrls: Record<string, string> = {
       termii: 'https://v3.api.termii.com/api',
@@ -24,167 +37,177 @@ export class SMSClient {
     };
 
     this.client = axios.create({
-      baseURL: baseUrls[this.provider],
+      baseURL: baseUrls[this.provider] || baseUrls.termii,
       timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 
+  // ── Public API ─────────────────────────────────────────────────────────────
+
   /**
-   * Send SMS message
+   * Send a promotional SMS.
+   * Uses the generic route — will NOT reach numbers on DND.
+   * Do NOT use for OTPs or transactional messages.
    */
-  async sendSms(to: string, message: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
-    try {
-      if (this.provider === 'termii') {
-        return await this.sendTermiiSms(to, message);
-      } else if (this.provider === 'infobip') {
-        return await this.sendInfobipSms(to, message);
-      }
-      throw new Error(`Unsupported SMS provider: ${this.provider}`);
-    } catch (error: any) {
-      logger.error('SMS sending failed', { to, error: error.message });
-      throw error;
+  async sendSms(to: string, message: string): Promise<SmsSendResult> {
+    if (this.provider === 'termii') {
+      return this.termiiSend({ to, message, channel: 'generic', type: 'plain' });
     }
+    if (this.provider === 'infobip') {
+      return this.infobipSend(to, message);
+    }
+    throw new Error(`Unsupported SMS provider: ${this.provider}`);
   }
 
   /**
-   * Send OTP via SMS
+   * Send an OTP / transactional SMS.
+   * Uses the DND route — delivers to ALL numbers including DND-registered ones.
+   * Required for verification codes, alerts, and all critical messages.
    */
-  async sendOtp(to: string, otp: string, purpose: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
-    const message = `Your SOHCAHTOA verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+  async sendOtp(to: string, otp: string, _purpose: string): Promise<SmsSendResult> {
+    const message = `Your Sochatoa verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    if (this.provider === 'termii') {
+      return this.termiiSend({ to, message, channel: 'dnd', type: 'plain' });
+    }
     return this.sendSms(to, message);
   }
 
   /**
-   * Termii implementation
+   * Send a WhatsApp message.
+   * channel must be 'whatsapp', from must be a registered WhatsApp device name.
    */
-  private async sendTermiiSms(to: string, message: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
-    const response = await this.client.post('/sms/send', {
-      to,
-      from: process.env.SMS_SENDER_ID || 'SOHCAHTOA',
-      sms: message,
-      type: 'plain',
-      channel: 'generic',
-      api_key: this.apiKey,
-    });
-
-    return {
-      success: response.data.message_id !== undefined,
-      messageId: response.data.message_id,
-    };
+  async sendWhatsApp(to: string, message: string): Promise<SmsSendResult> {
+    return this.termiiSend({ to, message, channel: 'whatsapp', type: 'plain' });
   }
 
   /**
-   * Infobip implementation
+   * Send a voice message (text-to-speech call).
+   * Tip: add spaces between digits in OTPs for clearer speech (e.g. "1 2 3 4 5 6").
    */
-  private async sendInfobipSms(to: string, message: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
-    const response = await this.client.post(
-      '/sms/2/text/advanced',
-      {
-        messages: [
-          {
-            from: process.env.SMS_SENDER_ID || 'SOHCAHTOA',
-            destinations: [{ to }],
-            text: message,
-          },
-        ],
-      },
-      {
-        headers: {
-          Authorization: `App ${this.apiKey}`,
-        },
-      }
-    );
-
-    return {
-      success: response.data.messages?.[0]?.status?.groupId === 1,
-      messageId: response.data.messages?.[0]?.messageId,
-    };
+  async sendVoice(to: string, message: string): Promise<SmsSendResult> {
+    return this.termiiSend({ to, message, channel: 'voice', type: 'voice' });
   }
 
   /**
-   * Send an OTP/verification code via Termii email
-   * Uses Termii's dedicated email OTP endpoint with a pre-configured template
+   * Send the same message to up to 100 numbers at once.
+   * POST /sms/send/bulk
    */
-  async sendEmailOtp(to: string, code: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
+  async sendBulkSms(
+    recipients: string[],
+    message: string,
+    channel: 'dnd' | 'generic' = 'generic',
+  ): Promise<SmsSendResult> {
+    return this.termiiSendBulk({ to: recipients, message, channel, type: 'plain' });
+  }
+
+  // ── Termii implementation ──────────────────────────────────────────────────
+
+  /**
+   * POST /sms/send
+   * Single recipient. Response: { code, balance, message_id, message_id_str, message, user }
+   */
+  private async termiiSend(params: {
+    to: string;
+    message: string;
+    channel: 'dnd' | 'generic' | 'whatsapp' | 'voice';
+    type: 'plain' | 'unicode' | 'encrypted' | 'voice';
+  }): Promise<SmsSendResult> {
     try {
-      if (this.provider !== 'termii') {
-        throw new Error(`Email OTP via ${this.provider} is not supported`);
-      }
+      logger.info('Sending SMS via Termii', { to: params.to, channel: params.channel });
 
-      logger.info('Sending OTP email via Termii', { to });
-
-      const response = await this.client.post('/email/otp/send', {
+      const response = await this.client.post('/sms/send', {
         api_key: this.apiKey,
-        email_address: to,
-        code,
-        email_configuration_id: this.emailConfigId,
+        to: params.to,
+        from: this.senderId,
+        sms: params.message,
+        type: params.type,
+        channel: params.channel,
       });
 
-      const success = response.status === 200 || response.data?.message_id !== undefined;
+      const data = response.data;
+      const success = data?.code === 'ok';
 
-      logger.info('Termii OTP email sent', { to, success });
+      if (success) {
+        logger.info('Termii SMS sent', { to: params.to, messageId: data.message_id, balance: data.balance });
+      } else {
+        logger.warn('Termii SMS unexpected response', { to: params.to, data });
+      }
 
       return {
         success,
-        messageId: response.data?.message_id,
+        messageId: data?.message_id_str || data?.message_id,
+        balance: data?.balance,
       };
     } catch (error: any) {
-      logger.error('Termii OTP email failed', { to, error: error.message });
+      logger.error('Termii SMS failed', { to: params.to, error: error.message });
       throw error;
     }
   }
 
   /**
-   * Send a plain-text email via Termii messaging channel
+   * POST /sms/send/bulk
+   * Up to 100 recipients. Same response shape as single send.
    */
-  async sendEmail(to: string, message: string): Promise<{
-    success: boolean;
-    messageId?: string;
-  }> {
+  private async termiiSendBulk(params: {
+    to: string[];
+    message: string;
+    channel: 'dnd' | 'generic';
+    type: 'plain' | 'unicode' | 'encrypted';
+  }): Promise<SmsSendResult> {
     try {
-      if (this.provider !== 'termii') {
-        throw new Error(`Email via ${this.provider} is not supported`);
-      }
+      logger.info('Sending bulk SMS via Termii', { recipients: params.to.length, channel: params.channel });
 
-      logger.info('Sending email via Termii', { to });
-
-      const response = await this.client.post('/sms/send', {
+      const response = await this.client.post('/sms/send/bulk', {
         api_key: this.apiKey,
-        to,
-        from: process.env.SMS_SENDER_ID || 'Sochatoa',
-        sms: message,
-        type: 'plain',
-        channel: 'email',
+        to: params.to,
+        from: this.senderId,
+        sms: params.message,
+        type: params.type,
+        channel: params.channel,
       });
 
-      const success = response.data?.message_id !== undefined;
+      const data = response.data;
+      const success = data?.code === 'ok';
 
-      logger.info('Termii email sent', { to, success });
+      logger.info('Termii bulk SMS sent', { recipients: params.to.length, success, balance: data?.balance });
 
       return {
         success,
-        messageId: response.data?.message_id,
+        messageId: data?.message_id_str || data?.message_id,
+        balance: data?.balance,
       };
     } catch (error: any) {
-      logger.error('Termii email failed', { to, error: error.message });
+      logger.error('Termii bulk SMS failed', { error: error.message });
+      throw error;
+    }
+  }
+
+  // ── Infobip fallback ───────────────────────────────────────────────────────
+
+  private async infobipSend(to: string, message: string): Promise<SmsSendResult> {
+    try {
+      const response = await this.client.post(
+        '/sms/2/text/advanced',
+        {
+          messages: [
+            {
+              from: this.senderId,
+              destinations: [{ to }],
+              text: message,
+            },
+          ],
+        },
+        { headers: { Authorization: `App ${this.apiKey}` } },
+      );
+
+      const msg = response.data.messages?.[0];
+      return {
+        success: msg?.status?.groupId === 1,
+        messageId: msg?.messageId,
+      };
+    } catch (error: any) {
+      logger.error('Infobip SMS failed', { to, error: error.message });
       throw error;
     }
   }

@@ -1,10 +1,26 @@
 import { eventBus, EventTypes } from '../../../events/event-bus';
 import notificationService from '../services/notification.service';
 import NotificationTemplates from '../templates/notification-templates';
-import { NotificationChannel, NotificationType, NotificationPriority } from '@prisma/client';
+import { NotificationChannel, NotificationType, NotificationPriority, PrismaClient } from '@prisma/client';
 import { createLogger } from '../../../shared/utils/logger';
+import { emailService } from '../../../shared/utils/email';
 
 const logger = createLogger('NotificationHandler');
+const prisma = new PrismaClient();
+
+// Fetch the minimum user fields needed to send an email
+async function getUserEmailInfo(userId: string): Promise<{ email: string; firstName: string } | null> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, profile: { select: { firstName: true } } },
+    });
+    if (!user) return null;
+    return { email: user.email, firstName: user.profile?.firstName || 'User' };
+  } catch {
+    return null;
+  }
+}
 
 export class NotificationHandler {
   /**
@@ -51,7 +67,7 @@ export class NotificationHandler {
   private handleUserRegistered() {
     eventBus.on(EventTypes.USER_REGISTERED, async (event: any) => {
       try {
-        const { userId, email, profile } = event.data;
+        const { userId, email, profile } = event;
 
         const template = NotificationTemplates.WELCOME({
           firstName: profile?.firstName || 'User',
@@ -80,7 +96,7 @@ export class NotificationHandler {
   private handleUserLogin() {
     eventBus.on(EventTypes.USER_LOGIN, async (event: any) => {
       try {
-        const { userId, ipAddress, userAgent } = event.data;
+        const { userId, ipAddress, userAgent } = event;
 
         // Send login alert for suspicious activity
         // This is a simple implementation - in production, you'd want more sophisticated detection
@@ -116,7 +132,7 @@ export class NotificationHandler {
   private handlePasswordReset() {
     eventBus.on(EventTypes.PASSWORD_RESET_REQUESTED, async (event: any) => {
       try {
-        const { userId } = event.data;
+        const { userId } = event;
 
         const template = NotificationTemplates.PASSWORD_RESET_REQUESTED();
 
@@ -138,7 +154,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.PASSWORD_RESET_COMPLETED, async (event: any) => {
       try {
-        const { userId } = event.data;
+        const { userId } = event;
 
         const template = NotificationTemplates.PASSWORD_RESET_COMPLETED();
 
@@ -165,7 +181,7 @@ export class NotificationHandler {
   private handleKycEvents() {
     eventBus.on(EventTypes.KYC_SUBMITTED, async (event: any) => {
       try {
-        const { userId, firstName } = event.data;
+        const { userId, firstName } = event;
 
         const template = NotificationTemplates.KYC_SUBMITTED({ firstName });
 
@@ -185,7 +201,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.KYC_APPROVED, async (event: any) => {
       try {
-        const { userId, firstName } = event.data;
+        const { userId, firstName } = event;
 
         const template = NotificationTemplates.KYC_APPROVED({ firstName });
 
@@ -198,6 +214,13 @@ export class NotificationHandler {
           body: template.body,
           data: { actionUrl: template.actionUrl },
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendKycApprovedEmail(user.email, user.firstName).catch((e) =>
+            logger.error('Error sending KYC approved email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending KYC approved notification:', error);
       }
@@ -205,7 +228,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.KYC_REJECTED, async (event: any) => {
       try {
-        const { userId, firstName, reason } = event.data;
+        const { userId, firstName, reason } = event;
 
         const template = NotificationTemplates.KYC_REJECTED({ firstName, reason });
 
@@ -218,6 +241,13 @@ export class NotificationHandler {
           body: template.body,
           data: { actionUrl: template.actionUrl },
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendKycRejectedEmail(user.email, user.firstName, reason || 'No reason provided').catch((e) =>
+            logger.error('Error sending KYC rejected email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending KYC rejected notification:', error);
       }
@@ -225,7 +255,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.BVN_VERIFIED, async (event: any) => {
       try {
-        const { userId, firstName } = event.data;
+        const { userId, firstName } = event;
 
         const template = NotificationTemplates.BVN_VERIFIED({ firstName });
 
@@ -249,7 +279,7 @@ export class NotificationHandler {
   private handleTransactionEvents() {
     eventBus.on(EventTypes.TRANSACTION_CREATED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.TRANSACTION_CREATED({
           referenceNumber: transaction.referenceNumber,
@@ -274,7 +304,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_SUBMITTED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.TRANSACTION_SUBMITTED({
           referenceNumber: transaction.referenceNumber,
@@ -297,7 +327,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_APPROVED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.TRANSACTION_APPROVED({
           referenceNumber: transaction.referenceNumber,
@@ -313,6 +343,18 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          const amount = transaction.foreignAmount
+            ? `${transaction.foreignAmount} ${transaction.currency || ''}`.trim()
+            : transaction.nairaEquivalent
+            ? `NGN ${transaction.nairaEquivalent}`
+            : '';
+          await emailService.sendTransactionApprovedEmail(user.email, user.firstName, transaction.referenceNumber, amount).catch((e) =>
+            logger.error('Error sending transaction approved email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending transaction approved notification:', error);
       }
@@ -320,7 +362,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_REJECTED, async (event: any) => {
       try {
-        const { userId, transaction, reason } = event.data;
+        const { userId, transaction, reason } = event;
 
         const template = NotificationTemplates.TRANSACTION_REJECTED({
           referenceNumber: transaction.referenceNumber,
@@ -337,6 +379,13 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendTransactionRejectedEmail(user.email, user.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
+            logger.error('Error sending transaction rejected email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending transaction rejected notification:', error);
       }
@@ -344,7 +393,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_COMPLETED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.TRANSACTION_COMPLETED({
           referenceNumber: transaction.referenceNumber,
@@ -362,6 +411,17 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendTransactionCompletedEmail(
+            user.email,
+            user.firstName,
+            transaction.referenceNumber,
+            transaction.foreignAmount?.toString() || '0',
+            transaction.currency || 'USD',
+          ).catch((e) => logger.error('Error sending transaction completed email:', e));
+        }
       } catch (error) {
         logger.error('Error sending transaction completed notification:', error);
       }
@@ -369,7 +429,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_SUBMITTED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.TRANSACTION_SUBMITTED({
           referenceNumber: transaction.referenceNumber,
@@ -392,7 +452,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_CANCELLED, async (event: any) => {
       try {
-        const { userId, transaction, reason } = event.data;
+        const { userId, transaction, reason } = event;
 
         const template = NotificationTemplates.TRANSACTION_CANCELLED({
           referenceNumber: transaction.referenceNumber,
@@ -420,7 +480,7 @@ export class NotificationHandler {
   private handlePaymentEvents() {
     eventBus.on(EventTypes.DEPOSIT_INITIATED, async (event: any) => {
       try {
-        const { userId, transaction, amount } = event.data;
+        const { userId, transaction, amount } = event;
 
         const template = NotificationTemplates.AWAITING_DEPOSIT({
           referenceNumber: transaction.referenceNumber,
@@ -445,7 +505,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.DEPOSIT_CONFIRMED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction, amount } = event;
 
         const template = NotificationTemplates.DEPOSIT_CONFIRMED({
           referenceNumber: transaction.referenceNumber,
@@ -461,6 +521,14 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          const amountStr = amount ? `NGN ${amount}` : transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : '';
+          await emailService.sendDepositConfirmedEmail(user.email, user.firstName, transaction.referenceNumber, amountStr).catch((e) =>
+            logger.error('Error sending deposit confirmed email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending deposit confirmed notification:', error);
       }
@@ -471,7 +539,7 @@ export class NotificationHandler {
     /*
     eventBus.on('cash.pickup.issued', async (event: any) => {
       try {
-        const { userId, transaction, pickupCode, location } = event.data;
+        const { userId, transaction, pickupCode, location } = event;
 
         const template = NotificationTemplates.CASH_PICKUP_READY({
           referenceNumber: transaction.referenceNumber,
@@ -500,7 +568,7 @@ export class NotificationHandler {
     /*
     eventBus.on('prepaid.card.issued', async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.PREPAID_CARD_READY({
           referenceNumber: transaction.referenceNumber,
@@ -529,7 +597,7 @@ export class NotificationHandler {
   private handleComplianceEvents() {
     eventBus.on(EventTypes.AML_CHECK_COMPLETED, async (event: any) => {
       try {
-        const { userId, transaction, status } = event.data;
+        const { userId, transaction, status } = event;
 
         if (status === 'FLAGGED') {
           const template = NotificationTemplates.COMPLIANCE_REVIEW({
@@ -554,7 +622,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.AML_FLAG_RAISED, async (event: any) => {
       try {
-        const { userId, transaction, severity } = event.data;
+        const { userId, transaction, severity } = event;
 
         const template = NotificationTemplates.AML_FLAG_RAISED({
           referenceNumber: transaction.referenceNumber,
@@ -583,7 +651,7 @@ export class NotificationHandler {
   private handleDocumentEvents() {
     eventBus.on(EventTypes.DOCUMENT_VERIFIED, async (event: any) => {
       try {
-        const { userId, transaction } = event.data;
+        const { userId, transaction } = event;
 
         const template = NotificationTemplates.VERIFICATION_COMPLETED({
           referenceNumber: transaction.referenceNumber,
@@ -606,7 +674,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.DOCUMENT_REJECTED, async (event: any) => {
       try {
-        const { userId, transaction, reason } = event.data;
+        const { userId, transaction, reason } = event;
 
         const template = NotificationTemplates.VERIFICATION_FAILED({
           referenceNumber: transaction.referenceNumber,
@@ -635,7 +703,7 @@ export class NotificationHandler {
   private handleSecurityEvents() {
     eventBus.on(EventTypes.USER_SUSPENDED, async (event: any) => {
       try {
-        const { userId, reason } = event.data;
+        const { userId, reason } = event;
 
         const template = NotificationTemplates.ACCOUNT_SUSPENDED({ reason });
 
@@ -649,6 +717,13 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           skipPreferenceCheck: true,
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendAccountSuspendedEmail(user.email, user.firstName, reason || 'Policy violation').catch((e) =>
+            logger.error('Error sending account suspended email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending account suspended notification:', error);
       }
@@ -656,7 +731,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.USER_ACTIVATED, async (event: any) => {
       try {
-        const { userId } = event.data;
+        const { userId } = event;
 
         const template = NotificationTemplates.ACCOUNT_ACTIVATED();
 
@@ -669,6 +744,13 @@ export class NotificationHandler {
           body: template.body,
           data: { actionUrl: template.actionUrl },
         });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendAccountActivatedEmail(user.email, user.firstName).catch((e) =>
+            logger.error('Error sending account activated email:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending account activated notification:', error);
       }
@@ -688,7 +770,7 @@ export class NotificationHandler {
   private handleAdminEvents() {
     eventBus.on(EventTypes.ADMIN_ACTION_PERFORMED, async (event: any) => {
       try {
-        const { actionType, resourceType, resourceId, adminId } = event.data;
+        const { actionType, resourceType, resourceId, adminId } = event;
 
         // Notify relevant admins about critical actions
         // This is a placeholder - implement based on your admin notification requirements
@@ -700,7 +782,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.ADMIN_REVIEW_REQUIRED, async (event: any) => {
       try {
-        const { adminIds = [], transaction } = event.data || {};
+        const { adminIds = [], transaction } = event || {};
         if (!transaction || adminIds.length === 0) return;
 
         const template = NotificationTemplates.NEW_TRANSACTION_ADMIN({
