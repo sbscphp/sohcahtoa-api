@@ -1875,6 +1875,138 @@ router.post('/verify-reset-otp', authController.verifyResetOtp);
  */
 router.post('/reset-password', authController.resetPassword);
 
+/**
+ * @swagger
+ * /api/auth/tin/verify-individual:
+ *   post:
+ *     summary: Verify an individual's Tax Identification Number (TIN)
+ *     tags: [Authentication]
+ *     description: >
+ *       Validates an individual's TIN against the NIBSS Identity v2 API and returns
+ *       the taxpayer's full profile (name, DOB, tax authority, etc.).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tin
+ *             properties:
+ *               tin:
+ *                 type: string
+ *                 description: 8–14 digit Tax Identification Number
+ *                 example: "1003123575"
+ *     responses:
+ *       200:
+ *         description: TIN verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                     message:
+ *                       type: string
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         tin:
+ *                           type: string
+ *                         firstName:
+ *                           type: string
+ *                         middleName:
+ *                           type: string
+ *                         lastName:
+ *                           type: string
+ *                         phoneNo:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         dateOfBirth:
+ *                           type: string
+ *                         dateOfRegistration:
+ *                           type: string
+ *                         taxAuthority:
+ *                           type: string
+ *                         taxOffice:
+ *                           type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/tin/verify-individual', authController.verifyIndividualTin.bind(authController));
+
+/**
+ * @swagger
+ * /api/auth/tin/verify-corporate:
+ *   post:
+ *     summary: Verify a corporate entity's Tax Identification Number (TIN)
+ *     tags: [Authentication]
+ *     description: >
+ *       Validates a corporate TIN against the NIBSS Identity v2 API and returns
+ *       the entity's registration details (name, RC number, incorporation date, etc.).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tin
+ *             properties:
+ *               tin:
+ *                 type: string
+ *                 description: 8–14 digit Tax Identification Number
+ *                 example: "1000001311"
+ *     responses:
+ *       200:
+ *         description: TIN verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                     message:
+ *                       type: string
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         tin:
+ *                           type: string
+ *                         registeredName:
+ *                           type: string
+ *                         registrationNumber:
+ *                           type: string
+ *                         phoneNo:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         dateOfIncorporation:
+ *                           type: string
+ *                         dateOfRegistration:
+ *                           type: string
+ *                         taxAuthority:
+ *                           type: string
+ *                         taxOffice:
+ *                           type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/tin/verify-corporate', authController.verifyCorporateTin.bind(authController));
+
 // Health check
 router.get('/health', authController.healthCheck);
 

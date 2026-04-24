@@ -151,6 +151,54 @@ interface TINVerificationResponse {
   Status?: string;
 }
 
+// ─── TIN Identity v2 (Individual / Corporate) ────────────────────────────────
+
+interface TINIdentityRequest {
+  ValidationNumber: string;
+  Signature: string; // Base64 of client username
+}
+
+interface IndividualTINResponse {
+  status: string;
+  message: string;
+  data?: {
+    taxpayer?: {
+      tin?: string;
+      first_name?: string;
+      middle_name?: string;
+      last_name?: string;
+      phone_no?: string;
+      email?: string;
+      date_of_birth?: string;
+      date_of_registration?: string;
+      tax_authority?: string;
+      tax_office?: string | null;
+    };
+    responseCode?: string;
+    responseDescription?: string;
+  };
+}
+
+interface CorporateTINResponse {
+  status: string;
+  message: string;
+  data?: {
+    taxpayer?: {
+      tin?: string;
+      registered_name?: string;
+      registration_number?: string;
+      phone_no?: string | null;
+      email?: string | null;
+      date_of_incorporation?: string;
+      date_of_registration?: string;
+      tax_authority?: string;
+      tax_office?: string | null;
+    };
+    responseCode?: string;
+    responseDescription?: string;
+  };
+}
+
 /**
  * NIBSS API Client
  *
@@ -171,12 +219,15 @@ export class NIBSSClient {
   private fasClient: AxiosInstance;
   private consentHubClient: AxiosInstance;
   private bivsClient: AxiosInstance; // kept for TIN + token generation
+  private identityClient: AxiosInstance; // TIN Identity v2 (individual / corporate)
 
   // ── BIVS (token + TIN) ──
   private bivsClientId: string;
   private bivsClientSecret: string;
   private bivsBaseUrl: string;
   private bivsResetUrl: string;
+  private bivsClientUsername: string; // Base64'd for TIN Identity v2 Signature field
+  private tinIdentityBaseUrl: string;
 
   // ── Consent Hub / FAS (shared credentials per user confirmation) ──
   private consentClientId: string;
@@ -202,10 +253,12 @@ export class NIBSSClient {
 
   constructor() {
     // BIVS
-    this.bivsClientId     = process.env.NIBSS_BIVS_CLIENT_ID     || '';
-    this.bivsClientSecret = process.env.NIBSS_BIVS_CLIENT_SECRET || '';
-    this.bivsBaseUrl      = process.env.NIBSS_BIVS_BASE_URL      || 'https://apitest.nibss-plc.com.ng:1443';
-    this.bivsResetUrl     = process.env.NIBSS_BIVS_RESET_URL     || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.bivsClientId        = process.env.NIBSS_BIVS_CLIENT_ID       || '';
+    this.bivsClientSecret    = process.env.NIBSS_BIVS_CLIENT_SECRET   || '';
+    this.bivsBaseUrl         = process.env.NIBSS_BIVS_BASE_URL        || 'https://apitest.nibss-plc.com.ng:1443';
+    this.bivsResetUrl        = process.env.NIBSS_BIVS_RESET_URL       || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.bivsClientUsername  = process.env.NIBSS_BIVS_CLIENT_USERNAME || '';
+    this.tinIdentityBaseUrl  = process.env.NIBSS_TIN_BASE_URL         || 'https://apitest.nibss-plc.com.ng/identity/v2';
 
     // Consent Hub / FAS (same credentials)
     this.consentClientId     = process.env.NIBSS_CONSENT_CLIENT_ID     || '';
@@ -245,6 +298,12 @@ export class NIBSSClient {
       },
     });
 
+    this.identityClient = axios.create({
+      baseURL: this.tinIdentityBaseUrl,
+      timeout: 30000,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
     this.setupInterceptors();
   }
 
@@ -278,6 +337,7 @@ export class NIBSSClient {
     attach(this.bivsClient,       'BIVS');
     attach(this.fasClient,        'FAS');
     attach(this.consentHubClient, 'ConsentHub');
+    attach(this.identityClient,   'TINIdentity');
   }
 
   // ─── Token management ──────────────────────────────────────────────────────
@@ -799,6 +859,124 @@ export class NIBSSClient {
     } catch (error: any) {
       logger.error('Bank list fetch failed', { error: error.message });
       throw new Error(`Bank list fetch failed: ${error.message}`);
+    }
+  }
+
+  // ─── TIN Identity v2 — Individual ──────────────────────────────────────────
+
+  async verifyIndividualTin(tin: string): Promise<{
+    verified: boolean;
+    data?: {
+      tin: string;
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      phoneNo?: string;
+      email?: string;
+      dateOfBirth?: string;
+      dateOfRegistration?: string;
+      taxAuthority?: string;
+      taxOffice?: string | null;
+    };
+    message: string;
+  }> {
+    try {
+      const token     = await this.getBivsToken();
+      const signature = Buffer.from(this.bivsClientUsername).toString('base64');
+
+      logger.info('Verifying Individual TIN via Identity v2', { tin: `***${tin.slice(-4)}` });
+
+      const res = await this.identityClient.post<IndividualTINResponse>(
+        '/verifyIndividualTin',
+        { ValidationNumber: tin, Signature: signature } satisfies TINIdentityRequest,
+        { headers: { Token: `Bearer ${token}` } }
+      );
+
+      const { status, data } = res.data;
+
+      if (status !== '00' || !data?.taxpayer) {
+        logger.warn('Individual TIN verification failed', { status, message: res.data.message });
+        return { verified: false, message: res.data.message || 'Individual TIN verification failed' };
+      }
+
+      const tp = data.taxpayer;
+      return {
+        verified: true,
+        data: {
+          tin:                tp.tin || tin,
+          firstName:          tp.first_name,
+          middleName:         tp.middle_name,
+          lastName:           tp.last_name,
+          phoneNo:            tp.phone_no,
+          email:              tp.email,
+          dateOfBirth:        tp.date_of_birth,
+          dateOfRegistration: tp.date_of_registration,
+          taxAuthority:       tp.tax_authority,
+          taxOffice:          tp.tax_office,
+        },
+        message: 'Individual TIN verified successfully',
+      };
+    } catch (error: any) {
+      logger.error('Individual TIN verification error', { error: error.message, data: error.response?.data });
+      return { verified: false, message: `Individual TIN verification failed: ${error.message}` };
+    }
+  }
+
+  // ─── TIN Identity v2 — Corporate ───────────────────────────────────────────
+
+  async verifyCorporateTin(tin: string): Promise<{
+    verified: boolean;
+    data?: {
+      tin: string;
+      registeredName?: string;
+      registrationNumber?: string;
+      phoneNo?: string | null;
+      email?: string | null;
+      dateOfIncorporation?: string;
+      dateOfRegistration?: string;
+      taxAuthority?: string;
+      taxOffice?: string | null;
+    };
+    message: string;
+  }> {
+    try {
+      const token     = await this.getBivsToken();
+      const signature = Buffer.from(this.bivsClientUsername).toString('base64');
+
+      logger.info('Verifying Corporate TIN via Identity v2', { tin: `***${tin.slice(-4)}` });
+
+      const res = await this.identityClient.post<CorporateTINResponse>(
+        '/verifyCorporateTin',
+        { ValidationNumber: tin, Signature: signature } satisfies TINIdentityRequest,
+        { headers: { Token: `Bearer ${token}` } }
+      );
+
+      const { status, data } = res.data;
+
+      if (status !== '00' || !data?.taxpayer) {
+        logger.warn('Corporate TIN verification failed', { status, message: res.data.message });
+        return { verified: false, message: res.data.message || 'Corporate TIN verification failed' };
+      }
+
+      const tp = data.taxpayer;
+      return {
+        verified: true,
+        data: {
+          tin:                  tp.tin || tin,
+          registeredName:       tp.registered_name,
+          registrationNumber:   tp.registration_number,
+          phoneNo:              tp.phone_no,
+          email:                tp.email,
+          dateOfIncorporation:  tp.date_of_incorporation,
+          dateOfRegistration:   tp.date_of_registration,
+          taxAuthority:         tp.tax_authority,
+          taxOffice:            tp.tax_office,
+        },
+        message: 'Corporate TIN verified successfully',
+      };
+    } catch (error: any) {
+      logger.error('Corporate TIN verification error', { error: error.message, data: error.response?.data });
+      return { verified: false, message: `Corporate TIN verification failed: ${error.message}` };
     }
   }
 

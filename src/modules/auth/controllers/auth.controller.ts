@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import authService from '../services/auth.service';
 import passportService from '../services/passport.service';
+import tinService from '../services/tin.service';
 import { successResponse, uploadToCloudinary, ValidationError } from '../../../shared/utils';
 import {
   SignupRequest,
@@ -438,6 +439,28 @@ export class AuthController {
         newPasswordConfirm: newPasswordConfirm || '',
       });
 
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyIndividualTin(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { tin } = req.body;
+      if (!tin) throw new ValidationError('tin is required');
+      const result = await tinService.verifyIndividualTin(tin);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyCorporateTin(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { tin } = req.body;
+      if (!tin) throw new ValidationError('tin is required');
+      const result = await tinService.verifyCorporateTin(tin);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
