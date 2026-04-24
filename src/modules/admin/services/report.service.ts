@@ -78,9 +78,9 @@ class ReportService {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
       const chunks: Buffer[] = [];
 
-      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", (err) => reject(err));
+      doc.on("error", (err: Error) => reject(err));
 
       // Header
       doc.fillColor("#1a1a1a").fontSize(20).text(params.title, { align: "left" });

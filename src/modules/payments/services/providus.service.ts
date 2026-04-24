@@ -596,3 +596,5 @@ export class ProvidusService {
     };
   }
 }
+
+export default new ProvidusService();
