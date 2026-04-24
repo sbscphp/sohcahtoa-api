@@ -31,9 +31,7 @@ export class AuthController {
   async verifyBvn(req: Request, res: Response, next: NextFunction) {
     try {
       const { bvn, phoneNumber, email } = req.body;
-      if (!bvn) throw new Error('BVN is required');
-      if (!phoneNumber) throw new Error('Phone number is required');
-      if (!email) throw new Error('Email is required');
+      if (!bvn) throw new ValidationError('BVN is required');
       const result = await authService.verifyBvnForSignup(bvn, phoneNumber, email);
       res.json(successResponse(result));
     } catch (error) {
@@ -45,7 +43,7 @@ export class AuthController {
   async checkBvnConsentStatus(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.body;
-      if (!sessionId) throw new Error('sessionId is required');
+      if (!sessionId) throw new ValidationError('sessionId is required');
       const result = await authService.checkBvnConsentStatus(sessionId);
       res.json(successResponse(result));
     } catch (error) {
@@ -137,7 +135,7 @@ export class AuthController {
     try {
       const { passportDocumentUrl, passportNumber } = req.body;
       if (!passportDocumentUrl) {
-        throw new Error('Passport document URL is required');
+        throw new ValidationError('Passport document URL is required');
       }
       const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST');
       res.json(successResponse(result));
@@ -184,7 +182,7 @@ export class AuthController {
     try {
       const { passportDocumentUrl, passportNumber } = req.body;
       if (!passportDocumentUrl) {
-        throw new Error('Passport document URL is required');
+        throw new ValidationError('Passport document URL is required');
       }
       const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE');
       res.json(successResponse(result));
@@ -296,7 +294,7 @@ export class AuthController {
     try {
       const sessionId = req.user?.sessionId;
       if (!sessionId) {
-        throw new Error('Session ID not found');
+        throw new ValidationError('Session ID not found');
       }
       const result = await authService.logout(sessionId);
       res.json(successResponse(result));
@@ -319,7 +317,7 @@ export class AuthController {
     try {
       const userId = req.user?.userId;
       if (!userId) {
-        throw new Error('User ID not found');
+        throw new ValidationError('User ID not found');
       }
       const data: KycVerificationRequest = { ...req.body, userId };
       const result = await authService.verifyKyc(data);
@@ -333,7 +331,7 @@ export class AuthController {
     try {
       const userId = req.user?.userId;
       if (!userId) {
-        throw new Error('User ID not found');
+        throw new ValidationError('User ID not found');
       }
       const profile = await authService.getUserProfile(userId);
       res.json(successResponse(profile, 'Profile retrieved successfully'));
@@ -383,7 +381,7 @@ export class AuthController {
     try {
       const userId = req.user?.userId;
       if (!userId) {
-        throw new Error('User ID not found');
+        throw new ValidationError('User ID not found');
       }
       const result = await passportService.getPassportVerificationStatus(userId);
       res.json(successResponse(result));

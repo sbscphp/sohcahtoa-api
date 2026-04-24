@@ -556,7 +556,7 @@ export class AuthService {
   }
 
   // STEP 1: Initiate NIBSS consent for BVN — returns consentUrl for user to authenticate
-  async verifyBvnForSignup(bvn: string, phoneNumber: string, email: string): Promise<{
+  async verifyBvnForSignup(bvn: string, phoneNumber?: string, email?: string): Promise<{
     sessionId: string;
     consentUrl: string;
     message: string;
