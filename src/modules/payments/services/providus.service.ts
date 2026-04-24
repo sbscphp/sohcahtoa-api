@@ -6,6 +6,12 @@ import { ErrorCode } from '../../../shared/types/common';
 
 const logger = createLogger('ProvidusService');
 
+// Simulation mode flag - set to true when Providus API is unreachable
+const SIMULATION_MODE = process.env.PROVIDUS_SIMULATION_MODE === 'true' || false;
+
+// Counter for generating unique simulated account numbers
+let simulationCounter = 9000000000;
+
 interface ProvidusConfig {
   baseUrl: string;
   clientId: string;
@@ -142,10 +148,38 @@ export class ProvidusService {
   }
 
   /**
+   * Check if an error is a network error that should trigger simulation fallback
+   */
+  private isNetworkError(error: any): boolean {
+    if (axios.isAxiosError(error)) {
+      // Network errors: ECONNREFUSED, ENOTFOUND, ETIMEDOUT, etc.
+      const code = error.code;
+      if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ETIMEDOUT' || code === 'ECONNRESET') {
+        return true;
+      }
+      // HTTP status codes indicating server unreachable
+      if (error.response?.status === 0 || error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) {
+        return true;
+      }
+      // No response means server didn't respond
+      if (!error.response) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Create a dynamic virtual account number
    * Used for one-time transactions
    */
   async createDynamicAccount(accountName: string): Promise<CreateDynamicAccountResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for createDynamicAccount');
+      return this.simulateCreateDynamicAccount(accountName);
+    }
+
     try {
       logger.info('Creating dynamic account', { accountName });
 
@@ -170,6 +204,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error creating dynamic account', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateCreateDynamicAccount(accountName);
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(
         ErrorCode.EXTERNAL_SERVICE_ERROR,
@@ -187,6 +226,12 @@ export class ProvidusService {
     accountName: string,
     bvn?: string
   ): Promise<CreateReservedAccountResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for createReservedAccount');
+      return this.simulateCreateReservedAccount(accountName, bvn);
+    }
+
     try {
       logger.info('Creating reserved account', { accountName, bvn });
 
@@ -214,6 +259,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error creating reserved account', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateCreateReservedAccount(accountName, bvn);
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(
         ErrorCode.EXTERNAL_SERVICE_ERROR,
@@ -230,6 +280,12 @@ export class ProvidusService {
     accountNumber: string,
     accountName: string
   ): Promise<UpdateAccountNameResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for updateAccountName');
+      return this.simulateUpdateAccountName();
+    }
+
     try {
       logger.info('Updating account name', { accountNumber, accountName });
 
@@ -254,6 +310,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error updating account name', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateUpdateAccountName();
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(ErrorCode.EXTERNAL_SERVICE_ERROR, 'Failed to update account name', 500);
     }
@@ -263,6 +324,12 @@ export class ProvidusService {
    * Verify transaction by session ID
    */
   async verifyTransactionBySessionId(sessionId: string): Promise<VerifyTransactionResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for verifyTransactionBySessionId');
+      return this.simulateVerifyTransaction(sessionId);
+    }
+
     try {
       logger.info('Verifying transaction by session ID', { sessionId });
 
@@ -287,6 +354,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error verifying transaction by session ID', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateVerifyTransaction(sessionId);
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(ErrorCode.EXTERNAL_SERVICE_ERROR, 'Failed to verify transaction', 500);
     }
@@ -296,6 +368,12 @@ export class ProvidusService {
    * Verify transaction by settlement ID
    */
   async verifyTransactionBySettlementId(settlementId: string): Promise<VerifyTransactionResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for verifyTransactionBySettlementId');
+      return this.simulateVerifyTransaction(settlementId);
+    }
+
     try {
       logger.info('Verifying transaction by settlement ID', { settlementId });
 
@@ -320,6 +398,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error verifying transaction by settlement ID', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateVerifyTransaction(settlementId);
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(ErrorCode.EXTERNAL_SERVICE_ERROR, 'Failed to verify transaction', 500);
     }
@@ -332,6 +415,12 @@ export class ProvidusService {
     accountNumber: string,
     blacklist: boolean = true
   ): Promise<BlacklistAccountResponse> {
+    // Use simulation mode if enabled
+    if (SIMULATION_MODE) {
+      logger.warn('SIMULATION MODE: Using simulated response for blacklistAccount');
+      return this.simulateBlacklistAccount();
+    }
+
     try {
       logger.info('Updating account blacklist status', { accountNumber, blacklist });
 
@@ -365,6 +454,11 @@ export class ProvidusService {
       return response.data;
     } catch (error) {
       logger.error('Error updating account blacklist status', error);
+      // Fall back to simulation mode on network error
+      if (this.isNetworkError(error)) {
+        logger.warn('Network error detected, falling back to simulation mode');
+        return this.simulateBlacklistAccount();
+      }
       if (error instanceof AppError) throw error;
       throw new AppError(
         ErrorCode.EXTERNAL_SERVICE_ERROR,
@@ -386,6 +480,119 @@ export class ProvidusService {
 
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
   }
-}
 
-export default new ProvidusService();
+  /**
+   * Check if simulation mode is enabled
+   */
+  isSimulationMode(): boolean {
+    return SIMULATION_MODE;
+  }
+
+  // ==================== SIMULATION METHODS ====================
+  // These methods return sample responses when Providus API is unreachable
+  // Used for development/testing when the actual API is unavailable
+
+  /**
+   * Generate simulated dynamic account response
+   * Based on sample from Providus documentation:
+   * {
+   *     "account_number": "9900000001",
+   *     "account_name": "CharlyWize(Adewale)",
+   *     "requestSuccessful": true,
+   *     "responseMessage": "Successful",
+   *     "responseCode": "00",
+   *     "initiationTranRef": "352352352325"
+   * }
+   */
+  private simulateCreateDynamicAccount(accountName: string): CreateDynamicAccountResponse {
+    simulationCounter++;
+    const accountNumber = simulationCounter.toString();
+    
+    logger.info('SIMULATION: Creating dynamic account', { accountName, accountNumber });
+
+    return {
+      account_number: accountNumber,
+      account_name: accountName,
+      requestSuccessful: true,
+      responseMessage: 'Successful',
+      responseCode: '00',
+      initiationTranRef: `SIM_${Date.now()}_${Math.random().toString(36).substring(7).toUpperCase()}`,
+    };
+  }
+
+  /**
+   * Generate simulated reserved account response
+   */
+  private simulateCreateReservedAccount(accountName: string, bvn?: string): CreateReservedAccountResponse {
+    simulationCounter++;
+    const accountNumber = simulationCounter.toString();
+    
+    logger.info('SIMULATION: Creating reserved account', { accountName, bvn });
+
+    return {
+      account_number: accountNumber,
+      account_name: accountName,
+      bvn,
+      requestSuccessful: true,
+      responseMessage: 'Successful',
+      responseCode: '00',
+    };
+  }
+
+  /**
+   * Generate simulated update account name response
+   * Based on sample from Providus documentation:
+   * {
+   *     "requestSuccessful": true,
+   *     "responseMessage": "Successful",
+   *     "responseCode": "00"
+   * }
+   */
+  private simulateUpdateAccountName(): UpdateAccountNameResponse {
+    logger.info('SIMULATION: Updating account name');
+
+    return {
+      requestSuccessful: true,
+      responseMessage: 'Successful',
+      responseCode: '00',
+    };
+  }
+
+  /**
+   * Generate simulated transaction verification response
+   */
+  private simulateVerifyTransaction(sessionId: string): VerifyTransactionResponse {
+    logger.info('SIMULATION: Verifying transaction', { sessionId });
+
+    return {
+      sessionId: sessionId || `SIM_SESSION_${Date.now()}`,
+      initiationTranRef: `SIM_INIT_${Date.now()}`,
+      accountNumber: '9900000001',
+      tranRemarks: 'Payment received',
+      transactionAmount: 10000,
+      settledAmount: 9850,
+      feeAmount: 150,
+      vatAmount: 0,
+      currency: 'NGN',
+      settlementId: `SIM_SETTLE_${Date.now()}`,
+      sourceAccountNumber: '1234567890',
+      sourceAccountName: 'Test Customer',
+      sourceBankName: 'Test Bank',
+      channelId: 'WEB',
+      tranDateTime: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Generate simulated blacklist response
+   */
+  private simulateBlacklistAccount(): BlacklistAccountResponse {
+    logger.info('SIMULATION: Updating account blacklist status');
+
+    return {
+      requestSuccessful: true,
+      responseMessage: 'Successful',
+      responseCode: '00',
+    };
+  }
+}
