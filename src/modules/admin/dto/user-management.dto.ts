@@ -68,6 +68,7 @@ export class AdminUserQueryDto {
     role?: string;
     department?: string;
     isActive?: any;
+    status?: any;
 }
 
 

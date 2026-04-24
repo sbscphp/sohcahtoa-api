@@ -198,55 +198,63 @@ class UserManagementService {
         }
     };
 
+    private buildAdminUserWhereClause(query: AdminUserQueryDto): Prisma.AdminUserWhereInput {
+        const { search, fullName, email, role, department, isActive, status } = query;
+        const where: Prisma.AdminUserWhereInput = {};
+
+        if (search) {
+            where.OR = [
+                { fullName: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { phoneNumber: { contains: search, mode: "insensitive" } },
+            ];
+        }
+
+        if (fullName) {
+            where.fullName = { contains: fullName, mode: "insensitive" };
+        }
+
+        if (email) {
+            where.email = { contains: email, mode: "insensitive" };
+        }
+
+        const statusVal = status || isActive;
+        if (statusVal !== undefined && statusVal !== null && statusVal !== "") {
+            const s = String(statusVal).trim().toLowerCase();
+            if (s === "pending") {
+                where.password = null;
+                where.isActive = true;
+            } else if (s === "active" || s === "activated" || s === "true" || s === "1") {
+                where.isActive = true;
+                where.password = { not: null };
+            } else if (s === "deactivated" || s === "inactive" || s === "false" || s === "0") {
+                where.isActive = false;
+            }
+        }
+
+        if (role) {
+            where.OR = [
+                ...(where.OR || []),
+                { roleId: role },
+                { role: { name: { equals: role, mode: "insensitive" } } }
+            ];
+        }
+
+        if (department) {
+            where.OR = [
+                ...(where.OR || []),
+                { departmentId: department },
+                { department: { name: { equals: department, mode: "insensitive" } } }
+            ];
+        }
+
+        return where;
+    }
+
     getAllUsers = async (query: AdminUserQueryDto) => {
         try {
-            const { page = 1, limit = 10, search, fullName, email, role, department, isActive } = query;
-            const where: Prisma.AdminUserWhereInput = {};
-
-            if (search) {
-                where.OR = [
-                    { fullName: { contains: search, mode: "insensitive" } },
-                    { email: { contains: search, mode: "insensitive" } },
-                    { phoneNumber: { contains: search, mode: "insensitive" } },
-                ];
-            }
-
-            if (fullName) {
-                where.fullName = { contains: fullName, mode: "insensitive" };
-            }
-
-            if (email) {
-                where.email = { contains: email, mode: "insensitive" };
-            }
-
-            if (isActive !== undefined && isActive !== null && isActive !== "") {
-                const s = String(isActive).trim().toLowerCase();
-                if (s === "pending") {
-                    where.password = null;
-                    where.isActive = true;
-                } else if (s === "active" || s === "activated" || s === "true" || s === "1") {
-                    where.isActive = true;
-                    where.password = { not: null };
-                } else if (s === "deactivated" || s === "inactive" || s === "false" || s === "0") {
-                    where.isActive = false;
-                }
-            }
-
-            if (role) {
-                where.OR = [
-                    ...(where.OR || []),
-                    { roleId: role },
-                    { role: { name: { equals: role, mode: "insensitive" } } }
-                ];
-            }
-
-            if (department) {
-                where.OR = [
-                    ...(where.OR || []),
-                    { departmentId: department },
-                    { department: { name: { equals: department, mode: "insensitive" } } }
-                ];
-            }
+            const { page = 1, limit = 10 } = query;
+            const where = this.buildAdminUserWhereClause(query);
 
             return await paginate(
                 this.prisma.adminUser,
@@ -517,8 +525,10 @@ class UserManagementService {
         }
     };
 
-    exportUsers = async () => {
+    exportUsers = async (query: AdminUserQueryDto) => {
+        const where = this.buildAdminUserWhereClause(query);
         const users = await this.prisma.adminUser.findMany({
+            where,
             orderBy: { createdAt: "desc" },
             include: {
                 role: { select: { name: true } },
@@ -538,8 +548,10 @@ class UserManagementService {
         }));
     };
 
-    exportRoles = async () => {
+    exportRoles = async (query: RoleQueryDto) => {
+        const where = this.buildRoleWhereClause(query);
         const roles = await this.prisma.role.findMany({
+            where,
             orderBy: { createdAt: "desc" },
             include: { department: { select: { name: true } } },
         });
@@ -557,8 +569,35 @@ class UserManagementService {
         }));
     };
 
-    exportDepartments = async () => {
+    private buildDepartmentWhereClause(query: DepartmentQueryDto): Prisma.DepartmentWhereInput {
+        const { search, isActive } = query;
+        const where: Prisma.DepartmentWhereInput = {};
+
+        if (search) {
+            where.name = { contains: search, mode: "insensitive" };
+        }
+
+        if (isActive !== undefined && isActive !== null && isActive !== "") {
+            const parseActiveFilter = (value: any): boolean | undefined => {
+                const s = String(value).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
+                if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
+                return undefined;
+            };
+
+            const parsed = parseActiveFilter(isActive);
+            if (parsed !== undefined) {
+                where.isActive = parsed;
+            }
+        }
+
+        return where;
+    }
+
+    exportDepartments = async (query: DepartmentQueryDto) => {
+        const where = this.buildDepartmentWhereClause(query);
         const depts = await this.prisma.department.findMany({
+            where,
             orderBy: { createdAt: "desc" },
         });
         return (depts || []).map((d: any) => ({
@@ -738,29 +777,35 @@ class UserManagementService {
         }
     };
 
+    private buildRoleWhereClause(query: RoleQueryDto): Prisma.RoleWhereInput {
+        const { search, isActive } = query;
+        const where: Prisma.RoleWhereInput = {};
+
+        if (search) {
+            where.name = { contains: search, mode: "insensitive" };
+        }
+
+        if (isActive !== undefined && isActive !== null && isActive !== "") {
+            const parseActiveFilter = (value: any): boolean | undefined => {
+                const s = String(value).trim().toLowerCase();
+                if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
+                if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
+                return undefined;
+            };
+
+            const parsed = parseActiveFilter(isActive);
+            if (parsed !== undefined) {
+                where.isActive = parsed;
+            }
+        }
+
+        return where;
+    }
+
     getAllRoles = async (query: RoleQueryDto) => {
         try {
-            const { page = 1, limit = 10, search, isActive } = query;
-
-            const where: Record<string, any> = {};
-
-            if (search) {
-                where.name = { contains: search, mode: "insensitive" };
-            }
-
-            if (isActive !== undefined && isActive !== null && isActive !== "") {
-                const parseActiveFilter = (value: any): boolean | undefined => {
-                    const s = String(value).trim().toLowerCase();
-                    if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
-                    if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
-                    return undefined;
-                };
-
-                const parsed = parseActiveFilter(isActive);
-                if (parsed !== undefined) {
-                    where.isActive = parsed;
-                }
-            }
+            const { page = 1, limit = 10 } = query;
+            const where = this.buildRoleWhereClause(query);
 
             const countPermissions = (p: any) => {
                 if (!p) return 0;
@@ -1221,27 +1266,8 @@ class UserManagementService {
 
     getAllDepartments = async (query: DepartmentQueryDto) => {
         try {
-            const { page = 1, limit = 10, search, isActive } = query;
-
-            const where: Record<string, any> = {};
-
-            if (search) {
-                where.name = { contains: search, mode: "insensitive" };
-            }
-
-            if (isActive !== undefined && isActive !== null && isActive !== "") {
-                const parseActiveFilter = (value: any): boolean | undefined => {
-                    const s = String(value).trim().toLowerCase();
-                    if (s === "true" || s === "1" || s === "active" || s === "activated" || s === "enabled") return true;
-                    if (s === "false" || s === "0" || s === "deactivated" || s === "inactive" || s === "disabled" || s === "dectivated") return false;
-                    return undefined;
-                };
-
-                const parsed = parseActiveFilter(isActive);
-                if (parsed !== undefined) {
-                    where.isActive = parsed;
-                }
-            }
+            const { page = 1, limit = 10 } = query;
+            const where = this.buildDepartmentWhereClause(query);
 
             return await paginate(
                 this.prisma.department,

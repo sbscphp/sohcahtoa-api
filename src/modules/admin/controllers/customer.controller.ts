@@ -142,10 +142,7 @@ class CustomerController {
 
   exportCustomersCsv = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const rows = await customerService.exportCustomers({
-        search: (req.query.search as string) || (req.query.q as string) || "",
-        status: (req.query.status as string) || undefined,
-      });
+      const rows = await customerService.exportCustomers(req.query);
       streamCsv(
         res,
         "customers.csv",

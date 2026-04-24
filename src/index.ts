@@ -7,6 +7,7 @@ import { initializeFirebase } from './config/firebase';
 import { createLogger } from './shared/utils/logger';
 import { eventBus } from './events/event-bus';
 import notificationHandler from './modules/notifications/handlers/notification.handler';
+import { setupTransactionWorkflow } from './shared/utils/workflow-setup';
 
 const logger = createLogger('Server');
 
@@ -21,6 +22,9 @@ async function startServer() {
     // Initialize database
     logger.info('Initializing database connection...');
     initializeDatabase();
+
+    // Setup workflows
+    await setupTransactionWorkflow();
 
     // Initialize Redis
     logger.info('Initializing Redis connection...');

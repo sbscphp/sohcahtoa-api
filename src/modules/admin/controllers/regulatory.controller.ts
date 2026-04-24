@@ -122,10 +122,7 @@ class RegulatoryController {
   });
 
   exportAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-    const severity = (req.query.severity as string) || "ALL";
-    const category = (req.query.category as string) || "ALL";
-    const search = (req.query.search as string) || "";
-    const result = await regulatoryService.auditLogsList({ severity, category, search }, 1, 10_000);
+    const result = await regulatoryService.auditLogsList(req.query, 1, 10_000);
     const rows = result.data || [];
     streamCsv(
       res,
@@ -143,9 +140,7 @@ class RegulatoryController {
   });
 
   exportRegulatoryLogs = asyncHandler(async (req: Request, res: Response) => {
-    const status = (req.query.status as string) || "ALL";
-    const search = (req.query.search as string) || "";
-    const result = await regulatoryService.regulatoryLogsList({ status, search }, 1, 10_000);
+    const result = await regulatoryService.regulatoryLogsList(req.query, 1, 10_000);
     const rows = result.data || [];
     streamCsv(
       res,
