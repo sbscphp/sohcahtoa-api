@@ -134,6 +134,16 @@ export interface AgentCreateTransactionPayload {
     accountName?: string;
     bankName?: string;
     iban?: string;
+    beneficiaryCountryRegion?: string;
+    beneficiaryName?: string;
+    beneficiaryAddress?: string;
+    bankAddress?: string;
+    paymentReference?: string;
+    swiftCode?: string;
+    routingNumber?: string;
+    ifscNumber?: string;
+    purposeCode?: string;
+    bsbCode?: string;
   };
   pickupLocation?: {
     id?: string;

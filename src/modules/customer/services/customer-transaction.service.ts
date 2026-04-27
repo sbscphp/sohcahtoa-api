@@ -48,6 +48,16 @@ interface CreateCustomerTransactionPayload {
     accountName?: string;
     bankName?: string;
     iban?: string;
+    beneficiaryCountryRegion?: string;
+    beneficiaryName?: string;
+    beneficiaryAddress?: string;
+    bankAddress?: string;
+    paymentReference?: string;
+    swiftCode?: string;
+    routingNumber?: string;
+    ifscNumber?: string;
+    purposeCode?: string;
+    bsbCode?: string;
   };
 
   // Pickup Location details
@@ -1023,6 +1033,11 @@ export class CustomerTransactionService {
           cashPickup: {
             select: { pickupLocation: true, status: true },
           },
+          steps: {
+            where: { step: 'PERSONAL_INFO' as any },
+            select: { data: true },
+            take: 1,
+          },
         },
         orderBy: { [sortBy]: sortOrder },
         skip,
@@ -1040,11 +1055,16 @@ export class CustomerTransactionService {
       totalPages: Math.ceil(total / limit),
     });
 
-    // Attach the transaction group label to each row
-    const data = transactions.map((t) => ({
-      ...t,
-      group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
-    }));
+    // Attach the transaction group label and beneficiary details to each row
+    const data = transactions.map((t) => {
+      const { steps, ...rest } = t;
+      const personalInfoData = steps?.[0]?.data as any;
+      return {
+        ...rest,
+        group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
+        beneficiaryDetails: personalInfoData?.beneficiaryDetails || null,
+      };
+    });
 
     return {
       data,
