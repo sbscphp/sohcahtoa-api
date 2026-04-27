@@ -15,7 +15,7 @@ export const UPLOAD_LIMITS = {
   PARAMETER_LIMIT: 50000,            // Maximum number of parameters in URL-encoded data
 
   // Multiple file upload limits
-  MAX_FILES_PER_UPLOAD: 5,          // Maximum number of files in a single upload
+  MAX_FILES_PER_UPLOAD: 10,         // Maximum number of files in a single upload
 
   // Specific use case limits
   TRANSACTION_DOCUMENT: 5 * 1024 * 1024,    // 5MB per transaction document

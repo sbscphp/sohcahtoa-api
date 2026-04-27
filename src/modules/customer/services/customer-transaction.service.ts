@@ -365,6 +365,7 @@ export class CustomerTransactionService {
         'PROOF_OF_FUNDS',
         'SOURCE_OF_FUNDS_DECLARATION',
         'DIGITAL_SIGNATURE',
+        'BANK_VERIFICATION',
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -572,6 +573,7 @@ export class CustomerTransactionService {
       'PROOF_OF_FUNDS',
       'SOURCE_OF_FUNDS_DECLARATION',
       'DIGITAL_SIGNATURE',
+      'BANK_VERIFICATION',
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
