@@ -29,6 +29,44 @@ class AgentCustomerController {
     }
   }
 
+  async createTouristCustomerAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) {
+        throw new ValidationError("Authentication required");
+      }
+
+      const { verificationToken, password } = req.body;
+      const result = await agentCustomerService.createTouristCustomerAccountForAgent(
+        { verificationToken, password },
+        authUser.userId,
+      );
+
+      res.status(201).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createExpatriateCustomerAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) {
+        throw new ValidationError("Authentication required");
+      }
+
+      const { verificationToken, password } = req.body;
+      const result = await agentCustomerService.createExpatriateCustomerAccountForAgent(
+        { verificationToken, password },
+        authUser.userId,
+      );
+
+      res.status(201).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async listAgentCustomers(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;
