@@ -290,11 +290,8 @@ export class AuthService {
     const response: AgentLoginOtpSentResponse = {
       message: 'OTP sent to your email',
       requiresVerification: true,
+      otp: otpResult.otp,
     };
-
-    if (process.env.NODE_ENV !== 'production') {
-      response.otp = otpResult.otp;
-    }
 
     return response;
   }
