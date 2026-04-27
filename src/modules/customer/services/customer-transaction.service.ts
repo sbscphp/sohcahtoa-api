@@ -1310,11 +1310,85 @@ export class CustomerTransactionService {
         createdAt: h.createdAt,
       }));
 
-    // Fetch settlement details if they exist
-    const settlement = await prisma.settlement.findUnique({
-      where: { transactionId },
-      include: { bankDetails: true },
-    }).catch(() => null);
+    // Fetch payment and settlement details in parallel
+    const client = prisma as any;
+    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts] =
+      await Promise.all([
+        prisma.settlement
+          .findUnique({ where: { transactionId }, include: { bankDetails: true } })
+          .catch(() => null),
+        client.virtualAccount
+          .findUnique({ where: { transactionId } })
+          .catch(() => null),
+        client.providusDeposit
+          .findMany({
+            where: { transactionId },
+            select: {
+              id: true,
+              sessionId: true,
+              settlementId: true,
+              accountNumber: true,
+              amount: true,
+              settledAmount: true,
+              feeAmount: true,
+              currency: true,
+              sourceAccountNumber: true,
+              sourceAccountName: true,
+              sourceBankName: true,
+              tranRemarks: true,
+              tranDateTime: true,
+              status: true,
+              verifiedAt: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' as const },
+          })
+          .catch(() => []),
+        client.outboundSettlement
+          .findFirst({
+            where: { transactionId },
+            select: {
+              id: true,
+              referenceNumber: true,
+              amount: true,
+              currency: true,
+              status: true,
+              beneficiaryName: true,
+              beneficiaryBank: true,
+              beneficiaryAccount: true,
+              beneficiarySwift: true,
+              beneficiaryIban: true,
+              beneficiaryCountry: true,
+              beneficiaryAddress: true,
+              paymentMethod: true,
+              paymentReference: true,
+              paymentProof: true,
+              notes: true,
+              initiatedAt: true,
+              approvedAt: true,
+              processedAt: true,
+              completedAt: true,
+              failedAt: true,
+              failureReason: true,
+            },
+          })
+          .catch(() => null),
+        client.paymentReceipt
+          .findMany({
+            where: { transactionId },
+            select: {
+              id: true,
+              receiptNumber: true,
+              amount: true,
+              currency: true,
+              paymentMethod: true,
+              pdfUrl: true,
+              generatedAt: true,
+            },
+            orderBy: { generatedAt: 'desc' as const },
+          })
+          .catch(() => []),
+      ]);
 
     return {
       transactionId: transaction.id,
@@ -1358,6 +1432,7 @@ export class CustomerTransactionService {
       ),
       cashPickup: transaction.cashPickup,
       prepaidCard: transaction.prepaidCard,
+      // Inbound settlement (customer's NGN payment to the platform)
       settlement: settlement
         ? {
             id: settlement.id,
@@ -1382,6 +1457,80 @@ export class CustomerTransactionService {
               : null,
           }
         : null,
+
+      // Virtual account assigned to this transaction for payment collection
+      virtualAccount: virtualAccount
+        ? {
+            id: virtualAccount.id,
+            accountNumber: virtualAccount.accountNumber,
+            accountName: virtualAccount.accountName,
+            bankName: virtualAccount.bankName,
+            type: virtualAccount.type,
+            status: virtualAccount.status,
+            expiresAt: virtualAccount.expiresAt,
+            createdAt: virtualAccount.createdAt,
+          }
+        : null,
+
+      // Actual bank deposits received via Providus webhook
+      paymentDetails: deposits.length > 0
+        ? deposits.map((d: any) => ({
+            id: d.id,
+            sessionId: d.sessionId,
+            amount: d.amount,
+            settledAmount: d.settledAmount,
+            feeAmount: d.feeAmount,
+            currency: d.currency,
+            sourceAccountNumber: d.sourceAccountNumber,
+            sourceAccountName: d.sourceAccountName,
+            sourceBankName: d.sourceBankName,
+            tranRemarks: d.tranRemarks,
+            tranDateTime: d.tranDateTime,
+            status: d.status,
+            verifiedAt: d.verifiedAt,
+            createdAt: d.createdAt,
+          }))
+        : [],
+
+      // Outbound settlement (disbursement to beneficiary)
+      outboundSettlement: outboundSettlement
+        ? {
+            id: outboundSettlement.id,
+            referenceNumber: outboundSettlement.referenceNumber,
+            amount: outboundSettlement.amount,
+            currency: outboundSettlement.currency,
+            status: outboundSettlement.status,
+            beneficiaryName: outboundSettlement.beneficiaryName,
+            beneficiaryBank: outboundSettlement.beneficiaryBank,
+            beneficiaryAccount: outboundSettlement.beneficiaryAccount,
+            beneficiarySwift: outboundSettlement.beneficiarySwift,
+            beneficiaryIban: outboundSettlement.beneficiaryIban,
+            beneficiaryCountry: outboundSettlement.beneficiaryCountry,
+            beneficiaryAddress: outboundSettlement.beneficiaryAddress,
+            paymentMethod: outboundSettlement.paymentMethod,
+            paymentReference: outboundSettlement.paymentReference,
+            paymentProof: outboundSettlement.paymentProof,
+            notes: outboundSettlement.notes,
+            initiatedAt: outboundSettlement.initiatedAt,
+            approvedAt: outboundSettlement.approvedAt,
+            processedAt: outboundSettlement.processedAt,
+            completedAt: outboundSettlement.completedAt,
+            failedAt: outboundSettlement.failedAt,
+            failureReason: outboundSettlement.failureReason,
+          }
+        : null,
+
+      // Payment receipts generated for this transaction
+      paymentReceipts: paymentReceipts.map((r: any) => ({
+        id: r.id,
+        receiptNumber: r.receiptNumber,
+        amount: r.amount,
+        currency: r.currency,
+        paymentMethod: r.paymentMethod,
+        pdfUrl: r.pdfUrl,
+        generatedAt: r.generatedAt,
+      })),
+
       steps: this.sanitizeStepsForResponse(transaction.steps),
       comments,
       createdAt: transaction.createdAt,
