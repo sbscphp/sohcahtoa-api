@@ -14,7 +14,7 @@ export async function setupTransactionWorkflow() {
   const actionName = "Transaction Approval";
 
   try {
-    // 1. Check if the workflow already exists
+    //Check if the workflow already exists
     const existing = await prisma.workflowTemplate.findFirst({
       where: {
         OR: [
@@ -31,7 +31,7 @@ export async function setupTransactionWorkflow() {
 
     logger.info("Initializing standard transaction workflow...");
 
-    // 2. Find an admin user to be the creator
+    // Find an admin user to be the creator
     const creator = await prisma.adminUser.findFirst({
       where: { isActive: true },
       orderBy: { createdAt: 'asc' }
@@ -42,7 +42,7 @@ export async function setupTransactionWorkflow() {
       return;
     }
 
-    // 3. Create the Workflow Template and Stages
+    // Create the Workflow Template and Stages
     await prisma.$transaction(async (tx) => {
       const template = await tx.workflowTemplate.create({
         data: {
@@ -75,7 +75,7 @@ export async function setupTransactionWorkflow() {
         }
       });
 
-      // 4. Assign all current active admins to the stages
+      // Assign all current active admins to the stages
       const admins = await tx.adminUser.findMany({
         where: { isActive: true },
         take: 10 // Assign up to 10 admins to ensure the workflow is functional
