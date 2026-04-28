@@ -66,7 +66,8 @@ class AdminTransactionsController {
   });
 
   get = asyncHandler(async (req: Request, res: Response) => {
-    const result = await adminTransactionsService.getTransaction(req.params.id);
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminTransactionsService.getTransaction(req.params.id, adminId);
     res.json(successResponse(result));
   });
 
