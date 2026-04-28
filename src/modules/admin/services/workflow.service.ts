@@ -321,8 +321,14 @@ export class WorkflowService {
         hasPtaRequest: true,
         departmentId: true,
         branchId: true,
+        createdAt: true,
+        branch: { select: { name: true } },
+        department: { select: { name: true } },
       },
     });
+
+    if (!tpl) return null;
+
     const stages = await client.workflowStage.findMany({
       where: { templateId: id },
       orderBy: { order: "asc" },
@@ -332,7 +338,12 @@ export class WorkflowService {
     const assignees = stageIds.length
       ? await client.workflowAssignee.findMany({
           where: { stageId: { in: stageIds } },
-          select: { stageId: true, adminId: true, order: true },
+          select: { 
+            stageId: true, 
+            adminId: true, 
+            order: true,
+            admin: { select: { fullName: true, role: { select: { name: true } } } }
+          },
           orderBy: { order: "asc" },
         })
       : [];
@@ -340,9 +351,21 @@ export class WorkflowService {
       ...s,
       assignees: assignees
         .filter((a: any) => a.stageId === s.id)
-        .map((a: any) => ({ adminId: a.adminId, order: a.order })),
+        .map((a: any) => ({ 
+          adminId: a.adminId, 
+          order: a.order,
+          adminName: a.admin?.fullName,
+          roleName: a.admin?.role?.name
+        })),
     }));
-    return { ...tpl, stages: stageWithAssignees };
+
+    const responseTpl: any = { ...tpl };
+    responseTpl.branchName = tpl.branch?.name;
+    responseTpl.departmentName = tpl.department?.name;
+    delete responseTpl.branch;
+    delete responseTpl.department;
+
+    return { ...responseTpl, stages: stageWithAssignees };
   }
 
   async updateTemplate(id: string, payload: UpdateWorkflowDto) {
