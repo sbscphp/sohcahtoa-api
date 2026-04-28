@@ -79,6 +79,7 @@ export interface AgentPaymentMovementDisbursedRow {
 
 /** Inbound settlement row (from admin or from customer) */
 export interface AgentPaymentMovementInboundRow {
+  transaction_id: string;
   sender_full_name: string;
   amount_received: number;
   transaction_date: string;
@@ -678,6 +679,7 @@ class AgentTransactionService {
         prisma.settlement.findMany({
           where,
           select: {
+            transactionId: true,
             amount: true,
             confirmedAt: true,
             confirmedBy: true,
@@ -690,6 +692,7 @@ class AgentTransactionService {
       ]);
 
       const data: AgentPaymentMovementInboundRow[] = rows.map((row) => ({
+        transaction_id: row.transactionId,
         sender_full_name: (row.confirmedBy && adminNameById.get(row.confirmedBy)) || "Admin",
         amount_received: round2(Number(row.amount)),
         transaction_date: (row.confirmedAt ?? new Date(0)).toISOString(),
@@ -786,6 +789,7 @@ class AgentTransactionService {
       }
 
       return {
+        transaction_id: row.transactionId,
         sender_full_name: senderFullName,
         amount_received: round2(Number(row.amount)),
         transaction_date: (row.confirmedAt ?? new Date(0)).toISOString(),
