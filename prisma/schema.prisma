@@ -799,6 +799,8 @@ model Transaction {
   formAId            String?
   nairaEquivalent    Decimal?            @db.Decimal(18, 2)
   exchangeRate       Decimal?            @db.Decimal(18, 6)
+  amountPaid         Decimal?            @db.Decimal(18, 2) // Cumulative amount received so far
+  balanceDue         Decimal?            @db.Decimal(18, 2) // Positive = underpaid (still owed), Negative = overpaid (credit)
   disbursementMethod DisbursementMethod?
   taxClearanceNumber String?
   createdAt          DateTime            @default(now())

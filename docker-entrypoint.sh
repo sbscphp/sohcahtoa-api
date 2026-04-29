@@ -646,6 +646,10 @@ ALTER TABLE "workflow_assignees" ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NU
 -- Update transactions
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
+
+-- Payment balance tracking for underpayment/overpayment settlement
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "amountPaid" DECIMAL(18,2);
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "balanceDue" DECIMAL(18,2);
 EOF
 
 echo "✅ Schema verification completed"
