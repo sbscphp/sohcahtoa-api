@@ -433,6 +433,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'AWAITING_DISBURSEMENT';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================

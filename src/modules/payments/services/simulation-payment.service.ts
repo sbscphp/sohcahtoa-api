@@ -124,6 +124,11 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Exact payment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
+    await prisma.transaction.update({
+      where: { id: options.transactionId },
+      data: { status: 'AWAITING_DISBURSEMENT' },
+    });
+
     return {
       type: 'exact',
       expectedAmount,
@@ -133,6 +138,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
+      transactionStatus: 'AWAITING_DISBURSEMENT',
     };
   }
 
@@ -169,6 +175,11 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Overpayment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
+    await prisma.transaction.update({
+      where: { id: options.transactionId },
+      data: { status: 'AWAITING_DISBURSEMENT' },
+    });
+
     return {
       type: 'overpayment',
       expectedAmount,
@@ -179,6 +190,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
+      transactionStatus: 'AWAITING_DISBURSEMENT',
     };
   }
 
@@ -225,6 +237,7 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Split payment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
+    // Underpayment: transaction remains DEPOSIT_PENDING until balance is settled
     return {
       type: 'split',
       expectedAmount,
@@ -236,6 +249,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
+      transactionStatus: 'DEPOSIT_PENDING',
     };
   }
 
