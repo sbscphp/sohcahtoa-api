@@ -88,20 +88,52 @@ export class VirtualAccountService {
           : null;
 
       // Save virtual account to database
-      const virtualAccount = await prisma.virtualAccount.create({
-        data: {
-          userId,
-          transactionId,
-          accountNumber: providusResponse.account_number,
-          accountName: providusResponse.account_name,
-          type,
-          status: VirtualAccountStatus.ACTIVE,
-          initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
-          bvn,
-          expiresAt,
-          metadata: providusResponse as any,
-        },
-      });
+      // Retry logic for duplicate account numbers in simulation mode
+      let virtualAccount;
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (retries < maxRetries) {
+        try {
+          virtualAccount = await prisma.virtualAccount.create({
+            data: {
+              userId,
+              transactionId,
+              accountNumber: providusResponse.account_number,
+              accountName: providusResponse.account_name,
+              type,
+              status: VirtualAccountStatus.ACTIVE,
+              initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
+              bvn,
+              expiresAt,
+              metadata: providusResponse as any,
+            },
+          });
+          break;
+        } catch (error: any) {
+          if (error.code === 'P2002' && retries < maxRetries - 1) {
+            // Duplicate account number, try creating a new one
+            logger.warn('Duplicate account number, retrying with new number', {
+              accountNumber: providusResponse.account_number,
+              retries: retries + 1,
+            });
+            retries++;
+
+            // Generate a new account in Providus for retry
+            if (type === VirtualAccountType.DYNAMIC) {
+              providusResponse = await providusService.createDynamicAccount(accountName);
+            } else {
+              providusResponse = await providusService.createReservedAccount(accountName, bvn);
+            }
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!virtualAccount) {
+        throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to create virtual account', 500);
+      }
 
       logger.info('Virtual account created successfully', {
         id: virtualAccount.id,

@@ -9,8 +9,15 @@ const logger = createLogger('ProvidusService');
 // Simulation mode flag - set to true when Providus API is unreachable
 const SIMULATION_MODE = process.env.PROVIDUS_SIMULATION_MODE === 'true' || false;
 
-// Counter for generating unique simulated account numbers
-let simulationCounter = 9000000000;
+/**
+ * Generate a random account number for simulation
+ * Returns a 10-digit number in the 9000000000-9999999999 range
+ */
+function generateRandomAccountNumber(): string {
+  const min = 9000000000;
+  const max = 9999999999;
+  return Math.floor(Math.random() * (max - min + 1) + min).toString();
+}
 
 interface ProvidusConfig {
   baseUrl: string;
@@ -505,9 +512,8 @@ export class ProvidusService {
    * }
    */
   private simulateCreateDynamicAccount(accountName: string): CreateDynamicAccountResponse {
-    simulationCounter++;
-    const accountNumber = simulationCounter.toString();
-    
+    const accountNumber = generateRandomAccountNumber();
+
     logger.info('SIMULATION: Creating dynamic account', { accountName, accountNumber });
 
     return {
@@ -524,9 +530,8 @@ export class ProvidusService {
    * Generate simulated reserved account response
    */
   private simulateCreateReservedAccount(accountName: string, bvn?: string): CreateReservedAccountResponse {
-    simulationCounter++;
-    const accountNumber = simulationCounter.toString();
-    
+    const accountNumber = generateRandomAccountNumber();
+
     logger.info('SIMULATION: Creating reserved account', { accountName, bvn });
 
     return {

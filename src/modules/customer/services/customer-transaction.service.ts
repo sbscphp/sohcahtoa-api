@@ -7,6 +7,7 @@ import { NotFoundError, ValidationError } from '../../../shared/utils';
 import { v2 as cloudinary } from 'cloudinary';
 import auditService from '../../audit/services/audit.service';
 import { createLogger } from '../../../shared/utils/logger';
+import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
 
 const prisma = getDatabase();
@@ -667,6 +668,19 @@ export class CustomerTransactionService {
       uploadedCount: uploadedDocuments.length,
       documentIds: uploadedDocuments.map((d) => d.id),
     });
+
+    // If the transaction was in COMPLIANCE_REVIEW (documents flagged for manual review),
+    // reset it back to AWAITING_VERIFICATION so it re-enters the review queue
+    if (transaction.status === 'COMPLIANCE_REVIEW') {
+      logger.info(`[uploadDocuments] Resetting transaction status from COMPLIANCE_REVIEW to AWAITING_VERIFICATION`, {
+        transactionId,
+      });
+
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: { status: TransactionStatus.AWAITING_VERIFICATION },
+      });
+    }
 
     // Update transaction step if not already done
     if (transaction.currentStep === 'PERSONAL_INFO') {

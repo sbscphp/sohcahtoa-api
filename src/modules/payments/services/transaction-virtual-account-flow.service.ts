@@ -67,6 +67,28 @@ export class TransactionVirtualAccountFlowService {
       );
     }
 
+    // Ensure all documents are verified before creating a virtual account
+    const unapprovedDocuments = await prisma.transactionDocument.findMany({
+      where: {
+        transactionId,
+        verificationStatus: { not: 'VERIFIED' },
+      },
+      select: { id: true, documentType: true, verificationStatus: true },
+    });
+
+    if (unapprovedDocuments.length > 0) {
+      logger.warn('Cannot create virtual account: not all documents are verified', {
+        transactionId,
+        customerUserId,
+        unapprovedDocuments,
+      });
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        'All documents must be approved before a virtual account can be created',
+        400
+      );
+    }
+
     try {
       const existingAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
 
