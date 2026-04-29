@@ -30,9 +30,9 @@ class RegulatoryService {
     // Summary cards
     const [submittedReports, pendingSubmissions, failedSubmissions, rejectedReports] = await Promise.all([
       prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "COMPLETED" } }),
-      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: { not: "COMPLETED" } } }),
+      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "PENDING" } }),
       prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "FAILED" } }),
-      prisma.complianceReview.count({ where: { status: "REJECTED" } }),
+      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "REJECTED" } }),
     ]);
 
     // SLA tracker
@@ -160,22 +160,21 @@ class RegulatoryService {
       TransactionStatus.ADMIN_APPROVAL_PENDING,
     ];
     const [total, busy, approved, rejected, failed] = await Promise.all([
-      prisma.transaction.count({ where: { ...whereTypes, formAId: { not: null } } }),
+      prisma.transaction.count({ where: { ...whereTypes } }),
       prisma.transaction.count({
         where: {
           ...whereTypes,
-          formAId: { not: null },
           status: { in: busyStatuses },
         },
       }),
       prisma.transaction.count({
-        where: { ...whereTypes, formAId: { not: null }, status: { in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED] } },
+        where: { ...whereTypes, status: { in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED] } },
       }),
       prisma.transaction.count({
-        where: { ...whereTypes, formAId: { not: null }, status: TransactionStatus.REJECTED },
+        where: { ...whereTypes, status: TransactionStatus.REJECTED },
       }),
       prisma.transaction.count({
-        where: { ...whereTypes, formAId: { not: null }, status: TransactionStatus.CANCELLED },
+        where: { ...whereTypes, status: TransactionStatus.CANCELLED },
       }),
     ]);
 
@@ -196,6 +195,8 @@ class RegulatoryService {
         where.status = { in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED] };
       } else if (filters.status === "REJECTED") {
         where.status = TransactionStatus.REJECTED;
+      } else if (filters.status === "FAILED") {
+        where.status = TransactionStatus.CANCELLED;
       } else {
         where.status = { equals: filters.status, mode: "insensitive" };
       }
@@ -532,15 +533,27 @@ class RegulatoryService {
     const nameMap: Record<string, string> = {};
     users.forEach((u: any) => (nameMap[u.id] = u.fullName));
     const actionResult = (sev: string) => (sev === "ERROR" || sev === "CRITICAL" ? "Failed" : sev === "WARNING" ? "Warning" : "Submitted");
-    const data = events.map((e: any) => ({
-      id: e.id,
-      timestamp: e.timestamp,
-      userOrSystem: e.userId ? (nameMap[e.userId] || e.userId) : "System",
-      actionPerformed: e.action || e.eventType,
-      actionResult: actionResult(e.severity),
-      channel: e.source,
-      auditId: e.eventId || e.id,
-    }));
+    const data = events.map((e: any) => {
+      let moduleSection = "System";
+      if (e.category === "COMPLIANCE") moduleSection = "Compliance";
+      else if (e.category === "TRANSACTION") moduleSection = "Transaction Management";
+      else if (e.category === "PAYMENT") moduleSection = "Payment Processing";
+      else if (e.category === "AUTHENTICATION") moduleSection = "Authentication";
+      else if (e.category === "ADMIN") moduleSection = "Admin Operations";
+      
+      if (e.eventType?.includes("rate")) moduleSection = "Rate Management";
+      if (e.eventType?.includes("report")) moduleSection = "FX Report";
+
+      return {
+        id: e.id,
+        timestamp: e.timestamp,
+        userOrSystem: e.userId ? (nameMap[e.userId] || e.userId) : "System",
+        actionPerformed: e.action || e.eventType,
+        actionResult: actionResult(e.severity),
+        moduleSection,
+        auditId: e.eventId || e.id,
+      };
+    });
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -598,7 +611,7 @@ class RegulatoryService {
         userOrSystem: "System",
         actionPerformed: `${j.module} export`,
         actionResult: j.status === "COMPLETED" ? "Submitted" : j.status,
-        channel: j.module === "RATE" ? "FN window" : "System",
+        moduleSection: j.module === "RATE" ? "Rate Management" : j.module === "TRANSACTION" ? "FX Report" : "CBN Report",
         regulatoryId: j.id,
       })),
       ...nfiu.map((n: any) => ({
@@ -607,7 +620,7 @@ class RegulatoryService {
         userOrSystem: "Compliance Officer",
         actionPerformed: `${n.reportType} report`,
         actionResult: "Submitted",
-        channel: "TRMS/NFIU",
+        moduleSection: n.reportType === "CBN" ? "CBN Report" : n.reportType === "FX" ? "FX Report" : "NFIU Report",
         regulatoryId: n.reportReference,
       })),
     ];
@@ -630,7 +643,7 @@ class RegulatoryService {
         response: j.status,
         result: j.status === "COMPLETED" ? "Submitted" : j.status,
         regulatoryId: j.id,
-        channel: j.module === "RATE" ? "FN window" : "System",
+        moduleSection: j.module === "RATE" ? "Rate Management" : j.module === "TRANSACTION" ? "FX Report" : "CBN Report",
         fileUrl: j.generatedUrl || "",
       };
     }
@@ -647,7 +660,7 @@ class RegulatoryService {
       response: "200 OK",
       result: "Submitted",
       regulatoryId: n.reportReference,
-      channel: "TRMS/NFIU",
+      moduleSection: n.reportType === "CBN" ? "CBN Report" : n.reportType === "FX" ? "FX Report" : "NFIU Report",
       fileUrl: "",
     };
   }
