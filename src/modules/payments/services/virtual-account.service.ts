@@ -82,9 +82,14 @@ export class VirtualAccountService {
       }
 
       // Calculate expiry date for dynamic accounts
+      // In simulation mode, cap expiry at 30 minutes for faster testing cycles
+      const effectiveExpiryMs = providusService.isSimulationMode()
+        ? 30 * 60 * 1000
+        : expiresInHours * 60 * 60 * 1000;
+
       const expiresAt =
         type === VirtualAccountType.DYNAMIC
-          ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+          ? new Date(Date.now() + effectiveExpiryMs)
           : null;
 
       // Save virtual account to database
