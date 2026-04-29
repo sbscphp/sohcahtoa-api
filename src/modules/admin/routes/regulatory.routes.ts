@@ -108,7 +108,7 @@ RegulatoryRouter.post(
   "/compliance/reports/export",
   authenticate,
   requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
-  regulatoryController.exportSubmissions
+  regulatoryController.exportComplianceReports
 );
 
 /**

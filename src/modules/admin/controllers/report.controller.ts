@@ -36,6 +36,14 @@ class ReportController {
     const format = ((req.body.format || "CSV") as string).toUpperCase() as "CSV" | "PDF";
 
     if (!module) throw new ValidationError("module is required");
+
+    const validModules = await reportService.modules();
+    const normalizedInput = module.toString().trim().toUpperCase();
+    const isValidModule = validModules.some(m => m.key === normalizedInput || m.name.toUpperCase() === normalizedInput);
+    if (!isValidModule) {
+      throw new ValidationError(`Invalid report module: ${module}`);
+    }
+
     if (!req.body.startDate || Number.isNaN(startDate.getTime())) {
       throw new ValidationError("startDate must be a valid date");
     }

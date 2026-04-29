@@ -55,11 +55,19 @@ class RegulatoryController {
   });
 
   exportSubmissions = asyncHandler(async (req: Request, res: Response) => {
-    const user = (req as any).user;
-    const status = (req.query.status as string) || "ALL";
-    const search = (req.query.search as string) || "";
-    const result = await regulatoryService.exportSubmissions({ status, search }, user?.userId);
-    res.json(successResponse(result));
+    const status = (req.body?.status as string) || (req.query.status as string) || "ALL";
+    const search = (req.body?.search as string) || (req.query.search as string) || "";
+    const result = await regulatoryService.trmsList({ status, search }, 1, 10000);
+    res.json(successResponse(result.data));
+  });
+
+  exportComplianceReports = asyncHandler(async (req: Request, res: Response) => {
+    const status = (req.body?.status as string) || (req.query.status as string) || "ALL";
+    const search = (req.body?.search as string) || (req.query.search as string) || "";
+    const fileType = (req.body?.fileType as string) || (req.query.fileType as string) || undefined;
+    const channel = (req.body?.channel as string) || (req.query.channel as string) || undefined;
+    const result = await regulatoryService.complianceReportsList({ status, fileType, channel, search }, 1, 10000);
+    res.json(successResponse(result.data));
   });
 
   fnWindowStats = asyncHandler(async (_req: Request, res: Response) => {
@@ -132,7 +140,7 @@ class RegulatoryController {
         { header: "User/System", select: (r: any) => r.userOrSystem },
         { header: "Action Performed", select: (r: any) => r.actionPerformed },
         { header: "Result", select: (r: any) => r.actionResult },
-        { header: "Channel", select: (r: any) => r.channel },
+        { header: "Module/Section", select: (r: any) => r.moduleSection },
         { header: "Audit ID", select: (r: any) => r.auditId },
       ],
       rows as any[]
@@ -150,7 +158,7 @@ class RegulatoryController {
         { header: "User/System", select: (r: any) => r.userOrSystem },
         { header: "Action Performed", select: (r: any) => r.actionPerformed },
         { header: "Result", select: (r: any) => r.actionResult },
-        { header: "Channel", select: (r: any) => r.channel },
+        { header: "Module/Section", select: (r: any) => r.moduleSection },
         { header: "Regulatory ID", select: (r: any) => r.regulatoryId },
       ],
       rows as any[]
