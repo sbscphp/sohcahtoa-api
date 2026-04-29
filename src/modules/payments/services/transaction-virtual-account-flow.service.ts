@@ -197,7 +197,7 @@ export class TransactionVirtualAccountFlowService {
         // Auto-create VA if transaction is approved but no VA exists yet
         if (transaction.status === 'APPROVED') {
           logger.info('No virtual account found for approved transaction, auto-creating', { transactionId, customerUserId });
-          const result = await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+          await this.createVirtualAccountForTransaction(customerUserId, transactionId);
           virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
         } else {
           throw new AppError(
@@ -299,6 +299,17 @@ export class TransactionVirtualAccountFlowService {
     const deposits = await depositVerificationService.getTransactionDeposits(transactionId);
     const latestDeposit = deposits[0];
 
+    const depositConfirmedStatuses = [
+      'DEPOSIT_CONFIRMED',
+      'AWAITING_DISBURSEMENT',
+      'COMPLIANCE_REVIEW',
+      'ADMIN_APPROVAL_PENDING',
+      'APPROVED',
+      'DISBURSEMENT_IN_PROGRESS',
+      'PENDING_RECORD_VALIDATION',
+      'COMPLETED',
+    ];
+
     return {
       hasDeposit: deposits.length > 0,
       depositStatus: latestDeposit?.status || null,
@@ -306,7 +317,7 @@ export class TransactionVirtualAccountFlowService {
       depositDate: latestDeposit?.tranDateTime || null,
       transactionStatus: transaction.status,
       awaitingDeposit: transaction.status === 'AWAITING_DEPOSIT',
-      depositConfirmed: transaction.status === 'DEPOSIT_CONFIRMED',
+      depositConfirmed: depositConfirmedStatuses.includes(transaction.status),
     };
   }
 }
