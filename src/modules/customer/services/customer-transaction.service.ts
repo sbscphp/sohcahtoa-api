@@ -628,28 +628,66 @@ export class CustomerTransactionService {
           fileUrl: result.secure_url,
         });
 
-        // Save document record
-        const document = await prisma.transactionDocument.create({
-          data: {
+        // If a document of the same type already exists and requires review, replace it
+        // rather than creating a duplicate record
+        const existingReviewDoc = await prisma.transactionDocument.findFirst({
+          where: {
             transactionId,
             documentType: documentType as any,
-            fileUrl: result.secure_url,
-            fileName: file.originalname,
-            fileSize: file.size,
-            verificationStatus: 'PENDING',
-            metadata: {
-              cloudinaryPublicId: result.public_id,
-              format: result.format,
-              uploadedBy: userId,
-            },
+            verificationStatus: 'REQUIRES_MANUAL_REVIEW',
           },
         });
 
-        logger.debug(`[uploadDocuments] Document record created in database`, {
-          transactionId,
-          documentId: document.id,
-          fileName: file.originalname,
-        });
+        let document;
+        if (existingReviewDoc) {
+          document = await prisma.transactionDocument.update({
+            where: { id: existingReviewDoc.id },
+            data: {
+              fileUrl: result.secure_url,
+              fileName: file.originalname,
+              fileSize: file.size,
+              verificationStatus: 'PENDING',
+              verificationNotes: null,
+              verifiedAt: null,
+              verifiedBy: null,
+              uploadedAt: new Date(),
+              metadata: {
+                cloudinaryPublicId: result.public_id,
+                format: result.format,
+                uploadedBy: userId,
+              },
+            },
+          });
+
+          logger.info(`[uploadDocuments] Replaced REQUIRES_MANUAL_REVIEW document with new file`, {
+            transactionId,
+            documentId: document.id,
+            documentType,
+            fileName: file.originalname,
+          });
+        } else {
+          document = await prisma.transactionDocument.create({
+            data: {
+              transactionId,
+              documentType: documentType as any,
+              fileUrl: result.secure_url,
+              fileName: file.originalname,
+              fileSize: file.size,
+              verificationStatus: 'PENDING',
+              metadata: {
+                cloudinaryPublicId: result.public_id,
+                format: result.format,
+                uploadedBy: userId,
+              },
+            },
+          });
+
+          logger.debug(`[uploadDocuments] Document record created in database`, {
+            transactionId,
+            documentId: document.id,
+            fileName: file.originalname,
+          });
+        }
 
         uploadedDocuments.push(document);
       } catch (error) {
