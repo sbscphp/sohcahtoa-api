@@ -45,11 +45,24 @@ export class VirtualAccountService {
       });
 
       if (existingAccount) {
-        logger.info('Virtual account already exists for transaction', {
+        const isActive =
+          existingAccount.status === VirtualAccountStatus.ACTIVE &&
+          (!existingAccount.expiresAt || new Date(existingAccount.expiresAt) > new Date());
+
+        if (isActive) {
+          logger.info('Virtual account already exists for transaction', {
+            transactionId,
+            accountNumber: existingAccount.accountNumber,
+          });
+          return existingAccount;
+        }
+
+        // Existing account is expired/inactive — fall through to provision a new one
+        logger.info('Existing virtual account is inactive/expired, recreating', {
           transactionId,
-          accountNumber: existingAccount.accountNumber,
+          existingAccountNumber: existingAccount.accountNumber,
+          existingStatus: existingAccount.status,
         });
-        return existingAccount;
       }
 
       // Verify transaction exists and is approved
@@ -101,18 +114,28 @@ export class VirtualAccountService {
 
       while (retries < maxRetries) {
         try {
-          virtualAccount = await prisma.virtualAccount.create({
-            data: {
-              userId,
-              transactionId,
-              accountNumber: providusResponse.account_number,
-              accountName: providusResponse.account_name,
-              type,
+          const accountData = {
+            userId,
+            transactionId,
+            accountNumber: providusResponse.account_number,
+            accountName: providusResponse.account_name,
+            type,
+            status: VirtualAccountStatus.ACTIVE,
+            initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
+            bvn,
+            expiresAt,
+            metadata: providusResponse as any,
+          };
+          virtualAccount = await prisma.virtualAccount.upsert({
+            where: { transactionId },
+            create: accountData,
+            update: {
+              accountNumber: accountData.accountNumber,
+              accountName: accountData.accountName,
               status: VirtualAccountStatus.ACTIVE,
-              initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
-              bvn,
-              expiresAt,
-              metadata: providusResponse as any,
+              initiationTranRef: accountData.initiationTranRef,
+              expiresAt: accountData.expiresAt,
+              metadata: accountData.metadata,
             },
           });
           break;
