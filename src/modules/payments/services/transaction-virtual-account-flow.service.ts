@@ -50,11 +50,11 @@ export class TransactionVirtualAccountFlowService {
       include: { profile: true },
     });
 
-    const vaAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED'];
+    const vaAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
     if (!vaAllowedStatuses.includes(transaction.status)) {
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
-        'Virtual account can only be created for approved transactions',
+        'Virtual account can only be created for approved or awaiting deposit transactions',
         400
       );
     }

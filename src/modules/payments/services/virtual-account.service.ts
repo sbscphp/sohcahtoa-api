@@ -64,11 +64,12 @@ export class VirtualAccountService {
         throw new AppError(ErrorCode.NOT_FOUND, 'Transaction not found', 404);
       }
 
-      // Ensure transaction is approved before creating virtual account
-      if (transaction.status !== 'APPROVED') {
+      // Ensure transaction is approved or awaiting deposit before creating virtual account
+      const allowedStatuses = ['APPROVED', 'AWAITING_DEPOSIT'];
+      if (!allowedStatuses.includes(transaction.status)) {
         throw new AppError(
           ErrorCode.VALIDATION_ERROR,
-          'Virtual account can only be created for approved transactions',
+          'Virtual account can only be created for approved or awaiting deposit transactions',
           400
         );
       }
