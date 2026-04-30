@@ -22,15 +22,6 @@ export const DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_AGENT =
 
 export type VirtualAccountPathContext = 'customer' | 'agent';
 
-function recreateMessageGetVa(context: VirtualAccountPathContext): string {
-  return context === 'agent' ? DEFAULT_RECREATE_VA_MESSAGE_AGENT : DEFAULT_RECREATE_VA_MESSAGE_CUSTOMER;
-}
-
-function recreateMessageDeposit(context: VirtualAccountPathContext): string {
-  return context === 'agent'
-    ? DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_AGENT
-    : DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_CUSTOMER;
-}
 
 export class TransactionVirtualAccountFlowService {
   async assertTransactionBelongsToCustomer(transactionId: string, customerUserId: string) {
@@ -215,7 +206,13 @@ export class TransactionVirtualAccountFlowService {
     const isExpired =
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
 
-    const expiredMsg = recreateMessageGetVa(pathContext);
+    const noPaymentMade = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'].includes(transaction.status);
+
+    if (isExpired && noPaymentMade) {
+      logger.info('Virtual account expired with no payment — regenerating', { transactionId, customerUserId });
+      await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    }
 
     return {
       accountNumber: virtualAccount.accountNumber,
@@ -224,7 +221,7 @@ export class TransactionVirtualAccountFlowService {
       status: virtualAccount.status,
       expiresAt: virtualAccount.expiresAt,
       createdAt: virtualAccount.createdAt,
-      isExpired,
+      isExpired: false,
       deposits: virtualAccount.deposits?.map((deposit: any) => ({
         id: deposit.id,
         amount: deposit.amount,
@@ -233,7 +230,6 @@ export class TransactionVirtualAccountFlowService {
         tranDateTime: deposit.tranDateTime,
         createdAt: deposit.createdAt,
       })),
-      ...(isExpired && { message: expiredMsg }),
     };
   }
 
@@ -271,7 +267,9 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
 
     if (isExpired) {
-      throw new AppError(ErrorCode.VALIDATION_ERROR, recreateMessageDeposit(pathContext), 400);
+      logger.info('Virtual account expired with no payment — regenerating for deposit instructions', { transactionId, customerUserId });
+      await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     }
 
     return {
