@@ -1085,7 +1085,7 @@ export class CustomerTransactionService {
             },
           },
           cashPickup: {
-            select: { pickupLocation: true, status: true },
+            select: { pickupLocation: true, status: true, scheduledPickupDate: true, scheduledPickupTime: true },
           },
           steps: {
             where: { step: 'PERSONAL_INFO' as any },
@@ -1113,8 +1113,16 @@ export class CustomerTransactionService {
     const data = transactions.map((t) => {
       const { steps, ...rest } = t;
       const personalInfoData = steps?.[0]?.data as any;
+      const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
       return {
         ...rest,
+        cashPickup: t.cashPickup
+          ? {
+              ...t.cashPickup,
+              scheduledPickupDate: t.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate ?? null,
+              scheduledPickupTime: t.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
+            }
+          : null,
         group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
         beneficiaryDetails: personalInfoData?.beneficiaryDetails || null,
       };
@@ -1314,14 +1322,17 @@ export class CustomerTransactionService {
       stepCount: transaction.steps.length,
     });
 
-    // Fetch user's KYC data to include BVN and NIN
-    const userKyc = await prisma.userKyc.findUnique({
-      where: { userId },
-      select: {
-        bvn: true,
-        nin: true,
-      },
-    });
+    // Fetch user's KYC data and customerType in parallel
+    const [userKyc, userRecord] = await Promise.all([
+      prisma.userKyc.findUnique({
+        where: { userId },
+        select: { bvn: true, nin: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { customerType: true },
+      }),
+    ]);
 
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
     const personalInfoStep = transaction.steps.find((s) => s.step === 'PERSONAL_INFO');
@@ -1332,6 +1343,9 @@ export class CustomerTransactionService {
 
     // Extract personal info details from the step data
     const personalInfoData = personalInfoStep?.data as any;
+
+    // Extract pickup location from step data (used as fallback if cashPickup record is missing)
+    const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
 
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
@@ -1460,6 +1474,7 @@ export class CustomerTransactionService {
       disbursementMethod: transaction.disbursementMethod,
       formAId: transaction.formAId,
       taxClearanceNumber: transaction.taxClearanceNumber,
+      customerType: userRecord?.customerType ?? null,
 
       // Personal info used during creation
       personalInfo: {
@@ -1484,7 +1499,13 @@ export class CustomerTransactionService {
         transactionMode,
         transactionAmount
       ),
-      cashPickup: transaction.cashPickup,
+      cashPickup: transaction.cashPickup
+        ? {
+            ...transaction.cashPickup,
+            scheduledPickupDate: transaction.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate ?? null,
+            scheduledPickupTime: transaction.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
+          }
+        : null,
       prepaidCard: transaction.prepaidCard,
       // Inbound settlement (customer's NGN payment to the platform)
       settlement: settlement

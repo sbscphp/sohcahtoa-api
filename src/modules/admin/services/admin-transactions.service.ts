@@ -399,6 +399,8 @@ export class AdminTransactionsService {
         bvnNumber: maskedBvn,
         numberOfDocuments: docCount,
         pickupLocation: pickup?.pickupLocation || null,
+        scheduledPickupDate: pickup?.scheduledPickupDate || null,
+        scheduledPickupTime: pickup?.scheduledPickupTime || null,
       },
       workflowLine,
       raw: { ...(trx as any), history: decoratedHistory },
