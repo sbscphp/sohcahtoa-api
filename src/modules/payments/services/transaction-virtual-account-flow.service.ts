@@ -59,7 +59,8 @@ export class TransactionVirtualAccountFlowService {
       include: { profile: true },
     });
 
-    if (transaction.status !== 'APPROVED') {
+    const vaAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED'];
+    if (!vaAllowedStatuses.includes(transaction.status)) {
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
         'Virtual account can only be created for approved transactions',
@@ -194,8 +195,8 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     } catch (error) {
       if (error instanceof AppError && error.statusCode === 404) {
-        // Auto-create VA if transaction is approved but no VA exists yet
-        if (transaction.status === 'APPROVED') {
+        // Auto-create VA if transaction is approved or verification completed but no VA exists yet
+        if (transaction.status === 'APPROVED' || transaction.status === 'VERIFICATION_COMPLETED') {
           logger.info('No virtual account found for approved transaction, auto-creating', { transactionId, customerUserId });
           await this.createVirtualAccountForTransaction(customerUserId, transactionId);
           virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
@@ -243,7 +244,8 @@ export class TransactionVirtualAccountFlowService {
   ) {
     const transaction = await this.assertTransactionBelongsToCustomer(transactionId, customerUserId);
 
-    if (transaction.status !== 'APPROVED' && transaction.status !== 'AWAITING_DEPOSIT') {
+    const depositInstructionsAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+    if (!depositInstructionsAllowedStatuses.includes(transaction.status)) {
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
         'Deposit instructions not available yet. Please wait for transaction approval.',
