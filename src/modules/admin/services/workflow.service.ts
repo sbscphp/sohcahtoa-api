@@ -556,6 +556,40 @@ export class WorkflowService {
     const best = scored.sort((a: any, b: any) => b.score - a.score)[0];
     return best.score >= 0 ? best.t : null;
   }
+
+  /**
+   * Attaches an applicable workflow template to a transaction if not already attached.
+   */
+  async attachWorkflowToTransaction(transactionId: string) {
+    const client: any = prisma as any;
+    
+    const tx = await client.transaction.findUnique({
+      where: { id: transactionId },
+    });
+    
+    if (!tx || tx.workflowTemplateId) return null; // Already attached or not found
+
+    const template = await this.findApplicableWorkflow({
+      type: tx.type,
+      action: "Transaction Approval",
+    });
+
+    if (!template || !template.stages || template.stages.length === 0) {
+      return null;
+    }
+
+    const firstStage = template.stages[0];
+
+    const updated = await client.transaction.update({
+      where: { id: transactionId },
+      data: {
+        workflowTemplateId: template.id,
+        currentWorkflowStageId: firstStage.id,
+      }
+    });
+
+    return updated;
+  }
 }
 
 export const workflowService = new WorkflowService();
