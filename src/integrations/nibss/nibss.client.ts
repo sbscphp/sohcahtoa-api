@@ -419,7 +419,7 @@ export class NIBSSClient {
 
       const body: ConsentInitiateRequest = {
         dataControllerId:   this.dataControllerId,
-        dataProcessorId:    this.institutionCode,
+        dataProcessorId:    this.consentClientId,
         dataOwnerID:        dataOwnerId,
         requestType,
         consentType:        'RedirectLink',
