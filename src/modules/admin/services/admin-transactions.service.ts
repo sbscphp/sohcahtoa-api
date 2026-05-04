@@ -219,7 +219,7 @@ export class AdminTransactionsService {
   }
 
   async getTransaction(id: string, adminId?: string) {
-    const trx = await prisma.transaction.findUnique(
+    let trx = await prisma.transaction.findUnique(
       {
         where: { id },
         include: {
@@ -232,6 +232,31 @@ export class AdminTransactionsService {
       } as any
     );
     if (!trx) return null;
+
+    // Lazily attach workflow if not present (to ensure everything happens in the admin module)
+    if (!trx.workflowTemplateId) {
+      const updated = await workflowService.attachWorkflowToTransaction(id).catch(err => {
+        logger.error(`[getTransaction] Failed to attach workflow lazily`, { error: err instanceof Error ? err.message : String(err) });
+        return null;
+      });
+      if (updated) {
+        trx = await prisma.transaction.findUnique(
+          {
+            where: { id },
+            include: {
+              steps: { orderBy: { createdAt: "asc" } },
+              documents: true,
+              history: { orderBy: { createdAt: "asc" } },
+              receipt: true,
+              cashPickup: true,
+            },
+          } as any
+        );
+      }
+    }
+    
+    if (!trx) return null;
+
     const user = await prisma.user.findUnique({
       where: { id: (trx as any).userId },
       include: { profile: true, kyc: true },
