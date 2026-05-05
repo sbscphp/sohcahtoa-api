@@ -417,7 +417,7 @@ export class NIBSSClient {
       const token = await this.getConsentToken();
       const today = new Date().toISOString().split('T')[0];
 
-      const body: ConsentInitiateRequest = {
+      const consentCheckRequest: ConsentInitiateRequest = {
         dataControllerId:   this.dataControllerId,
         dataProcessorId:    this.consentClientId,
         dataOwnerID:        dataOwnerId,
@@ -431,11 +431,12 @@ export class NIBSSClient {
         dataOwnerId: `***${dataOwnerId.slice(-4)}`,
         requestType,
         dataSubjectPresent,
+        dataProcessorId: this.consentClientId,
       });
 
       const res = await this.consentHubClient.post<ConsentInitiateResponse>(
         '/consent/initiate',
-        body,
+        { consentCheckRequest },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
