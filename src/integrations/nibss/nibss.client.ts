@@ -119,16 +119,11 @@ interface FASComparisonData {
 interface ConsentInitiateRequest {
   dataControllerId: string;
   dataProcessorId: string;
-  dataOwnerId: string;
-  requestType: string;      // e.g. "YYYY"
+  dataOwnerID: string;
+  requestType: string; // e.g. "YYYY"
   consentType: 'RedirectLink' | 'OfflineConsent';
   dataSubjectPresent: boolean;
-  callbackUrl?: string;
-}
-
-interface ConsentInitiatePayload {
-  authenticationDate: string; // YYYY-MM-DD (at root level per NIBSS spec)
-  consentCheckRequest: ConsentInitiateRequest;
+  authenticationDate: string; // YYYY-MM-DD
 }
 
 interface ConsentInitiateResponse {
@@ -404,7 +399,7 @@ export class NIBSSClient {
    * Returns a consentUrl to redirect the user to for authentication.
    * After the user authenticates, NIBSS will POST a retrievalToken to your callback URL.
    *
-   * @param dataOwnerId  User's BVN or NIN
+   * @param dataOwnerId  Identifier for the data subject or customer whose data is being accessed. This can be the user's BVN, NIN Sharecode, or any identification number.
    * @param requestType  4-char string e.g. "YYYY" (Personal ID, Contact, Demographics, Geographic)
    * @param dataSubjectPresent  true if user is physically present (gets redirect URL)
    */
@@ -422,14 +417,14 @@ export class NIBSSClient {
       const token = await this.getConsentToken();
       const today = new Date().toISOString().split('T')[0];
 
-      const consentCheckRequest: ConsentInitiateRequest = {
+      const requestBody: ConsentInitiateRequest = {
         dataControllerId:   this.dataControllerId,
         dataProcessorId:    this.consentClientId,
-        dataOwnerId:        dataOwnerId,
+        dataOwnerID:        dataOwnerId,
         requestType,
-        consentType:        'RedirectLink',
+        consentType:       'RedirectLink',
         dataSubjectPresent,
-        callbackUrl:        this.callbackUrl || undefined,
+        authenticationDate: today,
       };
 
       logger.info('Initiating Consent Hub request', {
@@ -437,14 +432,7 @@ export class NIBSSClient {
         requestType,
         dataSubjectPresent,
         dataProcessorId: this.consentClientId,
-        callbackUrl: this.callbackUrl ? 'configured' : 'not-configured',
       });
-
-      // Construct the request body with authenticationDate at root level
-      const requestBody = {
-        authenticationDate: today,
-        consentCheckRequest,
-      };
 
       const res = await this.consentHubClient.post<ConsentInitiateResponse>(
         '/consent/initiate',
