@@ -43,9 +43,6 @@ WorkflowRouter.get(
  *         name: status
  *         schema: { type: string, enum: [ALL, PENDING, COMPLETED, REJECTED], default: PENDING }
  *       - in: query
- *         name: module
- *         schema: { type: string, enum: ["Transaction", "Outlet Management", "Agent"] }
- *       - in: query
  *         name: search
  *         schema: { type: string }
  *     responses:

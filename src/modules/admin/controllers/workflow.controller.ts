@@ -12,12 +12,12 @@ class WorkflowController {
   actions = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const result = await workflowService.list(req.query as any, page, limit);
+    const result = await workflowService.list({ ...req.query, module: "Transaction" } as any, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
   exportActionsCsv = asyncHandler(async (req: Request, res: Response) => {
-    const result = await workflowService.list(req.query as any, 1, 10_000);
+    const result = await workflowService.list({ ...req.query, module: "Transaction" } as any, 1, 10_000);
     const rows = result.data || [];
     streamCsv(
       res,
