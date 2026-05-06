@@ -429,7 +429,6 @@ export class NIBSSClient {
         requestType,
         consentType:        'RedirectLink',
         dataSubjectPresent,
-        authenticationDate: today,
         callbackUrl:        this.callbackUrl || undefined,
       };
 
