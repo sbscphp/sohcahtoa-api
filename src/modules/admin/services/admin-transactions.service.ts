@@ -233,28 +233,6 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    // Lazily attach workflow if not present (to ensure everything happens in the admin module)
-    if (!trx.workflowTemplateId) {
-      const updated = await workflowService.attachWorkflowToTransaction(id).catch(err => {
-        logger.error(`[getTransaction] Failed to attach workflow lazily`, { error: err instanceof Error ? err.message : String(err) });
-        return null;
-      });
-      if (updated) {
-        trx = await prisma.transaction.findUnique(
-          {
-            where: { id },
-            include: {
-              steps: { orderBy: { createdAt: "asc" } },
-              documents: true,
-              history: { orderBy: { createdAt: "asc" } },
-              receipt: true,
-              cashPickup: true,
-            },
-          } as any
-        );
-      }
-    }
-    
     if (!trx) return null;
 
     const user = await prisma.user.findUnique({
@@ -354,8 +332,10 @@ export class AdminTransactionsService {
     let approvalState: string | null = null;
     let pendingAssignees: any[] = [];
 
+    // Find workflow template
+    let workflow = null;
     if (trx.workflowTemplateId) {
-      const workflow = await prisma.workflowTemplate.findUnique({
+      workflow = await prisma.workflowTemplate.findUnique({
         where: { id: trx.workflowTemplateId },
         include: {
           stages: {
@@ -372,15 +352,44 @@ export class AdminTransactionsService {
           }
         }
       });
+    }
 
-      let activeStage: any = null;
-      if (workflow && trx.currentWorkflowStageId) {
+    // If template ID is set but workflow not found, or no template ID set, try to re-attach
+    if (!workflow && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
+      const updated = await workflowService.attachWorkflowToTransaction(id).catch(() => null);
+      if (updated && updated.workflowTemplateId) {
+        workflow = await prisma.workflowTemplate.findUnique({
+          where: { id: updated.workflowTemplateId },
+          include: {
+            stages: {
+              orderBy: { order: "asc" },
+              include: {
+                assignees: {
+                  include: {
+                    admin: {
+                      select: { id: true, fullName: true, role: { select: { name: true } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    let activeStage: any = null;
+    if (workflow) {
+      if (trx.currentWorkflowStageId) {
         activeStage = workflow.stages.find((s: any) => s.id === trx.currentWorkflowStageId);
-      } else if (workflow && workflow.stages.length > 0 && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
+      } 
+      
+      // Fallback to first stage if not officially started but still pending
+      if (!activeStage && workflow.stages.length > 0 && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
         activeStage = workflow.stages[0];
       }
 
-      if (activeStage && workflow) {
+      if (activeStage) {
         const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === activeStage.id);
         if (currentStageIndex !== -1) {
           const totalStages = workflow.stages.length;
@@ -393,10 +402,13 @@ export class AdminTransactionsService {
           }));
 
           if (adminId) {
-            isApprovalOfficer = activeStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+            // Check if user is assigned to ANY stage in the entire workflow
+            isApprovalOfficer = workflow.stages.some((s: any) => 
+              s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+            );
           }
         }
-      } else if (workflow && trx.status === "APPROVED") {
+      } else if (trx.status === "APPROVED") {
         approvalState = "Approved (Workflow Completed)";
       }
     }
