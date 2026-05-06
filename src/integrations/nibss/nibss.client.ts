@@ -123,8 +123,12 @@ interface ConsentInitiateRequest {
   requestType: string;      // e.g. "YYYY"
   consentType: 'RedirectLink' | 'OfflineConsent';
   dataSubjectPresent: boolean;
-  authenticationDate: string; // YYYY-MM-DD
   callbackUrl?: string;
+}
+
+interface ConsentInitiatePayload {
+  authenticationDate: string; // YYYY-MM-DD (at root level per NIBSS spec)
+  consentCheckRequest: ConsentInitiateRequest;
 }
 
 interface ConsentInitiateResponse {
@@ -437,9 +441,15 @@ export class NIBSSClient {
         callbackUrl: this.callbackUrl ? 'configured' : 'not-configured',
       });
 
+      // Construct the request body with authenticationDate at root level
+      const requestBody = {
+        authenticationDate: today,
+        consentCheckRequest,
+      };
+
       const res = await this.consentHubClient.post<ConsentInitiateResponse>(
         '/consent/initiate',
-        { consentCheckRequest },
+        requestBody,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
