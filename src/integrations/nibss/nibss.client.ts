@@ -119,7 +119,7 @@ interface FASComparisonData {
 interface ConsentInitiateRequest {
   dataControllerId: string;
   dataProcessorId: string;
-  dataOwnerID: string;
+  dataOwnerID: string; // actual BVN/NIN identifier, never the redacted form
   requestType: string; // e.g. "YYYY"
   consentType: 'RedirectLink' | 'OfflineConsent';
   dataSubjectPresent: boolean;
@@ -417,6 +417,7 @@ export class NIBSSClient {
       const token = await this.getConsentToken();
       const today = new Date().toISOString().split('T')[0];
 
+      // Use the real BVN/NIN value for the request payload; logging is intentionally masked.
       const requestBody: ConsentInitiateRequest = {
         dataControllerId:   this.dataControllerId,
         dataProcessorId:    this.consentClientId,
