@@ -119,11 +119,12 @@ interface FASComparisonData {
 interface ConsentInitiateRequest {
   dataControllerId: string;
   dataProcessorId: string;
-  dataOwnerID: string;
+  dataOwnerId: string;
   requestType: string;      // e.g. "YYYY"
   consentType: 'RedirectLink' | 'OfflineConsent';
   dataSubjectPresent: boolean;
   authenticationDate: string; // YYYY-MM-DD
+  callbackUrl?: string;
 }
 
 interface ConsentInitiateResponse {
@@ -420,11 +421,12 @@ export class NIBSSClient {
       const consentCheckRequest: ConsentInitiateRequest = {
         dataControllerId:   this.dataControllerId,
         dataProcessorId:    this.consentClientId,
-        dataOwnerID:        dataOwnerId,
+        dataOwnerId:        dataOwnerId,
         requestType,
         consentType:        'RedirectLink',
         dataSubjectPresent,
         authenticationDate: today,
+        callbackUrl:        this.callbackUrl || undefined,
       };
 
       logger.info('Initiating Consent Hub request', {
@@ -432,6 +434,7 @@ export class NIBSSClient {
         requestType,
         dataSubjectPresent,
         dataProcessorId: this.consentClientId,
+        callbackUrl: this.callbackUrl ? 'configured' : 'not-configured',
       });
 
       const res = await this.consentHubClient.post<ConsentInitiateResponse>(

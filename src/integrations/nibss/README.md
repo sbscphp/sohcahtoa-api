@@ -43,8 +43,9 @@ NIBSS_BIVS_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
 # NIBSS ConsentMgmt Configuration
 NIBSS_CONSENT_CLIENT_ID=57b06b79-2825-4aa6-ae08-bd098ba8bfa7
 NIBSS_CONSENT_CLIENT_SECRET=YOUR_NIBSS_CONSENT_CLIENT_SECRET
-NIBSS_CONSENT_BASE_URL=https://apitest.nibss-plc.com.ng:1443
+NIBSS_CONSENT_HUB_BASE_URL=https://apitest.nibss-plc.com.ng/api
 NIBSS_CONSENT_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_CALLBACK_URL=https://your-app.example.com/api/auth/nibss/callback
 
 # Environment
 NIBSS_ENVIRONMENT=CERTIFICATION
