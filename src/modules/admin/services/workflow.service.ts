@@ -548,11 +548,16 @@ export class WorkflowService {
     // Filter and score
     const scored = templates.map((t: any) => {
       let score = 0;
-      if (t.branchId === params.branchId) score += 10;
-      else if (t.branchId && t.branchId !== params.branchId) score -= 100;
+      
+      const tBranchId = t.branchId || null;
+      const pBranchId = params.branchId || null;
+      if (tBranchId === pBranchId && pBranchId !== null) score += 10;
+      else if (tBranchId !== null && tBranchId !== pBranchId) score -= 100;
 
-      if (t.departmentId === params.departmentId) score += 5;
-      else if (t.departmentId && t.departmentId !== params.departmentId) score -= 100;
+      const tDeptId = t.departmentId || null;
+      const pDeptId = params.departmentId || null;
+      if (tDeptId === pDeptId && pDeptId !== null) score += 5;
+      else if (tDeptId !== null && tDeptId !== pDeptId) score -= 100;
 
       return { t, score };
     });
