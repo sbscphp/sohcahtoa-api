@@ -373,21 +373,27 @@ export class AdminTransactionsService {
         }
       });
 
+      let activeStage: any = null;
       if (workflow && trx.currentWorkflowStageId) {
-        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === trx.currentWorkflowStageId);
-        if (currentStageIndex !== -1) {
-          const currentStage = workflow.stages[currentStageIndex];
-          const totalStages = workflow.stages.length;
-          approvalState = `Stage ${currentStageIndex + 1} of ${totalStages} (${currentStage.name})`;
+        activeStage = workflow.stages.find((s: any) => s.id === trx.currentWorkflowStageId);
+      } else if (workflow && workflow.stages.length > 0 && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
+        activeStage = workflow.stages[0];
+      }
 
-          pendingAssignees = currentStage.assignees.map((a: any) => ({
+      if (activeStage && workflow) {
+        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === activeStage.id);
+        if (currentStageIndex !== -1) {
+          const totalStages = workflow.stages.length;
+          approvalState = `Stage ${currentStageIndex + 1} of ${totalStages} (${activeStage.name})`;
+
+          pendingAssignees = activeStage.assignees.map((a: any) => ({
             adminId: a.adminId,
             adminName: a.admin?.fullName || null,
             roleName: a.admin?.role?.name || null,
           }));
 
           if (adminId) {
-            isApprovalOfficer = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+            isApprovalOfficer = activeStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
           }
         }
       } else if (workflow && trx.status === "APPROVED") {

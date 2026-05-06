@@ -52,9 +52,9 @@ export class WorkflowService {
       client.agent.count({ where: { isApproved: true } }),
     ]);
 
-    const pending = txPending + franchisePending + branchPending + agentsPending;
-    const completed = txCompleted + franchiseCompleted + branchCompleted + agentsCompleted;
-    const rejected = txRejected + franchiseRejected + branchRejected;
+    const pending = txPending;
+    const completed = txCompleted;
+    const rejected = txRejected;
 
     return { pending, completed, rejected };
   }
@@ -204,7 +204,7 @@ export class WorkflowService {
         description: payload.description || null,
         type: payload.type,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || null,
+        action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
@@ -250,7 +250,7 @@ export class WorkflowService {
         description: payload.description || null,
         type: payload.type,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || null,
+        action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
@@ -377,7 +377,7 @@ export class WorkflowService {
         description: payload.description || null,
         type: payload.type,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || null,
+        action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
         departmentId: payload.departmentId || null,
         escalationMinutes: payload.escalationMinutes || 0,
@@ -529,7 +529,11 @@ export class WorkflowService {
     const templates = await client.workflowTemplate.findMany({
       where: {
         status: "ACTIVE",
-        action: params.action || "Transaction Approval", // Default action name
+        OR: [
+          { action: params.action || "Transaction Approval" },
+          { action: null },
+          { action: "" }
+        ]
       },
       include: {
         stages: {
