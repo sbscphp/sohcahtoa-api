@@ -380,6 +380,13 @@ export class AdminTransactionsService {
 
     let activeStage: any = null;
     if (workflow) {
+      if (adminId) {
+        // Check if user is assigned to ANY stage in the entire workflow
+        isApprovalOfficer = workflow.stages.some((s: any) => 
+          s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+        );
+      }
+
       if (trx.currentWorkflowStageId) {
         activeStage = workflow.stages.find((s: any) => s.id === trx.currentWorkflowStageId);
       } 
@@ -400,13 +407,6 @@ export class AdminTransactionsService {
             adminName: a.admin?.fullName || null,
             roleName: a.admin?.role?.name || null,
           }));
-
-          if (adminId) {
-            // Check if user is assigned to ANY stage in the entire workflow
-            isApprovalOfficer = workflow.stages.some((s: any) => 
-              s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
-            );
-          }
         }
       } else if (trx.status === "APPROVED") {
         approvalState = "Approved (Workflow Completed)";
