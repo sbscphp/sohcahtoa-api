@@ -111,6 +111,16 @@ export interface AgentDashboardTransactionsByTypeResult {
   segments: AgentDashboardTransactionTypeSegment[];
 }
 
+export interface AgentBalanceDashboardResult {
+  currency: string;
+  currencyName: string;
+  period: { preset: string; start: string; end: string };
+  openingBalance: number;
+  totalReceived: number;
+  totalDisbursed: number;
+  currentBalance: number;
+}
+
 /**
  * Payload for creating a transaction on behalf of a customer.
  * Same shape as customer create; userId (customer id) is required.
@@ -532,6 +542,133 @@ class AgentTransactionService {
       totalCashReceivedFromCustomer: round2(Number(fromCustomerAgg._sum?.amount ?? 0)),
       totalCashReceivedFromAdmin: round2(Number(fromAdminAgg._sum?.amount ?? 0)),
       totalCashDisbursed: round2(Number(disbursedAgg._sum?.amount ?? 0)),
+    };
+  }
+
+  /**
+   * Balance dashboard for agent showing opening balance, received, disbursed, and current balance.
+   */
+  async getBalanceDashboard(
+    agentUserId: string,
+    periodPreset: string,
+    currencyParam?: string
+  ): Promise<AgentBalanceDashboardResult> {
+    const agent = await this.resolveAgent(agentUserId);
+    const { start, end } = resolveAgentCashStatsDateRange(periodPreset);
+    const currency = (currencyParam || "NGN").trim().toUpperCase();
+
+    const currencyNames: Record<string, string> = {
+      NGN: "Nigerian Naira",
+      USD: "US Dollar",
+      GBP: "British Pound Sterling",
+      EUR: "Euro",
+    };
+    const currencyName = currencyNames[currency] || currency;
+
+    const agentTransactions = await prisma.transaction.findMany({
+      where: { createdByAgentId: agent.id },
+      select: { id: true },
+    });
+    const agentTransactionIds = agentTransactions.map((t) => t.id);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    if (agentTransactionIds.length === 0) {
+      return {
+        currency,
+        currencyName,
+        period: {
+          preset: periodPreset.trim(),
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+        openingBalance: 0,
+        totalReceived: 0,
+        totalDisbursed: 0,
+        currentBalance: 0,
+      };
+    }
+
+    const txIdFilter = { in: agentTransactionIds };
+
+    // Get admin user IDs for filtering admin settlements
+    const adminRows = await prisma.adminUser.findMany({ select: { id: true } });
+    const adminIds = adminRows.map((a) => a.id);
+
+    // Calculate opening balance (received - disbursed before period start)
+    const openingReceivedAgg = await prisma.settlement.aggregate({
+      where: {
+        status: "CONFIRMED",
+        currency,
+        transactionId: txIdFilter,
+        confirmedAt: { lt: start },
+        OR: [
+          { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
+          { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
+          ...(adminIds.length > 0 ? [{ confirmedBy: { in: adminIds } }] : []),
+        ],
+      },
+      _sum: { amount: true },
+    });
+
+    const openingDisbursedAgg = await prisma.outboundSettlement.aggregate({
+      where: {
+        status: "COMPLETED",
+        currency,
+        transactionId: txIdFilter,
+        initiatedBy: agent.id,
+        updatedAt: { lt: start },
+      },
+      _sum: { amount: true },
+    });
+
+    const openingReceived = Number(openingReceivedAgg._sum?.amount ?? 0);
+    const openingDisbursed = Number(openingDisbursedAgg._sum?.amount ?? 0);
+    const openingBalance = round2(openingReceived - openingDisbursed);
+
+    // Calculate period totals (received and disbursed within the period)
+    const periodReceivedAgg = await prisma.settlement.aggregate({
+      where: {
+        status: "CONFIRMED",
+        currency,
+        transactionId: txIdFilter,
+        confirmedAt: { gte: start, lte: end },
+        OR: [
+          { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
+          { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
+          ...(adminIds.length > 0 ? [{ confirmedBy: { in: adminIds } }] : []),
+        ],
+      },
+      _sum: { amount: true },
+    });
+
+    const periodDisbursedAgg = await prisma.outboundSettlement.aggregate({
+      where: {
+        status: "COMPLETED",
+        currency,
+        transactionId: txIdFilter,
+        initiatedBy: agent.id,
+        updatedAt: { gte: start, lte: end },
+      },
+      _sum: { amount: true },
+    });
+
+    const totalReceived = round2(Number(periodReceivedAgg._sum?.amount ?? 0));
+    const totalDisbursed = round2(Number(periodDisbursedAgg._sum?.amount ?? 0));
+    const currentBalance = round2(openingBalance + totalReceived - totalDisbursed);
+
+    return {
+      currency,
+      currencyName,
+      period: {
+        preset: periodPreset.trim(),
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      openingBalance,
+      totalReceived,
+      totalDisbursed,
+      currentBalance,
     };
   }
 
