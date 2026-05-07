@@ -101,6 +101,11 @@ export interface CreateAgentPasswordRequest {
   confirmPassword: string;
 }
 
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
 export interface AgentPasswordPromptResponse {
   message: string;
   requiresPasswordSet: true;

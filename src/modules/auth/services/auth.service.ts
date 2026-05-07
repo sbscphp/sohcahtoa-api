@@ -552,6 +552,53 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
+  async changeCustomerPassword(customerUserId: string, data: { oldPassword: string; newPassword: string }): Promise<{ message: string }> {
+    if (!data.oldPassword || !data.newPassword) {
+      throw new ValidationError('oldPassword and newPassword are required');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: customerUserId },
+      select: { email: true, role: true },
+    });
+
+    if (!user || user.role !== UserRole.CUSTOMER) {
+      throw new UnauthorizedError('Only customers can change customer passwords');
+    }
+
+    const userCredential = await prisma.userCredential.findUnique({
+      where: { userId: customerUserId },
+    });
+
+    if (!userCredential || !userCredential.passwordHash) {
+      throw new ValidationError('User password not set');
+    }
+
+    const isOldPasswordValid = await comparePassword(data.oldPassword, userCredential.passwordHash);
+    if (!isOldPasswordValid) {
+      throw new ValidationError('Current password is incorrect');
+    }
+
+    const hashed = await hashPassword(data.newPassword);
+
+    await prisma.userCredential.update({
+      where: { userId: customerUserId },
+      data: { passwordHash: hashed, lastPasswordChange: new Date() },
+    });
+
+    await prisma.session.updateMany({
+      where: { userId: customerUserId, isActive: true },
+      data: { isActive: false },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
   // STEP 1: Initiate NIBSS consent for BVN — returns consentUrl for user to authenticate
   async verifyBvnForSignup(bvn: string, phoneNumber?: string, email?: string): Promise<{
     sessionId: string;

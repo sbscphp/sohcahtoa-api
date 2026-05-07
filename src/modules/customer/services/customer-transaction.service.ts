@@ -431,9 +431,25 @@ export class CustomerTransactionService {
             recipientPhone: pickupLocation.recipientPhone || null,
             amount: amount as any,
             currency,
-            scheduledPickupDate: pickupLocation.scheduledPickupDate
-              ? new Date(pickupLocation.scheduledPickupDate)
-              : null,
+            scheduledPickupDate: (() => {
+              if (!pickupLocation.scheduledPickupDate) return null;
+              const date = new Date(pickupLocation.scheduledPickupDate);
+              if (isNaN(date.getTime())) {
+                // Try to parse as YYYY-MM-DD
+                const parts = pickupLocation.scheduledPickupDate.split('-');
+                if (parts.length === 3) {
+                  const year = parseInt(parts[0]);
+                  const month = parseInt(parts[1]) - 1;
+                  const day = parseInt(parts[2]);
+                  const parsedDate = new Date(year, month, day);
+                  if (!isNaN(parsedDate.getTime())) {
+                    return parsedDate;
+                  }
+                }
+                return null;
+              }
+              return date;
+            })(),
             scheduledPickupTime: pickupLocation.scheduledPickupTime || null,
             expiryDate,
             status: 'PENDING',
@@ -1502,7 +1518,21 @@ export class CustomerTransactionService {
       cashPickup: transaction.cashPickup
         ? {
             ...transaction.cashPickup,
-            scheduledPickupDate: transaction.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate ?? null,
+            scheduledPickupDate: (() => {
+              const date = transaction.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate;
+              if (!date) return null;
+              if (date instanceof Date) {
+                return date.toISOString().split('T')[0];
+              }
+              if (typeof date === 'string') {
+                const d = new Date(date);
+                if (!isNaN(d.getTime())) {
+                  return d.toISOString().split('T')[0];
+                }
+                return date;
+              }
+              return null;
+            })(),
             scheduledPickupTime: transaction.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
           }
         : null,

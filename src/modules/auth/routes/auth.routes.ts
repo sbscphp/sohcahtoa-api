@@ -2007,6 +2007,60 @@ router.post('/tin/verify-individual', authController.verifyIndividualTin.bind(au
  */
 router.post('/tin/verify-corporate', authController.verifyCorporateTin.bind(authController));
 
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change customer password
+ *     description: Allows authenticated customers to change their password by providing the current password and a new password.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - oldPassword
+ *               - newPassword
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: Current password for verification
+ *                 example: "CurrentPass123!"
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 description: New password (must meet strength requirements)
+ *                 example: "NewSecurePass123!"
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Password updated successfully"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post('/change-password', authenticate, authController.changePassword);
+
 // Health check
 router.get('/health', authController.healthCheck);
 

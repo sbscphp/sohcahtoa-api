@@ -13,6 +13,7 @@ import {
   TouristSignupRequest,
   CreateAgentPasswordRequest,
   VerifyAgentLoginRequest,
+  ChangePasswordRequest,
 } from '../../../shared/types';
 import { AuthRequest } from '../../../shared/middleware';
 
@@ -459,6 +460,17 @@ export class AuthController {
       const { tin } = req.body;
       if (!tin) throw new ValidationError('tin is required');
       const result = await tinService.verifyCorporateTin(tin);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Change customer password
+  async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const data: ChangePasswordRequest = req.body;
+      const result = await authService.changeCustomerPassword(req.user!.userId, data);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
