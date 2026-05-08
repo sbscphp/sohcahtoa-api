@@ -228,6 +228,7 @@ export class AdminTransactionsService {
           history: { orderBy: { createdAt: "asc" } },
           receipt: true,
           cashPickup: true,
+          createdByAgent: { select: { branchId: true } },
         },
       } as any
     );
@@ -374,6 +375,15 @@ export class AdminTransactionsService {
               }
             }
           }
+        });
+      }
+
+      // Final fallback: just find applicable workflow without attaching if it's still null
+      if (!workflow) {
+        workflow = await workflowService.findApplicableWorkflow({
+          type: trx.type,
+          branchId: (trx as any).createdByAgent?.branchId || undefined,
+          action: "Transaction Approval",
         });
       }
     }

@@ -574,12 +574,18 @@ export class WorkflowService {
     
     const tx = await client.transaction.findUnique({
       where: { id: transactionId },
+      include: {
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      }
     });
     
     if (!tx || tx.workflowTemplateId) return null; // Already attached or not found
 
     const template = await this.findApplicableWorkflow({
       type: tx.type,
+      branchId: tx.createdByAgent?.branchId || undefined,
       action: "Transaction Approval",
     });
 
