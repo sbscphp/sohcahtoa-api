@@ -700,14 +700,59 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.ADMIN_REVIEW_REQUIRED, async (event: any) => {
       try {
-        const { adminIds = [], transaction } = event.data || {};
-        if (!transaction || adminIds.length === 0) return;
+        const payload = event.data || event;
+        let { adminIds = [], transactionId, transaction } = payload;
+
+        const { getDatabase } = require('../../../config/database');
+        const prisma = getDatabase();
+
+        // If transaction is not provided, fetch it
+        if (!transaction && transactionId) {
+          transaction = await prisma.transaction.findUnique({
+            where: { id: transactionId },
+            include: {
+              user: { include: { profile: true } },
+              currentWorkflowStage: {
+                include: { assignees: true }
+              }
+            }
+          });
+        }
+
+        if (!transaction) {
+          logger.warn('ADMIN_REVIEW_REQUIRED: Transaction not found');
+          return;
+        }
+
+        // If adminIds is empty, try to get them from the current workflow stage or fallback
+        if (adminIds.length === 0) {
+          if (transaction.currentWorkflowStage?.assignees?.length > 0) {
+            adminIds = transaction.currentWorkflowStage.assignees.map((a: any) => a.adminId);
+          } else {
+            // Fallback: get all admins with SUPER_ADMIN role or a default role
+            const fallbackAdmins = await prisma.adminUser.findMany({
+              where: {
+                OR: [
+                  { role: { name: 'SUPER_ADMIN' } },
+                  { role: { name: 'OPERATIONS' } }
+                ]
+              },
+              select: { id: true }
+            });
+            adminIds = fallbackAdmins.map((a: any) => a.id);
+          }
+        }
+
+        if (adminIds.length === 0) {
+          logger.warn('ADMIN_REVIEW_REQUIRED: No admins found to notify');
+          return;
+        }
 
         const template = NotificationTemplates.NEW_TRANSACTION_ADMIN({
           referenceNumber: transaction.referenceNumber,
           amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
           type: String(transaction.type || ""),
-          customerName: transaction.customerName,
+          customerName: transaction.customerName || (transaction.user?.profile ? `${transaction.user.profile.firstName} ${transaction.user.profile.lastName}` : 'Customer'),
         });
 
         for (const adminId of adminIds) {
@@ -718,7 +763,11 @@ export class NotificationHandler {
             priority: template.priority,
             title: template.title,
             body: template.body,
-            data: { actionUrl: template.actionUrl, transactionId: transaction.id },
+            data: { 
+              actionUrl: template.actionUrl, 
+              transactionId: transaction.id,
+              reference: transaction.referenceNumber 
+            },
             transactionId: transaction.id,
           });
         }

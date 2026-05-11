@@ -101,7 +101,6 @@ export class WorkflowService {
               referenceNumber: true,
               status: true,
               createdAt: true,
-              type: true,
             },
           }),
       (moduleFilter && moduleFilter !== "Outlet Management")
@@ -139,7 +138,6 @@ export class WorkflowService {
         dateInitiated: t.createdAt,
         escalationMinutes: this.toMinutesSince(new Date(t.createdAt)),
         title: t.referenceNumber,
-        subtype: t.type,
       }))
     );
     items = items.concat(
@@ -258,7 +256,7 @@ export class WorkflowService {
         status: "DRAFT",
         createdBy: adminId,
       },
-      select: { id: true },
+      select: { id: true, name: true, type: true },
     });
     if (Array.isArray(payload.stages) && payload.stages.length) {
       for (const st of payload.stages) {
@@ -291,7 +289,7 @@ export class WorkflowService {
   async listTemplates(status: string | undefined, page = 1, limit = 20) {
     const client: any = prisma as any;
     const where: any = {};
-    if (status && status !== "ALL") where.status = { equals: status, mode: "insensitive" };
+    if (status && status !== "ALL") where.status = status.toUpperCase();
     const [total, templates] = await Promise.all([
       client.workflowTemplate.count({ where }),
       client.workflowTemplate.findMany({
@@ -370,6 +368,8 @@ export class WorkflowService {
 
   async updateTemplate(id: string, payload: UpdateWorkflowDto) {
     const client: any = prisma as any;
+    
+    // Update template metadata
     await client.workflowTemplate.update({
       where: { id },
       data: {
@@ -384,24 +384,60 @@ export class WorkflowService {
         hasPtaRequest: !!payload.hasPtaRequest,
       },
     });
+
     if (Array.isArray(payload.stages)) {
-      await client.workflowStage.deleteMany({ where: { templateId: id } });
-      for (const st of payload.stages) {
-        const stage = await client.workflowStage.create({
-          data: {
-            templateId: id,
-            name: st.name || `Stage ${st.order}`,
-            type: st.type || null,
-            escalationMinutes: st.escalationMinutes || 0,
-            order: st.order,
-          },
-          select: { id: true },
+      const existingStages = await client.workflowStage.findMany({
+        where: { templateId: id },
+        select: { id: true }
+      });
+      const existingStageIds: string[] = existingStages.map((s: any) => s.id);
+      const incomingStageIds = payload.stages.map(s => s.id).filter(Boolean) as string[];
+
+      // Delete stages that are no longer present
+      const stagesToDelete = existingStageIds.filter((sid: string) => !incomingStageIds.includes(sid));
+      if (stagesToDelete.length > 0) {
+        await client.workflowStage.deleteMany({
+          where: { id: { in: stagesToDelete } }
         });
+      }
+
+      for (const st of payload.stages) {
+        let stageId = st.id;
+        
+        if (stageId) {
+          // Update existing stage
+          await client.workflowStage.update({
+            where: { id: stageId },
+            data: {
+              name: st.name || `Stage ${st.order}`,
+              type: st.type || null,
+              escalationMinutes: st.escalationMinutes || 0,
+              order: st.order,
+            }
+          });
+        } else {
+          // Create new stage
+          const newStage = await client.workflowStage.create({
+            data: {
+              templateId: id,
+              name: st.name || `Stage ${st.order}`,
+              type: st.type || null,
+              escalationMinutes: st.escalationMinutes || 0,
+              order: st.order,
+            },
+            select: { id: true }
+          });
+          stageId = newStage.id;
+        }
+
+        // Sync assignees for this stage
         if (Array.isArray(st.assignees)) {
+          // For assignees, we can safely delete and recreate since no other entities link to assignee IDs
+          await client.workflowAssignee.deleteMany({ where: { stageId } });
           for (const ass of st.assignees) {
             await client.workflowAssignee.create({
               data: {
-                stageId: stage.id,
+                stageId,
                 adminId: ass.adminId,
                 order: ass.order || 1,
               },
@@ -410,7 +446,7 @@ export class WorkflowService {
         }
       }
     }
-    return { id, message: "Workflow updated" };
+    return { id, message: "Workflow updated successfully" };
   }
 
   async publishTemplate(id: string) {
@@ -446,8 +482,8 @@ export class WorkflowService {
     const client: any = prisma as any;
     const where: any = {};
     if (filters.status && filters.status !== "ALL") {
-      if (filters.status.toUpperCase() === "DEACTIVATED") where.status = { equals: "ARCHIVED", mode: "insensitive" };
-      else where.status = { equals: filters.status, mode: "insensitive" };
+      if (filters.status.toUpperCase() === "DEACTIVATED") where.status = "ARCHIVED";
+      else where.status = filters.status.toUpperCase();
     }
     const s = ((((filters as any) || {}).search ?? (filters.q || "") ) as string).toString().trim();
     if (s) {
@@ -485,7 +521,7 @@ export class WorkflowService {
         displayId: this.displayId(t.id),
         workflowName: t.name,
         workflowType,
-        workflowAction: t.action || (t.type === "APPROVAL" ? "Transaction Management" : "Settlement Management"),
+        workflowAction: t.action || "Transaction Management",
         status: statusLabel,
         dateCreated: t.createdAt,
       };
@@ -518,7 +554,6 @@ export class WorkflowService {
   }
 
   async findApplicableWorkflow(params: {
-    type: string;
     branchId?: string;
     departmentId?: string;
     action?: string;
@@ -538,7 +573,15 @@ export class WorkflowService {
       include: {
         stages: {
           orderBy: { order: "asc" },
-          include: { assignees: true },
+          include: { 
+            assignees: {
+              include: {
+                admin: {
+                  select: { id: true, fullName: true, role: { select: { name: true } } }
+                }
+              }
+            } 
+          },
         },
       },
     });
@@ -584,7 +627,6 @@ export class WorkflowService {
     if (!tx || tx.workflowTemplateId) return null; // Already attached or not found
 
     const template = await this.findApplicableWorkflow({
-      type: tx.type,
       branchId: tx.createdByAgent?.branchId || undefined,
       action: "Transaction Approval",
     });

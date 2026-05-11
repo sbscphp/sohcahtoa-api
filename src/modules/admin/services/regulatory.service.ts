@@ -198,7 +198,7 @@ class RegulatoryService {
       } else if (filters.status === "FAILED") {
         where.status = TransactionStatus.CANCELLED;
       } else {
-        where.status = { equals: filters.status, mode: "insensitive" };
+        where.status = filters.status.toUpperCase();
       }
     }
     if (filters.search) {
@@ -255,8 +255,8 @@ class RegulatoryService {
 
   async complianceReportsList(filters: { search?: string; status?: string; fileType?: string; channel?: string }, page = 1, limit = 20) {
     const where: any = {};
-    if (filters.status && filters.status !== "ALL") where.status = { equals: filters.status, mode: "insensitive" };
-    if (filters.fileType) where.format = { equals: filters.fileType, mode: "insensitive" };
+    if (filters.status && filters.status !== "ALL") where.status = filters.status.toUpperCase();
+    if (filters.fileType) where.format = filters.fileType.toUpperCase();
     if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
     const modules = ["TRANSACTION", "RATE", "INCIDENT"];
     where.module = { in: modules };
@@ -456,7 +456,7 @@ class RegulatoryService {
 
   async cbnFnReportsList(filters: { search?: string; status?: string; reportType?: string }, page = 1, limit = 20) {
     const where: any = { module: "RATE" };
-    if (filters.status && filters.status !== "ALL") where.status = { equals: filters.status, mode: "insensitive" };
+    if (filters.status && filters.status !== "ALL") where.status = filters.status.toUpperCase();
     if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
     const [jobs, total] = await Promise.all([
       prisma.reportJob.findMany({
@@ -505,8 +505,8 @@ class RegulatoryService {
 
   async auditLogsList(filters: { search?: string; severity?: string; category?: string }, page = 1, limit = 20) {
     const where: any = {};
-    if (filters.severity && filters.severity !== "ALL") where.severity = { equals: filters.severity, mode: "insensitive" };
-    if (filters.category && filters.category !== "ALL") where.category = { equals: filters.category, mode: "insensitive" };
+    if (filters.severity && filters.severity !== "ALL") where.severity = filters.severity.toUpperCase();
+    if (filters.category && filters.category !== "ALL") where.category = filters.category.toUpperCase();
     if (filters.search) {
       where.OR = [
         { eventType: { contains: filters.search, mode: "insensitive" } },
@@ -581,7 +581,7 @@ class RegulatoryService {
 
   async regulatoryLogsList(filters: { search?: string; status?: string }, page = 1, limit = 20) {
     const whereJob: any = {};
-    if (filters.status && filters.status !== "ALL") whereJob.status = { equals: filters.status, mode: "insensitive" };
+    if (filters.status && filters.status !== "ALL") whereJob.status = filters.status.toUpperCase();
     if (filters.search) whereJob.metadata = { path: "$", string_contains: filters.search } as any;
     const [jobs, jobsTotal] = await Promise.all([
       prisma.reportJob.findMany({

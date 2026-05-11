@@ -294,6 +294,7 @@ model User {
   otpLogs        OtpLog[]
   tickets        Ticket[]        @relation("TicketCustomer")
   createdByAgent Agent?          @relation("AgentCreatedCustomers", fields: [createdByAgentId], references: [id])
+  transactions   Transaction[]   @relation("UserTransactions")
 
   @@index([email])
   @@index([phoneNumber])
@@ -466,6 +467,7 @@ model RolePermission {
 
 model AdminUser {
   id             String  @id @default(uuid())
+  sequenceId     Int     @default(autoincrement()) @unique
   email          String  @unique
   fullName       String
   phoneNumber    String
@@ -609,7 +611,7 @@ model Agent {
   attachments      AgentAttachment[]
   createdCustomers User[]            @relation("AgentCreatedCustomers")
   createdTransactions Transaction[] @relation("AgentCreatedTransactions")
-  createdTickets   Ticket[]         @relation("TicketCreatedByAgent")
+  createdTickets   Ticket[]        @relation("TicketCreatedByAgent")
 
 
   @@index([branchId])
@@ -809,6 +811,7 @@ model Transaction {
   currentWorkflowStageId String?
 
   createdByAgent Agent?              @relation("AgentCreatedTransactions", fields: [createdByAgentId], references: [id])
+  user           User                @relation("UserTransactions", fields: [userId], references: [id])
   steps       TransactionStepLog[]
   documents   TransactionDocument[]
   history     TransactionHistory[]

@@ -90,6 +90,7 @@ router.get(
   requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
   customerController.listCustomers
 );
+
 /**
  * @swagger
  * /api/admin/customers/all:
@@ -124,6 +125,7 @@ router.get(
   requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "view" }),
   customerController.listAllCustomers
 );
+
 /**
  * @swagger
  * /api/admin/customers/export:

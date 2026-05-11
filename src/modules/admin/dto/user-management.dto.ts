@@ -69,6 +69,7 @@ export class AdminUserQueryDto {
     department?: string;
     isActive?: any;
     status?: any;
+    sequenceId?: number;
 }
 
 

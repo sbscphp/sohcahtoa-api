@@ -78,8 +78,10 @@ export class AdminTransactionsService {
   // }
 
   async getTransactionStats() {
-    const [underReviewA, underReviewB, rejected, approved, reqInfoGroup] = await Promise.all([
+    const [underReviewA, underReviewB, underReviewC, underReviewD, rejected, approved, reqInfoGroup] = await Promise.all([
+      prisma.transaction.count({ where: { status: TransactionStatus.AWAITING_VERIFICATION } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.VERIFICATION_IN_PROGRESS } as any }),
+      prisma.transaction.count({ where: { status: TransactionStatus.COMPLIANCE_REVIEW } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.REJECTED } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.APPROVED } as any }),
@@ -90,7 +92,7 @@ export class AdminTransactionsService {
     ]);
     const requestInformation = Array.isArray(reqInfoGroup) ? reqInfoGroup.length : 0;
     return {
-      underReview: underReviewA + underReviewB,
+      underReview: underReviewA + underReviewB + underReviewC + underReviewD,
       rejected,
       requestInformation,
       approved,
@@ -381,7 +383,6 @@ export class AdminTransactionsService {
       // Final fallback: just find applicable workflow without attaching if it's still null
       if (!workflow) {
         workflow = await workflowService.findApplicableWorkflow({
-          type: trx.type,
           branchId: (trx as any).createdByAgent?.branchId || undefined,
           action: "Transaction Approval",
         });
@@ -414,14 +415,26 @@ export class AdminTransactionsService {
 
           pendingAssignees = activeStage.assignees.map((a: any) => ({
             adminId: a.adminId,
-            adminName: a.admin?.fullName || null,
-            roleName: a.admin?.role?.name || null,
+            adminName: a.admin?.fullName || "Unknown Admin",
+            roleName: a.admin?.role?.name || "No Role",
           }));
         }
       } else if (trx.status === "APPROVED") {
         approvalState = "Approved (Workflow Completed)";
       }
     }
+
+    const workflowStages = workflow?.stages.map((s: any) => ({
+      stageId: s.id,
+      name: s.name,
+      order: s.order,
+      isCurrent: activeStage ? s.id === activeStage.id : false,
+      assignees: s.assignees.map((a: any) => ({
+        adminId: a.adminId,
+        adminName: a.admin?.fullName || "Unknown Admin",
+        roleName: a.admin?.role?.name || "No Role",
+      })),
+    })) || [];
 
     return {
       id: trx.id,
@@ -439,6 +452,7 @@ export class AdminTransactionsService {
         isApprovalOfficer,
         approvalState,
         pendingAssignees,
+        workflowStages,
       },
       details: {
         transactionValueFx: valueFx,
@@ -552,7 +566,6 @@ export class AdminTransactionsService {
     } else {
       // Find applicable workflow
       workflow = await workflowService.findApplicableWorkflow({
-        type: trx?.type || "",
         branchId: trx?.createdByAgent?.branchId || undefined,
         action: "Transaction Approval",
       });

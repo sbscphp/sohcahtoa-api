@@ -182,15 +182,14 @@ class CustomerController {
         res,
         `customer-${userId}-transactions.csv`,
         [
-          { header: "Date", select: (r: any) => r.createdAt || "" },
-          { header: "Reference", select: (r: any) => r.referenceNumber || "" },
-          { header: "Type", select: (r: any) => r.type || "" },
+          { header: "Date", select: (r: any) => r.dateAndId?.date || "" },
+          { header: "Reference", select: (r: any) => r.dateAndId?.reference || "" },
+          { header: "Type", select: (r: any) => r.transactionType || "" },
           { header: "Status", select: (r: any) => r.status || "" },
           { header: "Currency", select: (r: any) => r.currency || "" },
-          { header: "Foreign Amount", select: (r: any) => r.foreignAmount || "" },
-          { header: "Naira Equivalent", select: (r: any) => r.nairaEquivalent || "" },
+          { header: "Amount", select: (r: any) => r.transactionValue || "" },
           { header: "Transaction Mode", select: (r: any) => r.transactionMode || "" },
-          { header: "Current Step", select: (r: any) => r.currentStep || "" },
+          { header: "Stage", select: (r: any) => r.transactionStage || "" },
         ],
         transactions as any[]
       );

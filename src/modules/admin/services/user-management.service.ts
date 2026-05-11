@@ -199,15 +199,27 @@ class UserManagementService {
     };
 
     private buildAdminUserWhereClause(query: AdminUserQueryDto): Prisma.AdminUserWhereInput {
-        const { search, fullName, email, role, department, isActive, status } = query;
+        const { search, fullName, email, role, department, isActive, status, sequenceId } = query;
         const where: Prisma.AdminUserWhereInput = {};
 
+        if (sequenceId) {
+            where.sequenceId = Number(sequenceId);
+        }
+
         if (search) {
-            where.OR = [
+            const searchOr: any[] = [
                 { fullName: { contains: search, mode: "insensitive" } },
                 { email: { contains: search, mode: "insensitive" } },
                 { phoneNumber: { contains: search, mode: "insensitive" } },
             ];
+
+            // If search is a number, try to match sequenceId
+            const searchNum = Number(search);
+            if (!isNaN(searchNum)) {
+                searchOr.push({ sequenceId: searchNum });
+            }
+
+            where.OR = searchOr;
         }
 
         if (fullName) {
@@ -223,12 +235,13 @@ class UserManagementService {
             const s = String(statusVal).trim().toLowerCase();
             if (s === "pending") {
                 where.password = null;
-                where.isActive = true;
+                where.isActive = true; // Pending users are usually active
             } else if (s === "active" || s === "activated" || s === "true" || s === "1") {
                 where.isActive = true;
                 where.password = { not: null };
             } else if (s === "deactivated" || s === "inactive" || s === "false" || s === "0") {
                 where.isActive = false;
+                // Deactivated users are shown regardless of password status
             }
         }
 
