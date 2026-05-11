@@ -7,6 +7,7 @@ import { NotFoundError, ValidationError } from '../../../shared/utils';
 import { v2 as cloudinary } from 'cloudinary';
 import auditService from '../../audit/services/audit.service';
 import { createLogger } from '../../../shared/utils/logger';
+import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
 
 const prisma = getDatabase();
@@ -48,6 +49,16 @@ interface CreateCustomerTransactionPayload {
     accountName?: string;
     bankName?: string;
     iban?: string;
+    beneficiaryCountryRegion?: string;
+    beneficiaryName?: string;
+    beneficiaryAddress?: string;
+    bankAddress?: string;
+    paymentReference?: string;
+    swiftCode?: string;
+    routingNumber?: string;
+    ifscNumber?: string;
+    purposeCode?: string;
+    bsbCode?: string;
   };
 
   // Pickup Location details
@@ -355,6 +366,7 @@ export class CustomerTransactionService {
         'PROOF_OF_FUNDS',
         'SOURCE_OF_FUNDS_DECLARATION',
         'DIGITAL_SIGNATURE',
+        'BANK_VERIFICATION',
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -419,9 +431,25 @@ export class CustomerTransactionService {
             recipientPhone: pickupLocation.recipientPhone || null,
             amount: amount as any,
             currency,
-            scheduledPickupDate: pickupLocation.scheduledPickupDate
-              ? new Date(pickupLocation.scheduledPickupDate)
-              : null,
+            scheduledPickupDate: (() => {
+              if (!pickupLocation.scheduledPickupDate) return null;
+              const date = new Date(pickupLocation.scheduledPickupDate);
+              if (isNaN(date.getTime())) {
+                // Try to parse as YYYY-MM-DD
+                const parts = pickupLocation.scheduledPickupDate.split('-');
+                if (parts.length === 3) {
+                  const year = parseInt(parts[0]);
+                  const month = parseInt(parts[1]) - 1;
+                  const day = parseInt(parts[2]);
+                  const parsedDate = new Date(year, month, day);
+                  if (!isNaN(parsedDate.getTime())) {
+                    return parsedDate;
+                  }
+                }
+                return null;
+              }
+              return date;
+            })(),
             scheduledPickupTime: pickupLocation.scheduledPickupTime || null,
             expiryDate,
             status: 'PENDING',
@@ -562,6 +590,7 @@ export class CustomerTransactionService {
       'PROOF_OF_FUNDS',
       'SOURCE_OF_FUNDS_DECLARATION',
       'DIGITAL_SIGNATURE',
+      'BANK_VERIFICATION',
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
@@ -615,28 +644,66 @@ export class CustomerTransactionService {
           fileUrl: result.secure_url,
         });
 
-        // Save document record
-        const document = await prisma.transactionDocument.create({
-          data: {
+        // If a document of the same type already exists and requires review, replace it
+        // rather than creating a duplicate record
+        const existingReviewDoc = await prisma.transactionDocument.findFirst({
+          where: {
             transactionId,
             documentType: documentType as any,
-            fileUrl: result.secure_url,
-            fileName: file.originalname,
-            fileSize: file.size,
-            verificationStatus: 'PENDING',
-            metadata: {
-              cloudinaryPublicId: result.public_id,
-              format: result.format,
-              uploadedBy: userId,
-            },
+            verificationStatus: 'REQUIRES_MANUAL_REVIEW',
           },
         });
 
-        logger.debug(`[uploadDocuments] Document record created in database`, {
-          transactionId,
-          documentId: document.id,
-          fileName: file.originalname,
-        });
+        let document;
+        if (existingReviewDoc) {
+          document = await prisma.transactionDocument.update({
+            where: { id: existingReviewDoc.id },
+            data: {
+              fileUrl: result.secure_url,
+              fileName: file.originalname,
+              fileSize: file.size,
+              verificationStatus: 'PENDING',
+              verificationNotes: null,
+              verifiedAt: null,
+              verifiedBy: null,
+              uploadedAt: new Date(),
+              metadata: {
+                cloudinaryPublicId: result.public_id,
+                format: result.format,
+                uploadedBy: userId,
+              },
+            },
+          });
+
+          logger.info(`[uploadDocuments] Replaced REQUIRES_MANUAL_REVIEW document with new file`, {
+            transactionId,
+            documentId: document.id,
+            documentType,
+            fileName: file.originalname,
+          });
+        } else {
+          document = await prisma.transactionDocument.create({
+            data: {
+              transactionId,
+              documentType: documentType as any,
+              fileUrl: result.secure_url,
+              fileName: file.originalname,
+              fileSize: file.size,
+              verificationStatus: 'PENDING',
+              metadata: {
+                cloudinaryPublicId: result.public_id,
+                format: result.format,
+                uploadedBy: userId,
+              },
+            },
+          });
+
+          logger.debug(`[uploadDocuments] Document record created in database`, {
+            transactionId,
+            documentId: document.id,
+            fileName: file.originalname,
+          });
+        }
 
         uploadedDocuments.push(document);
       } catch (error) {
@@ -655,6 +722,19 @@ export class CustomerTransactionService {
       uploadedCount: uploadedDocuments.length,
       documentIds: uploadedDocuments.map((d) => d.id),
     });
+
+    // If the transaction was in COMPLIANCE_REVIEW (documents flagged for manual review),
+    // reset it back to AWAITING_VERIFICATION so it re-enters the review queue
+    if (transaction.status === 'COMPLIANCE_REVIEW') {
+      logger.info(`[uploadDocuments] Resetting transaction status from COMPLIANCE_REVIEW to AWAITING_VERIFICATION`, {
+        transactionId,
+      });
+
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: { status: TransactionStatus.AWAITING_VERIFICATION },
+      });
+    }
 
     // Update transaction step if not already done
     if (transaction.currentStep === 'PERSONAL_INFO') {
@@ -1021,7 +1101,12 @@ export class CustomerTransactionService {
             },
           },
           cashPickup: {
-            select: { pickupLocation: true, status: true },
+            select: { pickupLocation: true, status: true, scheduledPickupDate: true, scheduledPickupTime: true },
+          },
+          steps: {
+            where: { step: 'PERSONAL_INFO' as any },
+            select: { data: true },
+            take: 1,
           },
         },
         orderBy: { [sortBy]: sortOrder },
@@ -1040,11 +1125,24 @@ export class CustomerTransactionService {
       totalPages: Math.ceil(total / limit),
     });
 
-    // Attach the transaction group label to each row
-    const data = transactions.map((t) => ({
-      ...t,
-      group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
-    }));
+    // Attach the transaction group label and beneficiary details to each row
+    const data = transactions.map((t) => {
+      const { steps, ...rest } = t;
+      const personalInfoData = steps?.[0]?.data as any;
+      const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
+      return {
+        ...rest,
+        cashPickup: t.cashPickup
+          ? {
+              ...t.cashPickup,
+              scheduledPickupDate: t.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate ?? null,
+              scheduledPickupTime: t.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
+            }
+          : null,
+        group: this.resolveTransactionGroup(t.type as string, t.transactionMode),
+        beneficiaryDetails: personalInfoData?.beneficiaryDetails || null,
+      };
+    });
 
     return {
       data,
@@ -1240,14 +1338,17 @@ export class CustomerTransactionService {
       stepCount: transaction.steps.length,
     });
 
-    // Fetch user's KYC data to include BVN and NIN
-    const userKyc = await prisma.userKyc.findUnique({
-      where: { userId },
-      select: {
-        bvn: true,
-        nin: true,
-      },
-    });
+    // Fetch user's KYC data and customerType in parallel
+    const [userKyc, userRecord] = await Promise.all([
+      prisma.userKyc.findUnique({
+        where: { userId },
+        select: { bvn: true, nin: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { customerType: true },
+      }),
+    ]);
 
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
     const personalInfoStep = transaction.steps.find((s) => s.step === 'PERSONAL_INFO');
@@ -1258,6 +1359,9 @@ export class CustomerTransactionService {
 
     // Extract personal info details from the step data
     const personalInfoData = personalInfoStep?.data as any;
+
+    // Extract pickup location from step data (used as fallback if cashPickup record is missing)
+    const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
 
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
@@ -1290,11 +1394,85 @@ export class CustomerTransactionService {
         createdAt: h.createdAt,
       }));
 
-    // Fetch settlement details if they exist
-    const settlement = await prisma.settlement.findUnique({
-      where: { transactionId },
-      include: { bankDetails: true },
-    }).catch(() => null);
+    // Fetch payment and settlement details in parallel
+    const client = prisma as any;
+    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts] =
+      await Promise.all([
+        prisma.settlement
+          .findUnique({ where: { transactionId }, include: { bankDetails: true } })
+          .catch(() => null),
+        client.virtualAccount
+          .findUnique({ where: { transactionId } })
+          .catch(() => null),
+        client.providusDeposit
+          .findMany({
+            where: { transactionId },
+            select: {
+              id: true,
+              sessionId: true,
+              settlementId: true,
+              accountNumber: true,
+              amount: true,
+              settledAmount: true,
+              feeAmount: true,
+              currency: true,
+              sourceAccountNumber: true,
+              sourceAccountName: true,
+              sourceBankName: true,
+              tranRemarks: true,
+              tranDateTime: true,
+              status: true,
+              verifiedAt: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' as const },
+          })
+          .catch(() => []),
+        client.outboundSettlement
+          .findFirst({
+            where: { transactionId },
+            select: {
+              id: true,
+              referenceNumber: true,
+              amount: true,
+              currency: true,
+              status: true,
+              beneficiaryName: true,
+              beneficiaryBank: true,
+              beneficiaryAccount: true,
+              beneficiarySwift: true,
+              beneficiaryIban: true,
+              beneficiaryCountry: true,
+              beneficiaryAddress: true,
+              paymentMethod: true,
+              paymentReference: true,
+              paymentProof: true,
+              notes: true,
+              initiatedAt: true,
+              approvedAt: true,
+              processedAt: true,
+              completedAt: true,
+              failedAt: true,
+              failureReason: true,
+            },
+          })
+          .catch(() => null),
+        client.paymentReceipt
+          .findMany({
+            where: { transactionId },
+            select: {
+              id: true,
+              receiptNumber: true,
+              amount: true,
+              currency: true,
+              paymentMethod: true,
+              pdfUrl: true,
+              generatedAt: true,
+            },
+            orderBy: { generatedAt: 'desc' as const },
+          })
+          .catch(() => []),
+      ]);
 
     return {
       transactionId: transaction.id,
@@ -1312,6 +1490,7 @@ export class CustomerTransactionService {
       disbursementMethod: transaction.disbursementMethod,
       formAId: transaction.formAId,
       taxClearanceNumber: transaction.taxClearanceNumber,
+      customerType: userRecord?.customerType ?? null,
 
       // Personal info used during creation
       personalInfo: {
@@ -1336,8 +1515,29 @@ export class CustomerTransactionService {
         transactionMode,
         transactionAmount
       ),
-      cashPickup: transaction.cashPickup,
+      cashPickup: transaction.cashPickup
+        ? {
+            ...transaction.cashPickup,
+            scheduledPickupDate: (() => {
+              const date = transaction.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate;
+              if (!date) return null;
+              if (date instanceof Date) {
+                return date.toISOString().split('T')[0];
+              }
+              if (typeof date === 'string') {
+                const d = new Date(date);
+                if (!isNaN(d.getTime())) {
+                  return d.toISOString().split('T')[0];
+                }
+                return date;
+              }
+              return null;
+            })(),
+            scheduledPickupTime: transaction.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
+          }
+        : null,
       prepaidCard: transaction.prepaidCard,
+      // Inbound settlement (customer's NGN payment to the platform)
       settlement: settlement
         ? {
             id: settlement.id,
@@ -1362,6 +1562,80 @@ export class CustomerTransactionService {
               : null,
           }
         : null,
+
+      // Virtual account assigned to this transaction for payment collection
+      virtualAccount: virtualAccount
+        ? {
+            id: virtualAccount.id,
+            accountNumber: virtualAccount.accountNumber,
+            accountName: virtualAccount.accountName,
+            bankName: virtualAccount.bankName,
+            type: virtualAccount.type,
+            status: virtualAccount.status,
+            expiresAt: virtualAccount.expiresAt,
+            createdAt: virtualAccount.createdAt,
+          }
+        : null,
+
+      // Actual bank deposits received via Providus webhook
+      paymentDetails: deposits.length > 0
+        ? deposits.map((d: any) => ({
+            id: d.id,
+            sessionId: d.sessionId,
+            amount: d.amount,
+            settledAmount: d.settledAmount,
+            feeAmount: d.feeAmount,
+            currency: d.currency,
+            sourceAccountNumber: d.sourceAccountNumber,
+            sourceAccountName: d.sourceAccountName,
+            sourceBankName: d.sourceBankName,
+            tranRemarks: d.tranRemarks,
+            tranDateTime: d.tranDateTime,
+            status: d.status,
+            verifiedAt: d.verifiedAt,
+            createdAt: d.createdAt,
+          }))
+        : [],
+
+      // Outbound settlement (disbursement to beneficiary)
+      outboundSettlement: outboundSettlement
+        ? {
+            id: outboundSettlement.id,
+            referenceNumber: outboundSettlement.referenceNumber,
+            amount: outboundSettlement.amount,
+            currency: outboundSettlement.currency,
+            status: outboundSettlement.status,
+            beneficiaryName: outboundSettlement.beneficiaryName,
+            beneficiaryBank: outboundSettlement.beneficiaryBank,
+            beneficiaryAccount: outboundSettlement.beneficiaryAccount,
+            beneficiarySwift: outboundSettlement.beneficiarySwift,
+            beneficiaryIban: outboundSettlement.beneficiaryIban,
+            beneficiaryCountry: outboundSettlement.beneficiaryCountry,
+            beneficiaryAddress: outboundSettlement.beneficiaryAddress,
+            paymentMethod: outboundSettlement.paymentMethod,
+            paymentReference: outboundSettlement.paymentReference,
+            paymentProof: outboundSettlement.paymentProof,
+            notes: outboundSettlement.notes,
+            initiatedAt: outboundSettlement.initiatedAt,
+            approvedAt: outboundSettlement.approvedAt,
+            processedAt: outboundSettlement.processedAt,
+            completedAt: outboundSettlement.completedAt,
+            failedAt: outboundSettlement.failedAt,
+            failureReason: outboundSettlement.failureReason,
+          }
+        : null,
+
+      // Payment receipts generated for this transaction
+      paymentReceipts: paymentReceipts.map((r: any) => ({
+        id: r.id,
+        receiptNumber: r.receiptNumber,
+        amount: r.amount,
+        currency: r.currency,
+        paymentMethod: r.paymentMethod,
+        pdfUrl: r.pdfUrl,
+        generatedAt: r.generatedAt,
+      })),
+
       steps: this.sanitizeStepsForResponse(transaction.steps),
       comments,
       createdAt: transaction.createdAt,

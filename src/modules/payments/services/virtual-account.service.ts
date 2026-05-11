@@ -45,11 +45,24 @@ export class VirtualAccountService {
       });
 
       if (existingAccount) {
-        logger.info('Virtual account already exists for transaction', {
+        const isActive =
+          existingAccount.status === VirtualAccountStatus.ACTIVE &&
+          (!existingAccount.expiresAt || new Date(existingAccount.expiresAt) > new Date());
+
+        if (isActive) {
+          logger.info('Virtual account already exists for transaction', {
+            transactionId,
+            accountNumber: existingAccount.accountNumber,
+          });
+          return existingAccount;
+        }
+
+        // Existing account is expired/inactive — fall through to provision a new one
+        logger.info('Existing virtual account is inactive/expired, recreating', {
           transactionId,
-          accountNumber: existingAccount.accountNumber,
+          existingAccountNumber: existingAccount.accountNumber,
+          existingStatus: existingAccount.status,
         });
-        return existingAccount;
       }
 
       // Verify transaction exists and is approved
@@ -64,11 +77,12 @@ export class VirtualAccountService {
         throw new AppError(ErrorCode.NOT_FOUND, 'Transaction not found', 404);
       }
 
-      // Ensure transaction is approved before creating virtual account
-      if (transaction.status !== 'APPROVED') {
+      // Ensure transaction is in an eligible status before creating virtual account
+      const allowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+      if (!allowedStatuses.includes(transaction.status)) {
         throw new AppError(
           ErrorCode.VALIDATION_ERROR,
-          'Virtual account can only be created for approved transactions',
+          'Virtual account can only be created for approved or awaiting deposit transactions',
           400
         );
       }
@@ -82,26 +96,73 @@ export class VirtualAccountService {
       }
 
       // Calculate expiry date for dynamic accounts
+      // In simulation mode, cap expiry at 30 minutes for faster testing cycles
+      const effectiveExpiryMs = providusService.isSimulationMode()
+        ? 30 * 60 * 1000
+        : expiresInHours * 60 * 60 * 1000;
+
       const expiresAt =
         type === VirtualAccountType.DYNAMIC
-          ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+          ? new Date(Date.now() + effectiveExpiryMs)
           : null;
 
       // Save virtual account to database
-      const virtualAccount = await prisma.virtualAccount.create({
-        data: {
-          userId,
-          transactionId,
-          accountNumber: providusResponse.account_number,
-          accountName: providusResponse.account_name,
-          type,
-          status: VirtualAccountStatus.ACTIVE,
-          initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
-          bvn,
-          expiresAt,
-          metadata: providusResponse as any,
-        },
-      });
+      // Retry logic for duplicate account numbers in simulation mode
+      let virtualAccount;
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (retries < maxRetries) {
+        try {
+          const accountData = {
+            userId,
+            transactionId,
+            accountNumber: providusResponse.account_number,
+            accountName: providusResponse.account_name,
+            type,
+            status: VirtualAccountStatus.ACTIVE,
+            initiationTranRef: 'initiationTranRef' in providusResponse ? providusResponse.initiationTranRef : null,
+            bvn,
+            expiresAt,
+            metadata: providusResponse as any,
+          };
+          virtualAccount = await prisma.virtualAccount.upsert({
+            where: { transactionId },
+            create: accountData,
+            update: {
+              accountNumber: accountData.accountNumber,
+              accountName: accountData.accountName,
+              status: VirtualAccountStatus.ACTIVE,
+              initiationTranRef: accountData.initiationTranRef,
+              expiresAt: accountData.expiresAt,
+              metadata: accountData.metadata,
+            },
+          });
+          break;
+        } catch (error: any) {
+          if (error.code === 'P2002' && retries < maxRetries - 1) {
+            // Duplicate account number, try creating a new one
+            logger.warn('Duplicate account number, retrying with new number', {
+              accountNumber: providusResponse.account_number,
+              retries: retries + 1,
+            });
+            retries++;
+
+            // Generate a new account in Providus for retry
+            if (type === VirtualAccountType.DYNAMIC) {
+              providusResponse = await providusService.createDynamicAccount(accountName);
+            } else {
+              providusResponse = await providusService.createReservedAccount(accountName, bvn);
+            }
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!virtualAccount) {
+        throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to create virtual account', 500);
+      }
 
       logger.info('Virtual account created successfully', {
         id: virtualAccount.id,

@@ -196,57 +196,62 @@ export class DepositVerificationService {
         throw new AppError(ErrorCode.NOT_FOUND, 'Transaction not found', 404);
       }
 
-      // Verify amount matches
+      // Calculate payment balance
       const expectedAmount = transaction.nairaEquivalent;
       const receivedAmount = deposit.settledAmount;
 
-      if (expectedAmount && receivedAmount.toString() !== expectedAmount.toString()) {
-        logger.warn('Deposit amount mismatch', {
+      // Accumulate total paid (handles multiple deposits / split payments)
+      const previousAmountPaid = transaction.amountPaid ?? 0;
+      const totalAmountPaid = Number(previousAmountPaid) + Number(receivedAmount);
+      const balanceDue = expectedAmount
+        ? Number(expectedAmount) - totalAmountPaid
+        : null;
+
+      const isUnderpaid = balanceDue !== null && balanceDue > 0.01;
+      const isOverpaid = balanceDue !== null && balanceDue < -0.01;
+      const isExact = !isUnderpaid && !isOverpaid;
+
+      if (!isExact) {
+        logger.warn(`Deposit amount ${isUnderpaid ? 'short' : 'excess'}`, {
           transactionId,
           expected: expectedAmount,
           received: receivedAmount,
+          totalAmountPaid,
+          balanceDue,
         });
 
-        // Create notification for admin review
+        // Notify admin and customer of mismatch
         await notificationService.sendNotification({
           userId: transaction.userId,
           type: NotificationType.IN_APP,
           channel: NotificationChannel.ALL,
-          title: 'Deposit Amount Mismatch',
-          body: `Deposit received for transaction ${transaction.referenceNumber} has amount mismatch. Expected: ₦${expectedAmount}, Received: ₦${receivedAmount}`,
+          title: isUnderpaid ? 'Deposit Underpayment' : 'Deposit Overpayment',
+          body: isUnderpaid
+            ? `Deposit for transaction ${transaction.referenceNumber} is short by ₦${balanceDue!.toFixed(2)}. Outstanding balance has been recorded.`
+            : `Deposit for transaction ${transaction.referenceNumber} has an excess of ₦${Math.abs(balanceDue!).toFixed(2)}. The surplus has been recorded.`,
           data: {
             transactionId,
             depositId,
-            expectedAmount: expectedAmount.toString(),
+            expectedAmount: expectedAmount?.toString(),
             receivedAmount: receivedAmount.toString(),
+            totalAmountPaid: totalAmountPaid.toString(),
+            balanceDue: balanceDue?.toString(),
           },
         });
-
-        // Update transaction to require manual review
-        await prisma.transaction.update({
-          where: { id: transactionId },
-          data: {
-            status: 'DEPOSIT_PENDING',
-            currentStep: 'DEPOSIT_CONFIRMATION',
-          },
-        });
-
-        return;
       }
 
-      // Update deposit status
+      // Always update deposit status to SETTLED and persist balance on transaction
       await prisma.providusDeposit.update({
         where: { id: depositId },
-        data: {
-          status: ProvidusTransactionStatus.SETTLED,
-        },
+        data: { status: ProvidusTransactionStatus.SETTLED },
       });
 
-      // Update transaction status
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
-          status: 'DEPOSIT_CONFIRMED',
+          amountPaid: totalAmountPaid,
+          balanceDue: balanceDue,
+          status: isUnderpaid ? 'DEPOSIT_PENDING' : 'DEPOSIT_CONFIRMED',
           currentStep: 'DEPOSIT_CONFIRMATION',
         },
       });
@@ -263,7 +268,11 @@ export class DepositVerificationService {
           depositedAt: deposit.tranDateTime || new Date(),
           confirmedAt: new Date(),
           confirmedBy: 'SYSTEM',
-          notes: `Deposit verified via Providus. Session ID: ${deposit.sessionId}`,
+          notes: isUnderpaid
+            ? `Partial deposit via Providus. Session ID: ${deposit.sessionId}. Balance due: ₦${balanceDue!.toFixed(2)}`
+            : isOverpaid
+            ? `Deposit via Providus. Session ID: ${deposit.sessionId}. Surplus: ₦${Math.abs(balanceDue!).toFixed(2)}`
+            : `Deposit verified via Providus. Session ID: ${deposit.sessionId}`,
         },
       });
 
@@ -272,12 +281,15 @@ export class DepositVerificationService {
         data: {
           transactionId,
           step: 'DEPOSIT_CONFIRMATION',
-          status: 'COMPLETED',
+          status: isUnderpaid ? 'IN_PROGRESS' : 'COMPLETED',
           data: {
             depositId,
             sessionId: deposit.sessionId,
             amount: deposit.amount.toString(),
             settledAmount: deposit.settledAmount.toString(),
+            totalAmountPaid: totalAmountPaid.toString(),
+            balanceDue: balanceDue?.toString() ?? null,
+            paymentStatus: isUnderpaid ? 'UNDERPAID' : isOverpaid ? 'OVERPAID' : 'EXACT',
             sourceAccount: deposit.sourceAccountNumber,
           },
           completedAt: new Date(),

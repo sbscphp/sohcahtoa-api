@@ -123,8 +123,12 @@ router.post('/signup', authController.signup);
  *       429:
  *         description: Too many requests
  */
+// NIBSS Consent Hub callback (called by NIBSS after user authenticates on their portal)
+router.post('/nibss/callback', authController.nibssConsentCallback);
+
 // Nigerian signup flow (4 steps)
-router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1
+router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1: initiates consent, returns sessionId + consentUrl
+router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsentStatus); // Step 1b: poll until COMPLETED, returns verificationToken
 /**
  * @swagger
  * /api/auth/signup/nigerian/send-otp:
@@ -1870,6 +1874,192 @@ router.post('/verify-reset-otp', authController.verifyResetOtp);
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/reset-password', authController.resetPassword);
+
+/**
+ * @swagger
+ * /api/auth/tin/verify-individual:
+ *   post:
+ *     summary: Verify an individual's Tax Identification Number (TIN)
+ *     tags: [Authentication]
+ *     description: >
+ *       Validates an individual's TIN against the NIBSS Identity v2 API and returns
+ *       the taxpayer's full profile (name, DOB, tax authority, etc.).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tin
+ *             properties:
+ *               tin:
+ *                 type: string
+ *                 description: 8–14 digit Tax Identification Number
+ *                 example: "1003123575"
+ *     responses:
+ *       200:
+ *         description: TIN verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                     message:
+ *                       type: string
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         tin:
+ *                           type: string
+ *                         firstName:
+ *                           type: string
+ *                         middleName:
+ *                           type: string
+ *                         lastName:
+ *                           type: string
+ *                         phoneNo:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         dateOfBirth:
+ *                           type: string
+ *                         dateOfRegistration:
+ *                           type: string
+ *                         taxAuthority:
+ *                           type: string
+ *                         taxOffice:
+ *                           type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/tin/verify-individual', authController.verifyIndividualTin.bind(authController));
+
+/**
+ * @swagger
+ * /api/auth/tin/verify-corporate:
+ *   post:
+ *     summary: Verify a corporate entity's Tax Identification Number (TIN)
+ *     tags: [Authentication]
+ *     description: >
+ *       Validates a corporate TIN against the NIBSS Identity v2 API and returns
+ *       the entity's registration details (name, RC number, incorporation date, etc.).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - tin
+ *             properties:
+ *               tin:
+ *                 type: string
+ *                 description: 8–14 digit Tax Identification Number
+ *                 example: "1000001311"
+ *     responses:
+ *       200:
+ *         description: TIN verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                     message:
+ *                       type: string
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         tin:
+ *                           type: string
+ *                         registeredName:
+ *                           type: string
+ *                         registrationNumber:
+ *                           type: string
+ *                         phoneNo:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         dateOfIncorporation:
+ *                           type: string
+ *                         dateOfRegistration:
+ *                           type: string
+ *                         taxAuthority:
+ *                           type: string
+ *                         taxOffice:
+ *                           type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/tin/verify-corporate', authController.verifyCorporateTin.bind(authController));
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change customer password
+ *     description: Allows authenticated customers to change their password by providing the current password and a new password.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - oldPassword
+ *               - newPassword
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: Current password for verification
+ *                 example: "CurrentPass123!"
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 description: New password (must meet strength requirements)
+ *                 example: "NewSecurePass123!"
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Password updated successfully"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post('/change-password', authenticate, authController.changePassword);
 
 // Health check
 router.get('/health', authController.healthCheck);

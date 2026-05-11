@@ -102,6 +102,12 @@ AgentCustomerRouter.use(authenticate, authorize(UserRole.AGENT));
  *                       kycStatus:
  *                         type: string
  *                         enum: [NOT_STARTED, IN_PROGRESS, PENDING_VERIFICATION, VERIFIED, REJECTED]
+ *                       nin:
+ *                         type: string
+ *                         nullable: true
+ *                       bvn:
+ *                         type: string
+ *                         nullable: true
  *                 meta:
  *                   type: object
  *                   properties:
@@ -204,6 +210,9 @@ AgentCustomerRouter.get("/customers/stats", agentCustomerController.getCustomerS
  *                       type: object
  *                       properties:
  *                         idType:
+ *                           type: string
+ *                           nullable: true
+ *                         nin:
  *                           type: string
  *                           nullable: true
  *                         bvn:

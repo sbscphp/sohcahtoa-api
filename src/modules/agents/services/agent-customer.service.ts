@@ -63,6 +63,60 @@ export class AgentCustomerService {
     };
   }
 
+  async createTouristCustomerAccountForAgent(
+    data: { verificationToken: string; password: string },
+    agentUserId: string,
+  ): Promise<{ userId: string; message: string }> {
+    const agentUser = await prisma.user.findUnique({ where: { id: agentUserId } });
+    if (!agentUser || agentUser.role !== UserRole.AGENT) {
+      throw new ValidationError("Only agents can create customers");
+    }
+
+    const agent = await (prisma as any).agent.findUnique({
+      where: { email: agentUser.email },
+    });
+
+    if (!agent) {
+      throw new ValidationError("Agent profile not found");
+    }
+
+    const baseResult = await authService.createTouristAccount(data);
+
+    await (prisma as any).user.update({
+      where: { id: baseResult.userId },
+      data: { createdByAgentId: agent.id },
+    });
+
+    return baseResult;
+  }
+
+  async createExpatriateCustomerAccountForAgent(
+    data: { verificationToken: string; password: string },
+    agentUserId: string,
+  ): Promise<{ userId: string; message: string }> {
+    const agentUser = await prisma.user.findUnique({ where: { id: agentUserId } });
+    if (!agentUser || agentUser.role !== UserRole.AGENT) {
+      throw new ValidationError("Only agents can create customers");
+    }
+
+    const agent = await (prisma as any).agent.findUnique({
+      where: { email: agentUser.email },
+    });
+
+    if (!agent) {
+      throw new ValidationError("Agent profile not found");
+    }
+
+    const baseResult = await authService.createExpatriateAccount(data);
+
+    await (prisma as any).user.update({
+      where: { id: baseResult.userId },
+      data: { createdByAgentId: agent.id },
+    });
+
+    return baseResult;
+  }
+
   async listAgentCustomers(
     agentUserId: string,
     filters: AgentCustomerListFilters,
@@ -184,6 +238,8 @@ export class AgentCustomerService {
         lastTransactionType: (user.lastTransactionType as TransactionType | undefined) ?? null,
         registeredAt: user.createdAt.toISOString(),
         kycStatus: user.kyc?.status as KycStatus | undefined,
+        nin: user.kyc?.nin ?? null,
+        bvn: user.kyc?.bvn ?? null,
       };
     });
 
@@ -301,6 +357,7 @@ export class AgentCustomerService {
       totalTransactionsCompleted,
       idDetails: {
         idType,
+        nin: user.kyc?.nin ?? null,
         bvn: user.kyc?.bvn ?? null,
         tin: user.kyc?.tin ?? null,
         formAId,

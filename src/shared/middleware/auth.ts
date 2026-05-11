@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
 import { JwtPayload, UserRole } from '../types';
 import { UnauthorizedError, ForbiddenError } from '../utils/errors';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AuthMiddleware');
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
@@ -12,7 +15,7 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedError('No token provided');
+      return next(new UnauthorizedError('No token provided'));
     }
 
     const token = authHeader.substring(7);
@@ -20,8 +23,21 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
     req.user = decoded;
     next();
-  } catch (error) {
-    next(new UnauthorizedError('Invalid or expired token'));
+  } catch (error: any) {
+    const reason = error?.message;
+
+    if (reason === 'TOKEN_EXPIRED') {
+      logger.warn('Access token expired', { path: req.path, method: req.method });
+      return next(new UnauthorizedError('Token has expired. Please log in again.'));
+    }
+
+    if (reason === 'TOKEN_INVALID') {
+      logger.warn('Invalid access token (bad signature or malformed)', { path: req.path, method: req.method });
+      return next(new UnauthorizedError('Invalid token. Please log in again.'));
+    }
+
+    logger.warn('Token verification failed', { reason, path: req.path, method: req.method });
+    return next(new UnauthorizedError('Authentication failed. Please log in again.'));
   }
 };
 

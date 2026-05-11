@@ -17,6 +17,41 @@ export interface TinVerificationResult {
   error?: string;
 }
 
+export interface IndividualTinVerificationResult {
+  success: boolean;
+  data?: {
+    tin: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    phoneNo?: string;
+    email?: string;
+    dateOfBirth?: string;
+    dateOfRegistration?: string;
+    taxAuthority?: string;
+    taxOffice?: string | null;
+  };
+  message: string;
+  error?: string;
+}
+
+export interface CorporateTinVerificationResult {
+  success: boolean;
+  data?: {
+    tin: string;
+    registeredName?: string;
+    registrationNumber?: string;
+    phoneNo?: string | null;
+    email?: string | null;
+    dateOfIncorporation?: string;
+    dateOfRegistration?: string;
+    taxAuthority?: string;
+    taxOffice?: string | null;
+  };
+  message: string;
+  error?: string;
+}
+
 export class TinService {
   /**
    * Verify TIN (Tax Identification Number) using NIBSS API
@@ -186,6 +221,70 @@ export class TinService {
   }
 
   /**
+   * Verify Individual TIN using NIBSS Identity v2
+   */
+  async verifyIndividualTin(tin: string): Promise<IndividualTinVerificationResult> {
+    if (!this.validateTin(tin)) {
+      throw new ValidationError('Invalid TIN format. TIN must be 8-14 digits');
+    }
+
+    try {
+      logger.info('Initiating Individual TIN verification via NIBSS Identity v2', {
+        tin: `***${tin.slice(-4)}`,
+      });
+
+      if (!process.env.NIBSS_BIVS_CLIENT_ID || !process.env.NIBSS_BIVS_CLIENT_SECRET) {
+        throw new ValidationError('TIN verification service is not configured. Please contact support.');
+      }
+
+      const result = await nibssClient.verifyIndividualTin(tin);
+
+      if (!result.verified) {
+        logger.warn('Individual TIN verification failed', { tin: `***${tin.slice(-4)}`, message: result.message });
+        return { success: false, message: result.message, error: result.message };
+      }
+
+      logger.info('Individual TIN verified successfully', { tin: `***${tin.slice(-4)}` });
+      return { success: true, data: result.data, message: result.message };
+    } catch (error: any) {
+      logger.error('Individual TIN verification error', { tin: `***${tin.slice(-4)}`, error: error.message });
+      return { success: false, message: 'Individual TIN verification failed', error: error.message };
+    }
+  }
+
+  /**
+   * Verify Corporate TIN using NIBSS Identity v2
+   */
+  async verifyCorporateTin(tin: string): Promise<CorporateTinVerificationResult> {
+    if (!this.validateTin(tin)) {
+      throw new ValidationError('Invalid TIN format. TIN must be 8-14 digits');
+    }
+
+    try {
+      logger.info('Initiating Corporate TIN verification via NIBSS Identity v2', {
+        tin: `***${tin.slice(-4)}`,
+      });
+
+      if (!process.env.NIBSS_BIVS_CLIENT_ID || !process.env.NIBSS_BIVS_CLIENT_SECRET) {
+        throw new ValidationError('TIN verification service is not configured. Please contact support.');
+      }
+
+      const result = await nibssClient.verifyCorporateTin(tin);
+
+      if (!result.verified) {
+        logger.warn('Corporate TIN verification failed', { tin: `***${tin.slice(-4)}`, message: result.message });
+        return { success: false, message: result.message, error: result.message };
+      }
+
+      logger.info('Corporate TIN verified successfully', { tin: `***${tin.slice(-4)}` });
+      return { success: true, data: result.data, message: result.message };
+    } catch (error: any) {
+      logger.error('Corporate TIN verification error', { tin: `***${tin.slice(-4)}`, error: error.message });
+      return { success: false, message: 'Corporate TIN verification failed', error: error.message };
+    }
+  }
+
+  /**
    * Verify TIN with consent management
    *
    * @param tin - Tax Identification Number
@@ -211,13 +310,8 @@ export class TinService {
         purpose,
       });
 
-      // Request consent via NIBSS ConsentMgmt
-      const consentResponse = await nibssClient.requestConsent({
-        customerId: userId,
-        serviceType: 'TIN_VERIFICATION',
-        duration: 30, // 30 days
-        purpose,
-      });
+      // Request consent via NIBSS Consent Hub
+      const consentResponse = await nibssClient.initiateConsent(userId, 'YYYY', false);
 
       if (!consentResponse.success) {
         logger.warn('Consent request failed', {
@@ -234,7 +328,7 @@ export class TinService {
 
       logger.info('Consent obtained successfully', {
         userId,
-        consentId: consentResponse.consentId,
+        sessionId: consentResponse.sessionId,
       });
 
       // Proceed with TIN verification

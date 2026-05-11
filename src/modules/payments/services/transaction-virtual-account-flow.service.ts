@@ -22,15 +22,6 @@ export const DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_AGENT =
 
 export type VirtualAccountPathContext = 'customer' | 'agent';
 
-function recreateMessageGetVa(context: VirtualAccountPathContext): string {
-  return context === 'agent' ? DEFAULT_RECREATE_VA_MESSAGE_AGENT : DEFAULT_RECREATE_VA_MESSAGE_CUSTOMER;
-}
-
-function recreateMessageDeposit(context: VirtualAccountPathContext): string {
-  return context === 'agent'
-    ? DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_AGENT
-    : DEFAULT_RECREATE_VA_MESSAGE_DEPOSIT_CUSTOMER;
-}
 
 export class TransactionVirtualAccountFlowService {
   async assertTransactionBelongsToCustomer(transactionId: string, customerUserId: string) {
@@ -59,10 +50,33 @@ export class TransactionVirtualAccountFlowService {
       include: { profile: true },
     });
 
-    if (transaction.status !== 'APPROVED') {
+    const vaAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+    if (!vaAllowedStatuses.includes(transaction.status)) {
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
-        'Virtual account can only be created for approved transactions',
+        'Virtual account can only be created for approved or awaiting deposit transactions',
+        400
+      );
+    }
+
+    // Ensure all documents are verified before creating a virtual account
+    const unapprovedDocuments = await prisma.transactionDocument.findMany({
+      where: {
+        transactionId,
+        verificationStatus: { not: 'VERIFIED' },
+      },
+      select: { id: true, documentType: true, verificationStatus: true },
+    });
+
+    if (unapprovedDocuments.length > 0) {
+      logger.warn('Cannot create virtual account: not all documents are verified', {
+        transactionId,
+        customerUserId,
+        unapprovedDocuments,
+      });
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        'All documents must be approved before a virtual account can be created',
         400
       );
     }
@@ -172,10 +186,10 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     } catch (error) {
       if (error instanceof AppError && error.statusCode === 404) {
-        // Auto-create VA if transaction is approved but no VA exists yet
-        if (transaction.status === 'APPROVED') {
+        // Auto-create VA if transaction is approved or verification completed but no VA exists yet
+        if (transaction.status === 'APPROVED' || transaction.status === 'VERIFICATION_COMPLETED') {
           logger.info('No virtual account found for approved transaction, auto-creating', { transactionId, customerUserId });
-          const result = await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+          await this.createVirtualAccountForTransaction(customerUserId, transactionId);
           virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
         } else {
           throw new AppError(
@@ -192,7 +206,13 @@ export class TransactionVirtualAccountFlowService {
     const isExpired =
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
 
-    const expiredMsg = recreateMessageGetVa(pathContext);
+    const noPaymentMade = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'].includes(transaction.status);
+
+    if (isExpired && noPaymentMade) {
+      logger.info('Virtual account expired with no payment — regenerating', { transactionId, customerUserId });
+      await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
+    }
 
     return {
       accountNumber: virtualAccount.accountNumber,
@@ -201,7 +221,7 @@ export class TransactionVirtualAccountFlowService {
       status: virtualAccount.status,
       expiresAt: virtualAccount.expiresAt,
       createdAt: virtualAccount.createdAt,
-      isExpired,
+      isExpired: false,
       deposits: virtualAccount.deposits?.map((deposit: any) => ({
         id: deposit.id,
         amount: deposit.amount,
@@ -210,7 +230,6 @@ export class TransactionVirtualAccountFlowService {
         tranDateTime: deposit.tranDateTime,
         createdAt: deposit.createdAt,
       })),
-      ...(isExpired && { message: expiredMsg }),
     };
   }
 
@@ -221,7 +240,8 @@ export class TransactionVirtualAccountFlowService {
   ) {
     const transaction = await this.assertTransactionBelongsToCustomer(transactionId, customerUserId);
 
-    if (transaction.status !== 'APPROVED' && transaction.status !== 'AWAITING_DEPOSIT') {
+    const depositInstructionsAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+    if (!depositInstructionsAllowedStatuses.includes(transaction.status)) {
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
         'Deposit instructions not available yet. Please wait for transaction approval.',
@@ -247,7 +267,9 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount.expiresAt && new Date(virtualAccount.expiresAt) < new Date();
 
     if (isExpired) {
-      throw new AppError(ErrorCode.VALIDATION_ERROR, recreateMessageDeposit(pathContext), 400);
+      logger.info('Virtual account expired with no payment — regenerating for deposit instructions', { transactionId, customerUserId });
+      await this.createVirtualAccountForTransaction(customerUserId, transactionId);
+      virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     }
 
     return {
@@ -277,6 +299,17 @@ export class TransactionVirtualAccountFlowService {
     const deposits = await depositVerificationService.getTransactionDeposits(transactionId);
     const latestDeposit = deposits[0];
 
+    const depositConfirmedStatuses = [
+      'DEPOSIT_CONFIRMED',
+      'AWAITING_DISBURSEMENT',
+      'COMPLIANCE_REVIEW',
+      'ADMIN_APPROVAL_PENDING',
+      'APPROVED',
+      'DISBURSEMENT_IN_PROGRESS',
+      'PENDING_RECORD_VALIDATION',
+      'COMPLETED',
+    ];
+
     return {
       hasDeposit: deposits.length > 0,
       depositStatus: latestDeposit?.status || null,
@@ -284,7 +317,7 @@ export class TransactionVirtualAccountFlowService {
       depositDate: latestDeposit?.tranDateTime || null,
       transactionStatus: transaction.status,
       awaitingDeposit: transaction.status === 'AWAITING_DEPOSIT',
-      depositConfirmed: transaction.status === 'DEPOSIT_CONFIRMED',
+      depositConfirmed: depositConfirmedStatuses.includes(transaction.status),
     };
   }
 }

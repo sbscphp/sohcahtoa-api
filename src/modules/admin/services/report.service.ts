@@ -82,9 +82,9 @@ class ReportService {
       });
       const chunks: Buffer[] = [];
 
-      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", (err) => reject(err));
+      doc.on("error", (err: Error) => reject(err));
 
       // Colors
       const primaryColor = "#0f172a"; // Deep Navy

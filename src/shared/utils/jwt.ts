@@ -1,4 +1,4 @@
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt, { SignOptions, TokenExpiredError, JsonWebTokenError, NotBeforeError } from 'jsonwebtoken';
 import { JwtPayload } from '../types';
 
 const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-secret-key';
@@ -23,7 +23,14 @@ export const verifyAccessToken = (token: string): JwtPayload => {
   try {
     return jwt.verify(token, ACCESS_TOKEN_SECRET) as JwtPayload;
   } catch (error) {
-    throw new Error('Invalid or expired access token');
+    if (error instanceof TokenExpiredError) {
+      throw new Error('TOKEN_EXPIRED');
+    }
+    if (error instanceof NotBeforeError) {
+      throw new Error('TOKEN_NOT_YET_VALID');
+    }
+    // JsonWebTokenError — bad signature, malformed, wrong secret, etc.
+    throw new Error('TOKEN_INVALID');
   }
 };
 
@@ -31,7 +38,10 @@ export const verifyRefreshToken = (token: string): JwtPayload => {
   try {
     return jwt.verify(token, REFRESH_TOKEN_SECRET) as JwtPayload;
   } catch (error) {
-    throw new Error('Invalid or expired refresh token');
+    if (error instanceof TokenExpiredError) {
+      throw new Error('TOKEN_EXPIRED');
+    }
+    throw new Error('TOKEN_INVALID');
   }
 };
 

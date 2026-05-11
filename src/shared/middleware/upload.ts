@@ -68,10 +68,10 @@ export const uploadPassport = multer({
 
 /**
  * Upload middleware for multiple documents
- * Max files: 5
+ * Max files: 10
  * Max size per file: 5MB
  */
-export const uploadMultipleDocuments = multer({
+const _uploadMultipleDocuments = multer({
   storage,
   fileFilter: documentFilter,
   limits: {
@@ -79,6 +79,25 @@ export const uploadMultipleDocuments = multer({
     files: UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD,
   },
 }).array('documents', UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD);
+
+export const uploadMultipleDocuments = (req: any, res: any, next: any) => {
+  _uploadMultipleDocuments(req, res, (err: any) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(new ValidationError(`File too large. Max size is ${formatFileSize(UPLOAD_LIMITS.TRANSACTION_DOCUMENT)}`));
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return next(new ValidationError(`Too many files. Maximum ${UPLOAD_LIMITS.MAX_FILES_PER_UPLOAD} files allowed per upload`));
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return next(new ValidationError(`Unexpected file field. Use the field name 'documents'`));
+      }
+      return next(new ValidationError(err.message));
+    }
+    return next(err);
+  });
+};
 
 /**
  * Upload middleware for single document

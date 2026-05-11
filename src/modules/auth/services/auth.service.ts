@@ -45,6 +45,7 @@ import {
   VerifyAgentLoginRequest,
 } from '../../../shared/types';
 import bvnService from './bvn.service';
+import tinService from './tin.service';
 import passportVerificationService from './passport-verification.service';
 import auditService from '../../audit/services/audit.service';
 import { smsClient } from '../../../integrations';
@@ -289,11 +290,8 @@ export class AuthService {
     const response: AgentLoginOtpSentResponse = {
       message: 'OTP sent to your email',
       requiresVerification: true,
+      otp: otpResult.otp,
     };
-
-    if (process.env.NODE_ENV !== 'production') {
-      response.otp = otpResult.otp;
-    }
 
     return response;
   }
@@ -554,9 +552,57 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
-  // STEP 1: Verify BVN and return ONLY verification token
-  async verifyBvnForSignup(bvn: string): Promise<{
-    verificationToken: string;
+  async changeCustomerPassword(customerUserId: string, data: { oldPassword: string; newPassword: string }): Promise<{ message: string }> {
+    if (!data.oldPassword || !data.newPassword) {
+      throw new ValidationError('oldPassword and newPassword are required');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: customerUserId },
+      select: { email: true, role: true },
+    });
+
+    if (!user || user.role !== UserRole.CUSTOMER) {
+      throw new UnauthorizedError('Only customers can change customer passwords');
+    }
+
+    const userCredential = await prisma.userCredential.findUnique({
+      where: { userId: customerUserId },
+    });
+
+    if (!userCredential || !userCredential.passwordHash) {
+      throw new ValidationError('User password not set');
+    }
+
+    const isOldPasswordValid = await comparePassword(data.oldPassword, userCredential.passwordHash);
+    if (!isOldPasswordValid) {
+      throw new ValidationError('Current password is incorrect');
+    }
+
+    const hashed = await hashPassword(data.newPassword);
+
+    await prisma.userCredential.update({
+      where: { userId: customerUserId },
+      data: { passwordHash: hashed, lastPasswordChange: new Date() },
+    });
+
+    await prisma.session.updateMany({
+      where: { userId: customerUserId, isActive: true },
+      data: { isActive: false },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
+  // STEP 1: Initiate NIBSS consent for BVN — returns consentUrl for user to authenticate
+  async verifyBvnForSignup(bvn: string, phoneNumber?: string, email?: string): Promise<{
+    sessionId: string;
+    consentUrl: string;
     message: string;
   }> {
     // Check DB first — before any expensive external call
@@ -588,8 +634,10 @@ export class AuthService {
         throw new DuplicateError('An account with this BVN already exists');
       }
 
-      // User started but never finished — resume entirely from DB, no mock generation needed
+      // User started but never finished — restore data from DB and issue a fake sessionId
+      // to let them skip consent and go straight to the OTP step
       const storedUser = existingKyc.user;
+      const resumeSessionId = `resume:${generateId()}`;
       const verificationToken = generateId();
       const cacheKey = `bvn:verification:${verificationToken}`;
       const resumedBvnData = {
@@ -605,44 +653,124 @@ export class AuthService {
         gender: null,
       };
       await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedBvnData));
+      // Mark consent session as already completed so status-check works immediately
+      const consentKey = `bvn:consent:${resumeSessionId}`;
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({
+        bvn, phoneNumber, email,
+        status: 'COMPLETED',
+        verificationToken,
+      }));
 
       return {
-        verificationToken,
-        message: 'BVN recognised. Your previous verification session has been restored. Use the verification token to continue.',
+        sessionId: resumeSessionId,
+        consentUrl: '',
+        message: 'BVN recognised. Your previous verification session has been restored.',
       };
     }
 
-    // New BVN — call the verification service to generate/fetch user data
-    const bvnResult = await bvnService.verifyBvn(bvn);
+    // New BVN — initiate Consent Hub flow
+    const consentResult = await bvnService.initiateConsentForBvn(bvn);
 
-    if (!bvnResult.success || !bvnResult.data) {
-      throw new ValidationError(bvnResult.message || 'BVN verification failed');
+    if (!consentResult.success || !consentResult.sessionId || !consentResult.consentUrl) {
+      throw new ValidationError(consentResult.message || 'BVN consent initiation failed');
     }
 
-    // Generate a verification token to track this BVN verification session
-    const verificationToken = generateId();
-
-    // Store full BVN data in Redis with 30-minute expiry for later verification steps
-    // This keeps sensitive data server-side only
-    const cacheKey = `bvn:verification:${verificationToken}`;
-    const bvnData = {
+    // Persist the pending consent session in Redis (30 min TTL)
+    const consentKey = `bvn:consent:${consentResult.sessionId}`;
+    await redis.setex(consentKey, 30 * 60, JSON.stringify({
       bvn,
+      phoneNumber,
+      email,
+      status: 'PENDING',
+    }));
+
+    return {
+      sessionId: consentResult.sessionId,
+      consentUrl: consentResult.consentUrl,
+      message: 'BVN consent initiated. Please authenticate on the NIBSS portal to continue.',
+    };
+  }
+
+  // NIBSS Callback: called when NIBSS POSTs the retrievalToken after user authenticates
+  async handleNibssConsentCallback(sessionId: string, retrievalToken: string): Promise<void> {
+    const consentKey = `bvn:consent:${sessionId}`;
+    const cached = await redis.get(consentKey);
+
+    if (!cached) {
+      logger.warn('NIBSS callback received for unknown/expired session', { sessionId });
+      return;
+    }
+
+    const session = JSON.parse(cached);
+
+    if (session.status === 'COMPLETED') {
+      logger.info('NIBSS callback already processed', { sessionId });
+      return;
+    }
+
+    logger.info('Processing NIBSS consent callback', { sessionId });
+
+    const bvnResult = await bvnService.verifyBvnWithRetrievalToken(session.bvn, retrievalToken);
+
+    if (!bvnResult.success || !bvnResult.data) {
+      logger.error('FAS BVN verification failed in callback', { sessionId, message: bvnResult.message });
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
+      return;
+    }
+
+    // Store verified BVN data under a new verificationToken for the OTP step
+    const verificationToken = generateId();
+    const verificationKey = `bvn:verification:${verificationToken}`;
+    await redis.setex(verificationKey, 30 * 60, JSON.stringify({
+      bvn: session.bvn,
       firstName: bvnResult.data.firstName,
       lastName: bvnResult.data.lastName,
-      email: bvnResult.data.email!,
-      phoneNumber: bvnResult.data.phoneNumber,
+      middleName: bvnResult.data.middleName,
       dateOfBirth: bvnResult.data.dateOfBirth,
-      address: bvnResult.data.address,
       gender: bvnResult.data.gender,
-    };
-    await redis.setex(cacheKey, 30 * 60, JSON.stringify(bvnData)); // 30 minutes
+      email: bvnResult.data.email || session.email,
+      phoneNumber: bvnResult.data.phoneNumber || session.phoneNumber,
+      address: bvnResult.data.residentialAddress || null,
+    }));
 
-    // Return ONLY verification token to frontend
-    // All sensitive data remains server-side in Redis
-    return {
-      verificationToken, // Client must send this token in subsequent steps
-      message: 'BVN verified successfully. Use the verification token to proceed.',
-    };
+    // Update consent session to COMPLETED with the verificationToken
+    await redis.setex(consentKey, 30 * 60, JSON.stringify({
+      ...session,
+      status: 'COMPLETED',
+      verificationToken,
+    }));
+
+    logger.info('NIBSS consent callback processed successfully', { sessionId, verificationToken });
+  }
+
+  // Poll endpoint: frontend uses sessionId to know when consent is done
+  async checkBvnConsentStatus(sessionId: string): Promise<{
+    status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    verificationToken?: string;
+    message: string;
+  }> {
+    const consentKey = `bvn:consent:${sessionId}`;
+    const cached = await redis.get(consentKey);
+
+    if (!cached) {
+      return { status: 'FAILED', message: 'Session expired or not found. Please restart BVN verification.' };
+    }
+
+    const session = JSON.parse(cached);
+
+    if (session.status === 'COMPLETED') {
+      return {
+        status: 'COMPLETED',
+        verificationToken: session.verificationToken,
+        message: 'BVN verified successfully. Use the verification token to proceed.',
+      };
+    }
+
+    if (session.status === 'FAILED') {
+      return { status: 'FAILED', message: session.errorMessage || 'BVN verification failed.' };
+    }
+
+    return { status: 'PENDING', message: 'Awaiting user consent on NIBSS portal.' };
   }
 
   // STEP 2: Send OTP using verification token, return details from Redis
@@ -1687,29 +1815,81 @@ export class AuthService {
   async verifyKyc(data: KycVerificationRequest): Promise<{ message: string }> {
     const user = await prisma.user.findUnique({
       where: { id: data.userId },
-      include: { kyc: true },
+      include: { kyc: true, profile: true },
     });
 
     if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    // Update KYC data
+    const kycUpdate: Record<string, any> = {
+      passportNumber: data.passportNumber,
+      status: KycStatus.PENDING_VERIFICATION,
+    };
+
+    // Verify BVN via FAS boolean check (matches BVN against user's profile fields)
+    if (data.bvn) {
+      logger.info('Verifying BVN via FAS in verifyKyc', {
+        userId: data.userId,
+        bvn: `***${data.bvn.slice(-4)}`,
+      });
+
+      const profile = (user as any).profile;
+      const bvnResult = await bvnService.verifyBvnBoolean(data.bvn, {
+        firstname:  profile?.firstName || '',
+        lastname:   profile?.lastName  || '',
+        middlename: profile?.middleName,
+        dob:        profile?.dateOfBirth
+          ? new Date(profile.dateOfBirth).toISOString().split('T')[0]
+          : undefined,
+      });
+
+      if (!bvnResult.success) {
+        throw new ValidationError(bvnResult.message || 'BVN verification failed');
+      }
+
+      kycUpdate.bvn = data.bvn;
+      kycUpdate.bvnVerified = true;
+
+      logger.info('BVN verified successfully in verifyKyc', { userId: data.userId });
+    }
+
+    // Verify TIN via NIBSS BIVS if provided
+    if (data.tin) {
+      logger.info('Verifying TIN via NIBSS in verifyKyc', {
+        userId: data.userId,
+        tin: `***${data.tin.slice(-4)}`,
+      });
+
+      const tinResult = await tinService.verifyTin(data.tin);
+
+      if (!tinResult.success) {
+        throw new ValidationError(tinResult.message || 'TIN verification failed');
+      }
+
+      kycUpdate.tin = data.tin;
+      kycUpdate.tinVerified = true;
+
+      logger.info('TIN verified successfully in verifyKyc', { userId: data.userId });
+    }
+
     await prisma.userKyc.update({
       where: { userId: data.userId },
-      data: {
-        bvn: data.bvn,
-        tin: data.tin,
-        passportNumber: data.passportNumber,
-        status: KycStatus.PENDING_VERIFICATION,
+      data: kycUpdate,
+    });
+
+    auditService.logAuthEvent({
+      userId: data.userId,
+      action: 'KYC_VERIFIED' as any,
+      success: true,
+      metadata: {
+        bvnVerified: !!data.bvn,
+        tinVerified: !!data.tin,
       },
     });
 
-    // TODO: Call external verification APIs (CBN TRMS, BVN verification, etc.)
-    // For now, we'll just update the status
-
     return {
-      message: 'KYC verification initiated',
+      message: 'KYC verification completed successfully',
     };
   }
 

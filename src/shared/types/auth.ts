@@ -101,6 +101,11 @@ export interface CreateAgentPasswordRequest {
   confirmPassword: string;
 }
 
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
 export interface AgentPasswordPromptResponse {
   message: string;
   requiresPasswordSet: true;
@@ -145,6 +150,8 @@ export interface AgentCustomerSummary {
   lastTransactionType?: TransactionType | null;
   registeredAt: string;
   kycStatus?: KycStatus;
+  nin?: string | null;
+  bvn?: string | null;
 }
 
 export interface AgentCustomerListMeta {
@@ -161,6 +168,7 @@ export interface AgentCustomerListResponse {
 
 export interface CustomerIdDetails {
   idType: string | null;
+  nin: string | null;
   bvn: string | null;
   tin: string | null;
   formAId: string | null;

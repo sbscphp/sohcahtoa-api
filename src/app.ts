@@ -28,6 +28,7 @@ import providusWebhookRoutes from './modules/payments/routes/providus-webhook.ro
 import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.routes';
 import customerVirtualAccountRoutes from './modules/customer/routes/customer-virtual-account.routes';
 import settlementManagementRoutes from './modules/admin/routes/settlement-management.routes';
+import simulationPaymentRoutes from './modules/payments/routes/simulation-payment.routes';
 
 const logger = createLogger('app');
 
@@ -150,6 +151,10 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/agent/dashboard', AgentDashboardRouter)
   logger.info('Settlement management routes registered');
+
+  // Simulation endpoints — only active when PROVIDUS_SIMULATION_MODE=true
+  app.use('/api/simulate/payments', simulationPaymentRoutes);
+  logger.info('Simulation payment routes registered');
 
   // 404 handler
   app.use((req: Request, res: Response) => {

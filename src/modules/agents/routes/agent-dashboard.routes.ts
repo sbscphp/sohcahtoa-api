@@ -228,4 +228,98 @@ AgentDashboardRouter.get("/transactions-by-type", agentDashboardController.getTr
  */
 AgentDashboardRouter.get("/cash-stats", agentDashboardController.getCashStats);
 
+/**
+ * @swagger
+ * /api/agent/dashboard/balance:
+ *   get:
+ *     summary: Agent balance dashboard
+ *     description: |
+ *       Comprehensive balance overview for the agent showing opening balance, total received,
+ *       total disbursed, and current balance for the specified period and currency.
+ *       
+ *       **Opening Balance:** Net cash position at the start of the period (received - disbursed before period start)
+ *       **Total Received:** All cash inflows during the period from customers and admin
+ *       **Total Disbursed:** All cash outflows during the period for transaction settlements
+ *       **Current Balance:** Opening balance + received - disbursed
+ *       
+ *       All amounts are in the specified currency.
+ *     tags: [Agent Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: period
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - last_month
+ *             - last_3_months
+ *             - last_6_months
+ *             - last_year
+ *         description: |
+ *           Time period for balance calculation. last_month = previous full calendar month (UTC).
+ *           Other periods roll back from now (90/180/365 days).
+ *       - in: query
+ *         name: currency
+ *         required: false
+ *         schema:
+ *           type: string
+ *           default: NGN
+ *         description: Reporting currency for all amounts
+ *     responses:
+ *       200:
+ *         description: Balance dashboard data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     currency:
+ *                       type: string
+ *                       example: NGN
+ *                     currencyName:
+ *                       type: string
+ *                       example: Nigerian Naira
+ *                     period:
+ *                       type: object
+ *                       properties:
+ *                         preset:
+ *                           type: string
+ *                           example: last_month
+ *                         start:
+ *                           type: string
+ *                           format: date-time
+ *                         end:
+ *                           type: string
+ *                           format: date-time
+ *                     openingBalance:
+ *                       type: number
+ *                       description: Net balance at start of period
+ *                       example: 150000.00
+ *                     totalReceived:
+ *                       type: number
+ *                       description: Total cash received during period
+ *                       example: 50000.00
+ *                     totalDisbursed:
+ *                       type: number
+ *                       description: Total cash disbursed during period
+ *                       example: 30000.00
+ *                     currentBalance:
+ *                       type: number
+ *                       description: Current balance (opening + received - disbursed)
+ *                       example: 170000.00
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentDashboardRouter.get("/balance", agentDashboardController.getBalanceDashboard);
+
 export default AgentDashboardRouter;

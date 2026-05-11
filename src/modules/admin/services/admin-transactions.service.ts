@@ -261,6 +261,10 @@ export class AdminTransactionsService {
         ? "Rejected"
         : trx.status === TransactionStatus.APPROVED
         ? "Approved"
+        : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
+        ? "Pending Record Validation"
+        : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
+        ? "Disbursement In Progress"
         : "Pending";
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
@@ -462,6 +466,8 @@ export class AdminTransactionsService {
         bvnNumber: maskedBvn,
         numberOfDocuments: docCount,
         pickupLocation: pickup?.pickupLocation || null,
+        scheduledPickupDate: pickup?.scheduledPickupDate || null,
+        scheduledPickupTime: pickup?.scheduledPickupTime || null,
       },
       workflowLine,
       raw: { ...(trx as any), history: decoratedHistory },

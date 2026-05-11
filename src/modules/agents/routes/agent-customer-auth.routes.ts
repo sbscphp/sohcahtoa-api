@@ -477,4 +477,318 @@ AgentCustomerAuthRouter.post(
   agentCustomerController.createCustomerAccount,
 );
 
+// ─── Tourist passport flow ────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/tourist/verify-passport:
+ *   post:
+ *     summary: Step 1 - Verify tourist passport for agent-created customer
+ *     description: >
+ *       Upload and OCR a passport document to start the tourist onboarding flow
+ *       under an agent. Returns a verification token valid for 30 minutes.
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - passportDocumentUrl
+ *             properties:
+ *               passportDocumentUrl:
+ *                 type: string
+ *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
+ *                 example: "https://cloudinary.com/passport/abc123.jpg"
+ *               passportNumber:
+ *                 type: string
+ *                 description: Optional passport number for faster lookup
+ *                 example: "A12345678"
+ *     responses:
+ *       200:
+ *         description: Passport verified successfully
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+AgentCustomerAuthRouter.post('/tourist/verify-passport', authController.verifyPassport);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/tourist/send-otp:
+ *   post:
+ *     summary: Step 2 - Send OTP for agent-created tourist customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ */
+AgentCustomerAuthRouter.post('/tourist/send-otp', authController.sendPassportOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/tourist/resend-otp:
+ *   post:
+ *     summary: Resend OTP for agent-created tourist customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ */
+AgentCustomerAuthRouter.post('/tourist/resend-otp', authController.sendPassportOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/tourist/validate-otp:
+ *   post:
+ *     summary: Step 3 - Validate OTP for agent-created tourist customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - otp
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP validated successfully
+ */
+AgentCustomerAuthRouter.post('/tourist/validate-otp', authController.validatePassportOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/tourist/create-account:
+ *   post:
+ *     summary: Step 4 - Create tourist customer account under an agent
+ *     description: >
+ *       Creates a tourist account using the passport verification token and links
+ *       it to the authenticated agent.
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - password
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from Step 1
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *     responses:
+ *       201:
+ *         description: Tourist customer account created and linked to agent
+ */
+AgentCustomerAuthRouter.post('/tourist/create-account', agentCustomerController.createTouristCustomerAccount);
+
+// ─── Expatriate passport flow ─────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/expatriate/verify-passport:
+ *   post:
+ *     summary: Step 1 - Verify expatriate passport for agent-created customer
+ *     description: >
+ *       Upload and OCR a passport document to start the expatriate onboarding flow
+ *       under an agent. Returns a verification token valid for 30 minutes.
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - passportDocumentUrl
+ *             properties:
+ *               passportDocumentUrl:
+ *                 type: string
+ *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
+ *                 example: "https://cloudinary.com/passport/abc123.jpg"
+ *               passportNumber:
+ *                 type: string
+ *                 description: Optional passport number for faster lookup
+ *                 example: "A12345678"
+ *     responses:
+ *       200:
+ *         description: Passport verified successfully
+ */
+AgentCustomerAuthRouter.post('/expatriate/verify-passport', authController.verifyExpatriatePassport);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/expatriate/send-otp:
+ *   post:
+ *     summary: Step 2 - Send OTP for agent-created expatriate customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ */
+AgentCustomerAuthRouter.post('/expatriate/send-otp', authController.sendExpatriateOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/expatriate/resend-otp:
+ *   post:
+ *     summary: Resend OTP for agent-created expatriate customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - verificationType
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               verificationType:
+ *                 type: string
+ *                 enum: [phone, email]
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ */
+AgentCustomerAuthRouter.post('/expatriate/resend-otp', authController.sendExpatriateOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/expatriate/validate-otp:
+ *   post:
+ *     summary: Step 3 - Validate OTP for agent-created expatriate customer
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - otp
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP validated successfully
+ */
+AgentCustomerAuthRouter.post('/expatriate/validate-otp', authController.validateExpatriateOtp);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/expatriate/create-account:
+ *   post:
+ *     summary: Step 4 - Create expatriate customer account under an agent
+ *     description: >
+ *       Creates an expatriate account using the passport verification token and links
+ *       it to the authenticated agent.
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - verificationToken
+ *               - password
+ *             properties:
+ *               verificationToken:
+ *                 type: string
+ *                 description: Verification token from Step 1
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *     responses:
+ *       201:
+ *         description: Expatriate customer account created and linked to agent
+ */
+AgentCustomerAuthRouter.post('/expatriate/create-account', agentCustomerController.createExpatriateCustomerAccount);
+
 export default AgentCustomerAuthRouter;

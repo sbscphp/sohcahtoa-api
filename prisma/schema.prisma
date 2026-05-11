@@ -125,10 +125,12 @@ enum TransactionStatus {
   AWAITING_DEPOSIT
   DEPOSIT_PENDING
   DEPOSIT_CONFIRMED
+  AWAITING_DISBURSEMENT
   COMPLIANCE_REVIEW
   ADMIN_APPROVAL_PENDING
   APPROVED
   DISBURSEMENT_IN_PROGRESS
+  PENDING_RECORD_VALIDATION
   COMPLETED
   REJECTED
   CANCELLED
@@ -187,6 +189,7 @@ enum DocumentType {
   PROOF_OF_FUNDS
   SOURCE_OF_FUNDS_DECLARATION
   DIGITAL_SIGNATURE
+  BANK_VERIFICATION
 }
 
 // Payment Service
@@ -799,6 +802,8 @@ model Transaction {
   formAId            String?
   nairaEquivalent    Decimal?            @db.Decimal(18, 2)
   exchangeRate       Decimal?            @db.Decimal(18, 6)
+  amountPaid         Decimal?            @db.Decimal(18, 2) // Cumulative amount received so far
+  balanceDue         Decimal?            @db.Decimal(18, 2) // Positive = underpaid (still owed), Negative = overpaid (credit)
   disbursementMethod DisbursementMethod?
   taxClearanceNumber String?
   createdAt          DateTime            @default(now())

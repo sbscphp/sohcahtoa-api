@@ -1027,6 +1027,62 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                       type: object
  *                       nullable: true
  *                       description: Cash pickup details — present only for CASH_REMITTANCE transactions
+                       properties:
+                         id:
+                           type: string
+                           format: uuid
+                         transactionId:
+                           type: string
+                           format: uuid
+                         pickupLocation:
+                           type: string
+                         pickupLocationId:
+                           type: string
+                           nullable: true
+                         pickupState:
+                           type: string
+                           nullable: true
+                         pickupCity:
+                           type: string
+                           nullable: true
+                         pickupCode:
+                           type: string
+                         recipientName:
+                           type: string
+                           nullable: true
+                         recipientPhone:
+                           type: string
+                           nullable: true
+                         amount:
+                           type: number
+                         currency:
+                           type: string
+                         status:
+                           type: string
+                         scheduledPickupDate:
+                           type: string
+                           format: date
+                           nullable: true
+                           description: Scheduled pickup date in YYYY-MM-DD format
+                           example: "2026-03-15"
+                         scheduledPickupTime:
+                           type: string
+                           nullable: true
+                           description: Scheduled pickup time in HH:mm format
+                           example: "14:00"
+                         expiryDate:
+                           type: string
+                           format: date-time
+                         pickedUpAt:
+                           type: string
+                           format: date-time
+                           nullable: true
+                         createdAt:
+                           type: string
+                           format: date-time
+                         updatedAt:
+                           type: string
+                           format: date-time
  *                     prepaidCard:
  *                       type: object
  *                       nullable: true
