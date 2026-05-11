@@ -180,6 +180,8 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
       persistAuthorization: true,
       displayRequestDuration: true,
       tryItOutEnabled: true,
+      docExpansion: 'none',
+      filter: true,
     },
     customCss: '.swagger-ui .topbar { display: none }',
     customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.0.0/swagger-ui.min.css',

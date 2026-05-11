@@ -1,0 +1,9 @@
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "sochatoa_db", schema "public" at "postgres:5432"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 374ms
+

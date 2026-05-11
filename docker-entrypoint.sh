@@ -207,6 +207,15 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Add foreign key constraint for transactions.userId if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_userId_fkey') THEN
+    ALTER TABLE "transactions"
+      ADD CONSTRAINT "transactions_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdByAgentId" TEXT;
 CREATE INDEX IF NOT EXISTS "tickets_createdByAgentId_idx" ON "tickets"("createdByAgentId");
 DO $$ BEGIN
@@ -228,7 +237,17 @@ DO $$ BEGIN
 END $$;
 
 ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
-
+ 
+-- Add sequenceId to admin_users if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'admin_users' AND column_name = 'sequenceId') THEN
+    ALTER TABLE "admin_users" ADD COLUMN "sequenceId" SERIAL;
+    -- Ensure it's unique
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_users_sequenceId_key') THEN
+      ALTER TABLE "admin_users" ADD CONSTRAINT "admin_users_sequenceId_key" UNIQUE ("sequenceId");
+    END IF;
+  END IF;
+END $$;
 -- Ensure escrow accounts table exists (migration fallback)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'EscrowAccountStatus') THEN

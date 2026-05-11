@@ -9,11 +9,13 @@ export enum WorkflowProcessType {
 }
 
 export interface WorkflowAssigneeDto {
+  id?: string;
   adminId: string;
   order?: number;
 }
 
 export interface WorkflowStageDto {
+  id?: string;
   name?: string;
   type?: WorkflowType;
   escalationMinutes?: number;

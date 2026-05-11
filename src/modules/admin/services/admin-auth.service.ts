@@ -406,6 +406,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     const user = await this.prisma.adminUser.findUnique({ where: { email } });
     if (!user) throw new NotFoundError("User not found");
     if (!user.password) throw new UnauthorizedError("Password not set. Please complete registration first.");
+    if (!user.isActive) throw new UnauthorizedError("Account is deactivated. Please contact the administrator.");
 
     const isPasswordValid = await comparePassword(password, user.password);
     if (!isPasswordValid) throw new UnauthorizedError("Invalid password");
@@ -447,6 +448,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
       where: { email },
       select: {
         id: true,
+        sequenceId: true,
         email: true,
         fullName: true,
         phoneNumber: true,
@@ -483,6 +485,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
       },
     });
     if (!user) throw new NotFoundError("User not found");
+    if (!user.isActive) throw new UnauthorizedError("Account is deactivated. Please contact the administrator.");
 
     const tokenRecord = await this.prisma.token.findFirst({
       where: {
