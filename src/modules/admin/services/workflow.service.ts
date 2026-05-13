@@ -594,19 +594,33 @@ export class WorkflowService {
       
       const tBranchId = t.branchId || null;
       const pBranchId = params.branchId || null;
-      if (tBranchId === pBranchId && pBranchId !== null) score += 10;
-      else if (tBranchId !== null && tBranchId !== pBranchId) score -= 100;
+      if (tBranchId === pBranchId && pBranchId !== null) {
+        score += 10;
+      } else if (tBranchId !== null && tBranchId !== pBranchId) {
+        if (pBranchId === null) {
+           score -= 1; // Soft penalty for customer transactions
+        } else {
+           score -= 100; // Hard mismatch for different branch
+        }
+      }
 
       const tDeptId = t.departmentId || null;
       const pDeptId = params.departmentId || null;
-      if (tDeptId === pDeptId && pDeptId !== null) score += 5;
-      else if (tDeptId !== null && tDeptId !== pDeptId) score -= 100;
+      if (tDeptId === pDeptId && pDeptId !== null) {
+        score += 5;
+      } else if (tDeptId !== null && tDeptId !== pDeptId) {
+        if (pDeptId === null) {
+           score -= 1; // Soft penalty
+        } else {
+           score -= 100; // Hard mismatch
+        }
+      }
 
       return { t, score };
     });
 
     const best = scored.sort((a: any, b: any) => b.score - a.score)[0];
-    return best.score >= 0 ? best.t : null;
+    return best && best.score > -100 ? best.t : null;
   }
 
   /**

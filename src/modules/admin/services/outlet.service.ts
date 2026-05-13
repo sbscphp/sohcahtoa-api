@@ -1023,7 +1023,10 @@ class OutletService {
   async getBranch(id: string) {
     const branch = await db.branch.findUnique({ where: { id } });
     if (!branch) return null;
-    return branch;
+    
+    const totalAgents = await db.agent.count({ where: { branchId: id } });
+    
+    return { ...branch, totalAgents };
   }
 
   async updateBranch(
