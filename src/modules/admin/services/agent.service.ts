@@ -10,13 +10,12 @@ const prisma: PrismaClient = getDatabase();
 class AgentService {
   async stats() {
     const client: any = prisma as any;
-    const [total, active, deactivated, pendingApproval] = await Promise.all([
+    const [total, active, deactivated] = await Promise.all([
       client.agent.count(),
-      client.agent.count({ where: { isActive: true, isApproved: true } }),
-      client.agent.count({ where: { isActive: false, isApproved: true } }),
-      client.agent.count({ where: { isApproved: false } }),
+      client.agent.count({ where: { isActive: true } }),
+      client.agent.count({ where: { isActive: false } }),
     ]);
-    return { total, active, deactivated, pendingApproval };
+    return { total, active, deactivated, pendingApproval: 0 };
   }
 
   private async getAgentWhereClause(filters: any = {}) {
@@ -27,11 +26,10 @@ class AgentService {
     const statusRaw = (filters.status ?? filters.isActive ?? "").toString().trim().toLowerCase();
     if (statusRaw === "active") {
       where.isActive = true;
-      where.isApproved = true;
     } else if (statusRaw === "deactivated") {
       where.isActive = false;
     } else if (statusRaw === "pending") {
-      where.isApproved = false;
+      where.isActive = true; // Fallback so we don't break existing queries entirely, but technically pending doesn't exist.
     } else if (statusRaw === "true") {
       where.isActive = true;
     } else if (statusRaw === "false") {
@@ -178,7 +176,7 @@ class AgentService {
       return {
         ...agentWithoutBranchObj,
         branchName,
-        status: !a.isApproved ? "Pending" : a.isActive ? "Active" : "Deactivated",
+        status: a.isActive ? "Active" : "Deactivated",
         totalTransactions: totals.count,
         totalTransactionsVolume: totals.volume,
       };
@@ -234,7 +232,7 @@ class AgentService {
           contactEmail: a.email,
           totalTransactions: count,
           transactionVolume: vol,
-          status: !a.isApproved ? "Pending" : a.isActive ? "Active" : "Deactivated",
+          status: a.isActive ? "Active" : "Deactivated",
         };
       })
     );
@@ -299,7 +297,7 @@ class AgentService {
     const volPickup = Number((sumPickupAgg as any)?._sum?.amount || 0);
     const totalTransactionsVolume = volNaira + volForeign + volPickup;
     const { branchId: _omit, ...rest } = agent as any;
-    const status = !agent.isApproved ? "Pending" : agent.isActive ? "Active" : "Deactivated";
+    const status = agent.isActive ? "Active" : "Deactivated";
     return { ...rest, status, totalTransactions, totalTransactionsVolume };
   }
 
@@ -463,7 +461,7 @@ class AgentService {
         email: data.email,
         phoneNumber: data.phoneNumber,
         branchId: foundBranch.id,
-        isApproved: false,
+        isApproved: true,
         attachments: data.attachment
           ? {
               create: {
