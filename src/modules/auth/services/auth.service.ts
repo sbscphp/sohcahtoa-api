@@ -49,6 +49,7 @@ import tinService from './tin.service';
 import passportVerificationService from './passport-verification.service';
 import auditService from '../../audit/services/audit.service';
 import { smsClient } from '../../../integrations';
+import walletService from '../../wallet/services/wallet.service';
 
 const prisma = getDatabase();
 
@@ -109,6 +110,11 @@ export class AuthService {
         },
       },
     });
+
+    // Create transient wallet for customer
+    walletService.createWallet(user.id).catch((err) =>
+      logger.error('Failed to create wallet on signup', { userId: user.id, error: err.message }),
+    );
 
     // Publish event
     eventBus.publish(EventType.USER_REGISTERED, {
@@ -1027,6 +1033,11 @@ export class AuthService {
     // Delete the verification token from cache after successful account creation
     await redis.del(cacheKey);
 
+    // Create transient wallet for customer
+    walletService.createWallet(user.id).catch((err) =>
+      logger.error('Failed to create wallet on Nigerian signup', { userId: user.id, error: err.message }),
+    );
+
     // Send welcome email
     if (emailService.isReady()) {
       await emailService.sendWelcomeEmail(bvnData.email, bvnData.firstName);
@@ -1430,6 +1441,11 @@ export class AuthService {
     // Delete the verification token from cache after successful account creation
     await redis.del(cacheKey);
 
+    // Create transient wallet for customer
+    walletService.createWallet(user.id).catch((err) =>
+      logger.error('Failed to create wallet on tourist signup', { userId: user.id, error: err.message }),
+    );
+
     // Send welcome email
     if (emailService.isReady()) {
       await emailService.sendWelcomeEmail(passportData.email, passportData.firstName);
@@ -1570,6 +1586,11 @@ export class AuthService {
       },
       kycType: 'PASSPORT',
     });
+
+    // Create transient wallet for customer
+    walletService.createWallet(user.id).catch((err) =>
+      logger.error('Failed to create wallet on expatriate signup', { userId: user.id, error: err.message }),
+    );
 
     auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { customerType: 'EXPATRIATE', passportVerified: true } });
 

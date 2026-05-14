@@ -1611,6 +1611,63 @@ model SecurityEvent {
   @@map("security_events")
 }
 
+// ========================================
+// WALLET SERVICE MODELS
+// ========================================
+
+enum WalletEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum WalletEntryStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+model CustomerWallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
+  currency  String   @default("NGN")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries WalletEntry[]
+
+  @@index([userId])
+  @@map("customer_wallets")
+}
+
+model WalletEntry {
+  id             String            @id @default(uuid())
+  walletId       String
+  transactionId  String?           // Soft reference only — not a FK
+  transactionRef String?           // Human-readable reference number
+  sessionId      String?           // Providus session ID for traceability
+  type           WalletEntryType
+  amount         Decimal           @db.Decimal(18, 2)
+  balanceBefore  Decimal           @db.Decimal(18, 2)
+  balanceAfter   Decimal           @db.Decimal(18, 2)
+  description    String?
+  status         WalletEntryStatus @default(COMPLETED)
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  wallet CustomerWallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([transactionId])
+  @@index([sessionId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("wallet_entries")
+}
+
 enum ReportFormat {
   CSV
   PDF

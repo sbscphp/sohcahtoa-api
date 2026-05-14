@@ -29,6 +29,8 @@ import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.ro
 import customerVirtualAccountRoutes from './modules/customer/routes/customer-virtual-account.routes';
 import settlementManagementRoutes from './modules/admin/routes/settlement-management.routes';
 import simulationPaymentRoutes from './modules/payments/routes/simulation-payment.routes';
+import customerWalletRoutes from './modules/wallet/routes/customer-wallet.routes';
+import adminWalletRoutes from './modules/wallet/routes/admin-wallet.routes';
 
 const logger = createLogger('app');
 
@@ -151,6 +153,12 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/agent/dashboard', AgentDashboardRouter)
   logger.info('Settlement management routes registered');
+
+  app.use('/api/customer/wallet', customerWalletRoutes);
+  logger.info('Customer wallet routes registered');
+
+  app.use('/api/admin/wallets', adminWalletRoutes);
+  logger.info('Admin wallet routes registered');
 
   // Simulation endpoints — only active when PROVIDUS_SIMULATION_MODE=true
   app.use('/api/simulate/payments', simulationPaymentRoutes);

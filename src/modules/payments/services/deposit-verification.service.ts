@@ -5,6 +5,7 @@ import { ErrorCode } from '../../../shared/types/common';
 import providusService from './providus.service';
 import notificationService from '../../notifications/services/notification.service';
 import { NotificationType, NotificationChannel } from '@prisma/client';
+import walletService from '../../wallet/services/wallet.service';
 
 const prisma = new PrismaClient();
 const logger = createLogger('DepositVerificationService');
@@ -310,6 +311,23 @@ export class DepositVerificationService {
           actionUrl: `/transactions/${transactionId}`,
         },
       });
+
+      // Wallet: credit the wallet when deposit is confirmed. Admin approval
+      // (which places the debit) always precedes the customer deposit, so the
+      // wallet will already have a matching debit entry for this transaction.
+      const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
+      if (!alreadyCredited) {
+        await walletService.creditWallet({
+          userId: transaction.userId,
+          amount: Number(receivedAmount),
+          transactionId,
+          transactionRef: transaction.referenceNumber,
+          sessionId: deposit.sessionId,
+          description: `Credit confirmed via Providus session ${deposit.sessionId}`,
+        }).catch((err) =>
+          logger.error('Wallet credit failed on deposit confirmation', { transactionId, depositId, error: err.message }),
+        );
+      }
 
       logger.info('Transaction deposit confirmed successfully', {
         transactionId,

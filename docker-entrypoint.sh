@@ -674,6 +674,65 @@ ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEX
 -- Payment balance tracking for underpayment/overpayment settlement
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "amountPaid" DECIMAL(18,2);
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "balanceDue" DECIMAL(18,2);
+
+-- ========================================
+-- TRANSIENT WALLET SYSTEM
+-- ========================================
+
+-- Ensure WalletEntryType enum exists
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WalletEntryType') THEN
+    CREATE TYPE "WalletEntryType" AS ENUM ('DEBIT', 'CREDIT');
+  END IF;
+END $$;
+
+-- Ensure WalletEntryStatus enum exists
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WalletEntryStatus') THEN
+    CREATE TYPE "WalletEntryStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'REVERSED');
+  END IF;
+END $$;
+
+-- Create customer_wallets table (one per customer)
+CREATE TABLE IF NOT EXISTS "customer_wallets" (
+  "id"        TEXT NOT NULL PRIMARY KEY,
+  "userId"    TEXT NOT NULL UNIQUE,
+  "balance"   DECIMAL(18,2) NOT NULL DEFAULT 0,
+  "currency"  TEXT NOT NULL DEFAULT 'NGN',
+  "isActive"  BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "customer_wallets_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS "customer_wallets_userId_idx" ON "customer_wallets"("userId");
+
+-- Create wallet_entries table (ledger — no FK to transactions, loosely coupled)
+CREATE TABLE IF NOT EXISTS "wallet_entries" (
+  "id"             TEXT NOT NULL PRIMARY KEY,
+  "walletId"       TEXT NOT NULL,
+  "transactionId"  TEXT,
+  "transactionRef" TEXT,
+  "sessionId"      TEXT,
+  "type"           "WalletEntryType" NOT NULL,
+  "amount"         DECIMAL(18,2) NOT NULL,
+  "balanceBefore"  DECIMAL(18,2) NOT NULL,
+  "balanceAfter"   DECIMAL(18,2) NOT NULL,
+  "description"    TEXT,
+  "status"         "WalletEntryStatus" NOT NULL DEFAULT 'COMPLETED',
+  "metadata"       JSONB,
+  "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "wallet_entries_walletId_fkey"
+    FOREIGN KEY ("walletId") REFERENCES "customer_wallets"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS "wallet_entries_walletId_idx"      ON "wallet_entries"("walletId");
+CREATE INDEX IF NOT EXISTS "wallet_entries_transactionId_idx" ON "wallet_entries"("transactionId");
+CREATE INDEX IF NOT EXISTS "wallet_entries_sessionId_idx"     ON "wallet_entries"("sessionId");
+CREATE INDEX IF NOT EXISTS "wallet_entries_type_idx"          ON "wallet_entries"("type");
+CREATE INDEX IF NOT EXISTS "wallet_entries_createdAt_idx"     ON "wallet_entries"("createdAt");
 EOF
 
 echo "✅ Schema verification completed"

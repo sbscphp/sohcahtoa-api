@@ -5,6 +5,7 @@ import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, Tr
 import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
+import walletService from "../../wallet/services/wallet.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -739,6 +740,24 @@ export class AdminTransactionsService {
         userId: transaction.userId,
         transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
       });
+
+      // Wallet: debit nairaEquivalent on final approval. The customer will
+      // deposit after this approval, and the credit fires in
+      // DepositVerificationService.confirmTransactionDeposit.
+      if (tx.nairaEquivalent && Number(tx.nairaEquivalent) > 0) {
+        const alreadyDebited = await walletService.hasDebitFor(transactionId);
+        if (!alreadyDebited) {
+          await walletService.debitWallet({
+            userId: transaction.userId,
+            amount: Number(tx.nairaEquivalent),
+            transactionId,
+            transactionRef: transaction.referenceNumber,
+            description: `Debit for approved transaction ${transaction.referenceNumber}`,
+          }).catch((err) =>
+            logger.error('Wallet debit failed on approval', { transactionId, error: err.message }),
+          );
+        }
+      }
 
       return { message: "Transaction approved successfully" };
     } else {
