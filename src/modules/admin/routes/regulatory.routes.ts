@@ -313,6 +313,36 @@ RegulatoryRouter.get(
 
 /**
  * @swagger
+ * /api/admin/regulatory/cbn-fn/reports/export:
+ *   get:
+ *     summary: Export CBN FN Window reports (CSV)
+ *     tags: [admin-regulatory]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [ALL, PENDING, COMPLETED, FAILED], default: ALL }
+ *     responses:
+ *       200:
+ *         description: CSV file
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ */
+RegulatoryRouter.get(
+  "/cbn-fn/reports/export",
+  authenticate,
+  requirePermission({ module: "COMPLIANCE", feature: "MODULE", action: "export" }),
+  regulatoryController.exportCbnFnReports
+);
+
+/**
+ * @swagger
  * /api/admin/regulatory/cbn-fn/reports/{id}:
  *   get:
  *     summary: Get FN Window report details

@@ -101,14 +101,15 @@ class AdminTransactionsController {
 
   approve = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const result = await adminTransactionsService.approveTransaction(req.params.id, adminId, req.body?.reason);
+    const notes = req.body?.notes || req.body?.reason;
+    const result = await adminTransactionsService.approveTransaction(req.params.id, adminId, notes);
     await auditTrailService.logAction({
       adminId,
       actionType: ActionType.TRANSACTION_APPROVE,
       actionLabel: "Approve transaction",
       resourceType: "TRANSACTION",
       resourceId: req.params.id,
-      reason: req.body?.reason,
+      reason: notes,
     });
     res.json(successResponse(result));
   });
