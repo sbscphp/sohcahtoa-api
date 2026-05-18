@@ -164,6 +164,25 @@ class RegulatoryController {
       rows as any[]
     );
   });
+
+  exportCbnFnReports = asyncHandler(async (req: Request, res: Response) => {
+    const result = await regulatoryService.cbnFnReportsList(req.query, 1, 10_000);
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "cbn-fn-reports.csv",
+      [
+        { header: "Report Name", select: (r: any) => r.reportName },
+        { header: "Report Type", select: (r: any) => r.reportType },
+        { header: "Status", select: (r: any) => r.status },
+        { header: "Channel", select: (r: any) => r.channel },
+        { header: "Reference", select: (r: any) => r.reference },
+        { header: "Created At", select: (r: any) => r.createdAt },
+        { header: "File Type", select: (r: any) => r.fileType },
+      ],
+      rows as any[]
+    );
+  });
 }
 
 export const regulatoryController = new RegulatoryController();

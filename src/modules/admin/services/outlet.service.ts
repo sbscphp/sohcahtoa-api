@@ -353,7 +353,13 @@ class OutletService {
     const where = this.buildBranchWhereClause(query);
 
     const [rows, total] = await Promise.all([
-      db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
+      db.branch.findMany({ 
+        where, 
+        orderBy: { createdAt: "desc" }, 
+        skip, 
+        take: limit,
+        include: { _count: { select: { agents: true } } }
+      }),
       db.branch.count({ where }),
     ]);
 
@@ -365,6 +371,7 @@ class OutletService {
       address: b.address,
       status: b.status,
       isActive: b.isActive,
+      totalAgents: b._count?.agents || 0,
     }));
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
@@ -411,7 +418,13 @@ class OutletService {
     if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
 
     const [rows, total] = await Promise.all([
-      db.branch.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
+      db.branch.findMany({ 
+        where, 
+        orderBy: { createdAt: "desc" }, 
+        skip, 
+        take: limit,
+        include: { _count: { select: { agents: true } } }
+      }),
       db.branch.count({ where }),
     ]);
 
@@ -423,6 +436,7 @@ class OutletService {
       address: b.address,
       status: b.status,
       isActive: b.isActive,
+      totalAgents: b._count?.agents || 0,
     }));
     return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }

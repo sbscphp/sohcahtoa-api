@@ -650,7 +650,7 @@ export class CustomerTransactionService {
           where: {
             transactionId,
             documentType: documentType as any,
-            verificationStatus: 'REQUIRES_MANUAL_REVIEW',
+            verificationStatus: { in: ['PENDING', 'REQUIRES_MANUAL_REVIEW'] as any },
           },
         });
 
