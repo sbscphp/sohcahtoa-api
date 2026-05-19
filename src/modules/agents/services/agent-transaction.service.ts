@@ -52,7 +52,7 @@ export interface AgentTransactionStats {
 export interface AgentCashStatsResult {
   currency: string;
   currencyName: string;
-  period: { preset: string; start: string; end: string };
+  date: string; // YYYY-MM-DD (UTC) — always today
   totalCashReceivedFromCustomer: number;
   totalCashReceivedFromAdmin: number;
   totalCashDisbursed: number;
@@ -461,12 +461,18 @@ class AgentTransactionService {
    */
   async getCashStats(
     agentUserId: string,
-    periodPreset: string,
     currencyParam?: string
   ): Promise<AgentCashStatsResult> {
     const agent = await this.resolveAgent(agentUserId);
-    const { start, end } = resolveAgentCashStatsDateRange(periodPreset);
     const currency = (currencyParam || "NGN").trim().toUpperCase();
+
+    // today's window in UTC
+    const now = new Date();
+    const start = new Date(now);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setUTCHours(23, 59, 59, 999);
+    const today = start.toISOString().slice(0, 10);
 
     const currencyNames: Record<string, string> = {
       NGN: "Nigerian Naira",
@@ -475,6 +481,7 @@ class AgentTransactionService {
       EUR: "Euro",
     };
     const currencyName = currencyNames[currency] || currency;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
 
     const agentTransactions = await prisma.transaction.findMany({
       where: { createdByAgentId: agent.id },
@@ -482,36 +489,20 @@ class AgentTransactionService {
     });
     const agentTransactionIds = agentTransactions.map((t) => t.id);
 
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-
     if (agentTransactionIds.length === 0) {
-      return {
-        currency,
-        currencyName,
-        period: {
-          preset: periodPreset.trim(),
-          start: start.toISOString(),
-          end: end.toISOString(),
-        },
-        totalCashReceivedFromCustomer: 0,
-        totalCashReceivedFromAdmin: 0,
-        totalCashDisbursed: 0,
-      };
+      return { currency, currencyName, date: today, totalCashReceivedFromCustomer: 0, totalCashReceivedFromAdmin: 0, totalCashDisbursed: 0 };
     }
 
     const txIdFilter = { in: agentTransactionIds };
-    const confirmedAtRange = { gte: start, lte: end };
+    const todayRange = { gte: start, lte: end };
 
     const adminRows = await prisma.adminUser.findMany({ select: { id: true } });
-    const adminIds = adminRows.map((a) => a.id);
+    const adminIds  = adminRows.map((a) => a.id);
 
-    const [fromCustomerAgg, disbursedAgg] = await Promise.all([
+    const [fromCustomerAgg, disbursedAgg, fromAdminAgg] = await Promise.all([
       prisma.settlement.aggregate({
         where: {
-          status: "CONFIRMED",
-          currency,
-          transactionId: txIdFilter,
-          confirmedAt: confirmedAtRange,
+          status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: todayRange,
           OR: [
             { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
             { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
@@ -520,42 +511,24 @@ class AgentTransactionService {
         _sum: { amount: true },
       }),
       prisma.outboundSettlement.aggregate({
-        where: {
-          status: "COMPLETED",
-          currency,
-          transactionId: txIdFilter,
-          initiatedBy: agent.id,
-          updatedAt: confirmedAtRange,
-        },
+        where: { status: "COMPLETED", currency, transactionId: txIdFilter, initiatedBy: agent.id, updatedAt: todayRange },
         _sum: { amount: true },
       }),
-    ]);
-
-    const fromAdminAgg =
       adminIds.length > 0
-        ? await prisma.settlement.aggregate({
-            where: {
-              status: "CONFIRMED",
-              currency,
-              transactionId: txIdFilter,
-              confirmedAt: confirmedAtRange,
-              confirmedBy: { in: adminIds },
-            },
+        ? prisma.settlement.aggregate({
+            where: { status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: todayRange, confirmedBy: { in: adminIds } },
             _sum: { amount: true },
           })
-        : { _sum: { amount: null } };
+        : Promise.resolve({ _sum: { amount: null } }),
+    ]);
 
     return {
       currency,
       currencyName,
-      period: {
-        preset: periodPreset.trim(),
-        start: start.toISOString(),
-        end: end.toISOString(),
-      },
+      date: today,
       totalCashReceivedFromCustomer: round2(Number(fromCustomerAgg._sum?.amount ?? 0)),
-      totalCashReceivedFromAdmin: round2(Number(fromAdminAgg._sum?.amount ?? 0)),
-      totalCashDisbursed: round2(Number(disbursedAgg._sum?.amount ?? 0)),
+      totalCashReceivedFromAdmin:    round2(Number(fromAdminAgg._sum?.amount    ?? 0)),
+      totalCashDisbursed:            round2(Number(disbursedAgg._sum?.amount    ?? 0)),
     };
   }
 
