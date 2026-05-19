@@ -39,7 +39,7 @@ class AdminAuthService {
     const now = new Date();
     const changeToken = generateId();
     const hashedChangeToken = await hashPassword(changeToken);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     await this.prisma.$transaction([
       this.prisma.token.updateMany({
@@ -159,7 +159,7 @@ class AdminAuthService {
 
   const otp = generateSecureOtp();
   const hashedOtp = await hashPassword(otp);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   const purpose = user.password ? "PASSWORD_RESET" : "WELCOME";
 
@@ -295,7 +295,7 @@ class AdminAuthService {
 
   const resetToken = generateId();
   const hashedResetToken = await hashPassword(resetToken);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   await this.prisma.$transaction([
     // Mark OTP as used

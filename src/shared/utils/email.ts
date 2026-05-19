@@ -172,7 +172,7 @@ class EmailService {
           const result = await emailClient.sendTemplateEmail(
             email,
             TEMPLATES.otp,
-            { otp, purpose_text: otpPurposeText(purpose) },
+            { otp, purpose_text: otpPurposeText(purpose), expiry_minutes: 5 },
             otpSubject(purpose),
           );
           return result.success;
@@ -185,9 +185,9 @@ class EmailService {
       }
     }
 
-    return this.sendTemplate(email, 'otp', { otp, purpose_text: otpPurposeText(purpose) }, {
+    return this.sendTemplate(email, 'otp', { otp, purpose_text: otpPurposeText(purpose), expiry_minutes: 5 }, {
       subject: otpSubject(purpose),
-      text: `Your verification code is: ${otp}. It will expire in 10 minutes.`,
+      text: `Your verification code is: ${otp}. It will expire in 5 minutes.`,
     });
   }
 
@@ -205,7 +205,7 @@ class EmailService {
   async sendAgentWelcomeEmail(email: string, fullName: string, otp: string): Promise<boolean> {
     return this.sendTemplate(email, 'agentWelcome', { full_name: fullName, otp }, {
       subject: 'Welcome to Sochatoa - Complete Your Agent Setup',
-      text: `Welcome to Sochatoa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. This code expires in 10 minutes.`,
+      text: `Welcome to Sochatoa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. This code expires in 5 minutes.`,
     });
   }
 
