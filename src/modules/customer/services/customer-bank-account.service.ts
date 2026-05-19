@@ -18,7 +18,62 @@ function simulateAccountName(bankName: string, accountNumber: string): string {
   return `${bank} Account Holder ${suffix}`;
 }
 
+// ---------------------------------------------------------------------------
+// Simulated Nigerian bank list
+// Replace with a live call to NIBSS / Paystack / Flutterwave when ready.
+// ---------------------------------------------------------------------------
+export const NIGERIAN_BANKS = [
+  { code: '044', name: 'Access Bank' },
+  { code: '063', name: 'Access Bank (Diamond)' },
+  { code: '035A', name: 'ALAT by WEMA' },
+  { code: '401', name: 'ASO Savings and Loans' },
+  { code: '023', name: 'Citibank Nigeria' },
+  { code: '050', name: 'EcoBank Nigeria' },
+  { code: '562', name: 'Ekondo Microfinance Bank' },
+  { code: '070', name: 'Fidelity Bank' },
+  { code: '011', name: 'First Bank of Nigeria' },
+  { code: '214', name: 'First City Monument Bank (FCMB)' },
+  { code: '058', name: 'Guaranty Trust Bank (GTBank)' },
+  { code: '030', name: 'Heritage Bank' },
+  { code: '301', name: 'Jaiz Bank' },
+  { code: '082', name: 'Keystone Bank' },
+  { code: '526', name: 'Kuda Bank' },
+  { code: '090405', name: 'Moniepoint MFB' },
+  { code: '014', name: 'MainStreet Bank' },
+  { code: '076', name: 'Polaris Bank' },
+  { code: '101', name: 'Providus Bank' },
+  { code: '125', name: 'Rubies MFB' },
+  { code: '8000', name: 'Sparkle' },
+  { code: '221', name: 'Stanbic IBTC Bank' },
+  { code: '068', name: 'Standard Chartered Bank' },
+  { code: '232', name: 'Sterling Bank' },
+  { code: '100', name: 'Suntrust Bank' },
+  { code: '302', name: 'TAJ Bank' },
+  { code: '102', name: 'Titan Trust Bank' },
+  { code: '032', name: 'Union Bank of Nigeria' },
+  { code: '033', name: 'United Bank for Africa (UBA)' },
+  { code: '215', name: 'Unity Bank' },
+  { code: '035', name: 'Wema Bank' },
+  { code: '057', name: 'Zenith Bank' },
+  { code: '090115', name: 'TCF MFB' },
+  { code: '090303', name: 'Palmpay' },
+  { code: '090175', name: 'VFD Microfinance Bank' },
+  { code: '090267', name: 'Kuda Microfinance Bank' },
+  { code: '090286', name: 'Safe Haven MFB' },
+];
+
 export class CustomerBankAccountService {
+  /**
+   * Return the list of supported Nigerian banks (simulated).
+   * Optionally filter by name via the `q` param.
+   */
+  getBanks(q?: string) {
+    const list = q
+      ? NIGERIAN_BANKS.filter((b) => b.name.toLowerCase().includes(q.toLowerCase().trim()))
+      : NIGERIAN_BANKS;
+    return list;
+  }
+
   /**
    * Simulate bank-name lookup (account enquiry).
    * Returns a deterministic placeholder name so the UI can show the field

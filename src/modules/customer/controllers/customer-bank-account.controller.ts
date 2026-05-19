@@ -6,6 +6,20 @@ import { ValidationError } from '../../../shared/utils';
 
 export class CustomerBankAccountController {
   /**
+   * GET /api/customer/bank-accounts/banks?q=
+   * Returns the list of supported Nigerian banks, optionally filtered by name.
+   */
+  async getBanks(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const q = req.query.q as string | undefined;
+      const banks = customerBankAccountService.getBanks(q);
+      res.json(successResponse(banks));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * GET /api/customer/bank-accounts/lookup?bankName=&accountNumber=
    * Simulates an account-name enquiry (NIBSS / bank API will replace this).
    */

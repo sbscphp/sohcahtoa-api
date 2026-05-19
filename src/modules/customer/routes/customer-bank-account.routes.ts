@@ -57,6 +57,28 @@ router.use(authenticate);
  *                     accountName: { type: string, example: "First Account Holder 5678" }
  *                     simulated: { type: boolean, example: true }
  */
+/**
+ * @swagger
+ * /api/customer/bank-accounts/banks:
+ *   get:
+ *     summary: Get list of Nigerian banks
+ *     description: Returns all supported banks. Pass `?q=` to filter by name.
+ *     tags: [Customer - Bank Accounts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema: { type: string }
+ *         description: Optional search term (e.g. "access", "zenith")
+ *     responses:
+ *       200:
+ *         description: List of banks with code and name
+ */
+router.get('/bank-accounts/banks', (req, res, next) =>
+  customerBankAccountController.getBanks(req as any, res, next)
+);
+
 router.get('/bank-accounts/lookup', (req, res, next) =>
   customerBankAccountController.lookupAccountName(req as any, res, next)
 );
