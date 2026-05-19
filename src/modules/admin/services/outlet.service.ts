@@ -985,7 +985,7 @@ class OutletService {
         agentName,
         agentEmail,
         agentPhoneNumber,
-        status: "PENDING",
+        status: "ACTIVE",
         isActive: true,
       },
     });

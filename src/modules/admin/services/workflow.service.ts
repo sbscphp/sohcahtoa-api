@@ -36,15 +36,15 @@ export class WorkflowService {
       agentsPending,
       agentsCompleted,
     ] = await Promise.all([
-      client.transaction.count({ where: { status: "ADMIN_APPROVAL_PENDING" } }),
+      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED"] } } }),
       client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }] } }),
       client.transaction.count({ where: { status: "REJECTED" } }),
 
-      client.franchise.count({ where: { status: "PENDING" } }),
+      client.franchise.count({ where: { status: { notIn: ["APPROVED", "ACTIVE", "REJECTED"] } } }),
       client.franchise.count({ where: { OR: [{ status: "APPROVED" }, { status: "ACTIVE" }] } }),
       client.franchise.count({ where: { status: "REJECTED" } }),
 
-      client.branch.count({ where: { status: "PENDING" } }),
+      client.branch.count({ where: { status: { notIn: ["APPROVED", "ACTIVE", "REJECTED"] } } }),
       client.branch.count({ where: { OR: [{ status: "APPROVED" }, { status: "ACTIVE" }] } }),
       client.branch.count({ where: { status: "REJECTED" } }),
 
@@ -73,9 +73,9 @@ export class WorkflowService {
 
     if (status !== "ALL") {
       if (status === "PENDING") {
-        txWhere.status = "ADMIN_APPROVAL_PENDING";
-        frWhere.status = "PENDING";
-        brWhere.status = "PENDING";
+        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED"] };
+        frWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
+        brWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         agWhere.isApproved = false;
       } else if (status === "COMPLETED") {
         txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }];
@@ -130,7 +130,7 @@ export class WorkflowService {
 
     items = items.concat(
       txs.map((t: any) => ({
-        id: `transaction:${t.id}`,
+        id: `${t.id}`,
         module: "Transaction",
         workflowAction: "Transaction Approval",
         actionNeeded: t.status === "ADMIN_APPROVAL_PENDING" ? "Approve" : t.status,
@@ -340,7 +340,7 @@ export class WorkflowService {
             stageId: true, 
             adminId: true, 
             order: true,
-            admin: { select: { fullName: true, role: { select: { name: true } } } }
+            admin: { select: { fullName: true, email: true, sequenceId: true, role: { select: { name: true } } } }
           },
           orderBy: { order: "asc" },
         })
@@ -353,6 +353,8 @@ export class WorkflowService {
           adminId: a.adminId, 
           order: a.order,
           adminName: a.admin?.fullName,
+          adminEmail: a.admin?.email,
+          seqid: a.admin?.sequenceId,
           roleName: a.admin?.role?.name
         })),
     }));
