@@ -921,12 +921,19 @@ export class CustomerTransactionService {
    * @param toCurrency   - The target currency (e.g. "NGN")
    * @param amount       - The amount in fromCurrency to convert
    */
-  async calculateAmount(fromCurrency: string, toCurrency: string, amount: number) {
-    // return calculateAmountUsingActiveSellRate(fromCurrency, toCurrency, amount);
+  async calculateAmount(
+    fromCurrency: string,
+    toCurrency: string,
+    amount: number,
+    mode?: string // 'buy' | 'sell' — defaults to 'sell'
+  ) {
+    const normalizedMode = (mode || 'sell').toLowerCase().trim();
+
     logger.info(`[calculateAmount] Calculating transaction amount`, {
       fromCurrency,
       toCurrency,
       amount,
+      mode: normalizedMode,
     });
 
     const where = buildRateWhereClause({
@@ -953,13 +960,19 @@ export class CustomerTransactionService {
     }
 
     const sellRate = parseFloat(rate.sellRate);
-    const buyRate = parseFloat(rate.buyRate);
-    const convertedAmount = amount * sellRate;
+    const buyRate  = parseFloat(rate.buyRate);
+
+    // BUY  = customer buying foreign currency from the bureau (bureau sells at sellRate)
+    // SELL = customer selling foreign currency to the bureau (bureau buys at buyRate)
+    const appliedRate     = normalizedMode === 'buy' ? sellRate : buyRate;
+    const convertedAmount = amount * appliedRate;
 
     logger.info(`[calculateAmount] Amount calculated successfully`, {
       fromCurrency: rate.fromCurrency,
       toCurrency: rate.toCurrency,
       amount,
+      mode: normalizedMode,
+      appliedRate,
       sellRate,
       buyRate,
       convertedAmount,
@@ -970,6 +983,8 @@ export class CustomerTransactionService {
       fromCurrency: rate.fromCurrency,
       toCurrency: rate.toCurrency,
       amount,
+      mode: normalizedMode,
+      appliedRate,
       sellRate,
       buyRate,
       convertedAmount,

@@ -110,7 +110,7 @@ class CustomerTransactionController {
    */
   calculateAmount = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { fromCurrency, toCurrency, amount } = req.body;
+      const { fromCurrency, toCurrency, amount, mode } = req.body;
 
       if (!fromCurrency || !toCurrency || !amount) {
         res.status(400).json({
@@ -123,7 +123,8 @@ class CustomerTransactionController {
       const result = await customerTransactionService.calculateAmount(
         fromCurrency,
         toCurrency,
-        parseFloat(amount)
+        parseFloat(amount),
+        mode, // 'buy' | 'sell' | undefined (defaults to 'sell')
       );
       res.json(successResponse(result));
     } catch (error) {
