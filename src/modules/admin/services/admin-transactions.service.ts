@@ -305,9 +305,13 @@ export class AdminTransactionsService {
       if (action === "TRANSACTION_SETTLED") return "Settled";
       if (action === "DEPOSIT_CONFIRMED") return "Deposit Confirmed";
       if (action === "DOCUMENT_MORE_INFO_REQUESTED") return "More Info Requested";
+      if (action === "DOCUMENT_APPROVED") return "Document Approved";
+      if (action === "DOCUMENT_REJECTED") return "Document Rejected";
       return action;
     };
     const toOutcome = (action: string) => {
+      if (action === "DOCUMENT_APPROVED") return "Completed";
+      if (action === "DOCUMENT_REJECTED") return "Rejected";
       if (action.includes("REJECT")) return "Rejected";
       if (action.includes("APPROV")) return "Approved";
       if (action.includes("COMPLETED")) return "Review Completed";
@@ -505,7 +509,7 @@ export class AdminTransactionsService {
 
     await prisma.transactionDocument.updateMany({
       where: { transactionId },
-      data: { verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW as any },
+      data: { verificationStatus: VerificationStatus.PENDING as any },
     });
 
     return { message: "Request for information recorded" };
@@ -515,12 +519,32 @@ export class AdminTransactionsService {
 
     const existingTx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { status: true, currentWorkflowStageId: true }
+      select: { status: true, currentWorkflowStageId: true, workflowTemplateId: true, userId: true, referenceNumber: true }
     });
 
     if (!existingTx) throw new Error("Transaction not found");
-    if (existingTx.status === TransactionStatus.ADMIN_APPROVAL_PENDING || existingTx.currentWorkflowStageId) {
-      throw new Error("Transaction is already under review or in an approval workflow.");
+
+    if (existingTx.status === TransactionStatus.ADMIN_APPROVAL_PENDING) {
+      throw new Error("Transaction is already under review.");
+    }
+    if (existingTx.status === TransactionStatus.APPROVED || existingTx.status === TransactionStatus.REJECTED) {
+      throw new Error("Transaction is already completed.");
+    }
+
+    if (existingTx.workflowTemplateId && existingTx.currentWorkflowStageId) {
+      const workflow = await prisma.workflowTemplate.findUnique({
+        where: { id: existingTx.workflowTemplateId },
+        include: { stages: { include: { assignees: true } } }
+      });
+      if (workflow) {
+        const currentStage = workflow.stages.find((s: any) => s.id === existingTx.currentWorkflowStageId);
+        if (currentStage) {
+          const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+          if (!isAssigned) {
+            throw new Error("You are not authorized to review this transaction at its current stage.");
+          }
+        }
+      }
     }
 
     const updated = await prisma.transaction.update({
@@ -591,15 +615,29 @@ export class AdminTransactionsService {
       if (nextStage) {
         adminIds = nextStage.assignees.map((a: any) => a.adminId);
         nextStageId = nextStage.id;
-      }
 
-      await prisma.transaction.update({
-        where: { id: transactionId },
-        data: {
-          workflowTemplateId: workflow.id,
-          currentWorkflowStageId: nextStageId,
-        },
-      });
+        await prisma.transaction.update({
+          where: { id: transactionId },
+          data: {
+            workflowTemplateId: workflow.id,
+            currentWorkflowStageId: nextStageId,
+          },
+        });
+      } else {
+        // Review was the final stage in the workflow
+        await prisma.transaction.update({
+          where: { id: transactionId },
+          data: {
+            status: TransactionStatus.APPROVED as any,
+            currentWorkflowStageId: null,
+          },
+        });
+
+        eventBus.publish(EventTypes.TRANSACTION_APPROVED, {
+          userId: existingTx.userId,
+          transaction: { id: transactionId, referenceNumber: existingTx.referenceNumber },
+        });
+      }
     }
 
     if (adminIds.length === 0 && !workflow) {
@@ -676,11 +714,15 @@ export class AdminTransactionsService {
     });
 
     if (!tx) throw new Error("Transaction not found");
-    if (tx.status === "APPROVED") throw new Error("Transaction is already approved");
+    if (tx.status === TransactionStatus.APPROVED) throw new Error("Transaction is already approved");
 
     let isFinalApproval = true;
     let nextStageId: string | null = null;
     let nextStageAssignees: string[] = [];
+
+    if (tx.workflowTemplateId && !tx.currentWorkflowStageId) {
+      throw new Error("Transaction workflow state is invalid (missing current stage).");
+    }
 
     if (tx.workflowTemplateId && tx.currentWorkflowStageId) {
       const workflow = await prisma.workflowTemplate.findUnique({
@@ -694,10 +736,19 @@ export class AdminTransactionsService {
       });
 
       if (workflow) {
-        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
+        let currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
         
         if (currentStageIndex === -1) {
-           throw new Error("Transaction is in an invalid workflow stage.");
+          if (workflow.stages.length > 0) {
+            const firstStage = workflow.stages[0];
+            await prisma.transaction.update({
+              where: { id: transactionId },
+              data: { currentWorkflowStageId: firstStage.id }
+            });
+            currentStageIndex = 0;
+          } else {
+            throw new Error("Transaction is in an invalid workflow stage (the workflow template has no stages configured).");
+          }
         }
         
         const currentStage = workflow.stages[currentStageIndex];
@@ -717,8 +768,11 @@ export class AdminTransactionsService {
     }
 
     if (isFinalApproval) {
-      const transaction = await prisma.transaction.update({
-        where: { id: transactionId },
+      const updateResult = await prisma.transaction.updateMany({
+        where: { 
+          id: transactionId,
+          currentWorkflowStageId: tx.currentWorkflowStageId
+        },
         data: {
           status: TransactionStatus.APPROVED as any,
           currentStep: TransactionStep.ADMIN_REVIEW as any,
@@ -726,6 +780,13 @@ export class AdminTransactionsService {
           updatedAt: new Date(),
         },
       });
+
+      if (updateResult.count === 0) {
+        throw new Error("Transaction state changed during approval. Please refresh and try again.");
+      }
+
+      const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+      if (!transaction) throw new Error("Transaction not found after update");
 
       await prisma.transactionDocument.updateMany({
         where: { transactionId, verificationStatus: VerificationStatus.PENDING as any },
@@ -761,13 +822,20 @@ export class AdminTransactionsService {
 
       return { message: "Transaction approved successfully" };
     } else {
-      await prisma.transaction.update({
-        where: { id: transactionId },
+      const updateResult = await prisma.transaction.updateMany({
+        where: { 
+          id: transactionId,
+          currentWorkflowStageId: tx.currentWorkflowStageId
+        },
         data: {
           currentWorkflowStageId: nextStageId,
           updatedAt: new Date(),
         },
       });
+
+      if (updateResult.count === 0) {
+        throw new Error("Transaction state changed during approval. Please refresh and try again.");
+      }
 
       await prisma.transactionHistory.create({
         data: { transactionId, action: "TRANSACTION_STAGE_APPROVED", performedBy: adminId, notes: reason },
@@ -887,6 +955,16 @@ export class AdminTransactionsService {
       },
     });
 
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_APPROVED",
+        performedBy: adminId,
+        notes: notes || "Document approved",
+        metadata: { documentId, documentType: updated.documentType },
+      } as any,
+    });
+
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
       select: { userId: true, id: true, referenceNumber: true },
@@ -974,7 +1052,7 @@ export class AdminTransactionsService {
     const updated = await prisma.transactionDocument.update({
       where: { id: documentId },
       data: {
-        verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW as any,
+        verificationStatus: VerificationStatus.PENDING as any,
         verificationNotes: comment,
         verifiedAt: null,
         verifiedBy: null,

@@ -457,7 +457,19 @@ class RegulatoryService {
   async cbnFnReportsList(filters: { search?: string; status?: string; reportType?: string }, page = 1, limit = 20) {
     const where: any = { module: "RATE" };
     if (filters.status && filters.status !== "ALL") where.status = filters.status.toUpperCase();
-    if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      where.OR = [
+        { id: { contains: filters.search, mode: "insensitive" } },
+        { status: { contains: filters.search, mode: "insensitive" } },
+      ];
+      if (searchLower === "csv" || searchLower === "pdf") {
+        where.OR.push({ format: searchLower.toUpperCase() as any });
+      }
+      if ("submitted".includes(searchLower)) {
+        where.OR.push({ status: "COMPLETED" });
+      }
+    }
     const [jobs, total] = await Promise.all([
       prisma.reportJob.findMany({
         where,
@@ -508,11 +520,25 @@ class RegulatoryService {
     if (filters.severity && filters.severity !== "ALL") where.severity = filters.severity.toUpperCase();
     if (filters.category && filters.category !== "ALL") where.category = filters.category.toUpperCase();
     if (filters.search) {
+      // Find matching admin users by full name
+      const matchedUsers = await prisma.adminUser.findMany({
+        where: {
+          fullName: { contains: filters.search, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u: any) => u.id);
+
       where.OR = [
         { eventType: { contains: filters.search, mode: "insensitive" } },
         { action: { contains: filters.search, mode: "insensitive" } },
         { source: { contains: filters.search, mode: "insensitive" } },
+        { userId: { contains: filters.search, mode: "insensitive" } },
       ];
+
+      if (userIds.length > 0) {
+        where.OR.push({ userId: { in: userIds } });
+      }
     }
     const [events, total] = await Promise.all([
       prisma.auditEvent.findMany({
@@ -582,7 +608,42 @@ class RegulatoryService {
   async regulatoryLogsList(filters: { search?: string; status?: string }, page = 1, limit = 20) {
     const whereJob: any = {};
     if (filters.status && filters.status !== "ALL") whereJob.status = filters.status.toUpperCase();
-    if (filters.search) whereJob.metadata = { path: "$", string_contains: filters.search } as any;
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      
+      // If searching for "system" or "sys" or "export", it matches all report jobs
+      if (searchLower.includes("sys") || searchLower.includes("system") || searchLower.includes("export")) {
+        // Match all ReportJobs under this search term
+      } else {
+        const orConditions: any[] = [
+          { id: { contains: filters.search, mode: "insensitive" } },
+          { status: { contains: filters.search, mode: "insensitive" } },
+        ];
+
+        const modules = ["OUTLET", "RATE", "TRANSACTION", "WORKFLOW", "AGENT", "FRANCHISE", "BRANCH", "INCIDENT"];
+        const matchingModules = modules.filter(m => m.toLowerCase().includes(searchLower));
+        if (matchingModules.length > 0) {
+          orConditions.push({ module: { in: matchingModules as any } });
+        }
+
+        if ("submitted".includes(searchLower)) {
+          orConditions.push({ status: "COMPLETED" });
+        }
+
+        if ("rate management".includes(searchLower)) {
+          orConditions.push({ module: "RATE" });
+        }
+        if ("fx report".includes(searchLower)) {
+          orConditions.push({ module: "TRANSACTION" });
+        }
+        if ("cbn report".includes(searchLower)) {
+          const cbnModules = ["OUTLET", "WORKFLOW", "AGENT", "FRANCHISE", "BRANCH", "INCIDENT"];
+          orConditions.push({ module: { in: cbnModules as any } });
+        }
+
+        whereJob.OR = orConditions;
+      }
+    }
     const [jobs, jobsTotal] = await Promise.all([
       prisma.reportJob.findMany({
         where: whereJob,
@@ -594,6 +655,31 @@ class RegulatoryService {
       prisma.reportJob.count({ where: whereJob }),
     ]);
     const nfWhere: any = {};
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      if (searchLower.includes("compliance") || searchLower.includes("officer") || "submitted".includes(searchLower)) {
+        // Match all NFIU reports
+      } else {
+        const nfOr: any[] = [
+          { id: { contains: filters.search, mode: "insensitive" } },
+          { reportReference: { contains: filters.search, mode: "insensitive" } },
+          { reportType: { contains: filters.search, mode: "insensitive" } },
+          { reason: { contains: filters.search, mode: "insensitive" } },
+        ];
+
+        if ("cbn report".includes(searchLower)) {
+          nfOr.push({ reportType: "CBN" });
+        }
+        if ("fx report".includes(searchLower)) {
+          nfOr.push({ reportType: "FX" });
+        }
+        if ("nfiu report".includes(searchLower)) {
+          nfOr.push({ reportType: "NFIU" });
+        }
+
+        nfWhere.OR = nfOr;
+      }
+    }
     const [nfiu, nfTotal] = await Promise.all([
       prisma.nfiuReport.findMany({
         where: nfWhere,
