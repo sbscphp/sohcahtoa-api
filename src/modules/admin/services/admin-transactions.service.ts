@@ -736,10 +736,19 @@ export class AdminTransactionsService {
       });
 
       if (workflow) {
-        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
+        let currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
         
         if (currentStageIndex === -1) {
-           throw new Error("Transaction is in an invalid workflow stage.");
+          if (workflow.stages.length > 0) {
+            const firstStage = workflow.stages[0];
+            await prisma.transaction.update({
+              where: { id: transactionId },
+              data: { currentWorkflowStageId: firstStage.id }
+            });
+            currentStageIndex = 0;
+          } else {
+            throw new Error("Transaction is in an invalid workflow stage (the workflow template has no stages configured).");
+          }
         }
         
         const currentStage = workflow.stages[currentStageIndex];
