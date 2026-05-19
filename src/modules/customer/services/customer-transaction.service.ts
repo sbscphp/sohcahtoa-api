@@ -36,29 +36,54 @@ interface CreateCustomerTransactionPayload {
   formAId?: string;
   taxClearanceNumber?: string;
 
+  // Passport details (required for travel-related and some professional transactions)
+  passportDocumentNumber?: string;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+
   // School fees specific fields
   admissionType?: 'UNDERGRADUATE' | 'POSTGRADUATE' | 'OTHER';
 
-  // Documents submitted inline with transaction creation
+  // Documents submitted inline with transaction creation.
+  // Supports all DocumentType values including DIGITAL_SIGNATURE (optional for all types).
   documents?: TransactionDocumentLink[];
 
-  // Beneficiary/Bank details
+  // Beneficiary / bank details — all fields are optional; include only what applies
   beneficiaryDetails?: {
+    // Beneficiary identity
     name?: string;
+    organizationName?: string;
+    beneficiaryName?: string;
+    beneficiaryPhone?: string;
+    beneficiaryEmail?: string;
+
+    // Beneficiary address
+    beneficiaryAddress?: string;
+    beneficiaryCity?: string;
+    beneficiaryState?: string;
+    beneficiaryCountry?: string;
+    beneficiaryCountryRegion?: string;
+
+    // Primary bank account
+    bankName?: string;
+    bankAddress?: string;
     accountNumber?: string;
     accountName?: string;
-    bankName?: string;
-    iban?: string;
-    beneficiaryCountryRegion?: string;
-    beneficiaryName?: string;
-    beneficiaryAddress?: string;
-    bankAddress?: string;
-    paymentReference?: string;
+    bankAccountName?: string;   // alias for accountName
     swiftCode?: string;
+    iban?: string;
     routingNumber?: string;
     ifscNumber?: string;
-    purposeCode?: string;
     bsbCode?: string;
+
+    // Payment metadata
+    paymentReference?: string;
+    purposeCode?: string;
+
+    // Correspondence / intermediary bank (used for international wires)
+    correspondenceBankName?: string;
+    correspondenceBankAddress?: string;
+    correspondenceBankSwiftCode?: string;
   };
 
   // How the customer wishes to collect the disbursed funds.
@@ -115,6 +140,9 @@ export class CustomerTransactionService {
       nin,
       formAId,
       taxClearanceNumber,
+      passportDocumentNumber,
+      passportIssueDate,
+      passportExpiryDate,
       admissionType,
       documents,
       disbursementOption,
@@ -362,6 +390,9 @@ export class CustomerTransactionService {
           nin: nin ? '***' + nin.slice(-4) : null,
           formAId,
           admissionType: type === 'SCHOOL_FEES' ? admissionType : null,
+          passportDocumentNumber: passportDocumentNumber ?? null,
+          passportIssueDate: passportIssueDate ?? null,
+          passportExpiryDate: passportExpiryDate ?? null,
           beneficiaryDetails,
           pickupLocation,
         },
@@ -1391,6 +1422,11 @@ export class CustomerTransactionService {
     // Extract personal info details from the step data
     const personalInfoData = personalInfoStep?.data as any;
 
+    // Passport fields stored in the step log at creation time
+    const passportDocumentNumber = personalInfoData?.passportDocumentNumber ?? null;
+    const passportIssueDate      = personalInfoData?.passportIssueDate      ?? null;
+    const passportExpiryDate     = personalInfoData?.passportExpiryDate     ?? null;
+
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
     const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
 
@@ -1427,7 +1463,7 @@ export class CustomerTransactionService {
 
     // Fetch payment and settlement details in parallel
     const client = prisma as any;
-    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts] =
+    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts, transactionBankAccounts] =
       await Promise.all([
         prisma.settlement
           .findUnique({ where: { transactionId }, include: { bankDetails: true } })
@@ -1503,6 +1539,24 @@ export class CustomerTransactionService {
             orderBy: { generatedAt: 'desc' as const },
           })
           .catch(() => []),
+        client.transactionBankAccount
+          .findMany({
+            where: { transactionId },
+            include: {
+              bankAccount: {
+                select: {
+                  id: true,
+                  bankName: true,
+                  accountNumber: true,
+                  accountName: true,
+                  isDefault: true,
+                  isVerified: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' as const },
+          })
+          .catch(() => []),
       ]);
 
     return {
@@ -1519,6 +1573,7 @@ export class CustomerTransactionService {
       nairaEquivalent: transaction.nairaEquivalent,
       exchangeRate: transaction.exchangeRate,
       disbursementMethod: transaction.disbursementMethod,
+      disbursementOption: (transaction as any).disbursementOption ?? null,
       formAId: transaction.formAId,
       taxClearanceNumber: transaction.taxClearanceNumber,
       customerType: userRecord?.customerType ?? null,
@@ -1527,11 +1582,17 @@ export class CustomerTransactionService {
       personalInfo: {
         bvn: userKyc?.bvn ? `***${userKyc.bvn.slice(-4)}` : null,
         nin: userKyc?.nin ? `***${userKyc.nin.slice(-4)}` : null,
-        admissionType: admissionType,
+        admissionType,
+        passportDocumentNumber,
+        passportIssueDate,
+        passportExpiryDate,
       },
 
-      // Beneficiary details from step data
-      beneficiaryDetails: personalInfoData?.beneficiaryDetails || null,
+      // Beneficiary details from step data (all fields, including correspondence bank)
+      beneficiaryDetails: personalInfoData?.beneficiaryDetails ?? null,
+
+      // Customer's own bank accounts attached to this transaction
+      bankAccounts: (transactionBankAccounts as any[]).map((r: any) => r.bankAccount),
 
       rejection: transaction.rejectionReason
         ? {
