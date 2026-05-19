@@ -155,6 +155,12 @@ enum DisbursementMethod {
   IMTO
 }
 
+enum DisbursementOption {
+  ELECTRONIC_TRANSFER // 100% bank transfer
+  CARD                // 100% prepaid card
+  CARD_AND_CASH       // 75% card + 25% cash (max $500 cash)
+}
+
 enum VerificationStatus {
   PENDING
   IN_PROGRESS
@@ -295,9 +301,10 @@ model User {
   kyc            UserKyc?
   sessions       Session[]
   otpLogs        OtpLog[]
-  tickets        Ticket[]        @relation("TicketCustomer")
-  createdByAgent Agent?          @relation("AgentCreatedCustomers", fields: [createdByAgentId], references: [id])
-  transactions   Transaction[]   @relation("UserTransactions")
+  tickets        Ticket[]           @relation("TicketCustomer")
+  createdByAgent Agent?             @relation("AgentCreatedCustomers", fields: [createdByAgentId], references: [id])
+  transactions   Transaction[]      @relation("UserTransactions")
+  bankAccounts   CustomerBankAccount[] @relation("UserBankAccounts")
 
   @@index([email])
   @@index([phoneNumber])
@@ -805,6 +812,7 @@ model Transaction {
   amountPaid         Decimal?            @db.Decimal(18, 2) // Cumulative amount received so far
   balanceDue         Decimal?            @db.Decimal(18, 2) // Positive = underpaid (still owed), Negative = overpaid (credit)
   disbursementMethod DisbursementMethod?
+  disbursementOption DisbursementOption?
   taxClearanceNumber String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -820,9 +828,10 @@ model Transaction {
   steps       TransactionStepLog[]
   documents   TransactionDocument[]
   history     TransactionHistory[]
-  cashPickup  CashPickup?
-  prepaidCard PrepaidCard?
-  receipt     Receipt?
+  cashPickup   CashPickup?
+  prepaidCard  PrepaidCard?
+  receipt      Receipt?
+  bankAccounts TransactionBankAccount[]
 
   @@index([userId])
   @@index([createdByAgentId])
@@ -830,7 +839,43 @@ model Transaction {
   @@index([status])
   @@index([type])
   @@index([transactionMode])
+  @@index([disbursementOption])
   @@map("transactions")
+}
+
+// Customer's own bank accounts — reusable across transactions
+model CustomerBankAccount {
+  id            String   @id @default(uuid())
+  userId        String
+  bankName      String
+  accountNumber String
+  accountName   String
+  isVerified    Boolean  @default(false) // true once name was confirmed via lookup
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user         User                     @relation("UserBankAccounts", fields: [userId], references: [id])
+  transactions TransactionBankAccount[]
+
+  @@unique([userId, accountNumber])
+  @@index([userId])
+  @@map("customer_bank_accounts")
+}
+
+// Join table: which bank accounts are attached to a specific transaction
+model TransactionBankAccount {
+  id                    String   @id @default(uuid())
+  transactionId         String
+  customerBankAccountId String
+  createdAt             DateTime @default(now())
+
+  transaction  Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  bankAccount  CustomerBankAccount @relation(fields: [customerBankAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, customerBankAccountId])
+  @@index([transactionId])
+  @@map("transaction_bank_accounts")
 }
 
 model TransactionStepLog {

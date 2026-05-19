@@ -1,4 +1,5 @@
 import { BadRequestError, createLogger, emailService, generateSecureOtp } from "../../../shared/utils";
+import { exposeOtp } from "../../../shared/utils/otp-release";
 import { ServiceName, UserRole } from "../../../shared/types";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
@@ -440,7 +441,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
         .catch((err: Error) => logger.warn("Login OTP email failed", { userId: user.id, message: err.message }));
     }
 
-    return { otp: tokenRecord.token, message: "OTP sent to your email" };
+    return { otp: exposeOtp(tokenRecord.token), message: "OTP sent to your email" };
   }
 
   async verifyLogin(email: string, otp: string) {

@@ -156,6 +156,7 @@ export interface AgentCreateTransactionPayload {
     purposeCode?: string;
     bsbCode?: string;
   };
+  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH';
   pickupLocation?: {
     id?: string;
     name: string;
@@ -1455,6 +1456,200 @@ class AgentTransactionService {
     });
 
     return csvContent;
+  }
+
+  /**
+   * Export the agent's FX inventory as a CSV.
+   *
+   * The inventory is derived from the agent's own transactions:
+   *   - FX Acquired  = foreignAmount on SELL-group transactions (bureau received foreign currency from customer)
+   *   - FX Dispensed = foreignAmount on BUY-group transactions  (bureau gave foreign currency to customer)
+   *   - Net Position = acquired − dispensed
+   *
+   * Remittance transactions are shown separately and excluded from the net position.
+   *
+   * One summary row is emitted per (currency, group) pair, followed by individual
+   * transaction detail rows so the file serves both audit and reconciliation purposes.
+   *
+   * Filters: startDate, endDate, currency, status (default: all statuses).
+   */
+  async exportFxInventory(
+    agentUserId: string,
+    filters: Pick<AgentTransactionExportFilters, "startDate" | "endDate" | "currency" | "status"> = {}
+  ): Promise<string> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const where: any = { createdByAgentId: agent.id };
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+    if (filters.status)   where.status   = filters.status;
+    if (filters.startDate || filters.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate)   where.createdAt.lte = new Date(filters.endDate);
+    }
+
+    logger.info("[exportFxInventory] Building FX inventory export", { agentId: agent.id, filters });
+
+    const transactions = await (prisma as any).transaction.findMany({
+      where,
+      select: {
+        referenceNumber: true,
+        type: true,
+        transactionMode: true,
+        status: true,
+        currency: true,
+        foreignAmount: true,
+        nairaEquivalent: true,
+        exchangeRate: true,
+        createdAt: true,
+        completedAt: true,
+      },
+      orderBy: [{ currency: "asc" }, { createdAt: "desc" }],
+      take: 10_000,
+    });
+
+    logger.info("[exportFxInventory] Transactions fetched", {
+      agentId: agent.id,
+      count: transactions.length,
+    });
+
+    const escape = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    // ── Build per-(currency, group) buckets ────────────────────────────────
+    type Bucket = {
+      fxAmount: number;
+      nairaAmount: number;
+      count: number;
+      rateSum: number; // for average rate
+    };
+
+    const buckets = new Map<string, Bucket>();
+    const key = (currency: string, group: string) => `${currency}||${group}`;
+
+    for (const t of transactions) {
+      const group    = this.resolveTransactionGroup(t.type, t.transactionMode);
+      const currency = t.currency.toUpperCase();
+      const k        = key(currency, group);
+
+      if (!buckets.has(k)) {
+        buckets.set(k, { fxAmount: 0, nairaAmount: 0, count: 0, rateSum: 0 });
+      }
+
+      const b = buckets.get(k)!;
+      b.fxAmount    += t.foreignAmount    != null ? Number(t.foreignAmount)    : 0;
+      b.nairaAmount += t.nairaEquivalent  != null ? Number(t.nairaEquivalent)  : 0;
+      b.rateSum     += t.exchangeRate     != null ? Number(t.exchangeRate)     : 0;
+      b.count       += 1;
+    }
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    // ── Net position per currency (acquired − dispensed, excl. remittance) ─
+    const netByCurrency = new Map<string, number>();
+    const nairaByCurrency = new Map<string, number>();
+    for (const [k, b] of buckets) {
+      const [currency, group] = k.split("||");
+      if (group === "REMITTANCE") continue;
+      const sign = group === "SELL" ? 1 : -1; // SELL = bureau acquired; BUY = bureau dispensed
+      netByCurrency.set(currency, (netByCurrency.get(currency) ?? 0) + sign * b.fxAmount);
+      nairaByCurrency.set(currency, (nairaByCurrency.get(currency) ?? 0) + b.nairaAmount);
+    }
+
+    // ── SECTION 1 — Summary ───────────────────────────────────────────────
+    const summaryHeaders = [
+      "SECTION",
+      "Currency",
+      "Group",
+      "FX Amount",
+      "NGN Equivalent",
+      "Avg Exchange Rate",
+      "Transaction Count",
+      "Net FX Position",
+      "Total NGN (Currency)",
+    ];
+
+    const summaryRows: string[] = [];
+    const sortedKeys = [...buckets.keys()].sort();
+
+    for (const k of sortedKeys) {
+      const [currency, group] = k.split("||");
+      const b = buckets.get(k)!;
+      summaryRows.push(
+        [
+          "SUMMARY",
+          currency,
+          group,
+          round2(b.fxAmount),
+          round2(b.nairaAmount),
+          b.count > 0 ? round2(b.rateSum / b.count) : "",
+          b.count,
+          netByCurrency.has(currency) ? round2(netByCurrency.get(currency)!) : "",
+          nairaByCurrency.has(currency) ? round2(nairaByCurrency.get(currency)!) : "",
+        ]
+          .map(escape)
+          .join(",")
+      );
+    }
+
+    // ── SECTION 2 — Transaction detail ───────────────────────────────────
+    const detailHeaders = [
+      "SECTION",
+      "Reference Number",
+      "Type",
+      "Group",
+      "Status",
+      "Currency",
+      "Foreign Amount",
+      "NGN Equivalent",
+      "Exchange Rate",
+      "Created At",
+      "Completed At",
+    ];
+
+    const detailRows = transactions.map((t: any) =>
+      [
+        "DETAIL",
+        t.referenceNumber,
+        t.type,
+        this.resolveTransactionGroup(t.type, t.transactionMode),
+        t.status,
+        t.currency,
+        t.foreignAmount    ?? "",
+        t.nairaEquivalent  ?? "",
+        t.exchangeRate     ?? "",
+        t.createdAt.toISOString(),
+        t.completedAt?.toISOString() ?? "",
+      ]
+        .map(escape)
+        .join(",")
+    );
+
+    // ── Assemble final CSV ────────────────────────────────────────────────
+    // Emit both sections with their own column headers separated by a blank line
+    const lines: string[] = [
+      // meta
+      `"FX Inventory Report","Agent: ${agent.id}","Generated: ${new Date().toISOString()}"`,
+      "",
+      // summary section
+      summaryHeaders.join(","),
+      ...summaryRows,
+      "",
+      // detail section
+      detailHeaders.join(","),
+      ...detailRows,
+    ];
+
+    logger.info("[exportFxInventory] CSV built", {
+      agentId: agent.id,
+      summaryRows: summaryRows.length,
+      detailRows: detailRows.length,
+    });
+
+    return lines.join("\n");
   }
 }
 

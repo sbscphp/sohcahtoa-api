@@ -230,6 +230,68 @@ router.get("/export", agentTransactionController.exportTransactions);
 
 /**
  * @swagger
+ * /api/agent/transactions/fx-inventory/export:
+ *   get:
+ *     summary: Export agent FX inventory as CSV
+ *     description: |
+ *       Downloads the agent's FX inventory derived from their own transactions.
+ *
+ *       **The CSV contains two sections:**
+ *       1. **SUMMARY** — one row per (currency, group) pair with aggregated FX amounts,
+ *          NGN equivalents, average exchange rate, transaction count, and the net FX
+ *          position for that currency across BUY and SELL groups.
+ *       2. **DETAIL** — one row per transaction with individual FX data for audit/reconciliation.
+ *
+ *       **Position logic (net FX position per currency):**
+ *       - `SELL` group (RESIDENT_FX, EXPATRIATE_FX) = bureau **acquired** foreign currency from customer → positive
+ *       - `BUY` group (PTA, BTA, SCHOOL_FEES, MEDICAL, PROFESSIONAL_BODY) = bureau **dispensed** foreign currency to customer → negative
+ *       - REMITTANCE group is excluded from the net position calculation.
+ *
+ *       Up to 10,000 transactions. Optionally filter by date range, currency, or status.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *         description: Filter by currency code (e.g. USD, GBP)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [DRAFT, AWAITING_VERIFICATION, APPROVED, COMPLETED, REJECTED, CANCELLED]
+ *         description: Filter by transaction status
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date }
+ *         description: Include transactions created on or after this date (ISO 8601)
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date }
+ *         description: Include transactions created on or before this date (ISO 8601)
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *               example: 'attachment; filename="fx-inventory-agent-1708123456789.csv"'
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Caller is not an agent
+ */
+router.get("/fx-inventory/export", agentTransactionController.exportFxInventory);
+
+/**
+ * @swagger
  * /api/agent/transactions:
  *   get:
  *     summary: List transactions created by the agent

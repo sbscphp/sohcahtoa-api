@@ -106,7 +106,7 @@ else
     echo "🔍 Found failed migration. Attempting to resolve..."
 
     # List of migrations that might fail (space-separated for POSIX sh compatibility)
-    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default 20260323145900_add_escrow_accounts 20260326095000_store_currency_type_for_escrow_accounts 20260417000000_add_bank_verification_doc_and_pending_record_validation"
+    MIGRATIONS_TO_RESOLVE="20260216100845_ 20260223161333_add_agent_password_hash 20260223165352_add_agent_otp_purpose 20260224093423_make_destination_country_optional 20260225085543_make_cash_pickup_recipient_optional 20260225113000_add_created_by_to_role_department 20260303131500_add_department_is_default 20260323145900_add_escrow_accounts 20260326095000_store_currency_type_for_escrow_accounts 20260416100000_add_ticket_created_by_admin 20260417000000_add_bank_verification_doc_and_pending_record_validation"
 
     # Try to mark each potentially failed migration as rolled back
     for migration in $MIGRATIONS_TO_RESOLVE; do
@@ -149,6 +149,8 @@ else
       npx prisma migrate resolve --applied 20260305094327_add_transaction_mode 2>&1 || true
       npx prisma migrate resolve --applied 20260323145900_add_escrow_accounts 2>&1 || true
       npx prisma migrate resolve --applied 20260326095000_store_currency_type_for_escrow_accounts 2>&1 || true
+      npx prisma migrate resolve --applied 20260416100000_add_ticket_created_by_admin 2>&1 || true
+      npx prisma migrate resolve --applied 20260417000000_add_bank_verification_doc_and_pending_record_validation 2>&1 || true
       echo "✅ Migrations marked as applied"
     else
       echo "⚠️  Unknown migration issue, continuing with application start..."
@@ -674,6 +676,56 @@ ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEX
 -- Payment balance tracking for underpayment/overpayment settlement
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "amountPaid" DECIMAL(18,2);
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "balanceDue" DECIMAL(18,2);
+
+-- ========================================
+-- CUSTOMER BANK ACCOUNTS
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS "customer_bank_accounts" (
+  "id"            TEXT NOT NULL PRIMARY KEY,
+  "userId"        TEXT NOT NULL,
+  "bankName"      TEXT NOT NULL,
+  "accountNumber" TEXT NOT NULL,
+  "accountName"   TEXT NOT NULL,
+  "isVerified"    BOOLEAN NOT NULL DEFAULT false,
+  "isDefault"     BOOLEAN NOT NULL DEFAULT false,
+  "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "customer_bank_accounts_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "customer_bank_accounts_userId_accountNumber_key"
+    UNIQUE ("userId", "accountNumber")
+);
+
+CREATE INDEX IF NOT EXISTS "customer_bank_accounts_userId_idx" ON "customer_bank_accounts"("userId");
+
+CREATE TABLE IF NOT EXISTS "transaction_bank_accounts" (
+  "id"                    TEXT NOT NULL PRIMARY KEY,
+  "transactionId"         TEXT NOT NULL,
+  "customerBankAccountId" TEXT NOT NULL,
+  "createdAt"             TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "transaction_bank_accounts_transactionId_fkey"
+    FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "transaction_bank_accounts_customerBankAccountId_fkey"
+    FOREIGN KEY ("customerBankAccountId") REFERENCES "customer_bank_accounts"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "transaction_bank_accounts_transactionId_customerBankAccountId_key"
+    UNIQUE ("transactionId", "customerBankAccountId")
+);
+
+CREATE INDEX IF NOT EXISTS "transaction_bank_accounts_transactionId_idx" ON "transaction_bank_accounts"("transactionId");
+
+-- ========================================
+-- DISBURSEMENT OPTION (customer pickup preference)
+-- ========================================
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'DisbursementOption') THEN
+    CREATE TYPE "DisbursementOption" AS ENUM ('ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH');
+  END IF;
+END $$;
+
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "disbursementOption" "DisbursementOption";
+CREATE INDEX IF NOT EXISTS "transactions_disbursementOption_idx" ON "transactions"("disbursementOption");
 
 -- ========================================
 -- TRANSIENT WALLET SYSTEM

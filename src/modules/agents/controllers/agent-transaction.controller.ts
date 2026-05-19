@@ -37,6 +37,7 @@ class AgentTransactionController {
         taxClearanceNumber: body.taxClearanceNumber,
         admissionType: body.admissionType,
         documents: body.documents,
+        disbursementOption: body.disbursementOption,
         beneficiaryDetails: body.beneficiaryDetails,
         pickupLocation: body.pickupLocation,
       };
@@ -201,6 +202,29 @@ class AgentTransactionController {
       );
 
       const filename = `transactions-agent-${Date.now()}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async exportFxInventory(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError("Authentication required");
+
+      const filters = {
+        currency:  req.query.currency  as string | undefined,
+        status:    req.query.status    as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate:   req.query.endDate   as string | undefined,
+      };
+
+      const csv = await agentTransactionService.exportFxInventory(authUser.userId, filters);
+
+      const filename = `fx-inventory-agent-${Date.now()}.csv`;
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(csv);

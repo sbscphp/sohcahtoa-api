@@ -1,4 +1,5 @@
 import { getDatabase } from '../../../config/database';
+import { exposeOtp } from '../../../shared/utils/otp-release';
 import redis from '../config/redis';
 import { eventBus, EventTypes } from '../../../events/event-bus';
 import {
@@ -296,7 +297,7 @@ export class AuthService {
     const response: AgentLoginOtpSentResponse = {
       message: 'OTP sent to your email',
       requiresVerification: true,
-      otp: otpResult.otp,
+      otp: exposeOtp(otpResult.otp),
     };
 
     return response;
@@ -918,7 +919,7 @@ export class AuthService {
     return {
       message: 'OTP sent successfully to your email',
       email: partiallyRedactField(bvnData.email, 'email'),
-      otp: otpResult.otp,
+      otp: exposeOtp(otpResult.otp),
     };
   }
 
@@ -2020,7 +2021,7 @@ export class AuthService {
 
     return {
       message: 'If an account with that email exists, a password reset OTP has been sent',
-      otp: otpResult.otp,
+      otp: exposeOtp(otpResult.otp),
     };
   }
 

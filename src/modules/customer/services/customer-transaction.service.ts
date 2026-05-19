@@ -61,7 +61,13 @@ interface CreateCustomerTransactionPayload {
     bsbCode?: string;
   };
 
-  // Pickup Location details
+  // How the customer wishes to collect the disbursed funds.
+  // ELECTRONIC_TRANSFER – 100% bank transfer (no pickup)
+  // CARD              – 100% prepaid card     (no pickup)
+  // CARD_AND_CASH     – 75% card + 25% cash, max $500 cash (pickup location required)
+  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH';
+
+  // Pickup Location details — required when disbursementOption is CARD_AND_CASH
   pickupLocation?: {
     id?: string;
     name: string;
@@ -111,6 +117,7 @@ export class CustomerTransactionService {
       taxClearanceNumber,
       admissionType,
       documents,
+      disbursementOption,
       beneficiaryDetails,
       pickupLocation,
     } = payload;
@@ -167,6 +174,24 @@ export class CustomerTransactionService {
     }
 
     logger.debug(`[createTransaction] Transaction type validated: ${type}`, { userId, type });
+
+    // Validate disbursement option
+    const VALID_DISBURSEMENT_OPTIONS = ['ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH'];
+    if (disbursementOption && !VALID_DISBURSEMENT_OPTIONS.includes(disbursementOption)) {
+      throw new ValidationError(
+        `Invalid disbursement option. Must be one of: ${VALID_DISBURSEMENT_OPTIONS.join(', ')}`
+      );
+    }
+    if (disbursementOption === 'CARD_AND_CASH' && !pickupLocation) {
+      throw new ValidationError('A pickup location is required when selecting Card + Cash disbursement');
+    }
+
+    // For CARD_AND_CASH: cash component = 25% of amount, capped at $500 equivalent
+    const CASH_CAP = 500;
+    const cashAmount =
+      disbursementOption === 'CARD_AND_CASH'
+        ? Math.min(amount * 0.25, CASH_CAP)
+        : null;
 
     // Update KYC info if BVN or NIN provided and user doesn't have KYC yet
     if ((bvn || nin) && !user.kyc) {
@@ -303,9 +328,15 @@ export class CustomerTransactionService {
       exchangeRate: exchangeRate as any,
       formAId,
       taxClearanceNumber,
-      disbursementMethod: pickupLocation
-        ? 'CASH_PICKUP'
-        : ((beneficiaryDetails ? 'BANK_TRANSFER' : null) as any),
+      disbursementOption: (disbursementOption ?? null) as any,
+      disbursementMethod: (
+        disbursementOption === 'ELECTRONIC_TRANSFER' ? 'BANK_TRANSFER'
+        : disbursementOption === 'CARD'              ? 'PREPAID_CARD'
+        : disbursementOption === 'CARD_AND_CASH'     ? 'CASH_PICKUP'
+        : pickupLocation                             ? 'CASH_PICKUP'
+        : beneficiaryDetails                         ? 'BANK_TRANSFER'
+        : null
+      ) as any,
     };
     if (payload.createdByAgentId != null) {
       (createData as any).createdByAgentId = payload.createdByAgentId;
@@ -429,7 +460,7 @@ export class CustomerTransactionService {
             pickupCode,
             recipientName: pickupLocation.recipientName || null,
             recipientPhone: pickupLocation.recipientPhone || null,
-            amount: amount as any,
+            amount: (cashAmount ?? amount) as any,
             currency,
             scheduledPickupDate: (() => {
               if (!pickupLocation.scheduledPickupDate) return null;
@@ -1977,25 +2008,21 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Get total amounts grouped by transaction type (BUY, SELL, REMITTANCE)
-   * All amounts are converted to USD by default, or uses a custom rate provided in the payload
+   * Get total amounts grouped by transaction type (BUY, SELL, REMITTANCE).
+   * All amounts are converted to USD using the latest admin-defined rates.
+   * Rates are stored as fromCurrency → NGN; USD is used as the pivot currency.
    *
    * @param userId - The customer ID
-   * @param customRates - Optional custom exchange rates for currencies without USD rates
    */
   async getTotalsByGroup(
-    userId: string,
-    customRates?: { currency: string; rate: number }[]
+    userId: string
   ): Promise<{
     all: { totalAmount: number; currency: string; transactionCount: number };
     buy: { totalAmount: number; currency: string; transactionCount: number };
     sell: { totalAmount: number; currency: string; transactionCount: number };
     remittance: { totalAmount: number; currency: string; transactionCount: number };
   }> {
-    logger.info(`[getTotalsByGroup] Fetching transaction totals by group for user`, {
-      userId,
-      hasCustomRates: !!customRates && customRates.length > 0,
-    });
+    logger.info(`[getTotalsByGroup] Fetching transaction totals by group for user`, { userId });
 
     // Fetch all completed transactions for the customer
     const transactions = await prisma.transaction.findMany({
@@ -2018,53 +2045,71 @@ export class CustomerTransactionService {
       transactionCount: transactions.length,
     });
 
-    // Get all active USD exchange rates
+    // Collect the distinct currencies present in the user's transactions
+    const currencies = [...new Set(transactions.map((t) => t.currency.toUpperCase()))];
+
+    // Fetch the latest active admin-defined rates for each of those currencies (all → NGN)
     const now = new Date();
     const client: any = prisma as any;
-    const usdRates = await client.exchangeRate.findMany({
+    const ngnRates: any[] = await client.exchangeRate.findMany({
       where: {
-        toCurrency: 'USD',
+        fromCurrency: { in: currencies },
+        toCurrency: 'NGN',
         isActive: true,
         validFrom: { lte: now },
         validUntil: { gt: now },
       },
-      select: {
-        fromCurrency: true,
-        rate: true,
-        buyRate: true,
-        sellRate: true,
-      },
+      select: { fromCurrency: true, sellRate: true, buyRate: true, rate: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
     });
 
-    logger.debug(`[getTotalsByGroup] Found ${usdRates.length} active USD exchange rates`, {
-      userId,
-      rateCount: usdRates.length,
-      currencies: usdRates.map((r: any) => r.fromCurrency),
-    });
-
-    // Create a map of currency to USD rate
-    const rateMap = new Map<string, number>();
-    usdRates.forEach((r: any) => {
-      rateMap.set(r.fromCurrency, parseFloat(r.rate || r.sellRate || r.buyRate));
-    });
-
-    // Add custom rates if provided
-    if (customRates && customRates.length > 0) {
-      customRates.forEach((customRate) => {
-        const currency = customRate.currency.toUpperCase();
-        if (!rateMap.has(currency)) {
-          rateMap.set(currency, customRate.rate);
-          logger.debug(`[getTotalsByGroup] Using custom rate for ${currency}`, {
-            userId,
-            currency,
-            rate: customRate.rate,
-          });
-        }
-      });
+    // Keep only the latest row per fromCurrency
+    const latestNgnRateMap = new Map<string, number>();
+    for (const r of ngnRates) {
+      if (!latestNgnRateMap.has(r.fromCurrency)) {
+        latestNgnRateMap.set(
+          r.fromCurrency,
+          parseFloat(r.sellRate ?? r.buyRate ?? r.rate ?? '0'),
+        );
+      }
     }
 
-    // USD is 1:1
+    // Ensure we have the USD→NGN rate (may already be in the map; fetch separately if not)
+    if (!latestNgnRateMap.has('USD')) {
+      const usdRow: any = await client.exchangeRate.findFirst({
+        where: {
+          fromCurrency: 'USD',
+          toCurrency: 'NGN',
+          isActive: true,
+          validFrom: { lte: now },
+          validUntil: { gt: now },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (usdRow) {
+        latestNgnRateMap.set('USD', parseFloat(usdRow.sellRate ?? usdRow.buyRate ?? usdRow.rate ?? '0'));
+      }
+    }
+
+    const usdNgnRate = latestNgnRateMap.get('USD') ?? 0;
+
+    logger.debug(`[getTotalsByGroup] Admin rates loaded`, {
+      userId,
+      usdNgnRate,
+      currencies: Object.fromEntries(latestNgnRateMap),
+    });
+
+    // Build a currencyToUSD factor map:
+    //   factor = currencyNgnRate / usdNgnRate
+    //   so: amountInUSD = foreignAmount * factor
+    const rateMap = new Map<string, number>();
     rateMap.set('USD', 1);
+    if (usdNgnRate > 0) {
+      rateMap.set('NGN', 1 / usdNgnRate);
+      for (const [ccy, ngnRate] of latestNgnRateMap.entries()) {
+        if (ccy !== 'USD') rateMap.set(ccy, ngnRate / usdNgnRate);
+      }
+    }
 
     // Group transactions and calculate totals
     const totals = {
@@ -2082,12 +2127,12 @@ export class CustomerTransactionService {
       const currency = transaction.currency.toUpperCase();
       const foreignAmount = parseFloat(transaction.foreignAmount?.toString() || '0');
 
-      // Convert to USD
+      // Convert to USD using the admin-defined NGN-pivot factor
       let amountInUSD = foreignAmount;
       if (currency !== 'USD') {
         const rate = rateMap.get(currency);
         if (rate) {
-          amountInUSD = foreignAmount / rate;
+          amountInUSD = foreignAmount * rate;
           logger.debug(`[getTotalsByGroup] Converting ${currency} to USD`, {
             userId,
             transactionId: transaction.id,
