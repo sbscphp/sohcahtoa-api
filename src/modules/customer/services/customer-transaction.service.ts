@@ -1413,7 +1413,11 @@ export class CustomerTransactionService {
     ]);
 
     // Extract admission type from transaction step data if it's a SCHOOL_FEES transaction
-    const personalInfoStep = transaction.steps.find((s) => s.step === 'PERSONAL_INFO');
+    // The creation step is PERSONAL_INFO when no documents are submitted at creation time,
+    // or DOCUMENT_UPLOAD when documents are included — both carry the same creation-time data.
+    const personalInfoStep =
+      transaction.steps.find((s) => s.step === 'PERSONAL_INFO') ??
+      transaction.steps.find((s) => s.step === 'DOCUMENT_UPLOAD');
     const admissionType =
       transaction.type === 'SCHOOL_FEES' && personalInfoStep?.data
         ? (personalInfoStep.data as any).admissionType
@@ -1791,26 +1795,37 @@ export class CustomerTransactionService {
       amount
     );
 
-    return required.map((docType) => {
-      const uploaded = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
-      return {
-        type: docType,
-        uploaded: uploaded
-          ? {
-              id: uploaded.id,
-              fileName: uploaded.fileName,
-              fileUrl: uploaded.fileUrl,
-              status: uploaded.verificationStatus,
-              rejectionNotes:
-                uploaded.verificationStatus === 'FAILED'
-                  ? (uploaded.verificationNotes ?? null)
-                  : null,
-              uploadedAt: uploaded.uploadedAt,
-              verifiedAt: uploaded.verifiedAt ?? null,
-            }
-          : null,
-      };
+    const toEntry = (docType: string, doc: typeof uploadedDocuments[number] | null) => ({
+      type: docType,
+      required: required.includes(docType),
+      uploaded: doc
+        ? {
+            id: doc.id,
+            fileName: doc.fileName,
+            fileUrl: doc.fileUrl,
+            status: doc.verificationStatus,
+            rejectionNotes:
+              doc.verificationStatus === 'FAILED' ? (doc.verificationNotes ?? null) : null,
+            uploadedAt: doc.uploadedAt,
+            verifiedAt: doc.verifiedAt ?? null,
+          }
+        : null,
     });
+
+    // Required documents (uploaded or not)
+    const result = required.map((docType) => {
+      const doc = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
+      return toEntry(docType, doc);
+    });
+
+    // Any additional documents uploaded beyond the required set
+    for (const doc of uploadedDocuments) {
+      if (!required.includes(doc.documentType)) {
+        result.push(toEntry(doc.documentType, doc));
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -1864,7 +1879,7 @@ export class CustomerTransactionService {
     }
 
     // Add postgraduate-specific documents for school fees
-    if (transactionType === 'SCHOOL_FEES' && admissionType === 'POSTGRADUATE') {
+    if (transactionType === 'SCHOOL_FEES' && admissionType?.toUpperCase() === 'POSTGRADUATE') {
       required = [...required, 'STATEMENT_OF_RESULT', 'DEGREE'];
     }
 
