@@ -308,7 +308,7 @@ export class DepositVerificationService {
           transactionId,
           depositId,
           amount: receivedAmount.toString(),
-          actionUrl: `/transactions/${transactionId}`,
+          actionUrl: `transactions/detail/${transactionId}`,
         },
       });
 

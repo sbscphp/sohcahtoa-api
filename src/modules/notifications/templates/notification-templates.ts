@@ -88,7 +88,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} for ${data.currency} ${data.amount} has been created.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   TRANSACTION_SUBMITTED: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -96,7 +96,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} has been submitted for verification.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   VERIFICATION_IN_PROGRESS: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -104,7 +104,7 @@ export const NotificationTemplates = {
     body: `Your transaction ${data.referenceNumber} is being verified. This may take a few minutes.`,
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   VERIFICATION_COMPLETED: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -112,7 +112,7 @@ export const NotificationTemplates = {
     body: `Document verification for transaction ${data.referenceNumber} is complete.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   VERIFICATION_FAILED: (data: { referenceNumber: string; reason?: string }): NotificationTemplate => ({
@@ -120,7 +120,7 @@ export const NotificationTemplates = {
     body: `Verification failed for transaction ${data.referenceNumber}. ${data.reason || 'Please review and resubmit documents.'}`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   AWAITING_DEPOSIT: (data: {
@@ -132,7 +132,7 @@ export const NotificationTemplates = {
     body: `Please deposit NGN ${data.amount} for transaction ${data.referenceNumber}.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}/deposit`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   DEPOSIT_RECEIVED: (data: { referenceNumber: string; amount: string }): NotificationTemplate => ({
@@ -140,7 +140,7 @@ export const NotificationTemplates = {
     body: `We've received your deposit of NGN ${data.amount} for transaction ${data.referenceNumber}.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   DEPOSIT_CONFIRMED: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -148,7 +148,7 @@ export const NotificationTemplates = {
     body: `Your deposit for transaction ${data.referenceNumber} has been confirmed.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   COMPLIANCE_REVIEW: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -156,7 +156,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} requires compliance review. This may take 24-48 hours.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   ADMIN_APPROVAL_PENDING: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -164,7 +164,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} is pending admin approval.`,
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   TRANSACTION_APPROVED: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -172,7 +172,7 @@ export const NotificationTemplates = {
     body: `Great news! Transaction ${data.referenceNumber} has been approved.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   TRANSACTION_REJECTED: (data: { referenceNumber: string; reason?: string }): NotificationTemplate => ({
@@ -180,7 +180,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} has been rejected. ${data.reason ? `Reason: ${data.reason}` : ''}`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.URGENT,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   DISBURSEMENT_IN_PROGRESS: (data: {
@@ -191,7 +191,7 @@ export const NotificationTemplates = {
     body: `Your funds for transaction ${data.referenceNumber} are being disbursed via ${data.method}.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   TRANSACTION_COMPLETED: (data: {
@@ -203,7 +203,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} for ${data.currency} ${data.amount} has been completed successfully!`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   TRANSACTION_CANCELLED: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -211,7 +211,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} has been cancelled.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   // Payment & Disbursement
@@ -224,7 +224,7 @@ export const NotificationTemplates = {
     body: `Your cash is ready for pickup at ${data.location}. Pickup code: ${data.pickupCode}`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.URGENT,
-    actionUrl: `/transactions/${data.referenceNumber}/pickup`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   PREPAID_CARD_READY: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -232,7 +232,7 @@ export const NotificationTemplates = {
     body: `Your prepaid card for transaction ${data.referenceNumber} is ready.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}/card`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   BANK_TRANSFER_INITIATED: (data: { referenceNumber: string; bank: string }): NotificationTemplate => ({
@@ -240,7 +240,7 @@ export const NotificationTemplates = {
     body: `Bank transfer to ${data.bank} for transaction ${data.referenceNumber} has been initiated.`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   // Compliance & AML
@@ -249,7 +249,7 @@ export const NotificationTemplates = {
     body: `Your transaction ${data.referenceNumber} requires additional compliance review.`,
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.HIGH,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   COMPLIANCE_REVIEW_COMPLETE: (data: { referenceNumber: string }): NotificationTemplate => ({
@@ -257,7 +257,7 @@ export const NotificationTemplates = {
     body: `Compliance review for transaction ${data.referenceNumber} is complete.`,
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.NORMAL,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   ADDITIONAL_INFO_REQUIRED: (data: { referenceNumber: string; info: string }): NotificationTemplate => ({
@@ -265,7 +265,7 @@ export const NotificationTemplates = {
     body: `Transaction ${data.referenceNumber} requires additional information: ${data.info}`,
     channel: NotificationChannel.ALL,
     priority: NotificationPriority.URGENT,
-    actionUrl: `/transactions/${data.referenceNumber}`,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
   // Account & Security
