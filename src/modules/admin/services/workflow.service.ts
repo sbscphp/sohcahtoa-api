@@ -36,8 +36,8 @@ export class WorkflowService {
       agentsPending,
       agentsCompleted,
     ] = await Promise.all([
-      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED"] } } }),
-      client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }] } }),
+      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED", "VERIFICATION_COMPLETED"] } } }),
+      client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }, { status: "VERIFICATION_COMPLETED" }] } }),
       client.transaction.count({ where: { status: "REJECTED" } }),
 
       client.franchise.count({ where: { status: { notIn: ["APPROVED", "ACTIVE", "REJECTED"] } } }),
@@ -73,12 +73,12 @@ export class WorkflowService {
 
     if (status !== "ALL") {
       if (status === "PENDING") {
-        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED"] };
+        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED", "VERIFICATION_COMPLETED"] };
         frWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         brWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         agWhere.isApproved = false;
       } else if (status === "COMPLETED") {
-        txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }];
+        txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }, { status: "VERIFICATION_COMPLETED" }];
         frWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         brWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         agWhere.isApproved = true;
@@ -129,16 +129,31 @@ export class WorkflowService {
     let items: any[] = [];
 
     items = items.concat(
-      txs.map((t: any) => ({
-        id: `${t.id}`,
-        module: "Transaction",
-        workflowAction: "Transaction Approval",
-        actionNeeded: t.status === "ADMIN_APPROVAL_PENDING" ? "Approve" : t.status,
-        status: t.status === "ADMIN_APPROVAL_PENDING" ? "Pending" : t.status,
-        dateInitiated: t.createdAt,
-        escalationMinutes: this.toMinutesSince(new Date(t.createdAt)),
-        title: t.referenceNumber,
-      }))
+      txs.map((t: any) => {
+        let displayStatus = t.status;
+        let actionNeeded = t.status;
+        if (t.status === "ADMIN_APPROVAL_PENDING") {
+          displayStatus = "Pending";
+          actionNeeded = "Approve";
+        } else if (
+          t.status === "VERIFICATION_COMPLETED" ||
+          t.status === "APPROVED" ||
+          t.status === "COMPLETED"
+        ) {
+          displayStatus = "Completed";
+          actionNeeded = "None";
+        }
+        return {
+          id: `${t.id}`,
+          module: "Transaction",
+          workflowAction: "Transaction Approval",
+          actionNeeded,
+          status: displayStatus,
+          dateInitiated: t.createdAt,
+          escalationMinutes: this.toMinutesSince(new Date(t.createdAt)),
+          title: t.referenceNumber,
+        };
+      })
     );
     items = items.concat(
       franchises.map((f: any) => ({
@@ -602,7 +617,7 @@ export class WorkflowService {
         if (pBranchId === null) {
            score -= 1; // Soft penalty for customer transactions
         } else {
-           score -= 100; // Hard mismatch for different branch
+           score -= 2; // Soft penalty for different branch (fallback allowed)
         }
       }
 
@@ -614,7 +629,7 @@ export class WorkflowService {
         if (pDeptId === null) {
            score -= 1; // Soft penalty
         } else {
-           score -= 100; // Hard mismatch
+           score -= 2; // Soft penalty for different department (fallback allowed)
         }
       }
 
