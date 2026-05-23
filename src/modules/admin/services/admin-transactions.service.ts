@@ -237,8 +237,6 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    if (!trx) return null;
-
     const user = await prisma.user.findUnique({
       where: { id: (trx as any).userId },
       include: { profile: true, kyc: true },
@@ -266,7 +264,7 @@ export class AdminTransactionsService {
         ? "Pending Record Validation"
         : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
         ? "Disbursement In Progress"
-        : "Pending";
+        : "Pending";      
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
     const steps = Array.isArray((trx as any).steps) ? (trx as any).steps : [];
