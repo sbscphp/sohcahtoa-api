@@ -7,7 +7,7 @@ const router:Router = Router();
 // /**
 //  * @swagger
 //  * tags:
-//  *   name: Customers
+//  *   name: admin-customers
 //  *   description: Customer management and flagging endpoints
 //  */
 

@@ -1703,14 +1703,52 @@ model WalletEntry {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
+  // Matching status (MATCHED / UNMATCHED)
+  matchStatus          String?   // "MATCHED" | "UNMATCHED"
+
+  // Linked transaction (manually linked by admin for unmatched entries)
+  linkedTransactionId  String?
+
+  // Flagging
+  isFlagged            Boolean   @default(false)
+  flagReason           String?
+  flaggedBy            String?
+  flaggedAt            DateTime?
+
+  // Refund
+  refundStatus         String?   // "PENDING" | "COMPLETED" | "FAILED"
+  refundedBy           String?
+  refundedAt           DateTime?
+
+  // Disbursement
+  disbursementStatus   String?   // "PENDING" | "COMPLETED" | "FAILED"
+  disbursedBy          String?
+  disbursedAt          DateTime?
+
   wallet CustomerWallet @relation(fields: [walletId], references: [id])
+  notes  WalletEntryNote[]
 
   @@index([walletId])
   @@index([transactionId])
   @@index([sessionId])
   @@index([type])
   @@index([createdAt])
+  @@index([matchStatus])
+  @@index([isFlagged])
   @@map("wallet_entries")
+}
+
+model WalletEntryNote {
+  id        String   @id @default(uuid())
+  entryId   String
+  adminId   String
+  note      String
+  createdAt DateTime @default(now())
+
+  entry WalletEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@map("wallet_entry_notes")
 }
 
 enum ReportFormat {
