@@ -785,6 +785,48 @@ CREATE INDEX IF NOT EXISTS "wallet_entries_transactionId_idx" ON "wallet_entries
 CREATE INDEX IF NOT EXISTS "wallet_entries_sessionId_idx"     ON "wallet_entries"("sessionId");
 CREATE INDEX IF NOT EXISTS "wallet_entries_type_idx"          ON "wallet_entries"("type");
 CREATE INDEX IF NOT EXISTS "wallet_entries_createdAt_idx"     ON "wallet_entries"("createdAt");
+
+-- ========================================
+-- WALLET ENTRY ADMIN FEATURES
+-- ========================================
+
+-- Matching status
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "matchStatus" TEXT;
+
+-- Linked transaction (manually linked by admin)
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "linkedTransactionId" TEXT;
+
+-- Flagging
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "isFlagged" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "flagReason" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "flaggedBy" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "flaggedAt" TIMESTAMP(3);
+
+-- Refund
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "refundStatus" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "refundedBy" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "refundedAt" TIMESTAMP(3);
+
+-- Disbursement
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "disbursementStatus" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "disbursedBy" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "disbursedAt" TIMESTAMP(3);
+
+CREATE INDEX IF NOT EXISTS "wallet_entries_matchStatus_idx" ON "wallet_entries"("matchStatus");
+CREATE INDEX IF NOT EXISTS "wallet_entries_isFlagged_idx"   ON "wallet_entries"("isFlagged");
+
+-- Wallet entry notes table
+CREATE TABLE IF NOT EXISTS "wallet_entry_notes" (
+  "id"        TEXT NOT NULL PRIMARY KEY,
+  "entryId"   TEXT NOT NULL,
+  "adminId"   TEXT NOT NULL,
+  "note"      TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "wallet_entry_notes_entryId_fkey"
+    FOREIGN KEY ("entryId") REFERENCES "wallet_entries"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS "wallet_entry_notes_entryId_idx" ON "wallet_entry_notes"("entryId");
 EOF
 
 echo "✅ Schema verification completed"
