@@ -15,6 +15,7 @@ import ReportRouter from "./report.routes";
 import SettlementRouter from "./settlement.routes";
 import RegulatoryRouter from "./regulatory.routes";
 import AdminNotificationRouter from "./admin-notification.routes";
+import { WalletRouter } from "./wallet.routes";
 
 const router: Router = Router();
 
@@ -158,5 +159,6 @@ router.use("/audit", AuditRouter);
 router.use("/reports", ReportRouter)
 router.use("/regulatory", RegulatoryRouter);
 router.use("/notifications", AdminNotificationRouter);
+router.use("/wallet", WalletRouter);
 
 export default router;

@@ -6,6 +6,7 @@ import {
 import { NotFoundError, ValidationError } from '../../../shared/utils';
 import { v2 as cloudinary } from 'cloudinary';
 import auditService from '../../audit/services/audit.service';
+import { workflowService } from '../../admin/services/workflow.service';
 import { createLogger } from '../../../shared/utils/logger';
 import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
@@ -541,6 +542,7 @@ export class CustomerTransactionService {
         verificationStatus: true,
         uploadedAt: true,
       },
+      orderBy: { uploadedAt: 'desc' },
     });
 
     const result = {
@@ -566,6 +568,14 @@ export class CustomerTransactionService {
       action: 'CREATED',
       newStatus: transaction.status,
       metadata: { type, referenceNumber: transaction.referenceNumber, hasDocuments },
+    });
+
+    // Attach applicable workflow template to the transaction
+    workflowService.attachWorkflowToTransaction(transaction.id).catch((err) => {
+      logger.error(`[createTransaction] Failed to attach workflow`, {
+        transactionId: transaction.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
 
     logger.info(`[createTransaction] Transaction creation completed successfully`, {
@@ -706,14 +716,15 @@ export class CustomerTransactionService {
           fileUrl: result.secure_url,
         });
 
-        // If a document of the same type already exists and requires review, replace it
-        // rather than creating a duplicate record
+        // If a document of the same type already exists and requires review or has failed/been rejected,
+        // replace it rather than creating a duplicate record
         const existingReviewDoc = await prisma.transactionDocument.findFirst({
           where: {
             transactionId,
             documentType: documentType as any,
-            verificationStatus: { in: ['PENDING', 'REQUIRES_MANUAL_REVIEW'] as any },
+            verificationStatus: { in: ['PENDING', 'REQUIRES_MANUAL_REVIEW', 'FAILED'] as any },
           },
+          orderBy: { uploadedAt: 'desc' },
         });
 
         let document;
@@ -833,6 +844,7 @@ export class CustomerTransactionService {
         verificationStatus: true,
         uploadedAt: true,
       },
+      orderBy: { uploadedAt: 'desc' },
     });
 
     logger.debug(`[uploadDocuments] Fetched all transaction documents`, {
@@ -1176,6 +1188,7 @@ export class CustomerTransactionService {
               verificationStatus: true,
               uploadedAt: true,
             },
+            orderBy: { uploadedAt: 'desc' },
           },
           cashPickup: {
             select: { pickupLocation: true, status: true, scheduledPickupDate: true, scheduledPickupTime: true },
@@ -1385,6 +1398,7 @@ export class CustomerTransactionService {
             uploadedAt: true,
             verifiedAt: true,
           },
+          orderBy: { uploadedAt: 'desc' },
         },
         steps: {
           orderBy: { createdAt: 'asc' },

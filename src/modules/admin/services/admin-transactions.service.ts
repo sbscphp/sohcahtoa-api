@@ -237,8 +237,6 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    if (!trx) return null;
-
     const user = await prisma.user.findUnique({
       where: { id: (trx as any).userId },
       include: { profile: true, kyc: true },
@@ -266,7 +264,7 @@ export class AdminTransactionsService {
         ? "Pending Record Validation"
         : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
         ? "Disbursement In Progress"
-        : "Pending";
+        : "Pending";      
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
     const steps = Array.isArray((trx as any).steps) ? (trx as any).steps : [];
@@ -967,7 +965,7 @@ export class AdminTransactionsService {
 
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { userId: true, id: true, referenceNumber: true },
+      select: { userId: true, id: true, referenceNumber: true, currentStep: true },
     });
     if (tx) {
       eventBus.publish(EventTypes.DOCUMENT_VERIFIED, {
@@ -978,6 +976,40 @@ export class AdminTransactionsService {
         verifiedBy: adminId,
         transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
       });
+    }
+
+    // Check if all documents for the transaction are now verified
+    const allDocs = await prisma.transactionDocument.findMany({
+      where: { transactionId },
+    });
+    const allVerified = allDocs.length > 0 && allDocs.every(
+      (doc) => doc.verificationStatus === "VERIFIED"
+    );
+
+    if (allVerified) {
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: { status: "VERIFICATION_COMPLETED" },
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "VERIFICATION_COMPLETED",
+          performedBy: adminId,
+          notes: "All documents approved, verification completed",
+        } as any,
+      });
+
+      if (tx) {
+        eventBus.publish(EventTypes.TRANSACTION_UPDATED, {
+          userId: tx.userId,
+          transactionId,
+          step: (tx as any).currentStep || "DOCUMENT_UPLOAD",
+          status: "VERIFICATION_COMPLETED",
+          transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+        });
+      }
     }
 
     return updated;
