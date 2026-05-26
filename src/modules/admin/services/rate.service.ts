@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere } from "../../../shared/utils/rate-filters";
+import { ValidationError } from "../../../shared/utils/errors";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -69,8 +70,25 @@ class RateService {
   }
 
   async create(data: { fromCurrency: string; toCurrency: string; buyRate: number; sellRate: number; validFrom: Date; validUntil: Date; note?: string }) {
-    const rate = data.sellRate;
+    const now = new Date();
     const client: any = prisma as any;
+
+    const nonExpiredCount = await client.exchangeRate.count({
+      where: {
+        fromCurrency: data.fromCurrency.toUpperCase(),
+        toCurrency: data.toCurrency.toUpperCase(),
+        isActive: true,
+        validUntil: { gt: now },
+      },
+    });
+
+    if (nonExpiredCount > 0) {
+      throw new ValidationError(
+        `Cannot create a new rate for ${data.fromCurrency}/${data.toCurrency}. There are currently active or scheduled rates that have not yet expired.`
+      );
+    }
+
+    const rate = data.sellRate;
     const created = await client.exchangeRate.create({
       data: {
         fromCurrency: data.fromCurrency,
