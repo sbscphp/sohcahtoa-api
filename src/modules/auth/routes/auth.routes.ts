@@ -81,8 +81,19 @@ router.post('/signup', authController.signup);
  * @swagger
  * /api/auth/signup/nigerian/verify-bvn:
  *   post:
- *     summary: Step 1 - Verify Nigerian BVN for signup
- *     description: Verifies BVN and returns a verification token. Sensitive data (BVN, email, phone, address) is stored server-side for security.
+ *     summary: "Nigerian signup — Step 1a: Initiate BVN consent"
+ *     description: |
+ *       Initiates the NIBSS Consent Hub flow for BVN verification.
+ *
+ *       **Important:** This endpoint does NOT return a `verificationToken`. It returns a
+ *       `sessionId` and a `consentUrl`. The frontend must:
+ *       1. Redirect or open `consentUrl` so the user can authenticate on the NIBSS portal.
+ *       2. Poll **Step 1b** (`POST /api/auth/signup/nigerian/bvn-consent-status`) with the
+ *          returned `sessionId` until `status` becomes `"COMPLETED"`.
+ *       3. Save the `verificationToken` from the Step 1b response — this is what all
+ *          subsequent steps (send-otp, validate-otp, create-account) require.
+ *
+ *       **Do NOT call send-otp before Step 1b returns `COMPLETED`.**
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -97,9 +108,18 @@ router.post('/signup', authController.signup);
  *                 type: string
  *                 description: 11-digit BVN number
  *                 example: "12345678901"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Optional — used as fallback if BVN has no email on record
+ *                 example: "user@example.com"
+ *               phoneNumber:
+ *                 type: string
+ *                 description: Optional — used as fallback if BVN has no phone on record
+ *                 example: "+2348012345678"
  *     responses:
  *       200:
- *         description: BVN verified successfully
+ *         description: Consent initiated — redirect user to consentUrl, then poll bvn-consent-status
  *         content:
  *           application/json:
  *             schema:
@@ -111,9 +131,82 @@ router.post('/signup', authController.signup);
  *                 data:
  *                   type: object
  *                   properties:
+ *                     sessionId:
+ *                       type: string
+ *                       description: Use this in Step 1b (bvn-consent-status) to poll for completion
+ *                       example: "202615269624757096223712376916"
+ *                     consentUrl:
+ *                       type: string
+ *                       description: Open this URL so the user can authenticate on the NIBSS portal
+ *                       example: "https://consent.nibss-plc.com.ng/auth?session=abc123"
+ *                     message:
+ *                       type: string
+ *                       example: "BVN consent initiated. Please authenticate on the NIBSS portal to continue."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many requests
+ */
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/bvn-consent-status:
+ *   post:
+ *     summary: "Nigerian signup — Step 1b: Poll BVN consent status"
+ *     description: |
+ *       Polls the status of the NIBSS consent initiated in Step 1a. The frontend must call
+ *       this endpoint repeatedly (e.g. every 2–3 seconds) until `status` is `"COMPLETED"`
+ *       or `"FAILED"`.
+ *
+ *       - **PENDING** — user has not yet authenticated on the NIBSS portal. Keep polling.
+ *       - **COMPLETED** — NIBSS callback received and BVN data verified. The response includes
+ *         a `verificationToken` — **save this token**. It is required for all subsequent steps
+ *         (send-otp, validate-otp, create-account). Valid for 30 minutes.
+ *       - **FAILED** — verification failed (e.g. user denied consent, NIBSS error). Restart
+ *         from Step 1a.
+ *
+ *       **Do NOT call send-otp before this endpoint returns `status: "COMPLETED"`.**
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sessionId
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: The sessionId returned from Step 1a (verify-bvn)
+ *                 example: "202615269624757096223712376916"
+ *     responses:
+ *       200:
+ *         description: Consent status response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [PENDING, COMPLETED, FAILED]
+ *                       description: |
+ *                         PENDING = still waiting for user to authenticate on NIBSS portal.
+ *                         COMPLETED = BVN verified, verificationToken is available.
+ *                         FAILED = verification failed, must restart from Step 1a.
+ *                       example: "COMPLETED"
  *                     verificationToken:
  *                       type: string
- *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
+ *                       description: |
+ *                         Only present when status is COMPLETED. Use this token in all
+ *                         subsequent steps (send-otp, validate-otp, create-account).
+ *                         Valid for 30 minutes.
  *                       example: "abc123xyz789"
  *                     message:
  *                       type: string
@@ -127,14 +220,23 @@ router.post('/signup', authController.signup);
 router.post('/nibss/callback', authController.nibssConsentCallback);
 
 // Nigerian signup flow (4 steps)
-router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1: initiates consent, returns sessionId + consentUrl
+router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1a: initiates consent, returns sessionId + consentUrl
 router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsentStatus); // Step 1b: poll until COMPLETED, returns verificationToken
 /**
  * @swagger
  * /api/auth/signup/nigerian/send-otp:
  *   post:
- *     summary: Step 2 - Send OTP for Nigerian signup
- *     description: Send OTP to phone or email for verification. Retrieves user details from Redis cache using the verification token from step 1.
+ *     summary: "Nigerian signup — Step 2: Send OTP"
+ *     description: |
+ *       Sends an OTP to the user's phone or email address retrieved from the verified BVN data.
+ *
+ *       **Prerequisite:** The `verificationToken` must come from Step 1b
+ *       (`POST /api/auth/signup/nigerian/bvn-consent-status`) **after** it returns
+ *       `status: "COMPLETED"`. Calling this endpoint with a token from a previous session,
+ *       or before Step 1b completes, will result in a 400 "BVN verification session expired" error.
+ *
+ *       The contact details (phone/email) are looked up server-side from the token — the
+ *       frontend does not need to supply them.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -148,12 +250,14 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *             properties:
  *               verificationToken:
  *                 type: string
- *                 description: Verification token from step 1
+ *                 description: |
+ *                   Token from Step 1b (bvn-consent-status) once status is COMPLETED.
+ *                   Valid for 30 minutes.
  *                 example: "abc123xyz789"
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Method to receive OTP (phone or email from BVN data)
+ *                 description: Whether to send the OTP to the BVN-registered phone or email
  *                 example: phone
  *     responses:
  *       200:
@@ -174,27 +278,38 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *                       example: OTP sent successfully to your phone
  *                     firstName:
  *                       type: string
- *                       description: First name from cached BVN data
+ *                       description: First name from BVN data (for display purposes)
  *                       example: "Chinedu"
  *                     lastName:
  *                       type: string
- *                       description: Last name from cached BVN data
+ *                       description: Last name from BVN data
  *                       example: "Okafor"
  *                     dateOfBirth:
  *                       type: string
  *                       format: date
- *                       description: Date of birth from cached BVN data
+ *                       description: Date of birth from BVN data
  *                       example: "1990-05-15"
+ *                     email:
+ *                       type: string
+ *                       description: Partially redacted email from BVN data
+ *                       example: "c***@example.com"
+ *                     phoneNumber:
+ *                       type: string
+ *                       description: Partially redacted phone from BVN data
+ *                       example: "+234****5678"
  *                     gender:
  *                       type: string
- *                       description: Gender from cached BVN data
+ *                       description: Gender from BVN data
  *                       example: "Male"
  *                     otp:
  *                       type: string
  *                       description: Only included in non-production environments
  *                       example: "123456"
  *       400:
- *         description: Invalid or expired verification token
+ *         description: |
+ *           Invalid or expired verificationToken. This usually means Step 1b was not
+ *           completed before calling this endpoint, or the 30-minute session has expired.
+ *           Restart from Step 1a (verify-bvn).
  *       429:
  *         description: Too many requests
  */
