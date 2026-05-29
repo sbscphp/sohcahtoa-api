@@ -178,7 +178,7 @@ export class CustomerService {
   async getCustomer(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { profile: true, kyc: true },
+      include: { profile: true, kyc: true, credentials: true },
     });
     if (!user) throw new NotFoundError("Customer not found");
     const txAgg = await prisma.transaction.aggregate({
@@ -216,6 +216,11 @@ export class CustomerService {
         ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
         : undefined;
 
+    const now = new Date();
+    const creds = (user as any).credentials;
+    const lockedUntil = creds?.lockedUntil ? new Date(creds.lockedUntil) : null;
+    const isLocked = lockedUntil !== null && lockedUntil > now;
+
     return {
       id: user.id,
       name,
@@ -228,7 +233,28 @@ export class CustomerService {
       lastActive: lastActiveDate
         ? lastActiveDate?.toISOString?.() || lastActiveDate
         : null,
+      accountLock: {
+        isLocked,
+        lockedUntil: isLocked ? lockedUntil!.toISOString() : null,
+        failedAttempts: creds?.failedAttempts ?? 0,
+      },
     };
+  }
+
+  async unlockCustomer(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { credentials: true },
+    });
+    if (!user) throw new NotFoundError("Customer not found");
+    if (!(user as any).credentials) throw new NotFoundError("No credentials found for this customer");
+
+    await (prisma as any).userCredential.update({
+      where: { userId },
+      data: { lockedUntil: null, failedAttempts: 0 },
+    });
+
+    return { message: "Account unlocked successfully" };
   }
 
   async getCustomerCounts() {
