@@ -16,6 +16,7 @@ class ReportService {
       { key: "FRANCHISE", name: "Franchise management", description: "Reports on franchise onboarding and status." },
       { key: "BRANCH", name: "Branch management", description: "Reports on branch set-up, performance & incidents." },
       { key: "INCIDENT", name: "Incidence management", description: "Reports on incidents and resolutions." },
+      { key: "DISCREPANCY", name: "Discrepancy management", description: "Reports on discrepancies and resolutions." },
     ];
   }
 

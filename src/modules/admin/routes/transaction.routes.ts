@@ -65,14 +65,14 @@ TransactionRouter.get(
  *           format: date-time
  *       - in: query
  *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
  *       - in: query
  *         name: createdByAgentId
  *         schema:
  *           type: string
  *         description: Filter by the agent who created the transaction
- *         schema:
- *           type: string
- *           format: date-time
  *       - in: query
  *         name: sortBy
  *         schema:
