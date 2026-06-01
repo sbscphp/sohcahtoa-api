@@ -272,6 +272,13 @@ router.get(
  *         $ref: '#/components/responses/NotFoundError'
  */
 router.patch(
+  "/:userId/unlock",
+  authenticate,
+  requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "edit" }),
+  customerController.unlockCustomer
+);
+
+router.patch(
   "/:userId/deactivate",
   authenticate,
   requirePermission({ module: "CUSTOMERS", feature: "MODULE", action: "edit" }),

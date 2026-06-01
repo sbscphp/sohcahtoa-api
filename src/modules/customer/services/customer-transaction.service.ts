@@ -1433,7 +1433,7 @@ export class CustomerTransactionService {
     const [userKyc, userRecord] = await Promise.all([
       prisma.userKyc.findUnique({
         where: { userId },
-        select: { bvn: true, nin: true },
+        select: { bvn: true, nin: true, tin: true },
       }),
       prisma.user.findUnique({
         where: { id: userId },
@@ -1615,6 +1615,7 @@ export class CustomerTransactionService {
       personalInfo: {
         bvn: userKyc?.bvn ? `***${userKyc.bvn.slice(-4)}` : null,
         nin: userKyc?.nin ? `***${userKyc.nin.slice(-4)}` : null,
+        tin: userKyc?.tin ?? null,
         admissionType,
         passportDocumentNumber,
         passportIssueDate,

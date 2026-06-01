@@ -104,6 +104,15 @@ class CustomerController {
     }
   };
 
+  unlockCustomer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await customerService.unlockCustomer(req.params.userId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   deactivateCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const adminId = (req as any).user?.userId as string;

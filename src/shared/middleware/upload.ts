@@ -11,6 +11,7 @@ const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFil
   const allowedMimeTypes = [
     'image/jpeg',
     'image/jpg',
+    'image/pjpeg',
     'image/png',
     'image/webp',
     'application/pdf',
@@ -28,6 +29,7 @@ const documentFilter = (req: Request, file: Express.Multer.File, cb: multer.File
   const allowedMimeTypes = [
     'image/jpeg',
     'image/jpg',
+    'image/pjpeg',
     'image/png',
     'image/webp',
     'application/pdf',
