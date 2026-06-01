@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
 import { createLogger } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
+import { workflowService } from "./workflow.service";
 
 const prisma = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -631,6 +632,42 @@ export class AdminWalletService {
     if (entry.refundStatus === "COMPLETED") {
       throw new Error("Entry has already been refunded");
     }
+    if (entry.refundStatus === "PENDING_APPROVAL") {
+      throw new Error("Refund is already pending approval");
+    }
+
+    // Attach workflow first
+    const attached = await workflowService.attachWorkflowToRefund(entryId);
+
+    if (!attached) {
+      // Auto approve / process immediately if no workflow template exists for REFUND
+      return this.executeRefundTransaction(walletId, entryId, adminId);
+    }
+
+    // Updated with PENDING_APPROVAL status and initiator
+    const updated = await (prisma as any).walletEntry.update({
+      where: { id: entryId },
+      data: {
+        refundedBy: adminId,
+      },
+    });
+
+    return {
+      id: updated.id,
+      refundStatus: "PENDING_APPROVAL",
+      message: "Refund initiated and queued for approval",
+    };
+  }
+
+  /**
+   * Execute the actual refund transaction (ledger entries & wallet balance adjustments).
+   */
+  async executeRefundTransaction(walletId: string, entryId: string, adminId: string) {
+    const entry = await (prisma as any).walletEntry.findFirst({
+      where: { id: entryId, walletId },
+    });
+    if (!entry) throw new Error("Entry not found");
+    if (entry.refundStatus === "COMPLETED") throw new Error("Entry has already been refunded");
 
     const wallet = await (prisma as any).customerWallet.findUnique({
       where: { id: walletId },
@@ -649,6 +686,7 @@ export class AdminWalletService {
           refundStatus: "COMPLETED",
           refundedBy: adminId,
           refundedAt: new Date(),
+          currentWorkflowStageId: null,
         },
       }),
       (prisma as any).walletEntry.create({
@@ -681,6 +719,103 @@ export class AdminWalletService {
       refundedAt: updatedEntry.refundedAt,
       message: "Refund initiated successfully",
     };
+  }
+
+  async approveRefund(walletId: string, entryId: string, adminId: string, reason?: string) {
+    const client: any = prisma as any;
+    const entry = await client.walletEntry.findFirst({
+      where: { id: entryId, walletId },
+      select: {
+        id: true,
+        workflowTemplateId: true,
+        currentWorkflowStageId: true,
+        refundStatus: true,
+      }
+    });
+
+    if (!entry) throw new Error("Entry not found");
+    if (entry.refundStatus === "COMPLETED") throw new Error("Refund is already completed");
+
+    if (entry.workflowTemplateId && entry.currentWorkflowStageId) {
+      const workflow = await client.workflowTemplate.findUnique({
+        where: { id: entry.workflowTemplateId },
+        include: {
+          stages: {
+            orderBy: { order: "asc" },
+            include: { assignees: true }
+          }
+        }
+      });
+
+      if (workflow) {
+        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === entry.currentWorkflowStageId);
+        if (currentStageIndex === -1) {
+          throw new Error("Refund is in an invalid workflow stage.");
+        }
+
+        const currentStage = workflow.stages[currentStageIndex];
+        const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+        if (!isAssigned) {
+          throw new Error("You are not authorized to approve this refund at its current stage.");
+        }
+
+        if (currentStageIndex + 1 < workflow.stages.length) {
+          const nextStage = workflow.stages[currentStageIndex + 1];
+          await client.walletEntry.update({
+            where: { id: entryId },
+            data: { currentWorkflowStageId: nextStage.id }
+          });
+          return { message: "Refund advanced to the next approval stage" };
+        }
+      }
+    }
+
+    // Final approval: Execute the refund transaction
+    await this.executeRefundTransaction(walletId, entryId, adminId);
+    return { message: "Refund approved and processed successfully" };
+  }
+
+  async rejectRefund(walletId: string, entryId: string, adminId: string, reason: string) {
+    const client: any = prisma as any;
+    const entry = await client.walletEntry.findFirst({
+      where: { id: entryId, walletId },
+      select: {
+        id: true,
+        workflowTemplateId: true,
+        currentWorkflowStageId: true,
+        refundStatus: true,
+      }
+    });
+
+    if (!entry) throw new Error("Entry not found");
+    if (entry.refundStatus === "COMPLETED") throw new Error("Refund is already completed");
+
+    if (entry.workflowTemplateId && entry.currentWorkflowStageId) {
+      const workflow = await client.workflowTemplate.findUnique({
+        where: { id: entry.workflowTemplateId },
+        include: { stages: { include: { assignees: true } } }
+      });
+
+      if (workflow) {
+        const currentStage = workflow.stages.find((s: any) => s.id === entry.currentWorkflowStageId);
+        if (currentStage) {
+          const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+          if (!isAssigned) {
+            throw new Error("You are not authorized to reject this refund at its current stage.");
+          }
+        }
+      }
+    }
+
+    await client.walletEntry.update({
+      where: { id: entryId },
+      data: {
+        refundStatus: "FAILED",
+        currentWorkflowStageId: null,
+      }
+    });
+
+    return { message: "Refund rejected successfully" };
   }
 
   /**

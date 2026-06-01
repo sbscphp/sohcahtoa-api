@@ -5,9 +5,11 @@ import { ActionType } from "../../../shared/types/action-type";
 import { successResponse } from "../../../shared/utils";
 
 class AdminController {
-  getDashboard = async (_req: Request, res: Response, next: NextFunction) => {
+  getDashboard = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await adminService.getDashboard();
+      const month = req.query.month ? parseInt(req.query.month as string, 10) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
+      const result = await adminService.getDashboard(month, year);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

@@ -1,4 +1,4 @@
-import { WorkflowType, WorkflowProcessType, WorkflowTemplateStatus } from "@prisma/client";
+import { WorkflowProcessType, WorkflowTemplateStatus } from "@prisma/client";
 import { getDatabase } from "../../config/database";
 import { createLogger } from "./logger";
 
@@ -14,6 +14,23 @@ export async function setupTransactionWorkflow() {
   const actionName = "Transaction Approval";
 
   try {
+    // Seed default workflow stage types
+    const defaultTypes = ["REVIEW", "APPROVAL"];
+    for (const typeName of defaultTypes) {
+      const typeExists = await (prisma as any).workflowStageType.findUnique({
+        where: { name: typeName },
+      });
+      if (!typeExists) {
+        await (prisma as any).workflowStageType.create({
+          data: {
+            name: typeName,
+            description: `Default system stage type: ${typeName}`,
+          },
+        });
+        logger.info(`Seeded default workflow stage type: ${typeName}`);
+      }
+    }
+
     //Check if the workflow already exists
     const existing = await prisma.workflowTemplate.findFirst({
       where: {
@@ -48,7 +65,7 @@ export async function setupTransactionWorkflow() {
         data: {
           name: templateName,
           description: "Standard linear workflow for transaction review and approval. Requires Compliance Review followed by Operations Approval.",
-          type: WorkflowType.APPROVAL,
+          type: "APPROVAL",
           processType: WorkflowProcessType.RIGID_LINEAR,
           action: actionName,
           status: WorkflowTemplateStatus.ACTIVE,
@@ -57,13 +74,13 @@ export async function setupTransactionWorkflow() {
             create: [
               {
                 name: "Compliance Review",
-                type: WorkflowType.REVIEW,
+                type: "REVIEW",
                 order: 1,
                 escalationMinutes: 60,
               },
               {
                 name: "Operations Approval",
-                type: WorkflowType.APPROVAL,
+                type: "APPROVAL",
                 order: 2,
                 escalationMinutes: 120,
               }

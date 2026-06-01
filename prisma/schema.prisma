@@ -506,6 +506,8 @@ model AdminUser {
   ticketsCreated           Ticket[]           @relation("TicketCreatedByAdmin")
   createdWorkflowTemplates WorkflowTemplate[] @relation("WorkflowTemplateCreator")
   workflowAssignees        WorkflowAssignee[]
+  escalatedStages          WorkflowStage[]    @relation("WorkflowStageEscalationAdmin")
+
 
   @@index([email])
   @@index([roleId])
@@ -1294,19 +1296,25 @@ model PaymentReceipt {
 }
 
 model ExchangeRate {
-  id           String   @id @default(uuid())
-  fromCurrency String
-  toCurrency   String
-  rate         Decimal  @db.Decimal(18, 6)
-  buyRate      Decimal? @db.Decimal(18, 6)
-  sellRate     Decimal? @db.Decimal(18, 6)
-  source       String   @default("MANUAL")
-  note         String?
-  validFrom    DateTime @default(now())
-  validUntil   DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  isActive     Boolean  @default(true)
+  id                     String            @id @default(uuid())
+  fromCurrency           String
+  toCurrency             String
+  rate                   Decimal           @db.Decimal(18, 6)
+  buyRate                Decimal?          @db.Decimal(18, 6)
+  sellRate               Decimal?          @db.Decimal(18, 6)
+  source                 String            @default("MANUAL")
+  note                   String?
+  validFrom              DateTime          @default(now())
+  validUntil             DateTime
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  isActive               Boolean           @default(true)
+  
+  workflowTemplateId     String?
+  currentWorkflowStageId String?
+  isApproved             Boolean           @default(false)
+
+  workflowTemplate       WorkflowTemplate? @relation(fields: [workflowTemplateId], references: [id])
 
   @@index([fromCurrency, toCurrency, isActive])
   @@map("exchange_rates")
@@ -1728,6 +1736,10 @@ model WalletEntry {
   wallet CustomerWallet @relation(fields: [walletId], references: [id])
   notes  WalletEntryNote[]
 
+  workflowTemplateId     String?
+  currentWorkflowStageId String?
+  workflowTemplate       WorkflowTemplate? @relation(fields: [workflowTemplateId], references: [id])
+
   @@index([walletId])
   @@index([transactionId])
   @@index([sessionId])
@@ -1981,11 +1993,6 @@ model InAppNotification {
   @@map("in_app_notifications")
 }
 
-enum WorkflowType {
-  REVIEW
-  APPROVAL
-}
-
 enum WorkflowProcessType {
   RIGID_LINEAR
   FLEXIBLE
@@ -1997,11 +2004,20 @@ enum WorkflowTemplateStatus {
   ARCHIVED
 }
 
+enum ApprovalType {
+  TRANSACTION
+  REFUND
+  RATE
+}
+
 model WorkflowTemplate {
   id                String                 @id @default(uuid())
   name              String
   description       String?
-  type              WorkflowType
+  type              String
+  approvalType      ApprovalType           @default(TRANSACTION)
+  minAmount         Decimal?               @db.Decimal(18, 2)
+  maxAmount         Decimal?               @db.Decimal(18, 2)
   processType       WorkflowProcessType    @default(RIGID_LINEAR)
   action            String?
   branchId          String?
@@ -2016,7 +2032,9 @@ model WorkflowTemplate {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  stages WorkflowStage[]
+  stages            WorkflowStage[]
+  exchangeRates     ExchangeRate[]
+  walletEntries     WalletEntry[]
 
   @@index([status])
   @@index([departmentId])
@@ -2029,16 +2047,29 @@ model WorkflowStage {
   templateId        String
   template          WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   name              String
-  type              WorkflowType?
+  type              String?
   order             Int
   escalationMinutes Int              @default(0)
   createdAt         DateTime         @default(now())
 
-  assignees WorkflowAssignee[]
+  escalationAdminId String?
+  escalationAdmin   AdminUser?       @relation("WorkflowStageEscalationAdmin", fields: [escalationAdminId], references: [id])
+  assignees         WorkflowAssignee[]
+
 
   @@index([templateId])
   @@index([order])
   @@map("workflow_stages")
+}
+
+model WorkflowStageType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("workflow_stage_types")
 }
 
 model WorkflowAssignee {

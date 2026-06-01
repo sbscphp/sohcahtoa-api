@@ -16,6 +16,7 @@ class ReportService {
       { key: "FRANCHISE", name: "Franchise management", description: "Reports on franchise onboarding and status." },
       { key: "BRANCH", name: "Branch management", description: "Reports on branch set-up, performance & incidents." },
       { key: "INCIDENT", name: "Incidence management", description: "Reports on incidents and resolutions." },
+      { key: "DISCREPANCY", name: "Discrepancy management", description: "Reports on discrepancies and resolutions." },
     ];
   }
 
@@ -376,6 +377,53 @@ class ReportService {
           r.franchise?.name || "Independent",
           r.status || "",
         ]);
+        break;
+      }
+
+      case "DISCREPANCY": {
+        const rows = await (prisma as any).settlement.findMany({
+          where: {
+            createdAt: dateRange,
+            OR: [
+              { status: "FAILED" },
+              { status: "REFUNDED" },
+              { notes: { not: null } },
+            ],
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        data = rows;
+        columns = [
+          { header: "Date", select: (r) => r.createdAt },
+          { header: "Reference ID", select: (r) => r.transactionId },
+          { header: "Amount", select: (r) => r.amount },
+          { header: "Status", select: (r) => r.status },
+          { header: "Priority", select: (r) => {
+            const amt = Number(r.amount || 0);
+            return amt >= 500000 ? "High" : amt >= 100000 ? "Medium" : "Low";
+          }},
+          { header: "Notes", select: (r) => r.notes || "Settlement discrepancy" },
+        ];
+        pdfColumns = [
+          { header: "Date", width: 80 },
+          { header: "Reference ID", width: 110 },
+          { header: "Amount", width: 70 },
+          { header: "Status", width: 70 },
+          { header: "Priority", width: 50 },
+          { header: "Notes", width: 120 },
+        ];
+        pdfRows = rows.map((r: any) => {
+          const amt = Number(r.amount || 0);
+          const priority = amt >= 500000 ? "High" : amt >= 100000 ? "Medium" : "Low";
+          return [
+            r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "",
+            r.transactionId || "",
+            r.amount?.toString() || "0",
+            r.status || "",
+            priority,
+            (r.notes || "Settlement discrepancy").slice(0, 30),
+          ];
+        });
         break;
       }
 

@@ -13,7 +13,7 @@ type ListFilters = {
   module?: WorkflowModule;
 };
 
-import { CreateWorkflowDto, UpdateWorkflowDto } from "../dto/workflow.dto";
+import { CreateWorkflowDto, UpdateWorkflowDto, ApprovalType } from "../dto/workflow.dto";
 
 export class WorkflowService {
   private toMinutesSince(date: Date) {
@@ -216,6 +216,9 @@ export class WorkflowService {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
+        approvalType: payload.approvalType || "TRANSACTION",
+        minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
+        maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
         action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
@@ -235,6 +238,7 @@ export class WorkflowService {
             name: st.name || `Stage ${st.order}`,
             type: st.type || null,
             escalationMinutes: st.escalationMinutes || 0,
+            escalationAdminId: st.escalationAdminId || null,
             order: st.order,
           },
           select: { id: true },
@@ -262,6 +266,9 @@ export class WorkflowService {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
+        approvalType: payload.approvalType || "TRANSACTION",
+        minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
+        maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
         action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
@@ -281,6 +288,7 @@ export class WorkflowService {
             name: st.name || `Stage ${st.order}`,
             type: st.type || null,
             escalationMinutes: st.escalationMinutes || 0,
+            escalationAdminId: st.escalationAdminId || null,
             order: st.order,
           },
           select: { id: true },
@@ -327,6 +335,9 @@ export class WorkflowService {
         name: true,
         description: true,
         type: true,
+        approvalType: true,
+        minAmount: true,
+        maxAmount: true,
         processType: true,
         action: true,
         status: true,
@@ -345,7 +356,17 @@ export class WorkflowService {
     const stages = await client.workflowStage.findMany({
       where: { templateId: id },
       orderBy: { order: "asc" },
-      select: { id: true, name: true, type: true, escalationMinutes: true, order: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        escalationMinutes: true,
+        escalationAdminId: true,
+        order: true,
+        escalationAdmin: {
+          select: { id: true, fullName: true, email: true }
+        }
+      },
     });
     const stageIds = stages.map((s: any) => s.id);
     const assignees = stageIds.length
@@ -393,6 +414,9 @@ export class WorkflowService {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
+        approvalType: payload.approvalType || "TRANSACTION",
+        minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
+        maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
         action: payload.action || "Transaction Approval",
         branchId: payload.branchId || null,
@@ -429,6 +453,7 @@ export class WorkflowService {
               name: st.name || `Stage ${st.order}`,
               type: st.type || null,
               escalationMinutes: st.escalationMinutes || 0,
+              escalationAdminId: st.escalationAdminId || null,
               order: st.order,
             }
           });
@@ -440,6 +465,7 @@ export class WorkflowService {
               name: st.name || `Stage ${st.order}`,
               type: st.type || null,
               escalationMinutes: st.escalationMinutes || 0,
+              escalationAdminId: st.escalationAdminId || null,
               order: st.order,
             },
             select: { id: true }
@@ -574,23 +600,53 @@ export class WorkflowService {
     branchId?: string;
     departmentId?: string;
     action?: string;
+    approvalType?: ApprovalType | string;
+    amount?: number;
   }) {
     const client: any = prisma as any;
     // Find active templates that match the criteria
     // Priority: Branch + Department > Branch > Department > Generic
+    
+    const where: any = {
+      status: "ACTIVE",
+    };
+
+    if (params.approvalType) {
+      where.approvalType = params.approvalType;
+    } else {
+      where.OR = [
+        { action: params.action || "Transaction Approval" },
+        { action: null },
+        { action: "" }
+      ];
+    }
+
+    if (params.amount !== undefined && params.amount !== null) {
+      where.AND = [
+        {
+          OR: [
+            { minAmount: null },
+            { minAmount: { lte: params.amount } }
+          ]
+        },
+        {
+          OR: [
+            { maxAmount: null },
+            { maxAmount: { gte: params.amount } }
+          ]
+        }
+      ];
+    }
+
     const templates = await client.workflowTemplate.findMany({
-      where: {
-        status: "ACTIVE",
-        OR: [
-          { action: params.action || "Transaction Approval" },
-          { action: null },
-          { action: "" }
-        ]
-      },
+      where,
       include: {
         stages: {
           orderBy: { order: "asc" },
           include: { 
+            escalationAdmin: {
+              select: { id: true, fullName: true, email: true }
+            },
             assignees: {
               include: {
                 admin: {
@@ -659,7 +715,8 @@ export class WorkflowService {
 
     const template = await this.findApplicableWorkflow({
       branchId: tx.createdByAgent?.branchId || undefined,
-      action: "Transaction Approval",
+      approvalType: "TRANSACTION",
+      amount: Number(tx.nairaEquivalent || tx.foreignAmount || 0),
     });
 
     if (!template || !template.stages || template.stages.length === 0) {
@@ -677,6 +734,239 @@ export class WorkflowService {
     });
 
     return updated;
+  }
+
+  /**
+   * Attaches an applicable workflow template to a wallet entry refund if not already attached.
+   */
+  async attachWorkflowToRefund(entryId: string) {
+    const client: any = prisma as any;
+    
+    const entry = await client.walletEntry.findUnique({
+      where: { id: entryId },
+    });
+    
+    if (!entry || entry.workflowTemplateId) return null; // Already attached or not found
+
+    const template = await this.findApplicableWorkflow({
+      approvalType: "REFUND",
+      amount: Number(entry.amount || 0),
+    });
+
+    if (!template || !template.stages || template.stages.length === 0) {
+      return null;
+    }
+
+    const firstStage = template.stages[0];
+
+    const updated = await client.walletEntry.update({
+      where: { id: entryId },
+      data: {
+        workflowTemplateId: template.id,
+        currentWorkflowStageId: firstStage.id,
+        refundStatus: "PENDING_APPROVAL",
+      }
+    });
+
+    return updated;
+  }
+
+  /**
+   * Attaches an applicable workflow template to an exchange rate if not already attached.
+   */
+  async attachWorkflowToRate(rateId: string) {
+    const client: any = prisma as any;
+    
+    const rate = await client.exchangeRate.findUnique({
+      where: { id: rateId },
+    });
+    
+    if (!rate || rate.workflowTemplateId) return null; // Already attached or not found
+
+    const template = await this.findApplicableWorkflow({
+      approvalType: "RATE",
+    });
+
+    if (!template || !template.stages || template.stages.length === 0) {
+      return null;
+    }
+
+    const firstStage = template.stages[0];
+
+    const updated = await client.exchangeRate.update({
+      where: { id: rateId },
+      data: {
+        workflowTemplateId: template.id,
+        currentWorkflowStageId: firstStage.id,
+        isApproved: false,
+        isActive: false, // Inactive until approved
+      }
+    });
+
+    return updated;
+  }
+
+  async getActiveWorkflowState(
+    entity: { 
+      workflowTemplateId?: string | null; 
+      currentWorkflowStageId?: string | null; 
+      isApproved?: boolean | null; 
+      refundStatus?: string | null; 
+    },
+    adminId?: string
+  ) {
+    const client: any = prisma as any;
+    let isApprovalOfficer = false;
+    let approvalState: string | null = null;
+    let pendingAssignees: any[] = [];
+    let workflow = null;
+
+    if (entity.workflowTemplateId) {
+      workflow = await client.workflowTemplate.findUnique({
+        where: { id: entity.workflowTemplateId },
+        include: {
+          stages: {
+            orderBy: { order: "asc" },
+            include: {
+              assignees: {
+                include: {
+                  admin: {
+                    select: { id: true, fullName: true, role: { select: { name: true } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    let activeStage: any = null;
+    const isCompleted = entity.isApproved === true || entity.refundStatus === "COMPLETED";
+    const isFailed = entity.refundStatus === "FAILED";
+
+    if (workflow) {
+      if (adminId) {
+        isApprovalOfficer = workflow.stages.some((s: any) => 
+          s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+        );
+      }
+
+      if (entity.currentWorkflowStageId) {
+        activeStage = workflow.stages.find((s: any) => s.id === entity.currentWorkflowStageId);
+      } 
+      
+      if (!activeStage && workflow.stages.length > 0 && !isCompleted && !isFailed) {
+        activeStage = workflow.stages[0];
+      }
+
+      if (activeStage) {
+        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === activeStage.id);
+        if (currentStageIndex !== -1) {
+          const totalStages = workflow.stages.length;
+          approvalState = `Stage ${currentStageIndex + 1} of ${totalStages} (${activeStage.name})`;
+
+          pendingAssignees = activeStage.assignees.map((a: any) => ({
+            adminId: a.adminId,
+            adminName: a.admin?.fullName || "Unknown Admin",
+            roleName: a.admin?.role?.name || "No Role",
+          }));
+        }
+      } else if (isCompleted) {
+        approvalState = "Approved (Workflow Completed)";
+      } else if (isFailed) {
+        approvalState = "Rejected/Failed (Workflow Completed)";
+      }
+    }
+
+    const workflowStages = workflow?.stages.map((s: any) => ({
+      stageId: s.id,
+      name: s.name,
+      order: s.order,
+      isCurrent: activeStage ? s.id === activeStage.id : false,
+      assignees: s.assignees.map((a: any) => ({
+        adminId: a.adminId,
+        adminName: a.admin?.fullName || "Unknown Admin",
+        roleName: a.admin?.role?.name || "No Role",
+      })),
+    })) || [];
+
+    return {
+      isApprovalOfficer,
+      approvalState,
+      pendingAssignees,
+      workflowStages,
+    };
+  }
+
+  async listStageTypes() {
+    const client: any = prisma as any;
+    return client.workflowStageType.findMany({
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createStageType(name: string, description?: string) {
+    const client: any = prisma as any;
+    const formattedName = name.trim().toUpperCase();
+    if (!formattedName) throw new Error("Stage type name is required");
+
+    const existing = await client.workflowStageType.findUnique({
+      where: { name: formattedName },
+    });
+    if (existing) throw new Error(`Stage type ${formattedName} already exists`);
+
+    return client.workflowStageType.create({
+      data: {
+        name: formattedName,
+        description: description || null,
+      },
+    });
+  }
+
+  async updateStageType(id: string, name: string, description?: string) {
+    const client: any = prisma as any;
+    const formattedName = name.trim().toUpperCase();
+    if (!formattedName) throw new Error("Stage type name is required");
+
+    const existing = await client.workflowStageType.findUnique({
+      where: { name: formattedName },
+    });
+    if (existing && existing.id !== id) {
+      throw new Error(`Stage type ${formattedName} is already in use by another record`);
+    }
+
+    return client.workflowStageType.update({
+      where: { id },
+      data: {
+        name: formattedName,
+        description: description !== undefined ? description : null,
+      },
+    });
+  }
+
+  async deleteStageType(id: string) {
+    const client: any = prisma as any;
+    // Check if any workflow stage is using this stage type name
+    const stageType = await client.workflowStageType.findUnique({
+      where: { id },
+    });
+    if (!stageType) throw new Error("Stage type not found");
+
+    const inUseStage = await client.workflowStage.findFirst({
+      where: { type: stageType.name },
+    });
+    const inUseTemplate = await client.workflowTemplate.findFirst({
+      where: { type: stageType.name },
+    });
+
+    if (inUseStage || inUseTemplate) {
+      throw new Error(`Cannot delete stage type ${stageType.name} because it is in use by active workflows`);
+    }
+
+    return client.workflowStageType.delete({
+      where: { id },
+    });
   }
 }
 

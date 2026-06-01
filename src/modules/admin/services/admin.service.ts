@@ -8,11 +8,22 @@ import { auditTrailService } from "../services/audit-trail.service";
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
 
-  async getDashboard() {
+  async getDashboard(month?: number, year?: number) {
     const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const filterYear = year !== undefined ? year : now.getFullYear();
+
+    let start: Date;
+    let end: Date;
+
+    if (month !== undefined) {
+      // Calendar month is 1-indexed (Jan = 1, Dec = 12)
+      start = new Date(filterYear, month - 1, 1, 0, 0, 0, 0);
+      end = new Date(filterYear, month, 0, 23, 59, 59, 999);
+    } else {
+      // Full year
+      start = new Date(filterYear, 0, 1, 0, 0, 0, 0);
+      end = new Date(filterYear, 11, 31, 23, 59, 59, 999);
+    }
 
     const [
       totalTransactions,
@@ -27,30 +38,55 @@ export class AdminService {
       pendingReviews,
       tasks,
     ] = await Promise.all([
-      prisma.transaction.count(),
-      prisma.user.count({ where: { role: "CUSTOMER" as any } }),
-      prisma.adminUser.count(),
+      prisma.transaction.count({ where: { createdAt: { gte: start, lte: end } } }),
+      prisma.user.count({ where: { role: "CUSTOMER" as any, createdAt: { gte: start, lte: end } } }),
+      prisma.adminUser.count({ where: { createdAt: { gte: start, lte: end } } }),
       prisma.settlement.aggregate({
         _sum: { amount: true },
-        where: { status: "CONFIRMED" as any },
+        where: { status: "CONFIRMED" as any, confirmedAt: { gte: start, lte: end } },
       }),
       prisma.transaction.findMany({
-        where: { createdAt: { gte: startOfYear, lte: endOfYear } },
+        where: { createdAt: { gte: start, lte: end } },
         select: { createdAt: true, status: true },
       }),
       prisma.transaction.findMany({
+        where: { createdAt: { gte: start, lte: end } },
         orderBy: { createdAt: "desc" },
         take: 10,
-        select: { id: true, createdAt: true, status: true, referenceNumber: true },
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          referenceNumber: true,
+          type: true,
+          user: {
+            select: {
+              email: true,
+              profile: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                }
+              }
+            }
+          }
+        },
       }),
       prisma.transaction.findMany({
-        where: { createdAt: { gte: sevenDaysAgo } },
+        where: { createdAt: { gte: start, lte: end } },
         select: { type: true, nairaEquivalent: true },
       }),
-      prisma.transaction.count({ where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING as any } }),
-      prisma.amlFlag.count(),
-      prisma.transaction.count({ where: { currentStep: TransactionStep.ADMIN_REVIEW as any } }),
+      prisma.transaction.count({
+        where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING as any, createdAt: { gte: start, lte: end } }
+      }),
+      prisma.amlFlag.count({
+        where: { createdAt: { gte: start, lte: end } }
+      }),
+      prisma.transaction.count({
+        where: { currentStep: TransactionStep.ADMIN_REVIEW as any, createdAt: { gte: start, lte: end } }
+      }),
       prisma.taskAssignment.findMany({
+        where: { assignedAt: { gte: start, lte: end } },
         orderBy: { assignedAt: "desc" },
         take: 5,
         select: { id: true, taskType: true, status: true, priority: true, assignedAt: true, taskId: true },
@@ -59,24 +95,64 @@ export class AdminService {
 
     const settlementBalance = Number(settlementAgg._sum.amount || 0);
 
-    const months = Array.from({ length: 12 }, (_, i) => i);
-    const series = {
-      completed: months.map(() => 0),
-      pending: months.map(() => 0),
-      rejected: months.map(() => 0),
-    };
-    for (const tx of yearTransactions) {
-      const m = new Date(tx.createdAt).getMonth();
-      if (tx.status === TransactionStatus.COMPLETED) {
-        series.completed[m] += 1;
-      } else if (tx.status === TransactionStatus.REJECTED) {
-        series.rejected[m] += 1;
-      } else {
-        series.pending[m] += 1;
+    let labels: string[];
+    let series: { completed: number[]; pending: number[]; rejected: number[] };
+
+    if (month !== undefined) {
+      const lastDay = new Date(filterYear, month, 0).getDate();
+      labels = Array.from({ length: lastDay }, (_, i) => String(i + 1));
+      series = {
+        completed: Array(lastDay).fill(0),
+        pending: Array(lastDay).fill(0),
+        rejected: Array(lastDay).fill(0),
+      };
+      for (const tx of yearTransactions) {
+        const d = new Date(tx.createdAt).getDate();
+        if (tx.status === TransactionStatus.COMPLETED) {
+          series.completed[d - 1] += 1;
+        } else if (tx.status === TransactionStatus.REJECTED) {
+          series.rejected[d - 1] += 1;
+        } else {
+          series.pending[d - 1] += 1;
+        }
+      }
+    } else {
+      labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      series = {
+        completed: Array(12).fill(0),
+        pending: Array(12).fill(0),
+        rejected: Array(12).fill(0),
+      };
+      for (const tx of yearTransactions) {
+        const m = new Date(tx.createdAt).getMonth();
+        if (tx.status === TransactionStatus.COMPLETED) {
+          series.completed[m] += 1;
+        } else if (tx.status === TransactionStatus.REJECTED) {
+          series.rejected[m] += 1;
+        } else {
+          series.pending[m] += 1;
+        }
       }
     }
 
+    const allTypes = [
+      "PTA",
+      "BTA",
+      "SCHOOL_FEES",
+      "MEDICAL",
+      "PROFESSIONAL_BODY",
+      "TOURIST_FX",
+      "RESIDENT_FX",
+      "EXPATRIATE_FX",
+      "IMTO_REMITTANCE",
+      "CASH_REMITTANCE",
+    ];
+
     const typeTotals: Record<string, number> = {};
+    for (const t of allTypes) {
+      typeTotals[t] = 0;
+    }
+
     let totalAmount = 0;
     for (const tx of typeWindowTransactions) {
       const type = (tx.type as any) || "UNKNOWN";
@@ -94,21 +170,29 @@ export class AdminService {
         totalUsers,
       },
       transactionSummary: {
-        year: now.getFullYear(),
-        labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+        year: filterYear,
+        month: month || null,
+        labels,
         series,
       },
       transactionsByType: {
-        windowDays: 7,
+        windowDays: month !== undefined ? new Date(filterYear, month, 0).getDate() : 365,
         totalAmount,
         items: transactionsByType,
       },
-      recentTransactions: recentTransactions.map((t) => ({
-        id: t.id,
-        referenceNumber: t.referenceNumber,
-        createdAt: t.createdAt,
-        status: t.status,
-      })),
+      recentTransactions: recentTransactions.map((t: any) => {
+        const customerName = t.user?.profile
+          ? `${t.user.profile.firstName} ${t.user.profile.lastName}`.trim()
+          : t.user?.email || "Unknown Customer";
+        return {
+          id: t.id,
+          referenceNumber: t.referenceNumber,
+          createdAt: t.createdAt,
+          status: t.status,
+          type: t.type,
+          customerName,
+        };
+      }),
       tasks: tasks.map((t) => ({
         id: t.id,
         title: t.taskType,

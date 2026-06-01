@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, streamCsv } from "../../../shared/utils";
 import { rateService } from "../services/rate.service";
+import { workflowService } from "../services/workflow.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
@@ -20,7 +21,13 @@ class RateController {
   });
 
   get = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId;
     const item = await rateService.get(req.params.id);
+    if (item) {
+      const approvalProcess = await workflowService.getActiveWorkflowState(item as any, adminId);
+      res.json(successResponse({ ...item, approvalProcess }));
+      return;
+    }
     res.json(successResponse(item));
   });
 
@@ -111,6 +118,18 @@ class RateController {
       ],
       rows as any[]
     );
+  });
+
+  approve = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const adminId = req.user?.userId || "system";
+    const result = await rateService.approveRate(req.params.id, adminId, req.body.notes || req.body.reason);
+    res.json(successResponse(result));
+  });
+
+  reject = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const adminId = req.user?.userId || "system";
+    const result = await rateService.rejectRate(req.params.id, adminId, req.body.reason || req.body.notes);
+    res.json(successResponse(result));
   });
 }
 

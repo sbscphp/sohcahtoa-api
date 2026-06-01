@@ -9,6 +9,11 @@ import { eventBus } from './events/event-bus';
 import notificationHandler from './modules/notifications/handlers/notification.handler';
 import { setupTransactionWorkflow } from './shared/utils/workflow-setup';
 
+// Import workers to activate background loops
+import './modules/admin/config/workers/outbox.worker';
+import './modules/admin/config/workers/escalation.worker';
+
+
 const logger = createLogger('Server');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);

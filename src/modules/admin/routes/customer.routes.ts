@@ -60,14 +60,14 @@ const router:Router = Router();
  *           format: date-time
  *       - in: query
  *         name: dateTo
+ *         schema:
+ *           type: string
+ *           format: date-time
  *       - in: query
  *         name: createdByAgentId
  *         schema:
  *           type: string
  *         description: Filter by the agent who created the user
- *         schema:
- *           type: string
- *           format: date-time
  *       - in: query
  *         name: sortBy
  *         schema:

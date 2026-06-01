@@ -19,7 +19,7 @@ export const validate = (req: Request, res: Response, next: NextFunction) => {
 
 export const createWorkflowValidation = [
     body('name').notEmpty().withMessage('Workflow name is required'),
-    body('type').isIn(['REVIEW', 'APPROVAL']).withMessage('Invalid workflow type'),
+    body('type').notEmpty().withMessage('Workflow type is required').isString().withMessage('Workflow type must be a string'),
     body('processType').optional().isIn(['RIGID_LINEAR', 'FLEXIBLE']).withMessage('Invalid process type'),
     body('hasPtaRequest').optional().isBoolean().withMessage('hasPtaRequest must be a boolean'),
     body('transactionType').optional().isString().withMessage('transactionType must be a string'),
@@ -30,3 +30,14 @@ export const createWorkflowValidation = [
     body('stages.*.assignees.*.id').optional().isUUID().withMessage('Invalid assignee ID'),
     body('stages.*.assignees.*.adminId').isUUID().withMessage('Invalid admin ID'),
 ];
+
+export const createStageTypeValidation = [
+    body('name').notEmpty().withMessage('Stage type name is required').isString().withMessage('Stage type name must be a string'),
+    body('description').optional().isString().withMessage('Description must be a string'),
+];
+
+export const updateStageTypeValidation = [
+    body('name').notEmpty().withMessage('Stage type name is required').isString().withMessage('Stage type name must be a string'),
+    body('description').optional().isString().withMessage('Description must be a string'),
+];
+

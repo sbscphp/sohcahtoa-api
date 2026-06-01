@@ -103,6 +103,28 @@ class WorkflowController {
     const result = await workflowService.exportTemplates({ status, search }, user?.userId);
     res.json(successResponse(result));
   });
+
+  listStageTypes = asyncHandler(async (_req: Request, res: Response) => {
+    const result = await workflowService.listStageTypes();
+    res.json(successResponse(result));
+  });
+
+  createStageType = asyncHandler(async (req: Request, res: Response) => {
+    const { name, description } = req.body;
+    const result = await workflowService.createStageType(name, description);
+    res.json(successResponse(result));
+  });
+
+  updateStageType = asyncHandler(async (req: Request, res: Response) => {
+    const { name, description } = req.body;
+    const result = await workflowService.updateStageType(req.params.id, name, description);
+    res.json(successResponse(result));
+  });
+
+  deleteStageType = asyncHandler(async (req: Request, res: Response) => {
+    const result = await workflowService.deleteStageType(req.params.id);
+    res.json(successResponse(result));
+  });
 }
 
 export const workflowController = new WorkflowController();
