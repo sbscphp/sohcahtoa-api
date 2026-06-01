@@ -13,15 +13,15 @@ export interface RateFilterOptions {
  * Helper functions for rate status filters
  */
 export const isActiveWhere = (now: Date = new Date()) => {
-  return { isActive: true, validFrom: { lte: now }, validUntil: { gt: now } };
+  return { isActive: true, isApproved: true, validFrom: { lte: now }, validUntil: { gt: now } };
 };
 
 export const isScheduledWhere = (now: Date = new Date()) => {
-  return { isActive: true, validFrom: { gt: now } };
+  return { isActive: true, isApproved: true, validFrom: { gt: now } };
 };
 
 export const isExpiredWhere = (now: Date = new Date()) => {
-  return { isActive: true, validUntil: { lte: now } };
+  return { isActive: true, isApproved: true, validUntil: { lte: now } };
 };
 
 export const isDeactivatedWhere = () => {

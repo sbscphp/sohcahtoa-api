@@ -572,6 +572,20 @@ WalletRouter.post(
   adminWalletController.refund
 );
 
+WalletRouter.post(
+  "/:id/ledger/:entryId/refund/approve",
+  authenticate,
+  requirePermission({ module: "WALLET", feature: "MODULE", action: "edit" }),
+  adminWalletController.approveRefund
+);
+
+WalletRouter.post(
+  "/:id/ledger/:entryId/refund/reject",
+  authenticate,
+  requirePermission({ module: "WALLET", feature: "MODULE", action: "edit" }),
+  adminWalletController.rejectRefund
+);
+
 /**
  * @swagger
  * /api/admin/wallet/{id}/ledger/{entryId}/disburse:

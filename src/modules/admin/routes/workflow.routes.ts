@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { authenticate, requirePermission } from "../../../shared/middleware";
 import { workflowController } from "../controllers/workflow.controller";
-import { createWorkflowValidation, validate } from "../validations/workflow.validation";
+import { createWorkflowValidation, validate, createStageTypeValidation, updateStageTypeValidation } from "../validations/workflow.validation";
+
 
 const WorkflowRouter: Router = Router();
 
@@ -413,4 +414,143 @@ WorkflowRouter.post(
   workflowController.exportTemplates
 );
 
+/**
+ * @swagger
+ * /api/admin/workflow/types:
+ *   get:
+ *     summary: List all workflow stage types
+ *     tags: [admin-workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stage types retrieved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ */
+WorkflowRouter.get(
+  "/types",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "view" }),
+  workflowController.listStageTypes
+);
+
+/**
+ * @swagger
+ * /api/admin/workflow/types:
+ *   post:
+ *     summary: Create new workflow stage type
+ *     tags: [admin-workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name: { type: string }
+ *               description: { type: string }
+ *     responses:
+ *       200:
+ *         description: Stage type created
+ *       400:
+ *         description: Validation failed or type name already exists
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ */
+WorkflowRouter.post(
+  "/types",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "create" }),
+  createStageTypeValidation,
+  validate,
+  workflowController.createStageType
+);
+
+/**
+ * @swagger
+ * /api/admin/workflow/types/{id}:
+ *   put:
+ *     summary: Update workflow stage type
+ *     tags: [admin-workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name: { type: string }
+ *               description: { type: string }
+ *     responses:
+ *       200:
+ *         description: Stage type updated
+ *       400:
+ *         description: Validation failed or type name already exists on another record
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ *       404:
+ *         description: Stage type not found
+ */
+WorkflowRouter.put(
+  "/types/:id",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "edit" }),
+  updateStageTypeValidation,
+  validate,
+  workflowController.updateStageType
+);
+
+/**
+ * @swagger
+ * /api/admin/workflow/types/{id}:
+ *   delete:
+ *     summary: Delete workflow stage type
+ *     tags: [admin-workflow]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Stage type deleted
+ *       400:
+ *         description: Cannot delete stage type because it is in use by active workflows
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Forbidden - Insufficient permissions
+ *       404:
+ *         description: Stage type not found
+ */
+WorkflowRouter.delete(
+  "/types/:id",
+  authenticate,
+  requirePermission({ module: "WORKFLOW", feature: "MODULE", action: "delete" }),
+  workflowController.deleteStageType
+);
+
 export default WorkflowRouter;
+

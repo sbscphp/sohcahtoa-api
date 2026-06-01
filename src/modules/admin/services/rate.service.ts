@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere } from "../../../shared/utils/rate-filters";
+import { workflowService } from "./workflow.service";
 
 const prisma: PrismaClient = getDatabase();
 
@@ -81,10 +82,22 @@ class RateService {
         note: data.note,
         validFrom: data.validFrom,
         validUntil: data.validUntil,
-        isActive: true,
+        isActive: false, // Inactive until approved
+        isApproved: false, // Pending approval
         source: "MANUAL",
       },
     });
+
+    const attached = await workflowService.attachWorkflowToRate(created.id);
+    if (!attached) {
+      // Auto approve if no workflow template exists for RATE
+      const approvedRate = await client.exchangeRate.update({
+        where: { id: created.id },
+        data: { isApproved: true, isActive: true },
+      });
+      return approvedRate;
+    }
+
     return created;
   }
 
@@ -136,6 +149,112 @@ class RateService {
       weSellAt: Number(r.sellRate || 0),
       lastUpdated: r.updatedAt,
     }));
+  }
+
+  async approveRate(rateId: string, adminId: string, reason?: string) {
+    const client: any = prisma as any;
+    const rate = await client.exchangeRate.findUnique({
+      where: { id: rateId },
+      select: {
+        id: true,
+        workflowTemplateId: true,
+        currentWorkflowStageId: true,
+        isApproved: true,
+      }
+    });
+
+    if (!rate) throw new Error("Rate not found");
+    if (rate.isApproved) throw new Error("Rate is already approved");
+
+    if (rate.workflowTemplateId && rate.currentWorkflowStageId) {
+      const workflow = await client.workflowTemplate.findUnique({
+        where: { id: rate.workflowTemplateId },
+        include: {
+          stages: {
+            orderBy: { order: "asc" },
+            include: { assignees: true }
+          }
+        }
+      });
+
+      if (workflow) {
+        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === rate.currentWorkflowStageId);
+        if (currentStageIndex === -1) {
+          throw new Error("Rate is in an invalid workflow stage.");
+        }
+
+        const currentStage = workflow.stages[currentStageIndex];
+        const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+        if (!isAssigned) {
+          throw new Error("You are not authorized to approve this rate at its current stage.");
+        }
+
+        if (currentStageIndex + 1 < workflow.stages.length) {
+          const nextStage = workflow.stages[currentStageIndex + 1];
+          await client.exchangeRate.update({
+            where: { id: rateId },
+            data: { currentWorkflowStageId: nextStage.id }
+          });
+          return { message: "Rate advanced to the next approval stage" };
+        }
+      }
+    }
+
+    // Final approval
+    await client.exchangeRate.update({
+      where: { id: rateId },
+      data: {
+        isApproved: true,
+        isActive: true,
+        currentWorkflowStageId: null,
+      }
+    });
+
+    return { message: "Rate approved and activated successfully" };
+  }
+
+  async rejectRate(rateId: string, adminId: string, reason: string) {
+    const client: any = prisma as any;
+    const rate = await client.exchangeRate.findUnique({
+      where: { id: rateId },
+      select: {
+        id: true,
+        workflowTemplateId: true,
+        currentWorkflowStageId: true,
+        isApproved: true,
+      }
+    });
+
+    if (!rate) throw new Error("Rate not found");
+    if (rate.isApproved) throw new Error("Rate is already approved");
+
+    if (rate.workflowTemplateId && rate.currentWorkflowStageId) {
+      const workflow = await client.workflowTemplate.findUnique({
+        where: { id: rate.workflowTemplateId },
+        include: { stages: { include: { assignees: true } } }
+      });
+
+      if (workflow) {
+        const currentStage = workflow.stages.find((s: any) => s.id === rate.currentWorkflowStageId);
+        if (currentStage) {
+          const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+          if (!isAssigned) {
+            throw new Error("You are not authorized to reject this rate at its current stage.");
+          }
+        }
+      }
+    }
+
+    await client.exchangeRate.update({
+      where: { id: rateId },
+      data: {
+        isActive: false,
+        isApproved: false,
+        currentWorkflowStageId: null,
+      }
+    });
+
+    return { message: "Rate rejected successfully" };
   }
 }
 

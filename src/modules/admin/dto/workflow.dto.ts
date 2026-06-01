@@ -1,8 +1,3 @@
-export enum WorkflowType {
-  REVIEW = "REVIEW",
-  APPROVAL = "APPROVAL",
-}
-
 export enum WorkflowProcessType {
   RIGID_LINEAR = "RIGID_LINEAR",
   FLEXIBLE = "FLEXIBLE",
@@ -17,16 +12,26 @@ export interface WorkflowAssigneeDto {
 export interface WorkflowStageDto {
   id?: string;
   name?: string;
-  type?: WorkflowType;
+  type?: string;
   escalationMinutes?: number;
+  escalationAdminId?: string;
   order: number;
   assignees: WorkflowAssigneeDto[];
+}
+
+export enum ApprovalType {
+  TRANSACTION = "TRANSACTION",
+  REFUND = "REFUND",
+  RATE = "RATE",
 }
 
 export interface CreateWorkflowDto {
   name: string;
   description?: string;
-  type: WorkflowType;
+  type: string;
+  approvalType?: ApprovalType;
+  minAmount?: number;
+  maxAmount?: number;
   processType?: WorkflowProcessType;
   action?: string;
   branchId?: string;

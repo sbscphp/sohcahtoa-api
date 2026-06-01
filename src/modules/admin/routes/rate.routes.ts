@@ -274,4 +274,18 @@ RateRouter.patch(
   rateController.deactivate
 );
 
+RateRouter.post(
+  "/:id/approve",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "edit" }),
+  rateController.approve
+);
+
+RateRouter.post(
+  "/:id/reject",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "edit" }),
+  rateController.reject
+);
+
 export default RateRouter;

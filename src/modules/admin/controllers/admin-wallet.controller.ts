@@ -3,6 +3,7 @@ import { asyncHandler } from "../../../shared/middleware";
 import { successResponse } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils/csv";
 import { adminWalletService } from "../services/admin-wallet.service";
+import { workflowService } from "../services/workflow.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { ActionType } from "../../../shared/types/action-type";
 
@@ -131,12 +132,14 @@ class AdminWalletController {
    * Get a specific ledger entry by ID.
    */
   getEntry = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId;
     const result = await adminWalletService.getEntryById(req.params.id, req.params.entryId);
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;
     }
-    res.json(successResponse(result));
+    const approvalProcess = await workflowService.getActiveWorkflowState(result as any, adminId);
+    res.json(successResponse({ ...result, approvalProcess }));
   });
 
   /**
@@ -294,8 +297,51 @@ class AdminWalletController {
   });
 
   /**
+   * POST /api/admin/wallet/:id/ledger/:entryId/refund/approve
+   * Approve a refund for an entry.
+   */
+  approveRefund = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminWalletService.approveRefund(req.params.id, req.params.entryId, adminId, req.body.notes || req.body.reason);
+    if (!result) {
+      res.status(404).json({ success: false, message: "Entry not found" });
+      return;
+    }
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.WALLET_REFUND,
+      actionLabel: "Approve wallet entry refund",
+      resourceType: "WALLET",
+      resourceId: req.params.id,
+      metadata: { entryId: req.params.entryId, action: "APPROVE", reason: req.body.notes || req.body.reason },
+    });
+    res.json(successResponse(result));
+  });
+
+  /**
+   * POST /api/admin/wallet/:id/ledger/:entryId/refund/reject
+   * Reject a refund for an entry.
+   */
+  rejectRefund = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminWalletService.rejectRefund(req.params.id, req.params.entryId, adminId, req.body.reason || req.body.notes);
+    if (!result) {
+      res.status(404).json({ success: false, message: "Entry not found" });
+      return;
+    }
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.WALLET_REFUND,
+      actionLabel: "Reject wallet entry refund",
+      resourceType: "WALLET",
+      resourceId: req.params.id,
+      metadata: { entryId: req.params.entryId, action: "REJECT", reason: req.body.reason || req.body.notes },
+    });
+    res.json(successResponse(result));
+  });
+
+  /**
    * POST /api/admin/wallet/:id/ledger/:entryId/disburse
-   * Confirm disbursement for an entry.
    */
   disburse = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;

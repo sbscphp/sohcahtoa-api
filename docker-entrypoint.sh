@@ -663,8 +663,23 @@ ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "action" TEXT;
 ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
 CREATE INDEX IF NOT EXISTS "workflow_templates_branchId_idx" ON "workflow_templates"("branchId");
 
+-- Ensure type is TEXT and update workflow_templates
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "type" TEXT;
+ALTER TABLE "workflow_templates" ALTER COLUMN "type" TYPE TEXT;
+
 -- Update workflow_stages
-ALTER TABLE "workflow_stages" ADD COLUMN IF NOT EXISTS "type" "WorkflowType";
+ALTER TABLE "workflow_stages" ADD COLUMN IF NOT EXISTS "type" TEXT;
+ALTER TABLE "workflow_stages" ALTER COLUMN "type" TYPE TEXT;
+ALTER TABLE "workflow_stages" ADD COLUMN IF NOT EXISTS "escalationAdminId" TEXT;
+CREATE INDEX IF NOT EXISTS "workflow_stages_escalationAdminId_idx" ON "workflow_stages"("escalationAdminId");
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'workflow_stages_escalationAdminId_fkey') THEN
+    ALTER TABLE "workflow_stages"
+      ADD CONSTRAINT "workflow_stages_escalationAdminId_fkey"
+      FOREIGN KEY ("escalationAdminId") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Update workflow_assignees
 ALTER TABLE "workflow_assignees" ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NULL DEFAULT 1;
@@ -672,6 +687,41 @@ ALTER TABLE "workflow_assignees" ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NU
 -- Update transactions
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
+
+-- Ensure ApprovalType enum exists
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ApprovalType') THEN
+    CREATE TYPE "ApprovalType" AS ENUM ('TRANSACTION', 'REFUND', 'RATE');
+  END IF;
+END $$;
+
+-- Update workflow_templates for approvalType and amount ranges
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "approvalType" "ApprovalType" NOT NULL DEFAULT 'TRANSACTION';
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "minAmount" DECIMAL(18, 2);
+ALTER TABLE "workflow_templates" ADD COLUMN IF NOT EXISTS "maxAmount" DECIMAL(18, 2);
+
+-- Ensure workflow_stage_types table exists
+CREATE TABLE IF NOT EXISTS "workflow_stage_types" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "workflow_stage_types_name_key" ON "workflow_stage_types"("name");
+
+-- Update exchange_rates with workflow fields
+ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
+ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
+ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "isApproved" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "exchange_rates_workflowTemplateId_idx" ON "exchange_rates"("workflowTemplateId");
+CREATE INDEX IF NOT EXISTS "exchange_rates_currentWorkflowStageId_idx" ON "exchange_rates"("currentWorkflowStageId");
+
+-- Update wallet_entries with workflow fields
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
+CREATE INDEX IF NOT EXISTS "wallet_entries_workflowTemplateId_idx" ON "wallet_entries"("workflowTemplateId");
+CREATE INDEX IF NOT EXISTS "wallet_entries_currentWorkflowStageId_idx" ON "wallet_entries"("currentWorkflowStageId");
 
 -- Payment balance tracking for underpayment/overpayment settlement
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "amountPaid" DECIMAL(18,2);
