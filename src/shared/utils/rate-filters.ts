@@ -21,11 +21,19 @@ export const isScheduledWhere = (now: Date = new Date()) => {
 };
 
 export const isExpiredWhere = (now: Date = new Date()) => {
-  return { isActive: true, isApproved: true, validUntil: { lte: now } };
+  return { validUntil: { lte: now } };
 };
 
-export const isDeactivatedWhere = () => {
-  return { isActive: false };
+export const isPendingApprovalWhere = (now: Date = new Date()) => {
+  return { isApproved: false, validUntil: { gt: now } };
+};
+
+export const isDeactivatedWhere = (now: Date = new Date()) => {
+  return {
+    isActive: false,
+    isApproved: true,
+    validUntil: { gt: now },
+  };
 };
 
 /**
@@ -34,6 +42,7 @@ export const isDeactivatedWhere = () => {
  */
 export const buildRateWhereClause = (filters: RateFilterOptions = {}) => {
   const where: any = {};
+  const now = new Date();
 
   // Search by currency codes
   if (filters.search) {
@@ -57,13 +66,15 @@ export const buildRateWhereClause = (filters: RateFilterOptions = {}) => {
   // Filter by status
   const status = (filters.status || "all").toString().toLowerCase();
   if (status === "active") {
-    Object.assign(where, isActiveWhere());
+    Object.assign(where, isActiveWhere(now));
   } else if (status === "scheduled" || status === "schedule") {
-    Object.assign(where, isScheduledWhere());
+    Object.assign(where, isScheduledWhere(now));
   } else if (status === "expired") {
-    Object.assign(where, isExpiredWhere());
+    Object.assign(where, isExpiredWhere(now));
   } else if (status === "deactivated") {
-    Object.assign(where, isDeactivatedWhere());
+    Object.assign(where, isDeactivatedWhere(now));
+  } else if (status === "pending_approval" || status === "pendingapproval") {
+    Object.assign(where, isPendingApprovalWhere(now));
   }
 
   return where;
@@ -82,4 +93,6 @@ export const rateSelectFields = {
   validFrom: true,
   validUntil: true,
   isActive: true,
+  isApproved: true,
 };
+

@@ -12,6 +12,8 @@ import { setupTransactionWorkflow } from './shared/utils/workflow-setup';
 // Import workers to activate background loops
 import './modules/admin/config/workers/outbox.worker';
 import './modules/admin/config/workers/escalation.worker';
+import './modules/admin/config/workers/rate-expiry.worker';
+
 
 
 const logger = createLogger('Server');

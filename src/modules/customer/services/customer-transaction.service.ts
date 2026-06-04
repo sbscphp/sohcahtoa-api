@@ -3,7 +3,7 @@ import {
   calculateAmountUsingActiveSellRate,
   getActiveExchangeRates,
 } from '../../../shared/services/exchange-rate-reader.service';
-import { NotFoundError, ValidationError } from '../../../shared/utils';
+import { NotFoundError, ValidationError, expireExpiredRates } from '../../../shared/utils';
 import { v2 as cloudinary } from 'cloudinary';
 import auditService from '../../audit/services/audit.service';
 import { workflowService } from '../../admin/services/workflow.service';
@@ -291,6 +291,7 @@ export class CustomerTransactionService {
     let exchangeRate: number | null = null;
 
     if (currency.toUpperCase() !== 'NGN') {
+      await expireExpiredRates();
       logger.info(`[createTransaction] Fetching exchange rate for ${currency} to NGN`, {
         currency,
         amount,
@@ -897,6 +898,7 @@ export class CustomerTransactionService {
    * @param toCurrency   - Optional: filter rates where this is the target currency
    */
   async getActiveRates(fromCurrency?: string, toCurrency?: string) {
+    await expireExpiredRates();
     logger.info(`[getActiveRates] Fetching active exchange rates`, {
       fromCurrency,
       toCurrency,
@@ -939,6 +941,7 @@ export class CustomerTransactionService {
     amount: number,
     mode?: string // 'buy' | 'sell' — defaults to 'sell'
   ) {
+    await expireExpiredRates();
     const normalizedMode = (mode || 'sell').toLowerCase().trim();
 
     logger.info(`[calculateAmount] Calculating transaction amount`, {
@@ -2153,6 +2156,8 @@ export class CustomerTransactionService {
 
     // Collect the distinct currencies present in the user's transactions
     const currencies = [...new Set(transactions.map((t) => t.currency.toUpperCase()))];
+
+    await expireExpiredRates();
 
     // Fetch the latest active admin-defined rates for each of those currencies (all → NGN)
     const now = new Date();

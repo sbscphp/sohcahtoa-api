@@ -60,6 +60,28 @@ const router: Router = Router();
  *     tags: [admin-core]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: integer
+ *         description: Calendar month (1-12)
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ *         description: Calendar year
+ *       - in: query
+ *         name: txnType
+ *         schema:
+ *           type: string
+ *         description: Filter by transaction type (e.g. PTA, BTA, SCHOOL_FEES)
+ *       - in: query
+ *         name: range
+ *         schema:
+ *           type: string
+ *           enum: [last_7_days, 7d, last_30_days, 30d, last_90_days, 90d, last_6_months, 6m, last_12_months, 12m]
+ *         description: Date range preset (overrides month and year)
  *     responses:
  *       200:
  *         description: Dashboard data retrieved successfully

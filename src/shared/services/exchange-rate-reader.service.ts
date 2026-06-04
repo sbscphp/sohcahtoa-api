@@ -1,6 +1,8 @@
 import { getDatabase } from "../../config/database";
 import { NotFoundError } from "../utils/errors";
 import { createLogger } from "../utils/logger";
+import { expireExpiredRates } from "../utils/rate-expiry";
+
 
 const prisma = getDatabase();
 const logger = createLogger("exchange-rate-reader");
@@ -19,6 +21,8 @@ export type CalculateAmountResult = {
  * Currently active exchange rates (valid window + isActive), with public-facing fields only.
  */
 export async function getActiveExchangeRates(fromCurrency?: string, toCurrency?: string) {
+  await expireExpiredRates();
+
   logger.info("Fetching active exchange rates", {
     fromCurrency,
     toCurrency,
@@ -72,6 +76,8 @@ export async function calculateAmountUsingActiveSellRate(
   toCurrency: string,
   amount: number
 ): Promise<CalculateAmountResult> {
+  await expireExpiredRates();
+
   const from = fromCurrency.toUpperCase();
   const to = toCurrency.toUpperCase();
 

@@ -131,6 +131,25 @@ class RateController {
     const result = await rateService.rejectRate(req.params.id, adminId, req.body.reason || req.body.notes);
     res.json(successResponse(result));
   });
+
+  delete = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const rate = await rateService.get(req.params.id);
+    const result = await rateService.deleteRate(req.params.id);
+    if (req.user && rate) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: ActionType.RATE_UPDATE,
+        actionLabel: "Rate deleted",
+        resourceType: "RATE",
+        resourceId: req.params.id,
+        previousState: rate,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
+    res.json(successResponse(result));
+  });
 }
 
 export const rateController = new RateController();

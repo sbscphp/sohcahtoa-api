@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { createLogger, ForbiddenError, NotFoundError } from "../../../shared/utils";
+import { createLogger, ForbiddenError, NotFoundError, ValidationError } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared/types";
 import { hashPassword } from "../../../shared/utils/password";
 import { auditTrailService } from "../services/audit-trail.service";
@@ -8,21 +8,81 @@ import { auditTrailService } from "../services/audit-trail.service";
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
 
-  async getDashboard(month?: number, year?: number) {
+  async getDashboard(month?: number, year?: number, txnType?: string, range?: string) {
     const now = new Date();
-    const filterYear = year !== undefined ? year : now.getFullYear();
+    const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    if (txnType) {
+      const allTypes = [
+        "PTA",
+        "BTA",
+        "SCHOOL_FEES",
+        "MEDICAL",
+        "PROFESSIONAL_BODY",
+        "TOURIST_FX",
+        "RESIDENT_FX",
+        "EXPATRIATE_FX",
+        "IMTO_REMITTANCE",
+        "CASH_REMITTANCE",
+      ];
+      if (!allTypes.includes(txnType.toUpperCase())) {
+        throw new ValidationError(`Invalid transaction type: ${txnType}`);
+      }
+    }
 
     let start: Date;
-    let end: Date;
+    let end: Date = now;
+    let windowDays = 365;
 
-    if (month !== undefined) {
-      // Calendar month is 1-indexed (Jan = 1, Dec = 12)
-      start = new Date(filterYear, month - 1, 1, 0, 0, 0, 0);
-      end = new Date(filterYear, month, 0, 23, 59, 59, 999);
+    if (range) {
+      const normalizedRange = range.toLowerCase().trim();
+      start = new Date(now);
+      if (normalizedRange === "last_7_days" || normalizedRange === "7d") {
+        start.setDate(now.getDate() - 7);
+        windowDays = 7;
+      } else if (normalizedRange === "last_30_days" || normalizedRange === "30d") {
+        start.setDate(now.getDate() - 30);
+        windowDays = 30;
+      } else if (normalizedRange === "last_90_days" || normalizedRange === "90d") {
+        start.setDate(now.getDate() - 90);
+        windowDays = 90;
+      } else if (normalizedRange === "last_6_months" || normalizedRange === "6m") {
+        start.setMonth(now.getMonth() - 6);
+        windowDays = 180;
+      } else if (normalizedRange === "last_12_months" || normalizedRange === "12m") {
+        start.setMonth(now.getMonth() - 12);
+        windowDays = 365;
+      } else {
+        throw new ValidationError(`Invalid range preset: ${range}`);
+      }
     } else {
-      // Full year
-      start = new Date(filterYear, 0, 1, 0, 0, 0, 0);
-      end = new Date(filterYear, 11, 31, 23, 59, 59, 999);
+      const filterYear = year !== undefined ? year : now.getFullYear();
+      if (month !== undefined) {
+        // Calendar month is 1-indexed (Jan = 1, Dec = 12)
+        start = new Date(filterYear, month - 1, 1, 0, 0, 0, 0);
+        end = new Date(filterYear, month, 0, 23, 59, 59, 999);
+        windowDays = new Date(filterYear, month, 0).getDate();
+      } else {
+        // Full year
+        start = new Date(filterYear, 0, 1, 0, 0, 0, 0);
+        end = new Date(filterYear, 11, 31, 23, 59, 59, 999);
+        windowDays = 365;
+      }
+    }
+
+    const txWhere: any = { createdAt: { gte: start, lte: end } };
+    if (txnType) {
+      txWhere.type = txnType.toUpperCase();
+    }
+
+    // Find settlements matching transactions of the selected type if filtered
+    let settlementWhere: any = { status: "CONFIRMED" as any, confirmedAt: { gte: start, lte: end } };
+    if (txnType) {
+      const txs = await prisma.transaction.findMany({
+        where: { type: txnType.toUpperCase() as any, createdAt: { gte: start, lte: end } },
+        select: { id: true },
+      });
+      settlementWhere.transactionId = { in: txs.map((t) => t.id) };
     }
 
     const [
@@ -38,19 +98,19 @@ export class AdminService {
       pendingReviews,
       tasks,
     ] = await Promise.all([
-      prisma.transaction.count({ where: { createdAt: { gte: start, lte: end } } }),
+      prisma.transaction.count({ where: txWhere }),
       prisma.user.count({ where: { role: "CUSTOMER" as any, createdAt: { gte: start, lte: end } } }),
       prisma.adminUser.count({ where: { createdAt: { gte: start, lte: end } } }),
       prisma.settlement.aggregate({
         _sum: { amount: true },
-        where: { status: "CONFIRMED" as any, confirmedAt: { gte: start, lte: end } },
+        where: settlementWhere,
       }),
       prisma.transaction.findMany({
-        where: { createdAt: { gte: start, lte: end } },
+        where: txWhere,
         select: { createdAt: true, status: true },
       }),
       prisma.transaction.findMany({
-        where: { createdAt: { gte: start, lte: end } },
+        where: txWhere,
         orderBy: { createdAt: "desc" },
         take: 10,
         select: {
@@ -73,17 +133,20 @@ export class AdminService {
         },
       }),
       prisma.transaction.findMany({
-        where: { createdAt: { gte: start, lte: end } },
+        where: txWhere,
         select: { type: true, nairaEquivalent: true },
       }),
       prisma.transaction.count({
-        where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING as any, createdAt: { gte: start, lte: end } }
+        where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING as any, ...txWhere }
       }),
       prisma.amlFlag.count({
-        where: { createdAt: { gte: start, lte: end } }
+        where: {
+          createdAt: { gte: start, lte: end },
+          check: txnType ? { transactionType: txnType.toUpperCase() as any } : undefined,
+        }
       }),
       prisma.transaction.count({
-        where: { currentStep: TransactionStep.ADMIN_REVIEW as any, createdAt: { gte: start, lte: end } }
+        where: { currentStep: TransactionStep.ADMIN_REVIEW as any, ...txWhere }
       }),
       prisma.taskAssignment.findMany({
         where: { assignedAt: { gte: start, lte: end } },
@@ -95,42 +158,170 @@ export class AdminService {
 
     const settlementBalance = Number(settlementAgg._sum.amount || 0);
 
-    let labels: string[];
-    let series: { completed: number[]; pending: number[]; rejected: number[] };
+    let labels: string[] = [];
+    let series: { completed: number[]; pending: number[]; rejected: number[] } = {
+      completed: [],
+      pending: [],
+      rejected: [],
+    };
 
-    if (month !== undefined) {
-      const lastDay = new Date(filterYear, month, 0).getDate();
-      labels = Array.from({ length: lastDay }, (_, i) => String(i + 1));
-      series = {
-        completed: Array(lastDay).fill(0),
-        pending: Array(lastDay).fill(0),
-        rejected: Array(lastDay).fill(0),
-      };
-      for (const tx of yearTransactions) {
-        const d = new Date(tx.createdAt).getDate();
-        if (tx.status === TransactionStatus.COMPLETED) {
-          series.completed[d - 1] += 1;
-        } else if (tx.status === TransactionStatus.REJECTED) {
-          series.rejected[d - 1] += 1;
-        } else {
-          series.pending[d - 1] += 1;
+    if (range) {
+      const normalizedRange = range.toLowerCase().trim();
+      if (normalizedRange === "last_7_days" || normalizedRange === "7d") {
+        const daysCount = 7;
+        labels = Array(daysCount).fill("");
+        series = {
+          completed: Array(daysCount).fill(0),
+          pending: Array(daysCount).fill(0),
+          rejected: Array(daysCount).fill(0),
+        };
+        const dateList: Date[] = [];
+        for (let i = daysCount - 1; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - i);
+          dateList.push(d);
+          labels[daysCount - 1 - i] = `${monthsShort[d.getMonth()]} ${d.getDate()}`;
+        }
+        for (const tx of yearTransactions) {
+          const txDate = new Date(tx.createdAt);
+          const slot = dateList.findIndex((d) => d.toDateString() === txDate.toDateString());
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
+          }
+        }
+      } else if (normalizedRange === "last_30_days" || normalizedRange === "30d") {
+        const daysCount = 30;
+        labels = Array(daysCount).fill("");
+        series = {
+          completed: Array(daysCount).fill(0),
+          pending: Array(daysCount).fill(0),
+          rejected: Array(daysCount).fill(0),
+        };
+        const dateList: Date[] = [];
+        for (let i = daysCount - 1; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - i);
+          dateList.push(d);
+          labels[daysCount - 1 - i] = `${monthsShort[d.getMonth()]} ${d.getDate()}`;
+        }
+        for (const tx of yearTransactions) {
+          const txDate = new Date(tx.createdAt);
+          const slot = dateList.findIndex((d) => d.toDateString() === txDate.toDateString());
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
+          }
+        }
+      } else if (normalizedRange === "last_90_days" || normalizedRange === "90d") {
+        const daysCount = 90;
+        labels = Array(daysCount).fill("");
+        series = {
+          completed: Array(daysCount).fill(0),
+          pending: Array(daysCount).fill(0),
+          rejected: Array(daysCount).fill(0),
+        };
+        const dateList: Date[] = [];
+        for (let i = daysCount - 1; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(now.getDate() - i);
+          dateList.push(d);
+          labels[daysCount - 1 - i] = `${monthsShort[d.getMonth()]} ${d.getDate()}`;
+        }
+        for (const tx of yearTransactions) {
+          const txDate = new Date(tx.createdAt);
+          const slot = dateList.findIndex((d) => d.toDateString() === txDate.toDateString());
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
+          }
+        }
+      } else if (
+        normalizedRange === "last_6_months" ||
+        normalizedRange === "6m" ||
+        normalizedRange === "last_12_months" ||
+        normalizedRange === "12m"
+      ) {
+        const monthsCount = normalizedRange.includes("6") ? 6 : 12;
+        labels = Array(monthsCount).fill("");
+        series = {
+          completed: Array(monthsCount).fill(0),
+          pending: Array(monthsCount).fill(0),
+          rejected: Array(monthsCount).fill(0),
+        };
+        const monthSlots: { year: number; month: number }[] = [];
+        for (let i = monthsCount - 1; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          monthSlots.push({ year: d.getFullYear(), month: d.getMonth() });
+          labels[monthsCount - 1 - i] = `${monthsShort[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
+        }
+        for (const tx of yearTransactions) {
+          const txDate = new Date(tx.createdAt);
+          const slot = monthSlots.findIndex(
+            (m) => m.year === txDate.getFullYear() && m.month === txDate.getMonth()
+          );
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
+          }
         }
       }
     } else {
-      labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      series = {
-        completed: Array(12).fill(0),
-        pending: Array(12).fill(0),
-        rejected: Array(12).fill(0),
-      };
-      for (const tx of yearTransactions) {
-        const m = new Date(tx.createdAt).getMonth();
-        if (tx.status === TransactionStatus.COMPLETED) {
-          series.completed[m] += 1;
-        } else if (tx.status === TransactionStatus.REJECTED) {
-          series.rejected[m] += 1;
-        } else {
-          series.pending[m] += 1;
+      const filterYear = year !== undefined ? year : now.getFullYear();
+      if (month !== undefined) {
+        const lastDay = new Date(filterYear, month, 0).getDate();
+        labels = Array.from({ length: lastDay }, (_, i) => String(i + 1));
+        series = {
+          completed: Array(lastDay).fill(0),
+          pending: Array(lastDay).fill(0),
+          rejected: Array(lastDay).fill(0),
+        };
+        for (const tx of yearTransactions) {
+          const d = new Date(tx.createdAt).getDate();
+          if (tx.status === TransactionStatus.COMPLETED) {
+            series.completed[d - 1] += 1;
+          } else if (tx.status === TransactionStatus.REJECTED) {
+            series.rejected[d - 1] += 1;
+          } else {
+            series.pending[d - 1] += 1;
+          }
+        }
+      } else {
+        labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        series = {
+          completed: Array(12).fill(0),
+          pending: Array(12).fill(0),
+          rejected: Array(12).fill(0),
+        };
+        for (const tx of yearTransactions) {
+          const m = new Date(tx.createdAt).getMonth();
+          if (tx.status === TransactionStatus.COMPLETED) {
+            series.completed[m] += 1;
+          } else if (tx.status === TransactionStatus.REJECTED) {
+            series.rejected[m] += 1;
+          } else {
+            series.pending[m] += 1;
+          }
         }
       }
     }
@@ -170,13 +361,14 @@ export class AdminService {
         totalUsers,
       },
       transactionSummary: {
-        year: filterYear,
-        month: month || null,
+        year: range ? null : (year !== undefined ? year : now.getFullYear()),
+        month: range ? null : (month || null),
+        rangePreset: range || null,
         labels,
         series,
       },
       transactionsByType: {
-        windowDays: month !== undefined ? new Date(filterYear, month, 0).getDate() : 365,
+        windowDays,
         totalAmount,
         items: transactionsByType,
       },

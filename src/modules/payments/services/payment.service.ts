@@ -5,6 +5,7 @@ import {
   generateId,
   NotFoundError,
   ValidationError,
+  expireExpiredRates,
 } from '../../../shared/utils';
 import {
   ExchangeRateRequest,
@@ -21,6 +22,7 @@ const prisma = getDatabase();
 
 export class PaymentService {
   async getExchangeRate(data: ExchangeRateRequest): Promise<ExchangeRateResponse> {
+    await expireExpiredRates();
     // Check cache first
     const cacheKey = `rate:${data.fromCurrency}:${data.toCurrency}`;
     const cached = await redis.get(cacheKey);
