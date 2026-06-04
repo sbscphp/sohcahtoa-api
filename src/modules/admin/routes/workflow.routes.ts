@@ -96,6 +96,9 @@ WorkflowRouter.get(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               minAmount: { type: number }
+ *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
  *               branchId: { type: string }
@@ -107,15 +110,18 @@ WorkflowRouter.get(
  *                 items:
  *                   type: object
  *                   properties:
+ *                     id: { type: string }
  *                     name: { type: string }
- *                     type: { type: string, enum: [REVIEW, APPROVAL] }
+ *                     type: { type: string }
  *                     order: { type: integer }
  *                     escalationMinutes: { type: integer }
+ *                     escalationAdminId: { type: string }
  *                     assignees:
  *                       type: array
  *                       items:
  *                         type: object
  *                         properties:
+ *                           id: { type: string }
  *                           adminId: { type: string }
  *                           order: { type: integer }
  *     responses:
@@ -149,13 +155,34 @@ WorkflowRouter.post(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               minAmount: { type: number }
+ *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
  *               branchId: { type: string }
  *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
- *               stages: { type: array }
+ *               stages:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string }
+ *                     name: { type: string }
+ *                     type: { type: string }
+ *                     order: { type: integer }
+ *                     escalationMinutes: { type: integer }
+ *                     escalationAdminId: { type: string }
+ *                     assignees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string }
+ *                           adminId: { type: string }
+ *                           order: { type: integer }
  *     responses:
  *       200:
  *         description: Draft saved
@@ -245,13 +272,34 @@ WorkflowRouter.get(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               minAmount: { type: number }
+ *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
  *               branchId: { type: string }
  *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
- *               stages: { type: array }
+ *               stages:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string }
+ *                     name: { type: string }
+ *                     type: { type: string }
+ *                     order: { type: integer }
+ *                     escalationMinutes: { type: integer }
+ *                     escalationAdminId: { type: string }
+ *                     assignees:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string }
+ *                           adminId: { type: string }
+ *                           order: { type: integer }
  *     responses:
  *       200:
  *         description: Template updated

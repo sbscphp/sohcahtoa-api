@@ -572,6 +572,33 @@ WalletRouter.post(
   adminWalletController.refund
 );
 
+/**
+ * @swagger
+ * /api/admin/wallet/{id}/ledger/{entryId}/refund/approve:
+ *   post:
+ *     summary: Approve a pending refund for a ledger entry
+ *     tags: [admin-wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Refund approved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 WalletRouter.post(
   "/:id/ledger/:entryId/refund/approve",
   authenticate,
@@ -579,6 +606,33 @@ WalletRouter.post(
   adminWalletController.approveRefund
 );
 
+/**
+ * @swagger
+ * /api/admin/wallet/{id}/ledger/{entryId}/refund/reject:
+ *   post:
+ *     summary: Reject a pending refund for a ledger entry
+ *     tags: [admin-wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Refund rejected successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 WalletRouter.post(
   "/:id/ledger/:entryId/refund/reject",
   authenticate,

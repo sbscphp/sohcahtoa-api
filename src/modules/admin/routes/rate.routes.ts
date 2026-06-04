@@ -274,6 +274,36 @@ RateRouter.patch(
   rateController.deactivate
 );
 
+/**
+ * @swagger
+ * /api/admin/rate/{id}/approve:
+ *   post:
+ *     summary: Approve a pending exchange rate
+ *     tags: [admin-rate]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Rate approved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 RateRouter.post(
   "/:id/approve",
   authenticate,
@@ -281,6 +311,36 @@ RateRouter.post(
   rateController.approve
 );
 
+/**
+ * @swagger
+ * /api/admin/rate/{id}/reject:
+ *   post:
+ *     summary: Reject a pending exchange rate
+ *     tags: [admin-rate]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Rate rejected successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 RateRouter.post(
   "/:id/reject",
   authenticate,
