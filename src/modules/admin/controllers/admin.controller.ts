@@ -9,7 +9,9 @@ class AdminController {
     try {
       const month = req.query.month ? parseInt(req.query.month as string, 10) : undefined;
       const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
-      const result = await adminService.getDashboard(month, year);
+      const txnType = (req.query.txnType || req.query.type) ? String(req.query.txnType || req.query.type) : undefined;
+      const range = (req.query.range || req.query.period) ? String(req.query.range || req.query.period) : undefined;
+      const result = await adminService.getDashboard(month, year, txnType, range);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

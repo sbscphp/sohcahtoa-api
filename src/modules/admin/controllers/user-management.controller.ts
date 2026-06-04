@@ -413,10 +413,13 @@ class UserManagementController {
             "WORKFLOW",
             "INCIDENCE",
             "RATE",
-            "USER_MANAGEMENT",
             "REGULATORY",    
             "REPORTS",
             "AUDIT_TRAIL",
+            "DASHBOARD",
+            "AGENT",
+            "PICKUP_STATIONS",
+            "DISCREPANCY"
         ];
         res.json(successResponse({ modules }));
     });

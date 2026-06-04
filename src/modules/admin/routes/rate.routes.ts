@@ -60,7 +60,7 @@ RateRouter.get(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [all, active, scheduled, expired, deactivated]
+ *           enum: [all, active, scheduled, expired, deactivated, pending_approval]
  *         description: Filter by rate status (default is all)
  *       - in: query
  *         name: fromCurrency
@@ -346,6 +346,31 @@ RateRouter.post(
   authenticate,
   requirePermission({ module: "RATE", feature: "MODULE", action: "edit" }),
   rateController.reject
+);
+
+/**
+ * @swagger
+ * /api/admin/rate/{id}:
+ *   delete:
+ *     summary: Delete exchange rate
+ *     tags: [admin-rate]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Rate deleted successfully
+ */
+RateRouter.delete(
+  "/:id",
+  authenticate,
+  requirePermission({ module: "RATE", feature: "MODULE", action: "delete" }),
+  rateController.delete
 );
 
 export default RateRouter;
