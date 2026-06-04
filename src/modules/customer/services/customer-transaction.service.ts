@@ -977,9 +977,8 @@ export class CustomerTransactionService {
     const sellRate = parseFloat(rate.sellRate);
     const buyRate  = parseFloat(rate.buyRate);
 
-    // BUY  = customer buying foreign currency from the bureau (bureau sells at sellRate)
-    // SELL = customer selling foreign currency to the bureau (bureau buys at buyRate)
-    const appliedRate     = normalizedMode === 'buy' ? sellRate : buyRate;
+    // BUY = use buyRate, SELL = use sellRate
+    const appliedRate     = normalizedMode === 'buy' ? buyRate : sellRate;
     const convertedAmount = amount * appliedRate;
 
     logger.info(`[calculateAmount] Amount calculated successfully`, {
