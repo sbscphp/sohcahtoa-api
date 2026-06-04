@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
-import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere } from "../../../shared/utils/rate-filters";
+import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere, isPendingApprovalWhere } from "../../../shared/utils/rate-filters";
 import { workflowService } from "./workflow.service";
 import { ValidationError } from "../../../shared/utils/errors";
 
@@ -10,14 +10,15 @@ class RateService {
 
   async stats() {
     const now = new Date();
-    const [active, scheduled, expired, deactivated, all] = await Promise.all([
+    const [active, scheduled, expired, deactivated, pendingApproval, all] = await Promise.all([
       prisma.exchangeRate.count({ where: isActiveWhere(now) }),
       prisma.exchangeRate.count({ where: isScheduledWhere(now) }),
       prisma.exchangeRate.count({ where: isExpiredWhere(now) }),
       prisma.exchangeRate.count({ where: isDeactivatedWhere() }),
+      prisma.exchangeRate.count({ where: isPendingApprovalWhere() }),
       prisma.exchangeRate.count({}),
     ]);
-    return { all, active, scheduled, expired, deactivated };
+    return { all, active, scheduled, expired, deactivated, pendingApproval };
   }
 
   async list(filters: any = {}, page = 1, limit = 20) {
@@ -43,15 +44,17 @@ class RateService {
 
     const now = new Date();
     const formattedItems = items.map((r: any) => {
-      let status = "DEACTIVATED";
-      if (r.isActive !== false) {
-        if (new Date(r.validFrom) > now) {
-          status = "SCHEDULED";
-        } else if (new Date(r.validUntil) <= now) {
-          status = "EXPIRED";
-        } else {
-          status = "ACTIVE";
-        }
+      let status: string;
+      if (r.isActive === false && r.isApproved === false) {
+        status = "PENDING_APPROVAL";
+      } else if (r.isActive === false) {
+        status = "DEACTIVATED";
+      } else if (new Date(r.validFrom) > now) {
+        status = "SCHEDULED";
+      } else if (new Date(r.validUntil) <= now) {
+        status = "EXPIRED";
+      } else {
+        status = "ACTIVE";
       }
 
       return {

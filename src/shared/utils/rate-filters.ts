@@ -25,7 +25,11 @@ export const isExpiredWhere = (now: Date = new Date()) => {
 };
 
 export const isDeactivatedWhere = () => {
-  return { isActive: false };
+  return { isActive: false, isApproved: true };
+};
+
+export const isPendingApprovalWhere = () => {
+  return { isActive: false, isApproved: false };
 };
 
 /**
@@ -64,6 +68,8 @@ export const buildRateWhereClause = (filters: RateFilterOptions = {}) => {
     Object.assign(where, isExpiredWhere());
   } else if (status === "deactivated") {
     Object.assign(where, isDeactivatedWhere());
+  } else if (status === "pending_approval" || status === "pending") {
+    Object.assign(where, isPendingApprovalWhere());
   }
 
   return where;
@@ -82,4 +88,9 @@ export const rateSelectFields = {
   validFrom: true,
   validUntil: true,
   isActive: true,
+  isApproved: true,
+  note: true,
+  source: true,
+  createdAt: true,
+  updatedAt: true,
 };
