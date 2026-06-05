@@ -12,15 +12,21 @@ const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFil
     'image/jpeg',
     'image/jpg',
     'image/pjpeg',
+    'image/x-citrix-jpeg',
+    'image/x-jpeg',
     'image/png',
+    'image/x-png',
     'image/webp',
     'application/pdf',
   ];
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+  const ext = ('.' + (file.originalname.split('.').pop() || '')).toLowerCase();
+
+  if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new ValidationError(`Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`));
+    cb(new ValidationError(`Invalid file type. Allowed types: JPEG, PNG, WEBP, PDF`));
   }
 };
 
@@ -30,14 +36,21 @@ const documentFilter = (req: Request, file: Express.Multer.File, cb: multer.File
     'image/jpeg',
     'image/jpg',
     'image/pjpeg',
+    'image/x-citrix-jpeg',
+    'image/x-jpeg',
     'image/png',
+    'image/x-png',
     'image/webp',
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  // Also accept by extension when mimetype is generic (e.g. application/octet-stream)
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.doc', '.docx'];
+  const ext = ('.' + (file.originalname.split('.').pop() || '')).toLowerCase();
+
+  if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     cb(new ValidationError(`Invalid file type. Allowed types: JPEG, PNG, WEBP, PDF, DOC, DOCX`));

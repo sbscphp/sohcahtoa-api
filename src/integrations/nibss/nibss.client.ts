@@ -423,7 +423,7 @@ export class NIBSSClient {
         dataProcessorId:    this.consentClientId,
         dataOwnerID:        dataOwnerId,
         requestType,
-        consentType:       'RedirectLink',
+        consentType:       'OfflineConsent',
         dataSubjectPresent,
         authenticationDate: today,
       };
