@@ -25,7 +25,11 @@ export const isExpiredWhere = (now: Date = new Date()) => {
 };
 
 export const isPendingApprovalWhere = (now: Date = new Date()) => {
-  return { isApproved: false, validUntil: { gt: now } };
+  return { isApproved: false, currentWorkflowStageId: { not: null }, validUntil: { gt: now } };
+};
+
+export const isRejectedWhere = (now: Date = new Date()) => {
+  return { isApproved: false, currentWorkflowStageId: null, validUntil: { gt: now } };
 };
 
 export const isDeactivatedWhere = (now: Date = new Date()) => {
@@ -75,6 +79,8 @@ export const buildRateWhereClause = (filters: RateFilterOptions = {}) => {
     Object.assign(where, isDeactivatedWhere(now));
   } else if (status === "pending_approval" || status === "pendingapproval") {
     Object.assign(where, isPendingApprovalWhere(now));
+  } else if (status === "rejected") {
+    Object.assign(where, isRejectedWhere(now));
   }
 
   return where;
@@ -94,5 +100,7 @@ export const rateSelectFields = {
   validUntil: true,
   isActive: true,
   isApproved: true,
+  workflowTemplateId: true,
+  currentWorkflowStageId: true,
 };
 
