@@ -66,7 +66,7 @@ export class SMSClient {
    * Required for verification codes, alerts, and all critical messages.
    */
   async sendOtp(to: string, otp: string, _purpose: string): Promise<SmsSendResult> {
-    const message = `Your Sochatoa verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    const message = `Your Sochatoa verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`;
     if (this.provider === 'termii') {
       return this.termiiSend({ to, message, channel: 'dnd', type: 'plain' });
     }

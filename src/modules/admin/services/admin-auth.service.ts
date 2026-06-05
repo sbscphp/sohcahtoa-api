@@ -327,7 +327,7 @@ class AdminAuthService {
 
   return {
     resetToken,
-    message: "OTP validated. Use resetToken within 10 minutes.",
+    message: "OTP validated. Use resetToken within 5 minutes.",
   };
 }
 

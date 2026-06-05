@@ -2052,7 +2052,7 @@ export class AuthService {
       throw new ValidationError(otpValidation.message);
     }
 
-    // Issue a short-lived reset token (10 minutes) so the client can set a new password
+    // Issue a short-lived reset token (5 minutes) so the client can set a new password
     const resetToken = generateId();
     const resetKey = `password:reset:${resetToken}`;
     await redis.setex(resetKey, 10 * 60, user.id);
