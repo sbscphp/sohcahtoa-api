@@ -441,7 +441,11 @@ export class NIBSSClient {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const isSuccess = res.data.responseCode === '00';
+      // responseCode "00" = full success
+      // responseCode "25" = no contact info on record — non-fatal for OfflineConsent since
+      //                     we capture consent ourselves; NIBSS still creates the session
+      const sessionCreated = !!res.data.sessionId;
+      const isSuccess = res.data.responseCode === '00' || (res.data.responseCode === '25' && sessionCreated);
 
       if (!isSuccess) {
         logger.warn('Consent Hub initiation failed', {
@@ -449,6 +453,12 @@ export class NIBSSClient {
           message: res.data.responseMessage,
         });
         return { success: false, message: res.data.responseMessage || 'Consent initiation failed' };
+      }
+
+      if (res.data.responseCode === '25') {
+        logger.info('Consent Hub: no contact info on record — proceeding with OfflineConsent session', {
+          sessionId: res.data.sessionId,
+        });
       }
 
       logger.info('Consent Hub session created', { sessionId: res.data.sessionId });
