@@ -470,7 +470,23 @@ export class NIBSSClient {
         message:    res.data.responseMessage || 'Consent session created',
       };
     } catch (error: any) {
-      logger.error('Consent Hub initiation error', { error: error.message, data: error.response?.data });
+      // NIBSS returns HTTP 400 for responseCode "25" (no contact info on record).
+      // For OfflineConsent this is non-fatal — we handle contact ourselves.
+      // If a sessionId is present in the error body, treat it as a successful session creation.
+      const errorData = error.response?.data as ConsentInitiateResponse | undefined;
+      if (errorData?.responseCode === '25' && errorData?.sessionId) {
+        logger.info('Consent Hub: no contact info (code 25) — proceeding with OfflineConsent session', {
+          sessionId: errorData.sessionId,
+        });
+        return {
+          success:    true,
+          sessionId:  errorData.sessionId,
+          consentUrl: errorData.data?.consentUrl,
+          message:    errorData.responseMessage || 'Consent session created',
+        };
+      }
+
+      logger.error('Consent Hub initiation error', { error: error.message, data: errorData });
       return { success: false, message: `Consent initiation failed: ${error.message}` };
     }
   }
