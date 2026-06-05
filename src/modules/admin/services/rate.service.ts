@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
-import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere, isPendingApprovalWhere } from "../../../shared/utils/rate-filters";
+import { buildRateWhereClause, rateSelectFields, isActiveWhere, isScheduledWhere, isExpiredWhere, isDeactivatedWhere, isPendingApprovalWhere, isRejectedWhere } from "../../../shared/utils/rate-filters";
 import { workflowService } from "./workflow.service";
 import { DuplicateError, ValidationError, NotFoundError } from "../../../shared/utils/errors";
 import { expireExpiredRates } from "../../../shared/utils/rate-expiry";
@@ -13,12 +13,13 @@ class RateService {
   async stats() {
     await expireExpiredRates();
     const now = new Date();
-    const [active, scheduled, expired, deactivated, pendingApproval, all] = await Promise.all([
+    const [active, scheduled, expired, deactivated, pendingApproval, rejected, all] = await Promise.all([
       prisma.exchangeRate.count({ where: isActiveWhere(now) }),
       prisma.exchangeRate.count({ where: isScheduledWhere(now) }),
       prisma.exchangeRate.count({ where: isExpiredWhere(now) }),
       prisma.exchangeRate.count({ where: isDeactivatedWhere(now) }),
       prisma.exchangeRate.count({ where: isPendingApprovalWhere(now) }),
+      prisma.exchangeRate.count({ where: isRejectedWhere(now) }),
       prisma.exchangeRate.count({}),
     ]);
     return {
@@ -28,7 +29,7 @@ class RateService {
       expired,
       deactivated,
       pendingApproval,
-
+      rejected,
     };
   }
 
@@ -55,29 +56,35 @@ class RateService {
     ]);
 
     const now = new Date();
-    const formattedItems = items.map((r: any) => {
-      let status = "DEACTIVATED";
-      if (new Date(r.validUntil) <= now) {
-        status = "EXPIRED";
-      } else if (!r.isApproved) {
-        status = "PENDING_APPROVAL";
-      } else if (r.isActive !== false) {
-        if (new Date(r.validFrom) > now) {
-          status = "SCHEDULED";
-        } else {
-          status = "ACTIVE";
-        }
-      }
-
-      return {
-        ...r,
-        status,
-        buyRate: Number(r.buyRate || 0),
-        sellRate: Number(r.sellRate || 0),
-      };
-    });
+    const formattedItems = items.map((r: any) => this.formatRate(r, now));
 
     return { data: formattedItems, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  }
+
+  formatRate(r: any, now = new Date()) {
+    let status = "DEACTIVATED";
+    if (new Date(r.validUntil) <= now) {
+      status = "EXPIRED";
+    } else if (!r.isApproved) {
+      if (r.currentWorkflowStageId === null) {
+        status = "REJECTED";
+      } else {
+        status = "PENDING_APPROVAL";
+      }
+    } else if (r.isActive !== false) {
+      if (new Date(r.validFrom) > now) {
+        status = "SCHEDULED";
+      } else {
+        status = "ACTIVE";
+      }
+    }
+
+    return {
+      ...r,
+      status,
+      buyRate: Number(r.buyRate || 0),
+      sellRate: Number(r.sellRate || 0),
+    };
   }
 
   async get(id: string) {

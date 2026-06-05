@@ -24,8 +24,9 @@ class RateController {
     const adminId = (req as any).user?.userId;
     const item = await rateService.get(req.params.id);
     if (item) {
-      const approvalProcess = await workflowService.getActiveWorkflowState(item as any, adminId);
-      res.json(successResponse({ ...item, approvalProcess }));
+      const formattedItem = rateService.formatRate(item);
+      const approvalProcess = await workflowService.getActiveWorkflowState(formattedItem as any, adminId);
+      res.json(successResponse({ ...formattedItem, approvalProcess }));
       return;
     }
     res.json(successResponse(item));

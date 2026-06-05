@@ -686,6 +686,8 @@ class AgentService {
       },
       transactionDetails: {
         transactionId: details.referenceNumber,
+        transactionType: details.type || "—",
+        currency: details.currency || "—",
         amountNgn: details.nairaEquivalent || "—",
         equivalentAmount: details.foreignAmount ? `${details.currency} ${Number(details.foreignAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—",
         exchangeRate: details.exchangeRate || "—",
@@ -695,14 +697,21 @@ class AgentService {
         destinationCountry: details.destinationCountry || "—",
         formAId: details.formAId || "—",
         disbursementMethod: details.disbursementMethod || "—",
+        status: details.status || "—",
+        currentStep: details.currentStep || "—",
       },
       requiredDocuments: {
         bvn: details.personalInfo?.bvn || "—",
         nin: details.personalInfo?.nin || "—",
+        tin: details.personalInfo?.tin || "—",
         taxClearanceNumber: details.taxClearanceNumber || "—",
         documentsCount: details.requiredDocuments.filter((d: any) => d.uploaded).length,
         visa: getDocUrl('VISA'),
         returnTicket: getDocUrl('RETURN_TICKET'),
+        passport: getDocUrl('PASSPORT'),
+        schoolAdmission: getDocUrl('SCHOOL_ADMISSION'),
+        invoice: getDocUrl('INVOICE'),
+        receipt: getDocUrl('RECEIPT'),
       },
       paymentDetails: {
         transactionId: details.transactionId,
@@ -721,7 +730,8 @@ class AgentService {
         settlementStructurePrepaidCard: "—",
         seventyFivePercentPaidInto: "—",
         settlementStatus: details.currentStep || details.status,
-      }
+      },
+      raw: details
     };
   }
 
@@ -735,16 +745,28 @@ class AgentService {
       select: {
         id: true,
         receipt: { select: { receiptNumber: true, pdfUrl: true } },
+        documents: {
+          where: { documentType: "RECEIPT" },
+          select: { fileUrl: true, fileName: true },
+          take: 1,
+        },
       },
     });
     if (!trx) throw new NotFoundError("Transaction not found for this agent");
-    const pdfUrl = (trx as any).receipt?.pdfUrl || null;
+
+    let pdfUrl = (trx as any).receipt?.pdfUrl || null;
+    let filename = (trx as any).receipt?.receiptNumber ? `receipt-${(trx as any).receipt.receiptNumber}.pdf` : null;
+
+    if (!pdfUrl && trx.documents && trx.documents.length > 0) {
+      pdfUrl = trx.documents[0].fileUrl;
+      filename = trx.documents[0].fileName || `receipt-${transactionId}`;
+    }
+
     if (!pdfUrl) throw new NotFoundError("Receipt not available for this transaction");
 
-    const receiptNumber = (trx as any).receipt?.receiptNumber || null;
     return {
       url: pdfUrl,
-      filename: `receipt-${receiptNumber || transactionId}.pdf`,
+      filename: filename || `receipt-${transactionId}.pdf`,
     };
   }
 

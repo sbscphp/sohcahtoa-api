@@ -113,7 +113,7 @@ class UserManagementService {
                 }),
             ]);
 
-            const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "http://localhost:3000";
+            const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "https://sohcahtoa-app.vercel.app/";
             const url = new URL("/admin/auth/reset-password", baseUrl);
             url.searchParams.set("otp", otp);
             const resetPasswordUrl = url.toString();
@@ -235,13 +235,12 @@ class UserManagementService {
             const s = String(statusVal).trim().toLowerCase();
             if (s === "pending") {
                 where.password = null;
-                where.isActive = true; // Pending users are usually active
             } else if (s === "active" || s === "activated" || s === "true" || s === "1") {
                 where.isActive = true;
                 where.password = { not: null };
             } else if (s === "deactivated" || s === "inactive" || s === "false" || s === "0") {
                 where.isActive = false;
-                // Deactivated users are shown regardless of password status
+                where.password = { not: null };
             }
         }
 

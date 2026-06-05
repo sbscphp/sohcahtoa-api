@@ -79,10 +79,12 @@ class OutletService {
   }
 
   async getFranchiseStats() {
-    const total = await db.franchise.count();
-    const active = await db.franchise.count({ where: { status: "Active" } });
-    const deactivated = await db.franchise.count({ where: { status: "Deactivated" } });
-    const pendingApproval = await db.franchise.count({ where: { status: "PENDING" } });
+    const [total, active, deactivated, pendingApproval] = await Promise.all([
+      db.franchise.count(),
+      db.franchise.count({ where: { status: { in: ["Active", "ACTIVE", "APPROVED"] } } }),
+      db.franchise.count({ where: { status: { in: ["Deactivated", "DEACTIVATED"] } } }),
+      db.franchise.count({ where: { status: { in: ["PENDING", "Pending"] } } }),
+    ]);
     return { total, active, deactivated, pendingApproval };
   }
 
@@ -245,9 +247,9 @@ class OutletService {
 
     const [totalBranches, activeBranches, deactivatedBranches, pendingBranches] = await Promise.all([
       db.branch.count({ where: { franchiseId: id } }),
-      db.branch.count({ where: { franchiseId: id, status: "Active" } }),
-      db.branch.count({ where: { franchiseId: id, status: "Deactivated" } }),
-      db.branch.count({ where: { franchiseId: id, status: "PENDING" } }),
+      db.branch.count({ where: { franchiseId: id, status: { in: ["Active", "ACTIVE", "APPROVED"] } } }),
+      db.branch.count({ where: { franchiseId: id, status: { in: ["Deactivated", "DEACTIVATED"] } } }),
+      db.branch.count({ where: { franchiseId: id, status: { in: ["PENDING", "Pending"] } } }),
     ]);
 
     return {
@@ -325,10 +327,13 @@ class OutletService {
   }
 
   async getBranchStats() {
-    const total = await db.branch.count();
-    const active = await db.branch.count({ where: { status: "Active" } });
-    const deactivated = await db.branch.count({ where: { status: "Deactivated" } });
-    return { total, active, deactivated };
+    const [total, active, deactivated, pendingApproval] = await Promise.all([
+      db.branch.count(),
+      db.branch.count({ where: { status: { in: ["Active", "ACTIVE", "APPROVED"] } } }),
+      db.branch.count({ where: { status: { in: ["Deactivated", "DEACTIVATED"] } } }),
+      db.branch.count({ where: { status: { in: ["PENDING", "Pending"] } } }),
+    ]);
+    return { total, active, deactivated, pendingApproval };
   }
 
   private buildBranchWhereClause(query: any) {
