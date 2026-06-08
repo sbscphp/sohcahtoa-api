@@ -27,6 +27,27 @@ TransactionRouter.get(
 
 /**
  * @swagger
+ * /api/admin/transactions/types:
+ *   get:
+ *     summary: Get all available transaction types
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Transaction types retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.get(
+  "/types",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  adminTransactionsController.types
+);
+
+/**
+ * @swagger
  * /api/admin/transactions:
  *   get:
  *     summary: List transactions

@@ -1,7 +1,7 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
-import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod } from "../../../shared/types";
+import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod, TransactionType } from "../../../shared/types";
 import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
@@ -98,6 +98,10 @@ export class AdminTransactionsService {
       requestInformation,
       approved,
     };
+  }
+
+  async getTransactionTypes() {
+    return Object.values(TransactionType);
   }
 
   private async buildTransactionsListQuery(filters: any) {
