@@ -142,8 +142,8 @@ DocumentRouter.post(
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Array of document files to upload (max 5 files)
- *                 maxItems: 5
+ *                 description: Array of document files to upload (max 10 files)
+ *                 maxItems: 10
  *               userId:
  *                 type: string
  *                 format: uuid

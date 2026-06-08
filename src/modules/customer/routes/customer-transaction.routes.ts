@@ -335,7 +335,7 @@ router.post("/transactions", customerTransactionController.createTransaction);
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Document files (max 5 files, 5MB each)
+ *                 description: Document files (max 10 files, 5MB each)
  *     responses:
  *       200:
  *         description: Documents uploaded successfully
