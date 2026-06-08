@@ -678,7 +678,7 @@ export class AuthService {
     // New BVN — initiate Consent Hub flow
     const consentResult = await bvnService.initiateConsentForBvn(bvn);
 
-    if (!consentResult.success || !consentResult.sessionId || !consentResult.consentUrl) {
+    if (!consentResult.success || !consentResult.sessionId) {
       throw new ValidationError(consentResult.message || 'BVN consent initiation failed');
     }
 
@@ -693,8 +693,10 @@ export class AuthService {
 
     return {
       sessionId: consentResult.sessionId,
-      consentUrl: consentResult.consentUrl,
-      message: 'BVN consent initiated. Please authenticate on the NIBSS portal to continue.',
+      consentUrl: consentResult.consentUrl || '',
+      message: consentResult.consentUrl
+        ? 'BVN consent initiated. Please authenticate on the NIBSS portal to continue.'
+        : 'BVN consent session created.',
     };
   }
 
