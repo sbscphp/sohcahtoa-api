@@ -35,7 +35,7 @@ router.use(authenticate);
  *
  *       **Required documents per type:**
  *       - `PTA`: VISA, RETURN_TICKET
- *       - `BTA`: TIN, TCC, PASSPORT, VISA, RETURN_TICKET, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER
+ *       - `BTA`: TCC, PASSPORT, VISA, RETURN_TICKET, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER
  *       - `SCHOOL_FEES`: PASSPORT, SCHOOL_ADMISSION, INVOICE (+ STATEMENT_OF_RESULT, DEGREE for postgraduate)
  *       - `MEDICAL`: PASSPORT, VISA, RETURN_TICKET, FORM_A_DOCUMENT, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER
  *       - `PROFESSIONAL_BODY`: MEMBERSHIP_CARD, INVOICE
@@ -292,7 +292,6 @@ router.post("/transactions", customerTransactionController.createTransaction);
  *       - RETURN_TICKET
  *       - BVN
  *       - NIN (for PTA and personal transactions)
- *       - TIN (for BTA and business transactions)
  *       - FORM_A_DOCUMENT
  *       - CORPORATE_BODY_LETTER (required for BTA)
  *       - PARTNER_INVITATION_LETTER (required for BTA)

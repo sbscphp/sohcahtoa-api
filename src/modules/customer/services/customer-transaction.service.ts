@@ -1872,7 +1872,6 @@ export class CustomerTransactionService {
     const documentRequirements: Record<string, string[]> = {
       PTA: ['VISA', 'RETURN_TICKET'],
       BTA: [
-        'TIN',
         'TCC',
         'PASSPORT',
         'VISA',
