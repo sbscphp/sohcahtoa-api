@@ -371,6 +371,70 @@ class RateService {
 
     return { message: "Rate deleted successfully" };
   }
+
+  async getWorkflowLine(rateId: string) {
+    const client: any = prisma as any;
+    const actions = await client.adminAction.findMany({
+      where: {
+        resourceType: "RATE",
+        resourceId: rateId,
+      },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            fullName: true,
+            position: true,
+            role: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { performedAt: "asc" },
+    });
+
+    const toTitle = (label: string, type: string) => {
+      const upLabel = (label || "").toUpperCase();
+      const upType = (type || "").toUpperCase();
+      if (upLabel.includes("CREATE") || upType.includes("CREATE")) return "Rate Created";
+      if (upLabel.includes("DEACTIVATE") || upType.includes("DEACTIVATE")) return "Rate Deactivated";
+      if (upLabel.includes("REJECT") || upType.includes("REJECT")) return "Rate Rejected";
+      if (upLabel.includes("ADVANCED") || upLabel.includes("STAGE")) return "Rate Advanced";
+      if (upLabel.includes("APPROV") || upType.includes("APPROV")) return "Rate Approved";
+      if (upLabel.includes("DELETE") || upLabel.includes("DELET")) return "Rate Deleted";
+      if (upLabel.includes("UPDATE") || upType.includes("UPDATE") || upLabel.includes("EDIT")) return "Rate Updated";
+      return label || type;
+    };
+
+    const toOutcome = (label: string, type: string) => {
+      const upLabel = (label || "").toUpperCase();
+      const upType = (type || "").toUpperCase();
+      if (upLabel.includes("CREATE") || upType.includes("CREATE")) return "Created";
+      if (upLabel.includes("DEACTIVATE") || upType.includes("DEACTIVATE")) return "Deactivated";
+      if (upLabel.includes("REJECT") || upType.includes("REJECT")) return "Rejected";
+      if (upLabel.includes("ADVANCED") || upLabel.includes("STAGE")) return "Advanced";
+      if (upLabel.includes("APPROV") || upType.includes("APPROV")) return "Approved";
+      if (upLabel.includes("DELETE") || upLabel.includes("DELET")) return "Deleted";
+      if (upLabel.includes("UPDATE") || upType.includes("UPDATE") || upLabel.includes("EDIT")) return "Updated";
+      return "Action Taken";
+    };
+
+    return actions.map((a: any) => {
+      const adminId = a.adminId;
+      const admin = a.admin;
+      return {
+        id: a.id,
+        timestamp: a.performedAt,
+        adminId,
+        adminName: admin?.fullName || adminId,
+        adminRole: admin?.position || admin?.role?.name || null,
+        title: toTitle(a.actionLabel || "", a.actionType || ""),
+        outcome: toOutcome(a.actionLabel || "", a.actionType || ""),
+        comment: a.reason || null,
+        action: a.actionType,
+      };
+    });
+  }
 }
 
 export const rateService = new RateService();
+

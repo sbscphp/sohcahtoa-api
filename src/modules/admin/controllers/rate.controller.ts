@@ -26,7 +26,8 @@ class RateController {
     if (item) {
       const formattedItem = rateService.formatRate(item);
       const approvalProcess = await workflowService.getActiveWorkflowState(formattedItem as any, adminId);
-      res.json(successResponse({ ...formattedItem, approvalProcess }));
+      const workflowLine = await rateService.getWorkflowLine(req.params.id);
+      res.json(successResponse({ ...formattedItem, approvalProcess, workflowLine }));
       return;
     }
     res.json(successResponse(item));
@@ -123,13 +124,41 @@ class RateController {
 
   approve = asyncHandler(async (req: AuthRequest, res: Response) => {
     const adminId = req.user?.userId || "system";
-    const result = await rateService.approveRate(req.params.id, adminId, req.body.notes || req.body.reason);
+    const notes = req.body.notes || req.body.reason;
+    const result = await rateService.approveRate(req.params.id, adminId, notes);
+    if (req.user) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: ActionType.RATE_UPDATE,
+        actionLabel: result.message || "Rate approved",
+        resourceType: "RATE",
+        resourceId: req.params.id,
+        reason: notes,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
     res.json(successResponse(result));
   });
 
   reject = asyncHandler(async (req: AuthRequest, res: Response) => {
     const adminId = req.user?.userId || "system";
-    const result = await rateService.rejectRate(req.params.id, adminId, req.body.reason || req.body.notes);
+    const reason = req.body.reason || req.body.notes;
+    const result = await rateService.rejectRate(req.params.id, adminId, reason);
+    if (req.user) {
+      await auditTrailService.logAction({
+        adminId: req.user.userId,
+        actionType: ActionType.RATE_UPDATE,
+        actionLabel: "Rate rejected",
+        resourceType: "RATE",
+        resourceId: req.params.id,
+        reason: reason,
+        status: "SUCCESS",
+        userAgent: req.headers["user-agent"] as string,
+        ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip,
+      });
+    }
     res.json(successResponse(result));
   });
 
