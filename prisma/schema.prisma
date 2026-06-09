@@ -1716,6 +1716,7 @@ model WalletEntry {
 
   // Linked transaction (manually linked by admin for unmatched entries)
   linkedTransactionId  String?
+  linkReason           String?
 
   // Flagging
   isFlagged            Boolean   @default(false)

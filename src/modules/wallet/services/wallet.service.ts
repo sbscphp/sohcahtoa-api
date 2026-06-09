@@ -65,6 +65,7 @@ export class WalletService {
           balanceAfter,
           description: description ?? `Debit for transaction ${transactionRef}`,
           status: 'COMPLETED',
+          matchStatus: 'UNMATCHED',
         },
       }),
     ]);
@@ -120,6 +121,7 @@ export class WalletService {
           balanceAfter,
           description: description ?? `Credit for transaction ${transactionRef}`,
           status: 'COMPLETED',
+          matchStatus: 'UNMATCHED',
         },
       }),
     ]);
@@ -180,6 +182,7 @@ export class WalletService {
           balanceAfter,
           description: reason ?? `Reversal of debit for transaction ${debitEntry.transactionRef}`,
           status: 'COMPLETED',
+          matchStatus: 'UNMATCHED',
           metadata: { reversalOf: debitEntry.id },
         },
       }),

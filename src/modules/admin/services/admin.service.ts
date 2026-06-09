@@ -4,6 +4,7 @@ import { createLogger, ForbiddenError, NotFoundError, ValidationError } from "..
 import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared/types";
 import { hashPassword } from "../../../shared/utils/password";
 import { auditTrailService } from "../services/audit-trail.service";
+import { workflowService } from "./workflow.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
@@ -96,7 +97,7 @@ export class AdminService {
       pendingApprovals,
       amlFlags,
       pendingReviews,
-      tasks,
+      pendingTasksResult,
     ] = await Promise.all([
       prisma.transaction.count({ where: txWhere }),
       prisma.user.count({ where: { role: "CUSTOMER" as any, createdAt: { gte: start, lte: end } } }),
@@ -148,12 +149,7 @@ export class AdminService {
       prisma.transaction.count({
         where: { currentStep: TransactionStep.ADMIN_REVIEW as any, ...txWhere }
       }),
-      prisma.taskAssignment.findMany({
-        where: { assignedAt: { gte: start, lte: end } },
-        orderBy: { assignedAt: "desc" },
-        take: 5,
-        select: { id: true, taskType: true, status: true, priority: true, assignedAt: true, taskId: true },
-      }),
+      workflowService.list({ status: "PENDING" }, 1, 5),
     ]);
 
     const settlementBalance = Number(settlementAgg._sum.amount || 0);
@@ -385,13 +381,19 @@ export class AdminService {
           customerName,
         };
       }),
-      tasks: tasks.map((t) => ({
+      tasks: (pendingTasksResult?.data || []).map((t: any) => ({
         id: t.id,
-        title: t.taskType,
+        title: `${t.workflowAction}: ${t.title || t.id}`,
         status: t.status,
-        priority: t.priority,
-        assignedAt: t.assignedAt,
-        taskId: t.taskId,
+        priority: "MEDIUM",
+        assignedAt: t.dateInitiated,
+        taskId: t.id,
+        module: t.module,
+        workflowAction: t.workflowAction,
+        actionNeeded: t.actionNeeded,
+        dateInitiated: t.dateInitiated,
+        escalationMinutes: t.escalationMinutes,
+        entityTitle: t.title,
       })),
       notifications: [],
       pendingApprovals,

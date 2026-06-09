@@ -12,6 +12,11 @@ class AdminTransactionsController {
     res.json(successResponse(result));
   });
 
+  types = asyncHandler(async (_req: Request, res: Response) => {
+    const result = await adminTransactionsService.getTransactionTypes();
+    res.json(successResponse(result));
+  });
+
   list = asyncHandler(async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
