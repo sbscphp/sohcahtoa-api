@@ -92,6 +92,52 @@ export class BvnService {
   }
 
   /**
+   * iGree flow: build the IdP authorization URL for the user to consent.
+   * Returns the URL to redirect to plus a state token used to correlate the callback.
+   */
+  initiateIGreeConsent(state: string): { authUrl: string } {
+    const authUrl = nibssClient.iGreeGetAuthUrl(state);
+    return { authUrl };
+  }
+
+  /**
+   * iGree flow: exchange authorization code for access token, then fetch BVN details.
+   */
+  async verifyBvnWithIGreeCode(code: string): Promise<BvnVerificationResult> {
+    try {
+      logger.info('iGree: exchanging authorization code for access token');
+      const { accessToken } = await nibssClient.iGreeExchangeCode(code);
+
+      const result = await nibssClient.iGreeGetBvnDetails(accessToken);
+
+      if (!result.verified || !result.data) {
+        return { success: false, message: result.message };
+      }
+
+      return {
+        success: true,
+        data: {
+          firstName:          result.data.firstName,
+          lastName:           result.data.lastName,
+          middleName:         result.data.middleName,
+          dateOfBirth:        result.data.dateOfBirth,
+          gender:             result.data.gender,
+          maritalStatus:      result.data.maritalStatus,
+          nationality:        result.data.nationality,
+          stateOfOrigin:      result.data.stateOfOrigin,
+          lgaOfOrigin:        result.data.lgaOfOrigin,
+          watchlisted:        result.data.watchlisted,
+          faceImage:          result.data.faceImage,
+        },
+        message: 'BVN verified via iGree successfully',
+      };
+    } catch (error: any) {
+      logger.error('iGree BVN verification error', { error: error.message });
+      return { success: false, message: 'iGree BVN verification failed', error: error.message };
+    }
+  }
+
+  /**
    * Complete BVN verification using a retrievalToken obtained from the Consent Hub callback.
    * Calls FAS to extract full KYC data.
    */

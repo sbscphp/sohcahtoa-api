@@ -240,10 +240,20 @@ export class NIBSSClient {
   private fasRetry: string;
   private institutionCode: string;
 
-  // ── Consent Hub ──
+  // ── Consent Hub (legacy) ──
   private consentHubBaseUrl: string;
-  private dataControllerId: string;   // NIBSS fixed test ID
+  private dataControllerId: string;
   private callbackUrl: string;
+
+  // ── iGree (BVN Consent v1) ──
+  private iGreeBaseUrl: string = '';
+  private iGreeClient!: AxiosInstance;
+  private iGreeClientId: string = '';
+  private iGreeClientSecret: string = '';
+  private iGreeRedirectUri: string = '';
+  private iGreeConsumerCustomId: string = '';
+  private iGreeChannelCode: string = '02';
+  private idpBaseUrl: string = '';
 
   // ── Token cache ──
   private bivsToken: string | null = null;
@@ -271,10 +281,19 @@ export class NIBSSClient {
     this.fasRetry        = process.env.NIBSS_FAS_RETRY     || '1';
     this.institutionCode = process.env.NIBSS_INSTITUTION_CODE || '';
 
-    // Consent Hub
+    // Consent Hub (legacy)
     this.consentHubBaseUrl = process.env.NIBSS_CONSENT_HUB_BASE_URL || 'https://apitest.nibss-plc.com.ng/api';
     this.dataControllerId  = process.env.NIBSS_DATA_CONTROLLER_ID   || 'd6378b2e-092f-485a-a1f9-f97b3ca8c3f3';
     this.callbackUrl       = process.env.NIBSS_CALLBACK_URL         || '';
+
+    // iGree
+    this.iGreeBaseUrl           = process.env.NIBSS_IGREE_BASE_URL          || 'https://apitest.nibss-plc.com.ng/bvnconsent/v1';
+    this.idpBaseUrl             = process.env.NIBSS_IDP_BASE_URL            || 'https://idsandbox.nibss-plc.com.ng';
+    this.iGreeClientId          = process.env.NIBSS_IGREE_CLIENT_ID         || process.env.NIBSS_CONSENT_CLIENT_ID || '';
+    this.iGreeClientSecret      = process.env.NIBSS_IGREE_CLIENT_SECRET     || process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
+    this.iGreeRedirectUri       = process.env.NIBSS_IGREE_REDIRECT_URI      || '';
+    this.iGreeConsumerCustomId  = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || process.env.NIBSS_CONSENT_CLIENT_ID || '';
+    this.iGreeChannelCode       = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
 
     // ── Axios instances ──
     this.bivsClient = axios.create({
@@ -300,6 +319,12 @@ export class NIBSSClient {
 
     this.identityClient = axios.create({
       baseURL: this.tinIdentityBaseUrl,
+      timeout: 30000,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    this.iGreeClient = axios.create({
+      baseURL: this.iGreeBaseUrl,
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -338,6 +363,7 @@ export class NIBSSClient {
     attach(this.fasClient,        'FAS');
     attach(this.consentHubClient, 'ConsentHub');
     attach(this.identityClient,   'TINIdentity');
+    attach(this.iGreeClient,      'iGree');
   }
 
   // ─── Token management ──────────────────────────────────────────────────────
@@ -1005,6 +1031,127 @@ export class NIBSSClient {
     } catch (error: any) {
       logger.error('Corporate TIN verification error', { error: error.message, data: error.response?.data });
       return { verified: false, message: `Corporate TIN verification failed: ${error.message}` };
+    }
+  }
+
+  // ─── iGree: BVN Consent v1 ─────────────────────────────────────────────────
+
+  /**
+   * Build the IdP authorization URL to redirect the user to for BVN consent.
+   * After the user authenticates, NIBSS redirects to iGreeRedirectUri with ?code=...&state=...
+   *
+   * @param state  A unique session identifier to correlate the callback
+   */
+  iGreeGetAuthUrl(state: string): string {
+    const params = new URLSearchParams({
+      scope:         'bvn',
+      acr_values:    'nibss_otp',
+      response_type: 'code',
+      redirect_uri:  this.iGreeRedirectUri,
+      client_id:     this.iGreeClientId,
+      state,
+      nonce:         state,
+    });
+    return `${this.idpBaseUrl}/oxauth/authorize.htm?${params.toString()}`;
+  }
+
+  /**
+   * Exchange the authorization code for an access token via the iGree IdP.
+   */
+  async iGreeExchangeCode(code: string): Promise<{ accessToken: string; expiresIn: number }> {
+    const params = new URLSearchParams();
+    params.append('client_id',     this.iGreeClientId);
+    params.append('client_secret', this.iGreeClientSecret);
+    params.append('code',          code);
+    params.append('redirect_uri',  this.iGreeRedirectUri);
+    params.append('grant_type',    'authorization_code');
+
+    const credentials = Buffer.from(`${this.iGreeClientId}:${this.iGreeClientSecret}`).toString('base64');
+
+    const res = await axios.post<NIBSSTokenResponse>(
+      `${this.idpBaseUrl}/oxauth/restv1/token`,
+      params,
+      {
+        headers: {
+          'Content-Type':  'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${credentials}`,
+        },
+        timeout: 15000,
+      }
+    );
+
+    return { accessToken: res.data.access_token, expiresIn: res.data.expires_in };
+  }
+
+  /**
+   * Retrieve BVN partial details using an iGree access token.
+   * Calls POST /getPartialDetailsWithBvn at the iGree base URL.
+   */
+  async iGreeGetBvnDetails(accessToken: string): Promise<{
+    verified: boolean;
+    data?: {
+      firstName: string;
+      lastName: string;
+      middleName?: string;
+      dateOfBirth?: string;
+      gender?: string;
+      maritalStatus?: string;
+      nationality?: string;
+      stateOfOrigin?: string;
+      lgaOfOrigin?: string;
+      watchlisted?: boolean;
+      faceImage?: string;
+    };
+    message: string;
+  }> {
+    try {
+      const consumerUniqueId = `${this.iGreeChannelCode}${this.iGreeConsumerCustomId}`;
+
+      logger.info('iGree: fetching BVN partial details');
+
+      const res = await this.iGreeClient.post<any[]>(
+        '/getPartialDetailsWithBvn',
+        {},
+        {
+          headers: {
+            'Authorization':       `Bearer ${accessToken}`,
+            'x-consumer-unique-id': consumerUniqueId,
+            'x-consumer-custom-id': this.iGreeConsumerCustomId,
+          },
+        }
+      );
+
+      const record = Array.isArray(res.data) ? res.data[0] : res.data;
+
+      if (!record) {
+        return { verified: false, message: 'No BVN data returned from iGree' };
+      }
+
+      logger.info('iGree: BVN details retrieved', {
+        firstName: record.first_name,
+        lastName:  record.surname,
+      });
+
+      return {
+        verified: true,
+        data: {
+          firstName:    record.first_name    || '',
+          lastName:     record.surname       || '',
+          middleName:   record.middle_name,
+          dateOfBirth:  record.date_of_birth,
+          gender:       record.gender,
+          maritalStatus: record.marital_status,
+          nationality:  record.nationality,
+          stateOfOrigin: record.state_of_origin,
+          lgaOfOrigin:  record.lga_of_origin,
+          watchlisted:  !!record.watchlisted && record.watchlisted !== '0',
+          faceImage:    record.face_image,
+        },
+        message: 'BVN details retrieved successfully',
+      };
+    } catch (error: any) {
+      logger.error('iGree: BVN details fetch error', { error: error.message, data: error.response?.data });
+      return { verified: false, message: `iGree BVN fetch failed: ${error.message}` };
     }
   }
 

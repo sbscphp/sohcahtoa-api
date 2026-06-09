@@ -675,15 +675,12 @@ export class AuthService {
       };
     }
 
-    // New BVN — initiate Consent Hub flow
-    const consentResult = await bvnService.initiateConsentForBvn(bvn);
-
-    if (!consentResult.success || !consentResult.sessionId) {
-      throw new ValidationError(consentResult.message || 'BVN consent initiation failed');
-    }
+    // New BVN — initiate iGree consent flow
+    const sessionId = generateId();
+    const { authUrl } = bvnService.initiateIGreeConsent(sessionId);
 
     // Persist the pending consent session in Redis (30 min TTL)
-    const consentKey = `bvn:consent:${consentResult.sessionId}`;
+    const consentKey = `bvn:consent:${sessionId}`;
     await redis.setex(consentKey, 30 * 60, JSON.stringify({
       bvn,
       phoneNumber,
@@ -692,15 +689,62 @@ export class AuthService {
     }));
 
     return {
-      sessionId: consentResult.sessionId,
-      consentUrl: consentResult.consentUrl || '',
-      message: consentResult.consentUrl
-        ? 'BVN consent initiated. Please authenticate on the NIBSS portal to continue.'
-        : 'BVN consent session created.',
+      sessionId,
+      consentUrl: authUrl,
+      message: 'BVN consent initiated. Please authenticate to continue.',
     };
   }
 
-  // NIBSS Callback: called when NIBSS POSTs the retrievalToken after user authenticates
+  // iGree Callback: NIBSS redirects here with ?code=...&state=... after user authenticates
+  async handleIGreeCallback(code: string, state: string): Promise<void> {
+    const consentKey = `bvn:consent:${state}`;
+    const cached = await redis.get(consentKey);
+
+    if (!cached) {
+      logger.warn('iGree callback received for unknown/expired session', { state });
+      return;
+    }
+
+    const session = JSON.parse(cached);
+
+    if (session.status === 'COMPLETED') {
+      logger.info('iGree callback already processed', { state });
+      return;
+    }
+
+    logger.info('Processing iGree consent callback', { state });
+
+    const bvnResult = await bvnService.verifyBvnWithIGreeCode(code);
+
+    if (!bvnResult.success || !bvnResult.data) {
+      logger.error('iGree BVN verification failed', { state, message: bvnResult.message });
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
+      return;
+    }
+
+    const verificationToken = generateId();
+    await redis.setex(`bvn:verification:${verificationToken}`, 30 * 60, JSON.stringify({
+      bvn:         session.bvn,
+      firstName:   bvnResult.data.firstName,
+      lastName:    bvnResult.data.lastName,
+      middleName:  bvnResult.data.middleName ?? null,
+      dateOfBirth: bvnResult.data.dateOfBirth ?? null,
+      gender:      bvnResult.data.gender ?? null,
+      email:       bvnResult.data.email ?? session.email ?? null,
+      phoneNumber: bvnResult.data.phoneNumber ?? session.phoneNumber ?? null,
+      address:     bvnResult.data.residentialAddress ?? null,
+    }));
+
+    await redis.setex(consentKey, 30 * 60, JSON.stringify({
+      ...session,
+      status: 'COMPLETED',
+      verificationToken,
+    }));
+
+    logger.info('iGree callback processed successfully', { state, verificationToken });
+  }
+
+  // NIBSS Callback (legacy Consent Hub): called when NIBSS POSTs the retrievalToken after user authenticates
   async handleNibssConsentCallback(sessionId: string, retrievalToken: string): Promise<void> {
     const consentKey = `bvn:consent:${sessionId}`;
     const cached = await redis.get(consentKey);

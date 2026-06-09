@@ -52,6 +52,28 @@ export class AuthController {
     }
   }
 
+  // iGree Callback: NIBSS redirects here with ?code=...&state=... after user authenticates
+  async iGreeCallback(req: Request, res: Response, next: NextFunction) {
+    try {
+      const code  = (req.query.code  || req.body.code)  as string;
+      const state = (req.query.state || req.body.state) as string;
+
+      if (!code || !state) {
+        res.status(400).json({ success: false, message: 'code and state are required' });
+        return;
+      }
+
+      // Respond immediately — process asynchronously so the redirect doesn't hang
+      res.status(200).json({ success: true, message: 'Consent received' });
+
+      await authService.handleIGreeCallback(code, state).catch((err) => {
+        console.error('iGree callback processing error', err);
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // NIBSS Callback: NIBSS POSTs retrievalToken here after user authenticates on their portal
   async nibssConsentCallback(req: Request, res: Response, next: NextFunction) {
     try {

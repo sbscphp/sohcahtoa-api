@@ -216,7 +216,11 @@ router.post('/signup', authController.signup);
  *       429:
  *         description: Too many requests
  */
-// NIBSS Consent Hub callback (called by NIBSS after user authenticates on their portal)
+// iGree callback — NIBSS redirects here with ?code=...&state=... after user authenticates
+router.get('/nibss/igree/callback', authController.iGreeCallback);
+router.post('/nibss/igree/callback', authController.iGreeCallback);
+
+// NIBSS Consent Hub callback (legacy — called by NIBSS POSTing retrievalToken)
 router.post('/nibss/callback', authController.nibssConsentCallback);
 
 // Nigerian signup flow (4 steps)
