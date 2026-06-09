@@ -76,6 +76,7 @@ class AdminWalletController {
       dateFrom: req.query.dateFrom as string | undefined,
       dateTo: req.query.dateTo as string | undefined,
       search: req.query.search as string | undefined,
+      matchStatus: req.query.matchStatus as string | undefined,
       sortBy: req.query.sortBy as string | undefined,
       sortOrder: req.query.sortOrder as string | undefined,
     });
@@ -99,6 +100,7 @@ class AdminWalletController {
       dateFrom: req.query.dateFrom as string | undefined,
       dateTo: req.query.dateTo as string | undefined,
       search: req.query.search as string | undefined,
+      matchStatus: req.query.matchStatus as string | undefined,
     });
     if (!result) {
       res.status(404).json({ success: false, message: "Wallet not found" });
@@ -116,6 +118,8 @@ class AdminWalletController {
         { header: "Balance After", select: (r: any) => r.balanceAfter },
         { header: "Description", select: (r: any) => r.description || "" },
         { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Match Status", select: (r: any) => r.matchStatus || "" },
+        { header: "Link Reason", select: (r: any) => r.linkReason || "" },
         { header: "Transaction Ref", select: (r: any) => r.transactionRef || "" },
         {
           header: "Date & Time",
@@ -203,12 +207,22 @@ class AdminWalletController {
    */
   linkTransaction = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const { transactionId } = req.body;
+    const { transactionId, reason } = req.body;
     if (!transactionId) {
       res.status(400).json({ success: false, message: "transactionId is required" });
       return;
     }
-    const result = await adminWalletService.linkTransaction(req.params.id, req.params.entryId, transactionId, adminId);
+    if (!reason || !reason.trim()) {
+      res.status(400).json({ success: false, message: "Reason is required" });
+      return;
+    }
+    const result = await adminWalletService.linkTransaction(
+      req.params.id,
+      req.params.entryId,
+      transactionId,
+      adminId,
+      reason.trim()
+    );
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;
@@ -219,7 +233,7 @@ class AdminWalletController {
       actionLabel: "Link transaction to wallet entry",
       resourceType: "WALLET",
       resourceId: req.params.id,
-      metadata: { entryId: req.params.entryId, transactionId },
+      metadata: { entryId: req.params.entryId, transactionId, reason: reason.trim() },
     });
     res.json(successResponse(result));
   });
