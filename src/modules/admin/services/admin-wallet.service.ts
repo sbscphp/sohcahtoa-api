@@ -200,6 +200,7 @@ export class AdminWalletService {
       dateFrom?: string;
       dateTo?: string;
       search?: string;
+      matchStatus?: string;
       sortBy?: string;
       sortOrder?: string;
     } = {}
@@ -216,21 +217,56 @@ export class AdminWalletService {
     const limit = Math.min(filters.limit ?? 20, 100);
     const skip = (page - 1) * limit;
 
-    const where: any = { walletId: wallet.id };
-    if (filters.type) where.type = filters.type;
-    if (filters.status) where.status = filters.status;
+    const andConditions: any[] = [];
+    andConditions.push({ walletId: wallet.id });
+
+    if (filters.type) andConditions.push({ type: filters.type });
+    if (filters.status) andConditions.push({ status: filters.status });
     if (filters.dateFrom || filters.dateTo) {
-      where.createdAt = {};
-      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+      const dateCond: any = {};
+      if (filters.dateFrom) dateCond.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) dateCond.lte = new Date(filters.dateTo);
+      andConditions.push({ createdAt: dateCond });
     }
     if (filters.search) {
       const search = filters.search.trim();
-      where.OR = [
-        { transactionRef: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
+      andConditions.push({
+        OR: [
+          { transactionRef: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ]
+      });
     }
+    if (filters.matchStatus) {
+      const matchStatus = filters.matchStatus.toUpperCase();
+      if (matchStatus === "MATCHED") {
+        andConditions.push({
+          OR: [
+            { matchStatus: "MATCHED" },
+            {
+              AND: [
+                { matchStatus: null },
+                { linkedTransactionId: { not: null } }
+              ]
+            }
+          ]
+        });
+      } else if (matchStatus === "UNMATCHED") {
+        andConditions.push({
+          OR: [
+            { matchStatus: "UNMATCHED" },
+            {
+              AND: [
+                { matchStatus: null },
+                { linkedTransactionId: null }
+              ]
+            }
+          ]
+        });
+      }
+    }
+
+    const where = { AND: andConditions };
 
     const orderBy: any = {};
     const sortBy = filters.sortBy || "createdAt";
@@ -262,8 +298,11 @@ export class AdminWalletService {
         balanceAfter: Number(e.balanceAfter),
         description: e.description,
         status: e.status,
+        matchStatus: e.matchStatus || (e.linkedTransactionId ? "MATCHED" : "UNMATCHED"),
         transactionRef: e.transactionRef,
         transactionId: e.transactionId,
+        linkedTransactionId: e.linkedTransactionId,
+        linkReason: e.linkReason,
         sessionId: e.sessionId,
         createdAt: e.createdAt,
       })),
@@ -350,11 +389,12 @@ export class AdminWalletService {
       balanceAfter: Number(entry.balanceAfter),
       description: entry.description,
       status: entry.status,
-      matchStatus: entry.matchStatus,
+      matchStatus: entry.matchStatus || (entry.linkedTransactionId ? "MATCHED" : "UNMATCHED"),
       transactionRef: entry.transactionRef,
       transactionId: entry.transactionId,
       sessionId: entry.sessionId,
       linkedTransactionId: entry.linkedTransactionId,
+      linkReason: entry.linkReason,
       linkedTransaction,
       isFlagged: entry.isFlagged,
       flagReason: entry.flagReason,
@@ -508,7 +548,7 @@ export class AdminWalletService {
   /**
    * Link a transaction to an unmatched wallet entry.
    */
-  async linkTransaction(walletId: string, entryId: string, transactionId: string, adminId: string) {
+  async linkTransaction(walletId: string, entryId: string, transactionId: string, adminId: string, reason: string) {
     const entry = await (prisma as any).walletEntry.findFirst({
       where: { id: entryId, walletId },
     });
@@ -531,6 +571,7 @@ export class AdminWalletService {
       where: { id: entryId },
       data: {
         linkedTransactionId: transactionId,
+        linkReason: reason,
         matchStatus: "MATCHED",
       },
     });
@@ -540,11 +581,13 @@ export class AdminWalletService {
       entryId,
       transactionId,
       adminId,
+      reason,
     });
 
     return {
       id: updated.id,
       linkedTransactionId: updated.linkedTransactionId,
+      linkReason: updated.linkReason,
       matchStatus: updated.matchStatus,
       message: "Transaction linked successfully",
     };
@@ -566,6 +609,7 @@ export class AdminWalletService {
       where: { id: entryId },
       data: {
         linkedTransactionId: null,
+        linkReason: null,
         matchStatus: "UNMATCHED",
       },
     });
@@ -579,6 +623,7 @@ export class AdminWalletService {
     return {
       id: updated.id,
       linkedTransactionId: null,
+      linkReason: null,
       matchStatus: updated.matchStatus,
       message: "Transaction unlinked successfully",
     };

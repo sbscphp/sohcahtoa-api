@@ -845,6 +845,7 @@ ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "matchStatus" TEXT;
 
 -- Linked transaction (manually linked by admin)
 ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "linkedTransactionId" TEXT;
+ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "linkReason" TEXT;
 
 -- Flagging
 ALTER TABLE "wallet_entries" ADD COLUMN IF NOT EXISTS "isFlagged" BOOLEAN NOT NULL DEFAULT false;

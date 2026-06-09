@@ -179,6 +179,12 @@ WalletRouter.get(
  *         schema:
  *           type: string
  *       - in: query
+ *         name: matchStatus
+ *         schema:
+ *           type: string
+ *           enum: [MATCHED, UNMATCHED]
+ *         description: Filter by match status (MATCHED or UNMATCHED)
+ *       - in: query
  *         name: search
  *         schema:
  *           type: string
@@ -239,6 +245,12 @@ WalletRouter.get(
  *         name: status
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: matchStatus
+ *         schema:
+ *           type: string
+ *           enum: [MATCHED, UNMATCHED]
+ *         description: Filter by match status (MATCHED or UNMATCHED)
  *       - in: query
  *         name: dateFrom
  *         schema:
@@ -441,8 +453,11 @@ WalletRouter.post(
  *             type: object
  *             required:
  *               - transactionId
+ *               - reason
  *             properties:
  *               transactionId:
+ *                 type: string
+ *               reason:
  *                 type: string
  *     responses:
  *       200:
