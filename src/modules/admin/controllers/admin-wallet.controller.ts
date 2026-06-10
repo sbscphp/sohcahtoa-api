@@ -374,6 +374,26 @@ class AdminWalletController {
     });
     res.json(successResponse(result));
   });
+
+  /**
+   * GET /api/admin/wallet/:id/ledger/:entryId/audit-logs
+   * Get audit logs for a specific ledger entry.
+   */
+  getEntryAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const result = await adminWalletService.getEntryAuditLogs(
+      req.params.id,
+      req.params.entryId,
+      page,
+      limit
+    );
+    if (!result) {
+      res.status(404).json({ success: false, message: "Ledger entry not found" });
+      return;
+    }
+    res.json(successResponse(result.logs, { pagination: result.meta }));
+  });
 }
 
 export const adminWalletController = new AdminWalletController();

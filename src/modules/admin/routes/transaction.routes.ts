@@ -370,6 +370,58 @@ TransactionRouter.get(
 
 /**
  * @swagger
+ * /api/admin/transactions/unsettled-balance:
+ *   get:
+ *     summary: Get aggregate unsettled transaction balance
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Unsettled transaction balance retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Internal server error
+ */
+TransactionRouter.get(
+  "/unsettled-balance",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  adminTransactionsController.unsettledBalance
+);
+
+/**
+ * @swagger
+ * /api/admin/transactions/total-balance:
+ *   get:
+ *     summary: Get aggregate total balance of FX sold to customers
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: currency
+ *         schema:
+ *           type: string
+ *         description: Toggle target currency (NGN, USD, GBP, EUR)
+ *     responses:
+ *       200:
+ *         description: Total balance retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       500:
+ *         description: Internal server error
+ */
+TransactionRouter.get(
+  "/total-balance",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  adminTransactionsController.totalBalance
+);
+
+/**
+ * @swagger
  * /api/admin/transactions/{id}:
  *   get:
  *     summary: Get transaction details

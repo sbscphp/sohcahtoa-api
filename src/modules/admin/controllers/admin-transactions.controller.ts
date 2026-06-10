@@ -205,6 +205,17 @@ class AdminTransactionsController {
     });
     res.json(successResponse(result));
   });
+
+  unsettledBalance = asyncHandler(async (_req: Request, res: Response) => {
+    const result = await adminTransactionsService.getUnsettledTransactionBalance();
+    res.json(successResponse(result));
+  });
+
+  totalBalance = asyncHandler(async (req: Request, res: Response) => {
+    const currency = (req.query.currency as string) || "NGN";
+    const result = await adminTransactionsService.getTotalBalance(currency);
+    res.json(successResponse(result));
+  });
 }
 
 export const adminTransactionsController = new AdminTransactionsController();

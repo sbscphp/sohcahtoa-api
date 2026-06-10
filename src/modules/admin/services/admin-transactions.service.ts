@@ -1162,6 +1162,165 @@ export class AdminTransactionsService {
 
     return { message: "Transaction settled successfully" };
   }
+
+  async getUnsettledTransactionBalance() {
+    const unsettledStatuses = [
+      "AWAITING_VERIFICATION",
+      "VERIFICATION_IN_PROGRESS",
+      "VERIFICATION_COMPLETED",
+      "AWAITING_DEPOSIT",
+      "DEPOSIT_PENDING",
+      "DEPOSIT_CONFIRMED",
+      "AWAITING_DISBURSEMENT",
+      "COMPLIANCE_REVIEW",
+      "ADMIN_APPROVAL_PENDING",
+      "APPROVED",
+      "DISBURSEMENT_IN_PROGRESS",
+      "PENDING_RECORD_VALIDATION"
+    ];
+
+    const groups = await prisma.transaction.groupBy({
+      by: ["currency"],
+      where: {
+        status: {
+          in: unsettledStatuses as any[]
+        }
+      },
+      _sum: {
+        foreignAmount: true,
+        nairaEquivalent: true
+      },
+      _count: {
+        _all: true
+      }
+    });
+
+    const breakdown = groups.map((g: any) => ({
+      currency: g.currency,
+      totalForeignAmount: Number(g._sum.foreignAmount || 0),
+      totalNairaEquivalent: Number(g._sum.nairaEquivalent || 0),
+      count: g._count._all
+    }));
+    const totalNairaEquivalent = breakdown.reduce((acc, b) => acc + b.totalNairaEquivalent, 0);
+
+    let color = "Green";
+    if (totalNairaEquivalent >= 600000000) {
+      color = "Red";
+    } else if (totalNairaEquivalent >= 500000001) {
+      color = "Amber";
+    }
+
+    return {
+      totalUnsettledNairaBalance: totalNairaEquivalent,
+      comparisonLimit: 2000000000,
+      color,
+      breakdown
+    };
+  }
+
+  async getExchangeRate(fromCurrency: string): Promise<number> {
+    const now = new Date();
+    // Try to get active approved rate
+    let rate = await prisma.exchangeRate.findFirst({
+      where: {
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: "NGN",
+        isActive: true,
+        isApproved: true,
+        validFrom: { lte: now },
+        validUntil: { gt: now },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (rate) return Number(rate.sellRate);
+
+    // Fallback: any approved rate
+    rate = await prisma.exchangeRate.findFirst({
+      where: {
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: "NGN",
+        isApproved: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (rate) return Number(rate.sellRate);
+
+    // Fallback: any rate at all
+    rate = await prisma.exchangeRate.findFirst({
+      where: {
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: "NGN",
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (rate) return Number(rate.sellRate);
+
+    // Hardcoded defaults if absolutely nothing exists in database
+    const defaults: Record<string, number> = {
+      USD: 1500,
+      GBP: 1950,
+      EUR: 1650,
+    };
+    return defaults[fromCurrency.toUpperCase()] || 1;
+  }
+
+  async getTotalBalance(targetCurrency: string = "NGN") {
+    const txs = await prisma.transaction.findMany({
+      where: {
+        status: { in: ["APPROVED", "COMPLETED"] as any[] },
+        OR: [
+          { type: { in: ["PTA", "BTA", "SCHOOL_FEES", "MEDICAL", "PROFESSIONAL_BODY"] as any[] } },
+          { AND: [{ type: "TOURIST_FX" }, { transactionMode: "BUY" as any }] }
+        ]
+      },
+      select: {
+        nairaEquivalent: true,
+        foreignAmount: true,
+        exchangeRate: true,
+        currency: true
+      }
+    });
+
+    let totalNgn = 0;
+    for (const tx of txs) {
+      let ngnVal = Number(tx.nairaEquivalent || 0);
+      if (ngnVal === 0 && tx.foreignAmount) {
+        const rate = Number(tx.exchangeRate || 1);
+        ngnVal = Number(tx.foreignAmount) * rate;
+      }
+      totalNgn += ngnVal;
+    }
+
+    const usdRate = await this.getExchangeRate("USD");
+    const gbpRate = await this.getExchangeRate("GBP");
+    const eurRate = await this.getExchangeRate("EUR");
+
+    const equivalents = {
+      NGN: totalNgn,
+      USD: totalNgn / usdRate,
+      GBP: totalNgn / gbpRate,
+      EUR: totalNgn / eurRate
+    };
+
+    const targetUpper = targetCurrency.toUpperCase();
+    let displayValue = totalNgn;
+    if (targetUpper === "USD") {
+      displayValue = equivalents.USD;
+    } else if (targetUpper === "GBP") {
+      displayValue = equivalents.GBP;
+    } else if (targetUpper === "EUR") {
+      displayValue = equivalents.EUR;
+    }
+
+    return {
+      totalBalance: displayValue,
+      currency: targetUpper,
+      equivalents
+    };
+  }
 }
 
 export const adminTransactionsService = new AdminTransactionsService();

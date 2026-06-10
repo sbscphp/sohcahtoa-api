@@ -897,6 +897,70 @@ export class AdminWalletService {
       message: "Disbursement confirmed successfully",
     };
   }
+
+  /**
+   * Get audit logs for a wallet ledger entry.
+   */
+  async getEntryAuditLogs(walletId: string, entryId: string, page = 1, limit = 20) {
+    const entry = await (prisma as any).walletEntry.findFirst({
+      where: { id: entryId, walletId },
+    });
+
+    if (!entry) {
+      return null;
+    }
+
+    const skip = (page - 1) * limit;
+    const where: any = {
+      resourceType: "WALLET",
+      resourceId: walletId,
+      metadata: {
+        path: ["entryId"],
+        equals: entryId,
+      } as any,
+    };
+
+    const client: any = prisma as any;
+    const [actions, total] = await Promise.all([
+      client.adminAction.findMany({
+        where,
+        orderBy: { performedAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          admin: {
+            select: { id: true, fullName: true, email: true },
+          },
+        },
+      }),
+      client.adminAction.count({ where }),
+    ]);
+
+    return {
+      logs: actions.map((a: any) => ({
+        id: a.id,
+        adminId: a.adminId,
+        adminName: a.admin?.fullName || null,
+        adminEmail: a.admin?.email || null,
+        actionType: a.actionType,
+        actionLabel: a.actionLabel,
+        previousState: a.previousState,
+        newState: a.newState,
+        reason: a.reason,
+        metadata: a.metadata,
+        status: a.status,
+        ipAddress: a.ipAddress,
+        userAgent: a.userAgent,
+        performedAt: a.performedAt,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }
 
 export const adminWalletService = new AdminWalletService();

@@ -341,6 +341,52 @@ WalletRouter.get(
 
 /**
  * @swagger
+ * /api/admin/wallet/{id}/ledger/{entryId}/audit-logs:
+ *   get:
+ *     summary: Get audit logs for a specific wallet ledger entry
+ *     tags: [admin-wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Wallet ID
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Ledger entry ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Audit logs retrieved successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
+WalletRouter.get(
+  "/:id/ledger/:entryId/audit-logs",
+  authenticate,
+  requirePermission({ module: "WALLET", feature: "MODULE", action: "view" }),
+  adminWalletController.getEntryAuditLogs
+);
+
+/**
+ * @swagger
  * /api/admin/wallet/{id}/ledger/{entryId}/notes:
  *   get:
  *     summary: Get notes for a ledger entry

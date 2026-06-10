@@ -467,6 +467,8 @@ class OutletController {
         { header: "Phone Number", select: (r: any) => r.phoneNumber },
         { header: "Active", select: (r: any) => (r.isActive ? "Active" : "Deactivated") },
         { header: "Approved", select: (r: any) => (r.isApproved ? "Approved" : "Pending") },
+        { header: "Total Transactions", select: (r: any) => r.totalTransactions ?? 0 },
+        { header: "Transaction Volume", select: (r: any) => r.transactionVolume ?? 0 },
         { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
       ],
       rows as any[]
