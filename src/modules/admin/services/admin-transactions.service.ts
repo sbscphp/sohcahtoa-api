@@ -241,10 +241,16 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const user = await prisma.user.findUnique({
-      where: { id: (trx as any).userId },
-      include: { profile: true, kyc: true },
-    });
+    const [user, wallet] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: (trx as any).userId },
+        include: { profile: true, kyc: true },
+      }),
+      (prisma as any).customerWallet.findUnique({
+        where: { userId: (trx as any).userId },
+        select: { id: true },
+      }),
+    ]);
     const name =
       user?.profile
         ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
@@ -254,6 +260,15 @@ export class AdminTransactionsService {
     const nin = user?.kyc?.nin || null;
     const tin = user?.kyc?.tin || null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
+    const receiptDoc = Array.isArray((trx as any).documents)
+      ? (trx as any).documents.find((d: any) => d.documentType === "RECEIPT")
+      : null;
+    const receiptUrl = (trx as any).receipt?.pdfUrl || receiptDoc?.fileUrl || null;
+    const receiptObj = (trx as any).receipt
+      ? { receiptNumber: (trx as any).receipt.receiptNumber, pdfUrl: (trx as any).receipt.pdfUrl, generatedAt: (trx as any).receipt.generatedAt }
+      : receiptDoc
+      ? { receiptNumber: receiptDoc.fileName || `receipt-${trx.id}`, pdfUrl: receiptDoc.fileUrl, generatedAt: receiptDoc.createdAt }
+      : null;
     const pickup = (trx as any).cashPickup || null;
     const valueFx = Number(trx.foreignAmount || 0);
     const valueNgn = Number(trx.nairaEquivalent || 0);
@@ -311,9 +326,11 @@ export class AdminTransactionsService {
       if (action === "DOCUMENT_MORE_INFO_REQUESTED") return "More Info Requested";
       if (action === "DOCUMENT_APPROVED") return "Document Approved";
       if (action === "DOCUMENT_REJECTED") return "Document Rejected";
+      if (action === "DISBURSEMENT_CONFIRMED") return "Disbursement Confirmed";
       return action;
     };
     const toOutcome = (action: string) => {
+      if (action === "DISBURSEMENT_CONFIRMED") return "Completed";
       if (action === "DOCUMENT_APPROVED") return "Completed";
       if (action === "DOCUMENT_REJECTED") return "Rejected";
       if (action.includes("REJECT")) return "Rejected";
@@ -456,12 +473,17 @@ export class AdminTransactionsService {
       time: trx.createdAt,
       customerName: name,
       customerType: user?.customerType || null,
+      customerTransientWalletId: wallet?.id || null,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,
       workflowStage: statusLabel,
       requestStatus,
+      receiptUrl,
+      receipt: receiptObj,
       approvalProcess: {
+        name: workflow?.name || null,
+        approvalType: workflow?.approvalType || null,
         isApprovalOfficer,
         approvalState,
         pendingAssignees,
@@ -479,6 +501,9 @@ export class AdminTransactionsService {
         pickupLocation: pickup?.pickupLocation || null,
         scheduledPickupDate: pickup?.scheduledPickupDate || null,
         scheduledPickupTime: pickup?.scheduledPickupTime || null,
+        customerTransientWalletId: wallet?.id || null,
+        receiptUrl,
+        receipt: receiptObj,
       },
       workflowLine,
       raw: { ...(trx as any), history: decoratedHistory },
@@ -1267,7 +1292,7 @@ export class AdminTransactionsService {
     return defaults[fromCurrency.toUpperCase()] || 1;
   }
 
-  async getTotalBalance(targetCurrency: string = "NGN") {
+  async getTotalBalance() {
     const txs = await prisma.transaction.findMany({
       where: {
         status: { in: ["APPROVED", "COMPLETED"] as any[] },
@@ -1279,47 +1304,32 @@ export class AdminTransactionsService {
       select: {
         nairaEquivalent: true,
         foreignAmount: true,
-        exchangeRate: true,
         currency: true
       }
     });
 
-    let totalNgn = 0;
+    const balances: Record<string, number> = {
+      USD: 0,
+      GBP: 0,
+      EUR: 0,
+      NGN: 0,
+    };
+
     for (const tx of txs) {
-      let ngnVal = Number(tx.nairaEquivalent || 0);
-      if (ngnVal === 0 && tx.foreignAmount) {
-        const rate = Number(tx.exchangeRate || 1);
-        ngnVal = Number(tx.foreignAmount) * rate;
+      const cur = (tx.currency || "").trim().toUpperCase();
+      if (!cur) continue;
+
+      let amount = 0;
+      if (cur === "NGN") {
+        amount = Number(tx.nairaEquivalent || tx.foreignAmount || 0);
+      } else {
+        amount = Number(tx.foreignAmount || 0);
       }
-      totalNgn += ngnVal;
+
+      balances[cur] = (balances[cur] || 0) + amount;
     }
 
-    const usdRate = await this.getExchangeRate("USD");
-    const gbpRate = await this.getExchangeRate("GBP");
-    const eurRate = await this.getExchangeRate("EUR");
-
-    const equivalents = {
-      NGN: totalNgn,
-      USD: totalNgn / usdRate,
-      GBP: totalNgn / gbpRate,
-      EUR: totalNgn / eurRate
-    };
-
-    const targetUpper = targetCurrency.toUpperCase();
-    let displayValue = totalNgn;
-    if (targetUpper === "USD") {
-      displayValue = equivalents.USD;
-    } else if (targetUpper === "GBP") {
-      displayValue = equivalents.GBP;
-    } else if (targetUpper === "EUR") {
-      displayValue = equivalents.EUR;
-    }
-
-    return {
-      totalBalance: displayValue,
-      currency: targetUpper,
-      equivalents
-    };
+    return balances;
   }
 }
 

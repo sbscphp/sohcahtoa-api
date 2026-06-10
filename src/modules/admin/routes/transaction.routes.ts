@@ -395,19 +395,13 @@ TransactionRouter.get(
  * @swagger
  * /api/admin/transactions/total-balance:
  *   get:
- *     summary: Get aggregate total balance of FX sold to customers
+ *     summary: Get aggregate total balances of FX sold to customers grouped by currency
  *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: currency
- *         schema:
- *           type: string
- *         description: Toggle target currency (NGN, USD, GBP, EUR)
  *     responses:
  *       200:
- *         description: Total balance retrieved successfully
+ *         description: Total balances by currency retrieved successfully
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       500:

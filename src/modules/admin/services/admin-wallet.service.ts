@@ -888,6 +888,18 @@ export class AdminWalletService {
       },
     });
 
+    const targetTrxId = entry.linkedTransactionId || entry.transactionId;
+    if (targetTrxId) {
+      await (prisma as any).transactionHistory.create({
+        data: {
+          transactionId: targetTrxId,
+          action: "DISBURSEMENT_CONFIRMED",
+          performedBy: adminId,
+          notes: "Disbursement confirmed",
+        },
+      });
+    }
+
     logger.info("Wallet entry disbursement confirmed", { walletId, entryId, adminId });
 
     return {

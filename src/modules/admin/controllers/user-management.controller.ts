@@ -419,7 +419,7 @@ class UserManagementController {
             "DASHBOARD",
             "AGENT",
             "PICKUP_STATIONS",
-            "DISCREPANCY"
+            "TRANSIENT_WALLET"
         ];
         res.json(successResponse({ modules }));
     });
