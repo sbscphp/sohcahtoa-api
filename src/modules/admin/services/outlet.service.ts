@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 import { createLogger, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
-import { ServiceName } from "../../../shared/types";
+import { ServiceName, TransactionStatus, TransactionType } from "../../../shared/types";
 import {
   CreateFranchiseDto,
   FranchiseQueryDto,
@@ -16,6 +16,41 @@ const logger = createLogger(ServiceName.ADMIN);
 const db: any = prisma;
 
 class OutletService {
+  private validateAndApplyTransactionFilters(where: any, filters: any) {
+    if (filters?.status) {
+      const statusUpper = filters.status.toString().trim().toUpperCase();
+      if (Object.values(TransactionStatus).includes(statusUpper as any)) {
+        where.status = statusUpper as any;
+      } else {
+        throw new ValidationError(`Invalid transaction status: ${filters.status}`);
+      }
+    }
+
+    if (filters?.step) {
+      where.currentStep = filters.step;
+    }
+
+    const rawType = (filters?.type || "").toString().trim().toLowerCase();
+    if (rawType === "buyfx") {
+      where.transactionMode = "BUY" as any;
+    } else if (rawType === "sellfx") {
+      where.transactionMode = "SELL" as any;
+    } else if (rawType) {
+      const typeUpper = rawType.toUpperCase();
+      if (Object.values(TransactionType).includes(typeUpper as any)) {
+        where.type = typeUpper as any;
+      } else {
+        throw new ValidationError(`Invalid transaction type: ${filters.type}`);
+      }
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+  }
+
   async listOutlets() {
     const locations = await prisma.cashPickup.findMany({
       select: { pickupLocation: true },
@@ -550,23 +585,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
-    if (filters?.step) where.currentStep = filters.step;
-
-    const rawType = (filters?.type || "").toString().trim().toLowerCase();
-    if (rawType === "buyfx") {
-      where.transactionMode = "BUY" as any;
-    } else if (rawType === "sellfx") {
-      where.transactionMode = "SELL" as any;
-    } else if (rawType) {
-      where.type = (filters.type as string).toUpperCase();
-    }
-
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.createdAt = {};
-      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
-    }
+    this.validateAndApplyTransactionFilters(where, filters);
 
     const search = (filters?.search || "").toString().trim();
     if (search) {
@@ -657,23 +676,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
-    if (filters?.step) where.currentStep = filters.step;
-
-    const rawType = (filters?.type || "").toString().trim().toLowerCase();
-    if (rawType === "buyfx") {
-      where.transactionMode = "BUY" as any;
-    } else if (rawType === "sellfx") {
-      where.transactionMode = "SELL" as any;
-    } else if (rawType) {
-      where.type = (filters.type as string).toUpperCase();
-    }
-
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.createdAt = {};
-      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
-    }
+    this.validateAndApplyTransactionFilters(where, filters);
 
     const search = (filters?.search || "").toString().trim();
     if (search) {
@@ -760,23 +763,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
-    if (filters?.step) where.currentStep = filters.step;
-
-    const rawType = (filters?.type || "").toString().trim().toLowerCase();
-    if (rawType === "buyfx") {
-      where.transactionMode = "BUY" as any;
-    } else if (rawType === "sellfx") {
-      where.transactionMode = "SELL" as any;
-    } else if (rawType) {
-      where.type = (filters.type as string).toUpperCase();
-    }
-
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.createdAt = {};
-      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
-    }
+    this.validateAndApplyTransactionFilters(where, filters);
 
     const search = (filters?.search || "").toString().trim();
     if (search) {
@@ -860,23 +847,7 @@ class OutletService {
       },
     };
 
-    if (filters?.status) where.status = { equals: filters.status, mode: "insensitive" };
-    if (filters?.step) where.currentStep = filters.step;
-
-    const rawType = (filters?.type || "").toString().trim().toLowerCase();
-    if (rawType === "buyfx") {
-      where.transactionMode = "BUY" as any;
-    } else if (rawType === "sellfx") {
-      where.transactionMode = "SELL" as any;
-    } else if (rawType) {
-      where.type = (filters.type as string).toUpperCase();
-    }
-
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.createdAt = {};
-      if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo);
-    }
+    this.validateAndApplyTransactionFilters(where, filters);
 
     const search = (filters?.search || "").toString().trim();
     if (search) {
@@ -1714,7 +1685,39 @@ class OutletService {
       db.agent.count({ where }),
     ]);
 
-    return { items: rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    const agentIds = (rows || []).map((a: any) => a.id).filter(Boolean);
+    const volumesByAgentId = new Map<string, { count: number; volume: number }>();
+    if (agentIds.length) {
+      const transactions = await db.transaction.findMany({
+        where: { createdByAgentId: { in: agentIds } },
+        select: {
+          createdByAgentId: true,
+          nairaEquivalent: true,
+          foreignAmount: true,
+          cashPickup: { select: { amount: true } },
+        },
+      });
+
+      for (const t of transactions || []) {
+        const agentId = t.createdByAgentId;
+        if (!agentId) continue;
+        const prev = volumesByAgentId.get(agentId) || { count: 0, volume: 0 };
+        const value = Number(t.nairaEquivalent || t.foreignAmount || t.cashPickup?.amount || 0);
+        volumesByAgentId.set(agentId, { count: prev.count + 1, volume: prev.volume + value });
+      }
+    }
+
+    const items = (rows || []).map((a: any) => {
+      const totals = volumesByAgentId.get(a.id) || { count: 0, volume: 0 };
+      return {
+        ...a,
+        totalTransactions: totals.count,
+        transactionVolume: totals.volume,
+        totalTransactionsVolume: totals.volume,
+      };
+    });
+
+    return { items, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
   async exportBranchAgents(branchId: string, query: any = {}) {
@@ -1754,7 +1757,37 @@ class OutletService {
       },
     });
 
-    return rows;
+    const agentIds = (rows || []).map((a: any) => a.id).filter(Boolean);
+    const volumesByAgentId = new Map<string, { count: number; volume: number }>();
+    if (agentIds.length) {
+      const transactions = await db.transaction.findMany({
+        where: { createdByAgentId: { in: agentIds } },
+        select: {
+          createdByAgentId: true,
+          nairaEquivalent: true,
+          foreignAmount: true,
+          cashPickup: { select: { amount: true } },
+        },
+      });
+
+      for (const t of transactions || []) {
+        const agentId = t.createdByAgentId;
+        if (!agentId) continue;
+        const prev = volumesByAgentId.get(agentId) || { count: 0, volume: 0 };
+        const value = Number(t.nairaEquivalent || t.foreignAmount || t.cashPickup?.amount || 0);
+        volumesByAgentId.set(agentId, { count: prev.count + 1, volume: prev.volume + value });
+      }
+    }
+
+    return (rows || []).map((a: any) => {
+      const totals = volumesByAgentId.get(a.id) || { count: 0, volume: 0 };
+      return {
+        ...a,
+        totalTransactions: totals.count,
+        transactionVolume: totals.volume,
+        totalTransactionsVolume: totals.volume,
+      };
+    });
   }
 
   async addAgentsToBranch(id: string, agentIds: string[]) {

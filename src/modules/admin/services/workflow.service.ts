@@ -892,6 +892,8 @@ export class WorkflowService {
     })) || [];
 
     return {
+      name: workflow?.name || null,
+      approvalType: workflow?.approvalType || null,
       isApprovalOfficer,
       approvalState,
       pendingAssignees,
