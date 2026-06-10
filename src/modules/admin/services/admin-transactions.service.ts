@@ -1292,7 +1292,7 @@ export class AdminTransactionsService {
     return defaults[fromCurrency.toUpperCase()] || 1;
   }
 
-  async getTotalBalance(targetCurrency: string = "NGN") {
+  async getTotalBalance() {
     const txs = await prisma.transaction.findMany({
       where: {
         status: { in: ["APPROVED", "COMPLETED"] as any[] },
@@ -1304,43 +1304,32 @@ export class AdminTransactionsService {
       select: {
         nairaEquivalent: true,
         foreignAmount: true,
-        exchangeRate: true,
         currency: true
       }
     });
 
-    let totalNgn = 0;
-    const balancesByCurrency: Record<string, number> = {};
+    const balances: Record<string, number> = {
+      USD: 0,
+      GBP: 0,
+      EUR: 0,
+      NGN: 0,
+    };
 
     for (const tx of txs) {
       const cur = (tx.currency || "").trim().toUpperCase();
-      const foreignAmt = Number(tx.foreignAmount || 0);
+      if (!cur) continue;
 
-      let ngnVal = Number(tx.nairaEquivalent || 0);
-      if (ngnVal === 0 && foreignAmt > 0) {
-        const rate = Number(tx.exchangeRate || 1);
-        ngnVal = foreignAmt * rate;
+      let amount = 0;
+      if (cur === "NGN") {
+        amount = Number(tx.nairaEquivalent || tx.foreignAmount || 0);
+      } else {
+        amount = Number(tx.foreignAmount || 0);
       }
-      totalNgn += ngnVal;
 
-      if (cur) {
-        balancesByCurrency[cur] = (balancesByCurrency[cur] || 0) + foreignAmt;
-      }
+      balances[cur] = (balances[cur] || 0) + amount;
     }
 
-    const equivalents: Record<string, number> = {
-      NGN: totalNgn,
-      ...balancesByCurrency
-    };
-
-    const targetUpper = targetCurrency.toUpperCase();
-    const displayValue = equivalents[targetUpper] ?? 0;
-
-    return {
-      totalBalance: displayValue,
-      currency: targetUpper,
-      equivalents
-    };
+    return balances;
   }
 }
 

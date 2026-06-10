@@ -212,8 +212,7 @@ class AdminTransactionsController {
   });
 
   totalBalance = asyncHandler(async (req: Request, res: Response) => {
-    const currency = (req.query.currency as string) || "NGN";
-    const result = await adminTransactionsService.getTotalBalance(currency);
+    const result = await adminTransactionsService.getTotalBalance();
     res.json(successResponse(result));
   });
 }
