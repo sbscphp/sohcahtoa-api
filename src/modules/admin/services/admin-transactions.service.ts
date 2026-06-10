@@ -326,9 +326,11 @@ export class AdminTransactionsService {
       if (action === "DOCUMENT_MORE_INFO_REQUESTED") return "More Info Requested";
       if (action === "DOCUMENT_APPROVED") return "Document Approved";
       if (action === "DOCUMENT_REJECTED") return "Document Rejected";
+      if (action === "DISBURSEMENT_CONFIRMED") return "Disbursement Confirmed";
       return action;
     };
     const toOutcome = (action: string) => {
+      if (action === "DISBURSEMENT_CONFIRMED") return "Completed";
       if (action === "DOCUMENT_APPROVED") return "Completed";
       if (action === "DOCUMENT_REJECTED") return "Rejected";
       if (action.includes("REJECT")) return "Rejected";
@@ -1308,12 +1310,10 @@ export class AdminTransactionsService {
     });
 
     let totalNgn = 0;
-    let totalUsd = 0;
-    let totalGbp = 0;
-    let totalEur = 0;
+    const balancesByCurrency: Record<string, number> = {};
 
     for (const tx of txs) {
-      const cur = (tx.currency || "").toUpperCase();
+      const cur = (tx.currency || "").trim().toUpperCase();
       const foreignAmt = Number(tx.foreignAmount || 0);
 
       let ngnVal = Number(tx.nairaEquivalent || 0);
@@ -1323,31 +1323,18 @@ export class AdminTransactionsService {
       }
       totalNgn += ngnVal;
 
-      if (cur === "USD") {
-        totalUsd += foreignAmt;
-      } else if (cur === "GBP") {
-        totalGbp += foreignAmt;
-      } else if (cur === "EUR") {
-        totalEur += foreignAmt;
+      if (cur) {
+        balancesByCurrency[cur] = (balancesByCurrency[cur] || 0) + foreignAmt;
       }
     }
 
-    const equivalents = {
+    const equivalents: Record<string, number> = {
       NGN: totalNgn,
-      USD: totalUsd,
-      GBP: totalGbp,
-      EUR: totalEur
+      ...balancesByCurrency
     };
 
     const targetUpper = targetCurrency.toUpperCase();
-    let displayValue = totalNgn;
-    if (targetUpper === "USD") {
-      displayValue = totalUsd;
-    } else if (targetUpper === "GBP") {
-      displayValue = totalGbp;
-    } else if (targetUpper === "EUR") {
-      displayValue = totalEur;
-    }
+    const displayValue = equivalents[targetUpper] ?? 0;
 
     return {
       totalBalance: displayValue,
