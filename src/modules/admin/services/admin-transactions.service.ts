@@ -241,10 +241,16 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const user = await prisma.user.findUnique({
-      where: { id: (trx as any).userId },
-      include: { profile: true, kyc: true },
-    });
+    const [user, wallet] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: (trx as any).userId },
+        include: { profile: true, kyc: true },
+      }),
+      (prisma as any).customerWallet.findUnique({
+        where: { userId: (trx as any).userId },
+        select: { id: true },
+      }),
+    ]);
     const name =
       user?.profile
         ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
@@ -254,6 +260,15 @@ export class AdminTransactionsService {
     const nin = user?.kyc?.nin || null;
     const tin = user?.kyc?.tin || null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
+    const receiptDoc = Array.isArray((trx as any).documents)
+      ? (trx as any).documents.find((d: any) => d.documentType === "RECEIPT")
+      : null;
+    const receiptUrl = (trx as any).receipt?.pdfUrl || receiptDoc?.fileUrl || null;
+    const receiptObj = (trx as any).receipt
+      ? { receiptNumber: (trx as any).receipt.receiptNumber, pdfUrl: (trx as any).receipt.pdfUrl, generatedAt: (trx as any).receipt.generatedAt }
+      : receiptDoc
+      ? { receiptNumber: receiptDoc.fileName || `receipt-${trx.id}`, pdfUrl: receiptDoc.fileUrl, generatedAt: receiptDoc.createdAt }
+      : null;
     const pickup = (trx as any).cashPickup || null;
     const valueFx = Number(trx.foreignAmount || 0);
     const valueNgn = Number(trx.nairaEquivalent || 0);
@@ -456,12 +471,17 @@ export class AdminTransactionsService {
       time: trx.createdAt,
       customerName: name,
       customerType: user?.customerType || null,
+      customerTransientWalletId: wallet?.id || null,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,
       workflowStage: statusLabel,
       requestStatus,
+      receiptUrl,
+      receipt: receiptObj,
       approvalProcess: {
+        name: workflow?.name || null,
+        approvalType: workflow?.approvalType || null,
         isApprovalOfficer,
         approvalState,
         pendingAssignees,
@@ -479,6 +499,9 @@ export class AdminTransactionsService {
         pickupLocation: pickup?.pickupLocation || null,
         scheduledPickupDate: pickup?.scheduledPickupDate || null,
         scheduledPickupTime: pickup?.scheduledPickupTime || null,
+        customerTransientWalletId: wallet?.id || null,
+        receiptUrl,
+        receipt: receiptObj,
       },
       workflowLine,
       raw: { ...(trx as any), history: decoratedHistory },
@@ -1285,34 +1308,45 @@ export class AdminTransactionsService {
     });
 
     let totalNgn = 0;
+    let totalUsd = 0;
+    let totalGbp = 0;
+    let totalEur = 0;
+
     for (const tx of txs) {
+      const cur = (tx.currency || "").toUpperCase();
+      const foreignAmt = Number(tx.foreignAmount || 0);
+
       let ngnVal = Number(tx.nairaEquivalent || 0);
-      if (ngnVal === 0 && tx.foreignAmount) {
+      if (ngnVal === 0 && foreignAmt > 0) {
         const rate = Number(tx.exchangeRate || 1);
-        ngnVal = Number(tx.foreignAmount) * rate;
+        ngnVal = foreignAmt * rate;
       }
       totalNgn += ngnVal;
-    }
 
-    const usdRate = await this.getExchangeRate("USD");
-    const gbpRate = await this.getExchangeRate("GBP");
-    const eurRate = await this.getExchangeRate("EUR");
+      if (cur === "USD") {
+        totalUsd += foreignAmt;
+      } else if (cur === "GBP") {
+        totalGbp += foreignAmt;
+      } else if (cur === "EUR") {
+        totalEur += foreignAmt;
+      }
+    }
 
     const equivalents = {
       NGN: totalNgn,
-      USD: totalNgn / usdRate,
-      GBP: totalNgn / gbpRate,
-      EUR: totalNgn / eurRate
+      USD: totalUsd,
+      GBP: totalGbp,
+      EUR: totalEur
     };
 
     const targetUpper = targetCurrency.toUpperCase();
     let displayValue = totalNgn;
     if (targetUpper === "USD") {
-      displayValue = equivalents.USD;
+      displayValue = totalUsd;
     } else if (targetUpper === "GBP") {
-      displayValue = equivalents.GBP;
+      displayValue = totalGbp;
     } else if (targetUpper === "EUR") {
-      displayValue = equivalents.EUR;
+      displayValue = totalEur;
     }
 
     return {
