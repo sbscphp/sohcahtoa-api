@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { createApp } from './app';
-import { initializeDatabase, disconnectDatabase } from './config/database';
+import { initializeDatabase, disconnectDatabase, getDatabase } from './config/database';
 import { initializeRedis, disconnectRedis } from './config/redis';
 import { initializeEmail } from './config/email';
 import { initializeFirebase } from './config/firebase';
@@ -8,6 +8,7 @@ import { createLogger } from './shared/utils/logger';
 import { eventBus } from './events/event-bus';
 import notificationHandler from './modules/notifications/handlers/notification.handler';
 import { setupTransactionWorkflow } from './shared/utils/workflow-setup';
+import { WalletService } from './modules/wallet/services/wallet.service';
 
 // Import workers to activate background loops
 import './modules/admin/config/workers/outbox.worker';
@@ -20,6 +21,50 @@ const logger = createLogger('Server');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
+
+/**
+ * Ensures every existing CUSTOMER has a transient wallet.
+ * Safe to run on every startup — wallet creation is idempotent.
+ */
+async function backfillTransientWallets() {
+  const prisma = getDatabase();
+  const walletService = new WalletService();
+
+  const [allCustomers, existingWallets] = await Promise.all([
+    (prisma as any).user.findMany({
+      where: { role: 'CUSTOMER' },
+      select: { id: true },
+    }),
+    (prisma as any).customerWallet.findMany({
+      select: { userId: true },
+    }),
+  ]);
+
+  const walletedUserIds = new Set(existingWallets.map((w: any) => w.userId));
+  const customersWithoutWallet = allCustomers.filter((u: any) => !walletedUserIds.has(u.id));
+
+  if (customersWithoutWallet.length === 0) {
+    logger.info('Wallet backfill: all customers already have wallets');
+    return;
+  }
+
+  logger.info(`Wallet backfill: creating wallets for ${customersWithoutWallet.length} customer(s)`);
+
+  let created = 0;
+  let failed = 0;
+
+  for (const { id } of customersWithoutWallet) {
+    try {
+      await walletService.createWallet(id);
+      created++;
+    } catch (err: any) {
+      failed++;
+      logger.error('Wallet backfill: failed to create wallet', { userId: id, error: err.message });
+    }
+  }
+
+  logger.info(`Wallet backfill complete`, { created, failed });
+}
 
 // Initialize the application
 async function startServer() {
@@ -44,6 +89,11 @@ async function startServer() {
     // Initialize Firebase for push notifications
     logger.info('Initializing Firebase for push notifications...');
     initializeFirebase();
+
+    // Backfill transient wallets for any customers missing one
+    backfillTransientWallets().catch((err) =>
+      logger.error('Wallet backfill failed', { error: err.message }),
+    );
 
     // Initialize event bus handlers
     initializeEventHandlers();
