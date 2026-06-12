@@ -58,7 +58,22 @@ class RegulatoryController {
     const status = (req.body?.status as string) || (req.query.status as string) || "ALL";
     const search = (req.body?.search as string) || (req.query.search as string) || "";
     const result = await regulatoryService.trmsList({ status, search }, 1, 10000);
-    res.json(successResponse(result.data));
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "trms-submissions.csv",
+      [
+        { header: "Transaction ID", select: (r: any) => r.transactionId || "" },
+        { header: "Customer Name", select: (r: any) => r.customerName || "" },
+        { header: "Currency Pair", select: (r: any) => r.currencyPair || "" },
+        { header: "Type", select: (r: any) => r.type || "" },
+        { header: "Amount", select: (r: any) => r.amount ?? "" },
+        { header: "Documents", select: (r: any) => r.documents ?? 0 },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
   });
 
   exportComplianceReports = asyncHandler(async (req: Request, res: Response) => {
@@ -67,7 +82,21 @@ class RegulatoryController {
     const fileType = (req.body?.fileType as string) || (req.query.fileType as string) || undefined;
     const channel = (req.body?.channel as string) || (req.query.channel as string) || undefined;
     const result = await regulatoryService.complianceReportsList({ status, fileType, channel, search }, 1, 10000);
-    res.json(successResponse(result.data));
+    const rows = result.data || [];
+    streamCsv(
+      res,
+      "compliance-reports.csv",
+      [
+        { header: "Report Name", select: (r: any) => r.reportName || "" },
+        { header: "Reporting Date", select: (r: any) => (r.reportingDate ? new Date(r.reportingDate).toISOString() : "") },
+        { header: "File Type", select: (r: any) => r.fileType || "" },
+        { header: "Status", select: (r: any) => r.status || "" },
+        { header: "Channel", select: (r: any) => r.channel || "" },
+        { header: "Reference", select: (r: any) => r.reference || "" },
+        { header: "Created At", select: (r: any) => (r.createdAt ? new Date(r.createdAt).toISOString() : "") },
+      ],
+      rows as any[]
+    );
   });
 
   fnWindowStats = asyncHandler(async (_req: Request, res: Response) => {
