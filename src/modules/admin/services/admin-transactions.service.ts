@@ -1229,12 +1229,10 @@ export class AdminTransactionsService {
 
     const breakdown = groups.map((g: any) => {
       const nairaEquivalent = Number(g._sum.nairaEquivalent || 0);
-      const pctVal = totalNairaEquivalent > 0 ? (nairaEquivalent / totalNairaEquivalent) * 100 : 0;
       return {
         currency: g.currency,
         totalForeignAmount: Number(g._sum.foreignAmount || 0),
         totalNairaEquivalent: nairaEquivalent,
-        percentage: formatPercent(pctVal),
         count: g._count._all
       };
     });
