@@ -400,6 +400,9 @@ export class WorkflowService {
     responseTpl.departmentName = tpl.department?.name;
     delete responseTpl.branch;
     delete responseTpl.department;
+    
+    responseTpl.status =
+      tpl.status === "ACTIVE" ? "Active" : tpl.status === "ARCHIVED" ? "Deactivated" : "Draft";
 
     return { ...responseTpl, stages: stageWithAssignees };
   }
@@ -540,7 +543,7 @@ export class WorkflowService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: "desc" },
-        select: { id: true, name: true, type: true, status: true, createdAt: true },
+        select: { id: true, name: true, type: true, status: true, createdAt: true, approvalType: true },
       }),
       client.workflowTemplate.count({ where }),
     ]);
@@ -567,6 +570,7 @@ export class WorkflowService {
         workflowAction: t.action || "Transaction Management",
         status: statusLabel,
         dateCreated: t.createdAt,
+        approvalType: t.approvalType,
       };
     });
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };

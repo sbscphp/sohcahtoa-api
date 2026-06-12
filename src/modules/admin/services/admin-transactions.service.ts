@@ -1220,13 +1220,24 @@ export class AdminTransactionsService {
       }
     });
 
-    const breakdown = groups.map((g: any) => ({
-      currency: g.currency,
-      totalForeignAmount: Number(g._sum.foreignAmount || 0),
-      totalNairaEquivalent: Number(g._sum.nairaEquivalent || 0),
-      count: g._count._all
-    }));
-    const totalNairaEquivalent = breakdown.reduce((acc, b) => acc + b.totalNairaEquivalent, 0);
+    const totalNairaEquivalent = groups.reduce((acc, g) => acc + Number(g._sum.nairaEquivalent || 0), 0);
+
+    const formatPercent = (val: number) => {
+      const formatted = val.toFixed(2);
+      return formatted.endsWith(".00") ? `${Math.round(val)}%` : `${formatted}%`;
+    };
+
+    const breakdown = groups.map((g: any) => {
+      const nairaEquivalent = Number(g._sum.nairaEquivalent || 0);
+      const pctVal = totalNairaEquivalent > 0 ? (nairaEquivalent / totalNairaEquivalent) * 100 : 0;
+      return {
+        currency: g.currency,
+        totalForeignAmount: Number(g._sum.foreignAmount || 0),
+        totalNairaEquivalent: nairaEquivalent,
+        percentage: formatPercent(pctVal),
+        count: g._count._all
+      };
+    });
 
     let color = "Green";
     if (totalNairaEquivalent >= 600000000) {
@@ -1235,9 +1246,14 @@ export class AdminTransactionsService {
       color = "Amber";
     }
 
+    const comparisonLimit = 2000000000;
+    const rootPctVal = comparisonLimit > 0 ? (totalNairaEquivalent / comparisonLimit) * 100 : 0;
+    const percentage = formatPercent(rootPctVal);
+
     return {
       totalUnsettledNairaBalance: totalNairaEquivalent,
-      comparisonLimit: 2000000000,
+      comparisonLimit,
+      percentage,
       color,
       breakdown
     };

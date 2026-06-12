@@ -17,6 +17,7 @@ class ReportService {
       { key: "BRANCH", name: "Branch management", description: "Reports on branch set-up, performance & incidents." },
       { key: "INCIDENT", name: "Incidence management", description: "Reports on incidents and resolutions." },
       { key: "DISCREPANCY", name: "Discrepancy management", description: "Reports on discrepancies and resolutions." },
+      { key: "USER_MANAGEMENT", name: "User management", description: "Reports on users and their activities." },
     ];
   }
 

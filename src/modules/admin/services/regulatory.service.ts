@@ -644,11 +644,12 @@ class RegulatoryService {
         whereJob.OR = orConditions;
       }
     }
+    const shouldQueryNfiu = !filters.status || filters.status === "ALL" || filters.status.toUpperCase() === "COMPLETED";
+
     const [jobs, jobsTotal] = await Promise.all([
       prisma.reportJob.findMany({
         where: whereJob,
-        skip: (page - 1) * limit,
-        take: limit,
+        take: page * limit,
         orderBy: { createdAt: "desc" },
         select: { id: true, module: true, status: true, createdAt: true, generatedUrl: true },
       }),
@@ -680,16 +681,17 @@ class RegulatoryService {
         nfWhere.OR = nfOr;
       }
     }
-    const [nfiu, nfTotal] = await Promise.all([
-      prisma.nfiuReport.findMany({
-        where: nfWhere,
-        skip: 0,
-        take: 0,
-        orderBy: { reportedAt: "desc" },
-        select: { id: true, reportType: true, reportedAt: true, reportReference: true },
-      }),
-      prisma.nfiuReport.count({ where: nfWhere }),
-    ]);
+    const [nfiu, nfTotal] = shouldQueryNfiu
+      ? await Promise.all([
+          prisma.nfiuReport.findMany({
+            where: nfWhere,
+            take: page * limit,
+            orderBy: { reportedAt: "desc" },
+            select: { id: true, reportType: true, reportedAt: true, reportReference: true },
+          }),
+          prisma.nfiuReport.count({ where: nfWhere }),
+        ])
+      : [[], 0];
     const entries = [
       ...jobs.map((j: any) => ({
         id: j.id,
@@ -706,12 +708,15 @@ class RegulatoryService {
         userOrSystem: "Compliance Officer",
         actionPerformed: `${n.reportType} report`,
         actionResult: "Submitted",
-        moduleSection: n.reportType === "CBN" ? "CBN Report" : n.reportType === "FX" ? "FX Report" : "NFIU Report",
+        moduleSection: n.reportType === "CBN" ? "CBN Report" : n.reportType === "FX" ? "FX Report" : n.reportType === "NFIU Report",
         regulatoryId: n.reportReference,
       })),
     ];
+    // Sort combined entries chronologically (newest first)
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
     const total = jobsTotal + nfTotal;
-    const paged = entries.slice((page - 1) * limit, (page - 1) * limit + limit);
+    const paged = entries.slice((page - 1) * limit, page * limit);
     return { data: paged, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
