@@ -198,12 +198,13 @@ export class AgentCustomerService {
         const lastTx = await (prisma as any).transaction.findFirst({
           where: { userId: user.id },
           orderBy: { createdAt: "desc" },
-          select: { type: true },
+          select: { type: true, createdAt: true },
         });
 
         return {
           ...user,
           lastTransactionType: lastTx?.type as TransactionType | undefined,
+          lastTransactionDate: lastTx?.createdAt as Date | undefined,
         };
       }),
     );
@@ -236,6 +237,7 @@ export class AgentCustomerService {
         fullName,
         customerType: user.customerType as CustomerType | undefined,
         lastTransactionType: (user.lastTransactionType as TransactionType | undefined) ?? null,
+        lastTransactionDate: user.lastTransactionDate ? (user.lastTransactionDate as Date).toISOString() : null,
         registeredAt: user.createdAt.toISOString(),
         kycStatus: user.kyc?.status as KycStatus | undefined,
         nin: user.kyc?.nin ?? null,
