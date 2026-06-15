@@ -156,6 +156,60 @@ router.get("/payments/movements", agentTransactionController.listPaymentMovement
 
 /**
  * @swagger
+ * /api/agent/transactions/payments/movements/export:
+ *   get:
+ *     summary: Export payment movements as CSV
+ *     description: |
+ *       Downloads cash movements for transactions created by this agent as a CSV file.
+ *       Same movement definitions as GET /api/agent/transactions/payments/movements but without pagination.
+ *       Up to 10,000 rows. Requires `type` query param.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [cash_disbursed, cash_received_from_admin, cash_received_from_customer]
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Filter by transaction ID substring
+ *       - in: query
+ *         name: currency
+ *         schema:
+ *           type: string
+ *         description: Filter by currency code (e.g. USD)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get("/payments/movements/export", agentTransactionController.exportPaymentMovements);
+
+/**
+ * @swagger
  * /api/agent/transactions/export:
  *   get:
  *     summary: Export transactions as CSV

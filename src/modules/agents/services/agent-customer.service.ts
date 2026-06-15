@@ -507,6 +507,95 @@ export class AgentCustomerService {
     };
   }
 
+  async exportAgentCustomers(
+    agentUserId: string,
+    filters: { search?: string; status?: string; customerType?: string; fromDate?: string; toDate?: string } = {}
+  ): Promise<string> {
+    const agentUser = await prisma.user.findUnique({ where: { id: agentUserId } });
+    if (!agentUser || agentUser.role !== UserRole.AGENT) {
+      throw new ValidationError("Only agents can export their customers");
+    }
+
+    const agent = await (prisma as any).agent.findUnique({ where: { email: agentUser.email } });
+    if (!agent) throw new ValidationError("Agent profile not found");
+
+    const where: any = { createdByAgentId: agent.id, role: UserRole.CUSTOMER };
+
+    if (filters.customerType && Object.values(CustomerType).includes(filters.customerType as CustomerType)) {
+      where.customerType = filters.customerType;
+    }
+
+    if (filters.search) {
+      const search = filters.search.trim();
+      if (search) {
+        where.OR = [
+          { id: search },
+          { email: { contains: search, mode: "insensitive" } },
+          { phoneNumber: { contains: search, mode: "insensitive" } },
+          { profile: { is: { OR: [{ firstName: { contains: search, mode: "insensitive" } }, { lastName: { contains: search, mode: "insensitive" } }] } } },
+        ];
+      }
+    }
+
+    if (filters.fromDate || filters.toDate) {
+      const createdAt: any = {};
+      if (filters.fromDate) { const d = new Date(filters.fromDate); if (!isNaN(d.getTime())) createdAt.gte = d; }
+      if (filters.toDate)   { const d = new Date(filters.toDate);   if (!isNaN(d.getTime())) createdAt.lte = d; }
+      if (createdAt.gte || createdAt.lte) where.createdAt = createdAt;
+    }
+
+    const users = await (prisma as any).user.findMany({
+      where,
+      include: { profile: true, kyc: true },
+      orderBy: { createdAt: "desc" },
+      take: 10_000,
+    });
+
+    // Optionally filter by KYC status (post-query since kyc is a relation)
+    const desiredStatus = filters.status as KycStatus | undefined;
+    const filtered = desiredStatus && Object.values(KycStatus).includes(desiredStatus)
+      ? users.filter((u: any) => u.kyc?.status === desiredStatus)
+      : users;
+
+    // Enrich with last transaction date
+    const enriched = await Promise.all(
+      filtered.map(async (user: any) => {
+        const lastTx = await (prisma as any).transaction.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          select: { type: true, createdAt: true },
+        });
+        return { ...user, lastTransactionType: lastTx?.type ?? null, lastTransactionDate: lastTx?.createdAt ?? null };
+      })
+    );
+
+    const escape = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const headers = ["Customer ID", "Full Name", "Email", "Phone Number", "Customer Type", "KYC Status", "BVN", "NIN", "Last Transaction Type", "Last Transaction Date", "Registered At"];
+    const rows = enriched.map((user: any) => {
+      const fullName = `${user.profile?.firstName || ""} ${user.profile?.lastName || ""}`.trim();
+      return [
+        user.id,
+        fullName,
+        user.email,
+        user.phoneNumber ?? "",
+        user.customerType ?? "",
+        user.kyc?.status ?? "",
+        user.kyc?.bvn ?? "",
+        user.kyc?.nin ?? "",
+        user.lastTransactionType ?? "",
+        user.lastTransactionDate ? (user.lastTransactionDate as Date).toISOString() : "",
+        user.createdAt.toISOString(),
+      ].map(escape).join(",");
+    });
+
+    return [headers.join(","), ...rows].join("\n");
+  }
+
   async updateAgentCustomerDetails(
     agentUserId: string,
     userId: string,

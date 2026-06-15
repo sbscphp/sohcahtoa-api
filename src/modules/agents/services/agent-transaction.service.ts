@@ -1642,6 +1642,203 @@ class AgentTransactionService {
 
     return lines.join("\n");
   }
+
+  /**
+   * Export payment movements for transactions created by this agent as CSV.
+   * type: cash_disbursed | cash_received_from_admin | cash_received_from_customer
+   * Optional filters: currency, startDate, endDate, q (search by transaction_id)
+   */
+  async exportPaymentMovements(
+    agentUserId: string,
+    type: AgentPaymentMovementType,
+    filters: { currency?: string; startDate?: string; endDate?: string; q?: string } = {}
+  ): Promise<string> {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const escape = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const currencyPair = (currency: string) => `${currency}/NGN`;
+    const profileFullName = (profile: { firstName: string; lastName: string } | null | undefined) => {
+      if (!profile) return "Customer";
+      const name = `${profile.firstName || ""} ${profile.lastName || ""}`.trim();
+      return name || "Customer";
+    };
+
+    const agentTxWhere: any = { createdByAgentId: agent.id };
+    if (filters.q) {
+      agentTxWhere.referenceNumber = { contains: filters.q, mode: "insensitive" };
+    }
+
+    const agentTransactions = await prisma.transaction.findMany({
+      where: agentTxWhere,
+      select: { id: true },
+    });
+    const agentTransactionIds = agentTransactions.map((t) => t.id);
+
+    if (agentTransactionIds.length === 0) {
+      const headers = type === "cash_disbursed"
+        ? ["Transaction ID", "Customer Name", "Amount Disbursed", "Currency Pair", "Prepaid Amount", "Transaction Type", "Transaction Date"]
+        : ["Transaction ID", "Sender Name", "Amount Received", "Transaction Date"];
+      return headers.join(",") + "\n";
+    }
+
+    const txIdFilter: any = { in: agentTransactionIds };
+
+    const dateRange: any = {};
+    if (filters.startDate) dateRange.gte = new Date(filters.startDate);
+    if (filters.endDate) dateRange.lte = new Date(filters.endDate);
+
+    if (type === "cash_disbursed") {
+      const where: any = {
+        status: "COMPLETED",
+        initiatedBy: agent.id,
+        transactionId: txIdFilter,
+        ...(filters.currency ? { currency: filters.currency.toUpperCase() } : {}),
+        ...(Object.keys(dateRange).length ? { updatedAt: dateRange } : {}),
+      };
+
+      const rows = await prisma.outboundSettlement.findMany({
+        where,
+        select: { amount: true, completedAt: true, updatedAt: true, transactionId: true },
+        orderBy: { updatedAt: "desc" },
+        take: 10_000,
+      });
+
+      const txIds = rows.map((r) => r.transactionId).filter((id): id is string => Boolean(id));
+      const txs = txIds.length > 0
+        ? await prisma.transaction.findMany({
+            where: { id: { in: txIds } },
+            select: { id: true, type: true, currency: true, userId: true, prepaidCard: { select: { amount: true } } },
+          })
+        : [];
+      const txById = new Map(txs.map((t) => [t.id, t]));
+      const userIds = [...new Set(txs.map((t) => t.userId))];
+      const users = userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+          })
+        : [];
+      const profileByUserId = new Map(users.map((u) => [u.id, u.profile]));
+
+      const headers = ["Transaction ID", "Customer Name", "Amount Disbursed", "Currency Pair", "Prepaid Amount", "Transaction Type", "Transaction Date"];
+      const csvRows = rows.map((row) => {
+        const tx = row.transactionId ? txById.get(row.transactionId) : undefined;
+        const at = row.completedAt ?? row.updatedAt;
+        return [
+          row.transactionId ?? "",
+          profileFullName(tx?.userId ? profileByUserId.get(tx.userId) : undefined),
+          round2(Number(row.amount)),
+          tx ? currencyPair(tx.currency) : "",
+          tx?.prepaidCard ? round2(Number(tx.prepaidCard.amount)) : "",
+          tx?.type ?? "",
+          at.toISOString(),
+        ].map(escape).join(",");
+      });
+
+      return [headers.join(","), ...csvRows].join("\n");
+    }
+
+    if (type === "cash_received_from_admin") {
+      const adminRows = await prisma.adminUser.findMany({ select: { id: true, fullName: true } });
+      const adminIds = adminRows.map((a) => a.id);
+      const adminNameById = new Map(adminRows.map((a) => [a.id, a.fullName]));
+
+      const where: any = {
+        status: "CONFIRMED",
+        transactionId: txIdFilter,
+        confirmedBy: { in: adminIds.length > 0 ? adminIds : ["__none__"] },
+        ...(filters.currency ? { currency: filters.currency.toUpperCase() } : {}),
+        ...(Object.keys(dateRange).length ? { confirmedAt: dateRange } : {}),
+      };
+
+      const rows = await prisma.settlement.findMany({
+        where,
+        select: { transactionId: true, amount: true, confirmedAt: true, confirmedBy: true },
+        orderBy: { confirmedAt: "desc" },
+        take: 10_000,
+      });
+
+      const headers = ["Transaction ID", "Sender Name", "Amount Received", "Transaction Date"];
+      const csvRows = rows.map((row) =>
+        [
+          row.transactionId,
+          (row.confirmedBy && adminNameById.get(row.confirmedBy)) || "Admin",
+          round2(Number(row.amount)),
+          (row.confirmedAt ?? new Date(0)).toISOString(),
+        ].map(escape).join(",")
+      );
+
+      return [headers.join(","), ...csvRows].join("\n");
+    }
+
+    // cash_received_from_customer
+    const where: any = {
+      status: "CONFIRMED",
+      transactionId: txIdFilter,
+      OR: [
+        { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
+        { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
+      ],
+      ...(filters.currency ? { currency: filters.currency.toUpperCase() } : {}),
+      ...(Object.keys(dateRange).length ? { confirmedAt: dateRange } : {}),
+    };
+
+    const rows = await prisma.settlement.findMany({
+      where,
+      select: { transactionId: true, amount: true, paymentMethod: true, paymentReference: true, confirmedAt: true },
+      orderBy: { confirmedAt: "desc" },
+      take: 10_000,
+    });
+
+    const custTxIds = [...new Set(rows.map((r) => r.transactionId))];
+    const custTxs = custTxIds.length > 0
+      ? await prisma.transaction.findMany({ where: { id: { in: custTxIds } }, select: { id: true, userId: true } })
+      : [];
+    const userIdByTxId = new Map(custTxs.map((t) => [t.id, t.userId]));
+    const custUserIds = [...new Set(custTxs.map((t) => t.userId))];
+    const custUsers = custUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: custUserIds } },
+          select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const custProfileByUserId = new Map(custUsers.map((u) => [u.id, u.profile]));
+
+    const sessionIds = rows
+      .filter((r) => r.paymentMethod === "BANK_TRANSFER" && r.paymentReference)
+      .map((r) => r.paymentReference as string);
+    const deposits = sessionIds.length > 0
+      ? await prisma.providusDeposit.findMany({
+          where: { sessionId: { in: [...new Set(sessionIds)] } },
+          select: { sessionId: true, sourceAccountName: true },
+        })
+      : [];
+    const sourceNameBySession = new Map(deposits.map((d) => [d.sessionId, d.sourceAccountName ?? ""]));
+
+    const headers = ["Transaction ID", "Sender Name", "Amount Received", "Transaction Date"];
+    const csvRows = rows.map((row) => {
+      const userId = userIdByTxId.get(row.transactionId);
+      let senderName = profileFullName(userId ? custProfileByUserId.get(userId) : undefined);
+      if (row.paymentMethod === "BANK_TRANSFER" && row.paymentReference) {
+        const fromProvidus = sourceNameBySession.get(row.paymentReference);
+        if (fromProvidus?.trim()) senderName = fromProvidus.trim();
+      }
+      return [
+        row.transactionId,
+        senderName,
+        round2(Number(row.amount)),
+        (row.confirmedAt ?? new Date(0)).toISOString(),
+      ].map(escape).join(",");
+    });
+
+    return [headers.join(","), ...csvRows].join("\n");
+  }
 }
 
 const agentTransactionService = new AgentTransactionService();

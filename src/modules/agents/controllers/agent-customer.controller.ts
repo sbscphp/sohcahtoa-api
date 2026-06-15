@@ -154,6 +154,30 @@ class AgentCustomerController {
     }
   }
 
+  async exportAgentCustomers(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError("Authentication required");
+
+      const filters = {
+        search:       req.query.search       as string | undefined,
+        status:       req.query.status       as string | undefined,
+        customerType: req.query.customerType as string | undefined,
+        fromDate:     req.query.fromDate     as string | undefined,
+        toDate:       req.query.toDate       as string | undefined,
+      };
+
+      const csv = await agentCustomerService.exportAgentCustomers(authUser.userId, filters);
+
+      const filename = `customers-agent-${Date.now()}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateAgentCustomer(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;

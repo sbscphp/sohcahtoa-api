@@ -126,6 +126,59 @@ AgentCustomerRouter.get("/customers", agentCustomerController.listAgentCustomers
 
 /**
  * @swagger
+ * /api/agent/customers/export:
+ *   get:
+ *     summary: Export agent customers as CSV
+ *     description: |
+ *       Downloads all customers created by the authenticated agent matching the given filters as a CSV file.
+ *       Up to 10,000 rows. Same filter parameters as GET /api/agent/customers.
+ *       CSV columns: Customer ID, Full Name, Email, Phone Number, Customer Type, KYC Status,
+ *       BVN, NIN, Last Transaction Type, Last Transaction Date, Registered At.
+ *     tags: [Agent Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by userId, email, phone number, or name
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [NOT_STARTED, IN_PROGRESS, PENDING_VERIFICATION, VERIFIED, REJECTED]
+ *         description: Filter by KYC status
+ *       - in: query
+ *         name: customerType
+ *         schema:
+ *           type: string
+ *           enum: [NIGERIAN_CITIZEN, TOURIST, EXPATRIATE]
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+AgentCustomerRouter.get("/customers/export", agentCustomerController.exportAgentCustomers);
+
+/**
+ * @swagger
  * /api/agent/customers/stats:
  *   get:
  *     summary: Get customer stats for the authenticated agent

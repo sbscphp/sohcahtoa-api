@@ -214,6 +214,45 @@ class AgentTransactionController {
     }
   }
 
+  async exportPaymentMovements(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError("Authentication required");
+
+      const typeRaw = (req.query.type as string | undefined)?.trim();
+      if (!typeRaw) {
+        throw new ValidationError(
+          "type is required (cash_disbursed | cash_received_from_admin | cash_received_from_customer)"
+        );
+      }
+      if (!AGENT_PAYMENT_MOVEMENT_TYPES.includes(typeRaw as AgentPaymentMovementType)) {
+        throw new ValidationError(
+          "type must be one of: cash_disbursed, cash_received_from_admin, cash_received_from_customer"
+        );
+      }
+
+      const filters = {
+        q:         req.query.q         as string | undefined,
+        currency:  req.query.currency  as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate:   req.query.endDate   as string | undefined,
+      };
+
+      const csv = await agentTransactionService.exportPaymentMovements(
+        authUser.userId,
+        typeRaw as AgentPaymentMovementType,
+        filters
+      );
+
+      const filename = `payment-movements-${typeRaw}-${Date.now()}.csv`;
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async exportFxInventory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;
