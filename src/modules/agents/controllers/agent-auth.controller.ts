@@ -214,6 +214,16 @@ class AgentAuthController {
     }
   }
 
+  async resendChangePasswordOtp(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) throw new ValidationError('Authentication required');
+      const result = await authService.resendAgentChangePasswordOtp(req.user.userId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * @swagger
    * /api/agent/auth/reset-password:

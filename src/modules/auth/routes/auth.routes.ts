@@ -2069,6 +2069,47 @@ router.post('/otp/verify-change-password', authController.verifyChangePasswordOt
 
 /**
  * @swagger
+ * /api/auth/otp/change-password/resend:
+ *   post:
+ *     summary: Resend change-password OTP
+ *     description: |
+ *       Resends the CHANGE_PASSWORD OTP to the customer's email without requiring the old password again.
+ *       Use this when the previously sent OTP has expired. The new OTP is valid for 5 minutes.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/otp/change-password/resend', authController.resendChangePasswordOtp);
+
+/**
+ * @swagger
  * /api/auth/tin/verify-individual:
  *   post:
  *     summary: Verify an individual's Tax Identification Number (TIN)

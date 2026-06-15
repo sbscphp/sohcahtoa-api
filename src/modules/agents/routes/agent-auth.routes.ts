@@ -15,6 +15,7 @@ AgentAuthRouter.get('/profile', agentAuthController.getProfile);
 AgentAuthRouter.post('/change-password', agentAuthController.changeAgentPassword);
 AgentAuthRouter.post('/otp/change-password', agentAuthController.initiateChangePassword);
 AgentAuthRouter.post('/otp/verify-change-password', agentAuthController.verifyChangePasswordOtp);
+AgentAuthRouter.post('/otp/change-password/resend', agentAuthController.resendChangePasswordOtp);
 
 export default AgentAuthRouter;
 

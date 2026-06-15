@@ -2259,6 +2259,26 @@ export class AuthService {
   }
 
   /**
+   * Resend CHANGE_PASSWORD OTP to a customer without re-validating the old password.
+   * Call this when the previously sent OTP has expired.
+   */
+  async resendChangePasswordOtp(email: string): Promise<{ message: string; otp?: string }> {
+    if (!validateEmail(email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new ValidationError('No account found with this email address');
+    }
+
+    return this.sendOtp({ email, phoneNumber: '', purpose: OtpPurpose.CHANGE_PASSWORD });
+  }
+
+  /**
    * Agent Step 1: Validate current password then send a CHANGE_PASSWORD OTP to the agent's email.
    */
   async initiateAgentChangePassword(agentUserId: string, oldPassword: string): Promise<{ message: string; otp?: string }> {
@@ -2318,6 +2338,23 @@ export class AuthService {
     logger.info('Agent change password OTP verified', { agentUserId });
 
     return { resetToken, message: 'OTP verified. Use the reset token to set your new password.' };
+  }
+
+  /**
+   * Resend CHANGE_PASSWORD OTP to an agent without re-validating the old password.
+   * Call this when the previously sent OTP has expired.
+   */
+  async resendAgentChangePasswordOtp(agentUserId: string): Promise<{ message: string; otp?: string }> {
+    const user = await prisma.user.findUnique({
+      where: { id: agentUserId },
+      select: { email: true, role: true, isActive: true },
+    });
+
+    if (!user || user.role !== UserRole.AGENT || !user.isActive) {
+      throw new UnauthorizedError('Only active agents can resend this OTP');
+    }
+
+    return this.sendOtp({ email: user.email, phoneNumber: '', purpose: OtpPurpose.CHANGE_PASSWORD });
   }
 
   /**

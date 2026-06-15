@@ -459,6 +459,16 @@ export class AuthController {
     }
   }
 
+  async resendChangePasswordOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body;
+      const result = await authService.resendChangePasswordOtp(email);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async changeAgentPassword(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user?.userId;
