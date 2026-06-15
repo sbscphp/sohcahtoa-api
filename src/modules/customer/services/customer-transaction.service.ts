@@ -44,6 +44,7 @@ interface CreateCustomerTransactionPayload {
 
   // School fees specific fields
   admissionType?: 'UNDERGRADUATE' | 'POSTGRADUATE' | 'OTHER';
+  studentName?: string;
 
   // Documents submitted inline with transaction creation.
   // Supports all DocumentType values including DIGITAL_SIGNATURE (optional for all types).
@@ -85,6 +86,9 @@ interface CreateCustomerTransactionPayload {
     correspondenceBankName?: string;
     correspondenceBankAddress?: string;
     correspondenceBankSwiftCode?: string;
+
+    // Additional notes or information
+    otherInformation?: string;
   };
 
   // How the customer wishes to collect the disbursed funds.
@@ -145,6 +149,7 @@ export class CustomerTransactionService {
       passportIssueDate,
       passportExpiryDate,
       admissionType,
+      studentName,
       documents,
       disbursementOption,
       beneficiaryDetails,
@@ -222,17 +227,36 @@ export class CustomerTransactionService {
         ? Math.min(amount * 0.25, CASH_CAP)
         : null;
 
+    // Strip masked values (e.g. "*******7624" sent back by the frontend) and
+    // validate format before touching KYC. A real BVN is 11 digits; NIN is 11 digits.
+    const cleanBvn = bvn && /^\d+$/.test(bvn.replace(/\s/g, '')) && bvn.replace(/\s/g, '').length === 11
+      ? bvn.replace(/\s/g, '')
+      : undefined;
+    const cleanNin = nin && /^\d+$/.test(nin.replace(/\s/g, '')) && nin.replace(/\s/g, '').length === 11
+      ? nin.replace(/\s/g, '')
+      : undefined;
+
+    if ((bvn && !cleanBvn) || (nin && !cleanNin)) {
+      logger.warn(`[createTransaction] Ignored invalid/masked BVN or NIN in payload`, {
+        userId,
+        bvnProvided: !!bvn,
+        bvnValid: !!cleanBvn,
+        ninProvided: !!nin,
+        ninValid: !!cleanNin,
+      });
+    }
+
     // Update KYC info if BVN or NIN provided and user doesn't have KYC yet
-    if ((bvn || nin) && !user.kyc) {
+    if ((cleanBvn || cleanNin) && !user.kyc) {
       logger.info(`[createTransaction] Creating KYC information for new user`, {
         userId,
-        hasBvn: !!bvn,
-        hasNin: !!nin,
+        hasBvn: !!cleanBvn,
+        hasNin: !!cleanNin,
       });
 
       const kycData: any = {};
-      if (bvn) kycData.bvn = bvn;
-      if (nin) kycData.nin = nin;
+      if (cleanBvn) kycData.bvn = cleanBvn;
+      if (cleanNin) kycData.nin = cleanNin;
 
       try {
         const newKyc = await prisma.userKyc.create({
@@ -251,13 +275,33 @@ export class CustomerTransactionService {
           'Failed to create KYC information. The BVN or NIN may already be registered to another account.'
         );
       }
-    } else if ((bvn || nin) && user.kyc) {
-      logger.debug(`[createTransaction] User already has KYC data, using existing information`, {
-        userId,
-        kycId: user.kyc.id,
-        hasExistingBvn: !!user.kyc.bvn,
-        hasExistingNin: !!user.kyc.nin,
-      });
+    } else if ((cleanBvn || cleanNin) && user.kyc) {
+      // Fill in any missing BVN/NIN on the existing KYC record
+      const kycUpdate: any = {};
+      if (cleanBvn && !user.kyc.bvn) kycUpdate.bvn = cleanBvn;
+      if (cleanNin && !user.kyc.nin) kycUpdate.nin = cleanNin;
+
+      if (Object.keys(kycUpdate).length > 0) {
+        logger.debug(`[createTransaction] Updating existing KYC with missing BVN/NIN`, {
+          userId,
+          kycId: user.kyc.id,
+          updatingBvn: !!kycUpdate.bvn,
+          updatingNin: !!kycUpdate.nin,
+        });
+        try {
+          await prisma.userKyc.update({ where: { userId }, data: kycUpdate });
+        } catch (error) {
+          logger.warn(`[createTransaction] Failed to update KYC with BVN/NIN — may already be registered`, {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      } else {
+        logger.debug(`[createTransaction] User already has KYC data with BVN/NIN, no update needed`, {
+          userId,
+          kycId: user.kyc.id,
+        });
+      }
     }
 
     // Generate unique reference number
@@ -388,10 +432,11 @@ export class CustomerTransactionService {
         step: initialStep as any,
         status: 'COMPLETED',
         data: {
-          bvn: bvn ? '***' + bvn.slice(-4) : null,
-          nin: nin ? '***' + nin.slice(-4) : null,
+          bvn: cleanBvn ? '***' + cleanBvn.slice(-4) : null,
+          nin: cleanNin ? '***' + cleanNin.slice(-4) : null,
           formAId,
           admissionType: type === 'SCHOOL_FEES' ? admissionType : null,
+          studentName: type === 'SCHOOL_FEES' ? (studentName ?? null) : null,
           passportDocumentNumber: passportDocumentNumber ?? null,
           passportIssueDate: passportIssueDate ?? null,
           passportExpiryDate: passportExpiryDate ?? null,
@@ -1461,6 +1506,7 @@ export class CustomerTransactionService {
     const passportDocumentNumber = personalInfoData?.passportDocumentNumber ?? null;
     const passportIssueDate      = personalInfoData?.passportIssueDate      ?? null;
     const passportExpiryDate     = personalInfoData?.passportExpiryDate     ?? null;
+    const studentName            = personalInfoData?.studentName            ?? null;
 
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
     const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
@@ -1615,10 +1661,11 @@ export class CustomerTransactionService {
 
       // Personal info used during creation
       personalInfo: {
-        bvn: userKyc?.bvn ? `***${userKyc.bvn.slice(-4)}` : null,
-        nin: userKyc?.nin ? `***${userKyc.nin.slice(-4)}` : null,
+        bvn: userKyc?.bvn ?? null,
+        nin: userKyc?.nin ?? null,
         tin: userKyc?.tin ?? null,
         admissionType,
+        studentName,
         passportDocumentNumber,
         passportIssueDate,
         passportExpiryDate,
@@ -1643,6 +1690,7 @@ export class CustomerTransactionService {
         transactionMode,
         transactionAmount
       ),
+      pickupLocation: stepPickupLocation ?? null,
       cashPickup: transaction.cashPickup
         ? {
             ...transaction.cashPickup,
@@ -1663,7 +1711,19 @@ export class CustomerTransactionService {
             })(),
             scheduledPickupTime: transaction.cashPickup.scheduledPickupTime ?? stepPickupLocation?.scheduledPickupTime ?? null,
           }
-        : null,
+        : stepPickupLocation
+          ? {
+              id: stepPickupLocation.id ?? null,
+              name: stepPickupLocation.name ?? null,
+              address: stepPickupLocation.address ?? null,
+              state: stepPickupLocation.state ?? null,
+              city: stepPickupLocation.city ?? null,
+              recipientName: stepPickupLocation.recipientName ?? null,
+              recipientPhone: stepPickupLocation.recipientPhone ?? null,
+              scheduledPickupDate: stepPickupLocation.scheduledPickupDate ?? null,
+              scheduledPickupTime: stepPickupLocation.scheduledPickupTime ?? null,
+            }
+          : null,
       prepaidCard: transaction.prepaidCard,
       // Inbound settlement (customer's NGN payment to the platform)
       settlement: settlement

@@ -142,6 +142,7 @@ export interface AgentCreateTransactionPayload {
   passportIssueDate?: string;
   passportExpiryDate?: string;
   admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
+  studentName?: string;
   documents?: Array<{ documentType: string; fileUrl: string; fileName: string; fileSize?: number }>;
   beneficiaryDetails?: {
     name?: string;
@@ -169,6 +170,7 @@ export interface AgentCreateTransactionPayload {
     correspondenceBankName?: string;
     correspondenceBankAddress?: string;
     correspondenceBankSwiftCode?: string;
+    otherInformation?: string;
   };
   disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH';
   pickupLocation?: {
