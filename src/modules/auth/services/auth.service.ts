@@ -2187,6 +2187,190 @@ export class AuthService {
     return { message: 'Password reset successfully. Please log in with your new password.' };
   }
 
+  /**
+   * Step 1: Validate current password then send a CHANGE_PASSWORD OTP to the user's email.
+   */
+  async initiateChangePassword(data: {
+    email: string;
+    oldPassword: string;
+  }): Promise<{ message: string; otp?: string }> {
+    if (!validateEmail(data.email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      select: { id: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new ValidationError('No account found with this email address');
+    }
+
+    const credential = await prisma.userCredential.findUnique({
+      where: { userId: user.id },
+      select: { passwordHash: true },
+    });
+    if (!credential) {
+      throw new ValidationError('No account found with this email address');
+    }
+
+    const oldPasswordValid = await comparePassword(data.oldPassword, credential.passwordHash);
+    if (!oldPasswordValid) {
+      throw new ValidationError('Current password is incorrect');
+    }
+
+    return this.sendOtp({ email: data.email, phoneNumber: '', purpose: OtpPurpose.CHANGE_PASSWORD });
+  }
+
+  /**
+   * Step 2: Validate the CHANGE_PASSWORD OTP and return a short-lived reset token.
+   */
+  async verifyChangePasswordOtp(data: {
+    email: string;
+    otp: string;
+  }): Promise<{ resetToken: string; message: string }> {
+    if (!validateEmail(data.email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      select: { id: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new ValidationError('Invalid email or OTP');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.CHANGE_PASSWORD,
+    });
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message);
+    }
+
+    const resetToken = generateId();
+    await redis.setex(`password:reset:${resetToken}`, 5 * 60, user.id);
+
+    logger.info('Change password OTP verified', { userId: user.id });
+
+    return { resetToken, message: 'OTP verified. Use the reset token to set your new password.' };
+  }
+
+  /**
+   * Agent Step 1: Validate current password then send a CHANGE_PASSWORD OTP to the agent's email.
+   */
+  async initiateAgentChangePassword(agentUserId: string, oldPassword: string): Promise<{ message: string; otp?: string }> {
+    const user = await prisma.user.findUnique({
+      where: { id: agentUserId },
+      select: { email: true, role: true, isActive: true },
+    });
+
+    if (!user || user.role !== UserRole.AGENT || !user.isActive) {
+      throw new UnauthorizedError('Only active agents can change agent passwords');
+    }
+
+    const client = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email: user.email },
+      select: { password: true },
+    });
+
+    if (!agent || !agent.password) {
+      throw new ValidationError('Agent password not set');
+    }
+
+    const isValid = await comparePassword(oldPassword, agent.password);
+    if (!isValid) {
+      throw new ValidationError('Current password is incorrect');
+    }
+
+    return this.sendOtp({ email: user.email, phoneNumber: '', purpose: OtpPurpose.CHANGE_PASSWORD });
+  }
+
+  /**
+   * Agent Step 2: Validate the CHANGE_PASSWORD OTP and return a short-lived reset token.
+   */
+  async verifyAgentChangePasswordOtp(agentUserId: string, otp: string): Promise<{ resetToken: string; message: string }> {
+    const user = await prisma.user.findUnique({
+      where: { id: agentUserId },
+      select: { email: true, role: true, isActive: true },
+    });
+
+    if (!user || user.role !== UserRole.AGENT || !user.isActive) {
+      throw new UnauthorizedError('Only active agents can change agent passwords');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: user.email,
+      otp,
+      purpose: OtpPurpose.CHANGE_PASSWORD,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message);
+    }
+
+    const resetToken = generateId();
+    await redis.setex(`agent:password:reset:${resetToken}`, 5 * 60, agentUserId);
+
+    logger.info('Agent change password OTP verified', { agentUserId });
+
+    return { resetToken, message: 'OTP verified. Use the reset token to set your new password.' };
+  }
+
+  /**
+   * Agent Step 3: Set a new password using the reset token from step 2.
+   * Updates both Agent.password and UserCredential.passwordHash.
+   */
+  async resetAgentPassword(data: { resetToken: string; newPassword: string }): Promise<{ message: string }> {
+    const agentUserId = await redis.get(`agent:password:reset:${data.resetToken}`);
+
+    if (!agentUserId) {
+      throw new ValidationError('Invalid or expired reset token. Please restart the process.');
+    }
+
+    const passwordValidation = validatePasswordStrength(data.newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: agentUserId },
+      select: { email: true, role: true },
+    });
+
+    if (!user || user.role !== UserRole.AGENT) {
+      throw new UnauthorizedError('Only agents can reset agent passwords');
+    }
+
+    await redis.del(`agent:password:reset:${data.resetToken}`);
+
+    const passwordHash = await hashPassword(data.newPassword);
+    const client = prisma as any;
+
+    await client.agent.update({
+      where: { email: user.email },
+      data: { password: passwordHash },
+    });
+
+    await prisma.userCredential.upsert({
+      where: { userId: agentUserId },
+      update: { passwordHash, lastPasswordChange: new Date(), failedAttempts: 0 },
+      create: { userId: agentUserId, passwordHash },
+    });
+
+    await prisma.session.updateMany({
+      where: { userId: agentUserId, isActive: true },
+      data: { isActive: false },
+    });
+
+    logger.info('Agent password reset successfully', { agentUserId });
+
+    return { message: 'Password changed successfully. Please log in with your new password.' };
+  }
+
   private getUserPermissions(role: string): string[] {
     const permissionMap: Record<string, string[]> = {
       CUSTOMER: [

@@ -65,6 +65,7 @@ class AgentTransactionController {
       const filters = {
         transaction_status: req.query.transaction_status as string | undefined,
         transaction_stage: req.query.transaction_stage as string | undefined,
+        group: req.query.group as string | undefined,
       };
 
       const result = await agentTransactionService.listTransactions(

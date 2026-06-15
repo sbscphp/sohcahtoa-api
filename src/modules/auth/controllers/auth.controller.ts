@@ -441,6 +441,24 @@ export class AuthController {
     }
   }
 
+  async initiateChangePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.initiateChangePassword(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyChangePasswordOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.verifyChangePasswordOtp(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async changeAgentPassword(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user?.userId;

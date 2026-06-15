@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import authController from '../controllers/auth.controller';
 import { authenticate, uploadPassport } from '../../../shared/middleware';
 
@@ -1993,6 +1993,79 @@ router.post('/verify-reset-otp', authController.verifyResetOtp);
  *         $ref: '#/components/responses/ValidationError'
  */
 router.post('/reset-password', authController.resetPassword);
+
+/**
+ * @swagger
+ * /api/auth/otp/change-password:
+ *   post:
+ *     summary: Step 1 - Validate current password and send OTP
+ *     description: Verifies the user's current password, then sends a CHANGE_PASSWORD OTP to their email.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, oldPassword]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               oldPassword:
+ *                 type: string
+ *                 description: The user's current password
+ *     responses:
+ *       200:
+ *         description: OTP sent to email
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/otp/change-password', authController.initiateChangePassword);
+
+/**
+ * @swagger
+ * /api/auth/otp/verify-change-password:
+ *   post:
+ *     summary: Step 2 - Validate OTP and receive reset token
+ *     description: Validates the CHANGE_PASSWORD OTP. Returns a short-lived reset token to use with POST /api/auth/reset-password.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: OTP verified — use resetToken with POST /api/auth/reset-password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     resetToken:
+ *                       type: string
+ *                       description: Short-lived token (10 min) to set the new password
+ *                     message:
+ *                       type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/otp/verify-change-password', authController.verifyChangePasswordOtp);
 
 /**
  * @swagger

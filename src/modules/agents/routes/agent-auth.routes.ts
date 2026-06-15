@@ -5,12 +5,16 @@ import { UserRole } from '../../../shared/types';
 
 const AgentAuthRouter: Router = Router();
 
-// All routes require authenticated agent
+// Public routes (token-gated, not JWT-gated)
+AgentAuthRouter.post('/reset-password', agentAuthController.resetPassword);
+
+// All routes below require authenticated agent
 AgentAuthRouter.use(authenticate, authorize(UserRole.AGENT));
 
 AgentAuthRouter.get('/profile', agentAuthController.getProfile);
-
 AgentAuthRouter.post('/change-password', agentAuthController.changeAgentPassword);
+AgentAuthRouter.post('/otp/change-password', agentAuthController.initiateChangePassword);
+AgentAuthRouter.post('/otp/verify-change-password', agentAuthController.verifyChangePasswordOtp);
 
 export default AgentAuthRouter;
 

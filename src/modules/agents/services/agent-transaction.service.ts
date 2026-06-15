@@ -40,6 +40,7 @@ export interface AgentTransactionListItem {
 export interface AgentTransactionListFilters {
   transaction_status?: string;
   transaction_stage?: string;
+  group?: string;
 }
 
 export interface AgentTransactionStats {
@@ -262,6 +263,10 @@ class AgentTransactionService {
     const where: any = { createdByAgentId: agent.id };
     if (filters.transaction_status) where.status = filters.transaction_status;
     if (filters.transaction_stage) where.currentStep = filters.transaction_stage;
+    if (filters.group) {
+      const groupTypes = AgentTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
+      if (groupTypes) where.type = { in: groupTypes };
+    }
 
     const skip = (page - 1) * limit;
 
