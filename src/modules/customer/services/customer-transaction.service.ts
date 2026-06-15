@@ -1944,7 +1944,6 @@ export class CustomerTransactionService {
         'PASSPORT',
         'VISA',
         'RETURN_TICKET',
-        'FORM_A_DOCUMENT',
         'MEDICAL_LETTER',
         'OVERSEAS_MEDICAL_LETTER',
       ],

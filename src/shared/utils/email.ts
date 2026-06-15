@@ -31,7 +31,7 @@ const TEMPLATES = {
   otp:                    process.env.TERMII_TEMPLATE_ID_OTP                     || '',
   // Variables: {{first_name}}
   welcome:                process.env.TERMII_TEMPLATE_ID_WELCOME                 || '',
-  // Variables: {{full_name}}, {{otp}}
+  // Variables: {{full_name}}, {{otp}}, {{set_password_url}}
   agentWelcome:           process.env.TERMII_TEMPLATE_ID_AGENT_WELCOME           || '',
   // Variables: {{full_name}}, {{reset_password_url}}
   adminWelcome:           process.env.TERMII_TEMPLATE_ID_ADMIN_WELCOME           || '',
@@ -204,10 +204,10 @@ class EmailService {
 
   // ── Agent welcome email ──────────────────────────────────────────────────
 
-  async sendAgentWelcomeEmail(email: string, fullName: string, otp: string): Promise<boolean> {
-    return this.sendTemplate(email, 'agentWelcome', { full_name: fullName, otp }, {
+  async sendAgentWelcomeEmail(email: string, fullName: string, otp: string, setPasswordUrl: string): Promise<boolean> {
+    return this.sendTemplate(email, 'agentWelcome', { full_name: fullName, otp, set_password_url: setPasswordUrl }, {
       subject: 'Welcome to Sochatoa - Complete Your Agent Setup',
-      text: `Welcome to Sochatoa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. This code expires in 5 minutes.`,
+      text: `Welcome to Sochatoa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. Set your password here: ${setPasswordUrl}. This code expires in 5 minutes.`,
     });
   }
 

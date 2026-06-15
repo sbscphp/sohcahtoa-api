@@ -1686,7 +1686,11 @@ export class AuthService {
           where: { email: data.email },
           select: { name: true },
         });
-        await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp);
+        const agentBaseUrl = process.env.AGENT_FRONTEND_URL ?? 'https://sohcahtoa-app.vercel.app';
+        const setPasswordUrl = new URL('/auth/set-password', agentBaseUrl);
+        setPasswordUrl.searchParams.set('email', data.email);
+        setPasswordUrl.searchParams.set('otp', otp);
+        await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp, setPasswordUrl.toString());
       } else {
         await emailService.sendOtpEmail(data.email, otp, data.purpose);
       }
