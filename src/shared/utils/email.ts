@@ -61,23 +61,25 @@ const TEMPLATES = {
 
 function otpPurposeText(purpose: string): string {
   switch (purpose) {
-    case 'REGISTRATION':           return 'verify your email address';
-    case 'LOGIN':                  return 'complete your login';
-    case 'PASSWORD_RESET':         return 'reset your password';
+    case 'REGISTRATION':             return 'verify your email address';
+    case 'LOGIN':                    return 'complete your login';
+    case 'PASSWORD_RESET':           return 'reset your password';
+    case 'CHANGE_PASSWORD':          return 'confirm your password change';
     case 'TRANSACTION_VERIFICATION': return 'verify your transaction';
-    case 'AGENT_SET_PASSWORD':     return 'set your agent password';
-    default:                       return 'complete your request';
+    case 'AGENT_SET_PASSWORD':       return 'set your agent password';
+    default:                         return 'complete your request';
   }
 }
 
 function otpSubject(purpose: string): string {
   switch (purpose) {
-    case 'REGISTRATION':           return 'Verify Your Email - Sochatoa';
-    case 'LOGIN':                  return 'Login Verification Code - Sochatoa';
-    case 'PASSWORD_RESET':         return 'Password Reset Code - Sochatoa';
+    case 'REGISTRATION':             return 'Verify Your Email - Sochatoa';
+    case 'LOGIN':                    return 'Login Verification Code - Sochatoa';
+    case 'PASSWORD_RESET':           return 'Password Reset Code - Sochatoa';
+    case 'CHANGE_PASSWORD':          return 'Password Change Verification - Sochatoa';
     case 'TRANSACTION_VERIFICATION': return 'Transaction Verification Code - Sochatoa';
-    case 'AGENT_SET_PASSWORD':     return 'Complete Your Agent Setup - Sochatoa';
-    default:                       return 'Verification Code - Sochatoa';
+    case 'AGENT_SET_PASSWORD':       return 'Complete Your Agent Setup - Sochatoa';
+    default:                         return 'Verification Code - Sochatoa';
   }
 }
 
