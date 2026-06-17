@@ -2105,7 +2105,7 @@ export class AuthService {
     // Issue a short-lived reset token (5 minutes) so the client can set a new password
     const resetToken = generateId();
     const resetKey = `password:reset:${resetToken}`;
-    await redis.setex(resetKey, 10 * 60, user.id);
+    await redis.setex(resetKey, 5 * 60, user.id);
 
     logger.info('Password reset OTP verified', { userId: user.id });
 
@@ -2260,6 +2260,74 @@ export class AuthService {
     logger.info('Change password OTP verified', { userId: user.id });
 
     return { resetToken, message: 'OTP verified. Use the reset token to set your new password.' };
+  }
+
+  // ─── Agent forgot-password flow ───────────────────────────────────────────
+
+  /**
+   * Agent Step 1: Send PASSWORD_RESET OTP to the agent's email.
+   */
+  async agentForgotPassword(email: string): Promise<{ message: string; otp?: string }> {
+    if (!validateEmail(email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, isActive: true, role: true },
+    });
+
+    // Always return the same message to prevent email enumeration
+    if (!user || !user.isActive || user.role !== UserRole.AGENT) {
+      return { message: 'If an agent account with that email exists, a password reset OTP has been sent' };
+    }
+
+    const otpResult = await this.sendOtp({ email, phoneNumber: '', purpose: OtpPurpose.PASSWORD_RESET });
+
+    logger.info('Agent forgot password OTP sent', { userId: user.id });
+
+    return {
+      message: 'If an agent account with that email exists, a password reset OTP has been sent',
+      otp: exposeOtp(otpResult.otp),
+    };
+  }
+
+  /**
+   * Agent Step 2: Verify the PASSWORD_RESET OTP and return a short-lived reset token.
+   */
+  async agentVerifyResetOtp(data: { email: string; otp: string }): Promise<{ resetToken: string; message: string }> {
+    if (!validateEmail(data.email)) {
+      throw new ValidationError('Invalid email format');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      select: { id: true, isActive: true, role: true },
+    });
+
+    if (!user || !user.isActive || user.role !== UserRole.AGENT) {
+      throw new ValidationError('Invalid email or OTP');
+    }
+
+    const otpValidation = await this.validateOtp({
+      email: data.email,
+      otp: data.otp,
+      purpose: OtpPurpose.PASSWORD_RESET,
+    });
+
+    if (!otpValidation.valid) {
+      throw new ValidationError(otpValidation.message);
+    }
+
+    const resetToken = generateId();
+    await redis.setex(`agent:password:reset:${resetToken}`, 5 * 60, user.id);
+
+    logger.info('Agent password reset OTP verified', { userId: user.id });
+
+    return {
+      resetToken,
+      message: 'OTP verified successfully. Use the reset token to set your new password.',
+    };
   }
 
   /**

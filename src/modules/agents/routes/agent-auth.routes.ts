@@ -5,7 +5,9 @@ import { UserRole } from '../../../shared/types';
 
 const AgentAuthRouter: Router = Router();
 
-// Public routes (token-gated, not JWT-gated)
+// Public routes (no JWT required)
+AgentAuthRouter.post('/forgot-password', agentAuthController.forgotPassword);
+AgentAuthRouter.post('/forgot-password/verify', agentAuthController.verifyForgotPasswordOtp);
 AgentAuthRouter.post('/reset-password', agentAuthController.resetPassword);
 
 // All routes below require authenticated agent

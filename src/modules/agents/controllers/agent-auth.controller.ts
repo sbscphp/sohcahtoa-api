@@ -5,6 +5,7 @@ import { AuthRequest } from '../../../shared/middleware';
 import { successResponse, ValidationError } from '../../../shared/utils';
 import agentProfileService from '../services/agent-profile.service';
 
+
 class AgentAuthController {
   /**
    * @swagger
@@ -253,6 +254,25 @@ class AgentAuthController {
   async resetPassword(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await authService.resetAgentPassword(req.body);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body;
+      const result = await authService.agentForgotPassword(email);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyForgotPasswordOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.agentVerifyResetOtp(req.body);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
