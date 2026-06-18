@@ -29,9 +29,9 @@ class RegulatoryService {
 
     // Summary cards
     const [submittedReports, pendingSubmissions, failedSubmissions, rejectedReports] = await Promise.all([
-      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "COMPLETED" } }),
-      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "PENDING" } }),
-      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "FAILED" } }),
+      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: { in: ["COMPLETED", "SUCCESS", "SUBMITTED"] } } }),
+      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
+      prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: { in: ["FAILED", "ERROR"] } } }),
       prisma.reportJob.count({ where: { module: { in: reportModules as any }, status: "REJECTED" } }),
     ]);
 
@@ -257,7 +257,22 @@ class RegulatoryService {
     const where: any = {};
     if (filters.status && filters.status !== "ALL") where.status = filters.status.toUpperCase();
     if (filters.fileType) where.format = filters.fileType.toUpperCase();
-    if (filters.search) where.metadata = { path: "$", string_contains: filters.search } as any;
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const searchUpper = filters.search.toUpperCase();
+      const searchCapitalized = filters.search.charAt(0).toUpperCase() + filters.search.slice(1).toLowerCase();
+
+      where.OR = [
+        { metadata: { path: ["reportName"], string_contains: filters.search } as any },
+        { metadata: { path: ["reportName"], string_contains: searchLower } as any },
+        { metadata: { path: ["reportName"], string_contains: searchUpper } as any },
+        { metadata: { path: ["reportName"], string_contains: searchCapitalized } as any },
+        { metadata: { path: ["channel"], string_contains: filters.search } as any },
+        { metadata: { path: ["channel"], string_contains: searchLower } as any },
+        { metadata: { path: ["channel"], string_contains: searchUpper } as any },
+        { metadata: { path: ["channel"], string_contains: searchCapitalized } as any },
+      ];
+    }
     const modules = ["TRANSACTION", "RATE", "INCIDENT"];
     where.module = { in: modules };
     const [jobs, total] = await Promise.all([
@@ -275,7 +290,7 @@ class RegulatoryService {
       reportName: (j.metadata && j.metadata.reportName) || `${j.module} Report`,
       reportingDate: j.startDate,
       fileType: j.format,
-      status: j.status === "COMPLETED" ? "Submitted" : j.status,
+      status: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
       channel: (j.metadata && j.metadata.channel) || "System",
       reference: j.id,
       url: j.generatedUrl || "",
@@ -295,7 +310,7 @@ class RegulatoryService {
       type: j.module,
       fileType: j.format,
       channel: (j.metadata && (j.metadata as any).channel) || "System",
-      status: j.status === "COMPLETED" ? "Submitted" : j.status,
+      status: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
       reference: j.id,
       submittedOn: j.completedAt || j.createdAt,
       reportDate: j.startDate,
@@ -421,8 +436,8 @@ class RegulatoryService {
 
   async fnWindowStats() {
     const [submittedReports, pendingReports] = await Promise.all([
-      prisma.reportJob.count({ where: { module: "RATE", status: "COMPLETED" } }),
-      prisma.reportJob.count({ where: { module: "RATE", status: "PENDING" } }),
+      prisma.reportJob.count({ where: { module: "RATE", status: { in: ["COMPLETED", "SUCCESS", "SUBMITTED"] } } }),
+      prisma.reportJob.count({ where: { module: "RATE", status: { in: ["PENDING", "IN_PROGRESS"] } } }),
     ]);
     // Dummy response for CBN/FN Window rates count
     const ratesCount = 3;
@@ -484,7 +499,7 @@ class RegulatoryService {
       id: j.id,
       reportName: (j.metadata && j.metadata.reportName) || "Daily FX sales report",
       reportType: (j.metadata && j.metadata.reportType) || "Daily",
-      status: j.status === "COMPLETED" ? "Submitted" : j.status,
+      status: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
       channel: "FN window",
       reference: j.id,
       createdAt: j.createdAt,
@@ -504,7 +519,7 @@ class RegulatoryService {
       type: (j.metadata && (j.metadata as any).reportType) || "Daily",
       fileType: j.format,
       channel: "FN window",
-      status: j.status === "COMPLETED" ? "Submitted" : j.status,
+      status: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
       reference: j.id,
       lastAction: j.status,
       submissionTime: j.completedAt || null,
@@ -698,7 +713,7 @@ class RegulatoryService {
         timestamp: j.createdAt,
         userOrSystem: "System",
         actionPerformed: `${j.module} export`,
-        actionResult: j.status === "COMPLETED" ? "Submitted" : j.status,
+        actionResult: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
         moduleSection: j.module === "RATE" ? "Rate Management" : j.module === "TRANSACTION" ? "FX Report" : "CBN Report",
         regulatoryId: j.id,
       })),
@@ -732,7 +747,7 @@ class RegulatoryService {
         description: (j.metadata && (j.metadata as any).reportName) || `${j.module} export`,
         duplicate: false,
         response: j.status,
-        result: j.status === "COMPLETED" ? "Submitted" : j.status,
+        result: (j.status === "COMPLETED" || j.status === "SUCCESS" || j.status === "SUBMITTED") ? "Submitted" : j.status,
         regulatoryId: j.id,
         moduleSection: j.module === "RATE" ? "Rate Management" : j.module === "TRANSACTION" ? "FX Report" : "CBN Report",
         fileUrl: j.generatedUrl || "",
