@@ -33,6 +33,8 @@ class AgentTransactionController {
         destinationCountry: body.destinationCountry,
         bvn: body.bvn,
         nin: body.nin,
+        tin: (body as any).tin,
+        tinNumber: (body as any).tinNumber,
         formAId: body.formAId,
         taxClearanceNumber: body.taxClearanceNumber,
         passportDocumentNumber: body.passportDocumentNumber,

@@ -136,6 +136,8 @@ export interface AgentCreateTransactionPayload {
   destinationCountry?: string;
   bvn?: string;
   nin?: string;
+  tin?: string;
+  tinNumber?: string;
   formAId?: string;
   taxClearanceNumber?: string;
   passportDocumentNumber?: string;

@@ -35,6 +35,7 @@ interface CreateCustomerTransactionPayload {
   bvn?: string;
   nin?: string;
   tin?: string;
+  tinNumber?: string;  // alias for tin
   formAId?: string;
   taxClearanceNumber?: string;
 
@@ -144,7 +145,8 @@ export class CustomerTransactionService {
       destinationCountry,
       bvn,
       nin,
-      tin,
+      tin: tinRaw,
+      tinNumber,
       formAId,
       taxClearanceNumber,
       passportDocumentNumber,
@@ -157,6 +159,9 @@ export class CustomerTransactionService {
       beneficiaryDetails,
       pickupLocation,
     } = payload;
+
+    // Normalize tin — accept either `tin` or `tinNumber` from the payload
+    const tin = tinRaw ?? tinNumber ?? undefined;
 
     logger.info(`[createTransaction] Starting transaction creation for user: ${userId}`, {
       userId,
@@ -444,8 +449,8 @@ export class CustomerTransactionService {
           nin: cleanNin ? '***' + cleanNin.slice(-4) : null,
           tin: tin ?? null,
           formAId,
-          admissionType: type === 'SCHOOL_FEES' ? admissionType : null,
-          studentName: type === 'SCHOOL_FEES' ? (studentName ?? null) : null,
+          admissionType: admissionType ?? null,
+          studentName: studentName ?? null,
           passportDocumentNumber: passportDocumentNumber ?? null,
           passportIssueDate: passportIssueDate ?? null,
           passportExpiryDate: passportExpiryDate ?? null,
@@ -1674,6 +1679,7 @@ export class CustomerTransactionService {
         bvn: userKyc?.bvn ?? null,
         nin: userKyc?.nin ?? null,
         tin: userKyc?.tin ?? stepTin ?? null,
+        tinNumber: userKyc?.tin ?? stepTin ?? null,
         admissionType,
         studentName,
         passportDocumentNumber,
