@@ -703,7 +703,7 @@ class AgentService {
       requiredDocuments: {
         bvn: details.personalInfo?.bvn || "—",
         nin: details.personalInfo?.nin || "—",
-        tin: details.personalInfo?.tin || "—",
+        tin: details.personalInfo?.tinNumber || "—",
         taxClearanceNumber: details.taxClearanceNumber || "—",
         documentsCount: details.requiredDocuments.filter((d: any) => d.uploaded).length,
         visa: getDocUrl('VISA'),
