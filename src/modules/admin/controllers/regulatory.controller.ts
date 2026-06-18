@@ -15,8 +15,8 @@ class RegulatoryController {
     const status = (req.query.status as string) || "ALL";
     const fileType = (req.query.fileType as string) || undefined;
     const channel = (req.query.channel as string) || undefined;
-    const search = (req.query.search as string) || "";
-    const result = await regulatoryService.complianceReportsList({ status, fileType, channel, search }, page, limit);
+    const search = (req.query.keyword as string) || "";
+    const result = await regulatoryService.complianceReportsList({ status, fileType, channel, search: search as any }, page, limit);
     res.json(successResponse(result.data, { pagination: result.meta }));
   });
 
