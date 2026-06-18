@@ -325,6 +325,37 @@ export class NotificationHandler {
       }
     });
 
+    eventBus.on(EventTypes.TRANSACTION_INFO_REQUESTED, async (event: any) => {
+      try {
+        const { userId, transaction, info } = event;
+
+        const template = NotificationTemplates.ADDITIONAL_INFO_REQUIRED({
+          referenceNumber: transaction.referenceNumber,
+          info,
+        });
+
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: template.priority,
+          title: template.title,
+          body: template.body,
+          data: { actionUrl: template.actionUrl },
+          transactionId: transaction.id,
+        });
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService.sendAdditionalInfoRequiredEmail(user.email, user.firstName, transaction.referenceNumber, info).catch((e) =>
+            logger.error('Error sending transaction info requested email:', e)
+          );
+        }
+      } catch (error) {
+        logger.error('Error sending transaction info requested notification:', error);
+      }
+    });
+
     eventBus.on(EventTypes.TRANSACTION_APPROVED, async (event: any) => {
       try {
         const { userId, transaction } = event;

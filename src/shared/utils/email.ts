@@ -55,6 +55,8 @@ const TEMPLATES = {
   accountSuspended:       process.env.TERMII_TEMPLATE_ID_ACCOUNT_SUSPENDED       || '',
   // Variables: {{first_name}}
   accountActivated:       process.env.TERMII_TEMPLATE_ID_ACCOUNT_ACTIVATED       || '',
+  // Variables: {{first_name}}, {{transaction_ref}}, {{info}}
+  additionalInfoRequired: process.env.TERMII_TEMPLATE_ID_ADDITIONAL_INFO_REQUIRED || '',
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -307,6 +309,15 @@ class EmailService {
     return this.sendTemplate(email, 'accountActivated', { first_name: firstName }, {
       subject: 'Account Reactivated - Sochatoa',
       text: `Hi ${firstName}, your Sochatoa account has been reactivated. You now have full access to all features.`,
+    });
+  }
+
+  // ── Additional Information Required ───────────────────────────────────────
+
+  async sendAdditionalInfoRequiredEmail(email: string, firstName: string, transactionRef: string, info: string): Promise<boolean> {
+    return this.sendTemplate(email, 'additionalInfoRequired', { first_name: firstName, transaction_ref: transactionRef, info }, {
+      subject: `Additional Information Required - ${transactionRef}`,
+      text: `Hi ${firstName}, your transaction ${transactionRef} requires additional information: ${info}. Please provide it to complete the transaction review.`,
     });
   }
 
