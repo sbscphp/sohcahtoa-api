@@ -675,12 +675,15 @@ export class AuthService {
       };
     }
 
-    // New BVN — initiate iGree consent flow
-    const sessionId = generateId();
-    const { authUrl } = bvnService.initiateIGreeConsent(sessionId);
+    // New BVN — initiate NIBSS Consent Hub flow
+    const consentResult = await bvnService.initiateConsentForBvn(bvn);
+
+    if (!consentResult.success || !consentResult.sessionId || !consentResult.consentUrl) {
+      throw new ValidationError(consentResult.message || 'BVN consent initiation failed');
+    }
 
     // Persist the pending consent session in Redis (30 min TTL)
-    const consentKey = `bvn:consent:${sessionId}`;
+    const consentKey = `bvn:consent:${consentResult.sessionId}`;
     await redis.setex(consentKey, 30 * 60, JSON.stringify({
       bvn,
       phoneNumber,
@@ -689,8 +692,8 @@ export class AuthService {
     }));
 
     return {
-      sessionId,
-      consentUrl: authUrl,
+      sessionId: consentResult.sessionId,
+      consentUrl: consentResult.consentUrl,
       message: 'BVN consent initiated. Please authenticate to continue.',
     };
   }

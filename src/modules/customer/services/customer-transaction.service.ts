@@ -34,6 +34,7 @@ interface CreateCustomerTransactionPayload {
   // Personal info
   bvn?: string;
   nin?: string;
+  tin?: string;
   formAId?: string;
   taxClearanceNumber?: string;
 
@@ -143,6 +144,7 @@ export class CustomerTransactionService {
       destinationCountry,
       bvn,
       nin,
+      tin,
       formAId,
       taxClearanceNumber,
       passportDocumentNumber,
@@ -246,17 +248,19 @@ export class CustomerTransactionService {
       });
     }
 
-    // Update KYC info if BVN or NIN provided and user doesn't have KYC yet
-    if ((cleanBvn || cleanNin) && !user.kyc) {
+    // Update KYC info if BVN, NIN, or TIN provided and user doesn't have KYC yet
+    if ((cleanBvn || cleanNin || tin) && !user.kyc) {
       logger.info(`[createTransaction] Creating KYC information for new user`, {
         userId,
         hasBvn: !!cleanBvn,
         hasNin: !!cleanNin,
+        hasTin: !!tin,
       });
 
       const kycData: any = {};
       if (cleanBvn) kycData.bvn = cleanBvn;
       if (cleanNin) kycData.nin = cleanNin;
+      if (tin) kycData.tin = tin;
 
       try {
         const newKyc = await prisma.userKyc.create({
@@ -275,11 +279,12 @@ export class CustomerTransactionService {
           'Failed to create KYC information. The BVN or NIN may already be registered to another account.'
         );
       }
-    } else if ((cleanBvn || cleanNin) && user.kyc) {
-      // Fill in any missing BVN/NIN on the existing KYC record
+    } else if ((cleanBvn || cleanNin || tin) && user.kyc) {
+      // Fill in any missing BVN/NIN/TIN on the existing KYC record
       const kycUpdate: any = {};
       if (cleanBvn && !user.kyc.bvn) kycUpdate.bvn = cleanBvn;
       if (cleanNin && !user.kyc.nin) kycUpdate.nin = cleanNin;
+      if (tin && !user.kyc.tin) kycUpdate.tin = tin;
 
       if (Object.keys(kycUpdate).length > 0) {
         logger.debug(`[createTransaction] Updating existing KYC with missing BVN/NIN`, {
@@ -434,6 +439,7 @@ export class CustomerTransactionService {
         data: {
           bvn: cleanBvn ? '***' + cleanBvn.slice(-4) : null,
           nin: cleanNin ? '***' + cleanNin.slice(-4) : null,
+          tin: tin ?? null,
           formAId,
           admissionType: type === 'SCHOOL_FEES' ? admissionType : null,
           studentName: type === 'SCHOOL_FEES' ? (studentName ?? null) : null,
@@ -1430,7 +1436,7 @@ export class CustomerTransactionService {
 
     const transaction = await prisma.transaction.findFirst({
       where: {
-        id: transactionId,
+        OR: [{ id: transactionId }, { referenceNumber: transactionId }],
         userId,
       },
       include: {
@@ -1507,6 +1513,7 @@ export class CustomerTransactionService {
     const passportIssueDate      = personalInfoData?.passportIssueDate      ?? null;
     const passportExpiryDate     = personalInfoData?.passportExpiryDate     ?? null;
     const studentName            = personalInfoData?.studentName            ?? null;
+    const stepTin                = personalInfoData?.tin                    ?? null;
 
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
     const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
@@ -1663,7 +1670,7 @@ export class CustomerTransactionService {
       personalInfo: {
         bvn: userKyc?.bvn ?? null,
         nin: userKyc?.nin ?? null,
-        tin: userKyc?.tin ?? null,
+        tin: userKyc?.tin ?? stepTin ?? null,
         admissionType,
         studentName,
         passportDocumentNumber,

@@ -29,6 +29,7 @@ Thumbs.db
 # Prisma
 *.db
 *.db-journal
+seed.sql
 
 # Docker
 .docker/
@@ -43,3 +44,4 @@ temp/
 
 # Planning (optional - uncomment if you want to keep planning docs in git)
 # .planning/
+
