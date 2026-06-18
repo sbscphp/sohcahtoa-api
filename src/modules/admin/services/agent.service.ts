@@ -754,12 +754,32 @@ class AgentService {
     });
     if (!trx) throw new NotFoundError("Transaction not found for this agent");
 
+    const [settlement, paymentReceipt] = await Promise.all([
+      prisma.settlement.findUnique({
+        where: { transactionId: transactionId }
+      }).catch(() => null),
+      (prisma as any).paymentReceipt.findFirst({
+        where: { transactionId: transactionId },
+        orderBy: { generatedAt: "desc" }
+      }).catch(() => null)
+    ]);
+
     let pdfUrl = (trx as any).receipt?.pdfUrl || null;
     let filename = (trx as any).receipt?.receiptNumber ? `receipt-${(trx as any).receipt.receiptNumber}.pdf` : null;
 
     if (!pdfUrl && trx.documents && trx.documents.length > 0) {
       pdfUrl = trx.documents[0].fileUrl;
       filename = trx.documents[0].fileName || `receipt-${transactionId}`;
+    }
+
+    if (!pdfUrl && paymentReceipt) {
+      pdfUrl = paymentReceipt.pdfUrl;
+      filename = paymentReceipt.receiptNumber ? `receipt-${paymentReceipt.receiptNumber}.pdf` : null;
+    }
+
+    if (!pdfUrl && settlement?.proofOfPayment) {
+      pdfUrl = settlement.proofOfPayment;
+      filename = settlement.paymentReference ? `receipt-${settlement.paymentReference}.pdf` : null;
     }
 
     if (!pdfUrl) throw new NotFoundError("Receipt not available for this transaction");
