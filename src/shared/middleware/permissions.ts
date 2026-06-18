@@ -30,7 +30,7 @@ export const requirePermission =
         return next(new UnauthorizedError("Authentication required"));
       }
 
-      if (req.user.role === UserRole.SUPER_ADMIN || req.user.role === UserRole.ADMIN) {
+      if (req.user.role === UserRole.SUPER_ADMIN) {
         return next();
       }
 
@@ -44,6 +44,7 @@ export const requirePermission =
           role: {
             select: {
               id: true,
+              name: true,
               rolePermissions: {
                 select: {
                   permission: {
@@ -60,8 +61,13 @@ export const requirePermission =
         return next(new ForbiddenError("Insufficient permissions"));
       }
 
-      const mod = module.toString().trim().toUpperCase();
-      const feat = feature.toString().trim().toUpperCase();
+      if (user.role?.name === "SUPER_ADMIN") {
+        return next();
+      }
+
+      const norm = (s: string) => s.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
+      const mod = norm(module);
+      const feat = norm(feature);
       const actions = Array.isArray(action) ? action : [action];
       const sanitized = actions
         .map((a) => sanitizeAction(a as string))
@@ -76,8 +82,8 @@ export const requirePermission =
         perms
           .filter((rp) => rp.permission.isActive)
           .map((rp) => {
-            const m = (rp.permission.module || "").toUpperCase();
-            const f = (rp.permission.featureKey || "").toUpperCase();
+            const m = norm(rp.permission.module || "");
+            const f = norm(rp.permission.featureKey || "");
             const a = sanitizeAction(rp.permission.action || "");
             return `${m}|${f}|${a}`;
           })

@@ -741,6 +741,46 @@ export class WorkflowService {
   }
 
   /**
+   * Attaches an applicable REFUND workflow template to a transaction, overriding its previous workflow.
+   */
+  async attachRefundWorkflowToTransaction(transactionId: string) {
+    const client: any = prisma as any;
+
+    const tx = await client.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      }
+    });
+
+    if (!tx) return null;
+
+    const template = await this.findApplicableWorkflow({
+      branchId: tx.createdByAgent?.branchId || undefined,
+      approvalType: "REFUND",
+      amount: Number(tx.nairaEquivalent || tx.foreignAmount || 0),
+    });
+
+    if (!template || !template.stages || template.stages.length === 0) {
+      return null;
+    }
+
+    const firstStage = template.stages[0];
+
+    await client.transaction.update({
+      where: { id: transactionId },
+      data: {
+        workflowTemplateId: template.id,
+        currentWorkflowStageId: firstStage.id,
+      }
+    });
+
+    return template;
+  }
+
+  /**
    * Attaches an applicable workflow template to a wallet entry refund if not already attached.
    */
   async attachWorkflowToRefund(entryId: string) {
