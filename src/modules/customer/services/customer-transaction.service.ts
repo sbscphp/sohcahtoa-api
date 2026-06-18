@@ -360,7 +360,10 @@ export class CustomerTransactionService {
         });
 
         if (rate) {
-          exchangeRate = parseFloat(rate.sellRate);
+          const normalizedMode = (mode || 'sell').toLowerCase().trim();
+          const sellRate = parseFloat(rate.sellRate);
+          const buyRate  = parseFloat(rate.buyRate);
+          exchangeRate = normalizedMode === 'buy' ? buyRate : sellRate;
           nairaEquivalent = amount * exchangeRate;
 
           logger.info(`[createTransaction] Exchange rate calculated`, {
