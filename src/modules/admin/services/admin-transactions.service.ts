@@ -115,6 +115,15 @@ export class AdminTransactionsService {
     }
 
     if (filters.userId) where.userId = filters.userId;
+    if (filters.transactionRef) {
+      where.referenceNumber = { contains: (filters.transactionRef as string).trim(), mode: "insensitive" };
+    }
+    if (filters.ref) {
+      where.referenceNumber = { contains: (filters.ref as string).trim(), mode: "insensitive" };
+    }
+    if (filters.reference) {
+      where.referenceNumber = { contains: (filters.reference as string).trim(), mode: "insensitive" };
+    }
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
@@ -251,7 +260,8 @@ export class AdminTransactionsService {
         select: { id: true },
       }),
       prisma.settlement.findUnique({
-        where: { transactionId: id }
+        where: { transactionId: id },
+        include: { bankDetails: true }
       }).catch(() => null),
       (prisma as any).paymentReceipt.findFirst({
         where: { transactionId: id },
@@ -477,6 +487,26 @@ export class AdminTransactionsService {
       })),
     })) || [];
 
+    const paymentDetails = {
+      transactionId: trx.id,
+      transactionDate: trx.createdAt,
+      transactionTime: trx.createdAt,
+      transactionReceipt: receiptUrl,
+      paidTo: settlement?.bankDetails?.accountName || "—",
+      bankName: settlement?.bankDetails?.bankName || "—",
+    };
+
+    const transactionSettlement = {
+      settlementId: settlement?.id || "—",
+      settlementDate: settlement?.depositedAt || settlement?.createdAt || "—",
+      settlementTime: settlement?.depositedAt || settlement?.createdAt || "—",
+      settlementReceipt: settlement?.proofOfPayment || "—",
+      settlementStructureCash: "—",
+      settlementStructurePrepaidCard: "—",
+      seventyFivePercentPaidInto: "—",
+      settlementStatus: trx.currentStep || trx.status,
+    };
+
     return {
       id: trx.id,
       reference: trx.referenceNumber,
@@ -500,6 +530,8 @@ export class AdminTransactionsService {
         pendingAssignees,
         workflowStages,
       },
+      paymentDetails,
+      transactionSettlement,
       details: {
         transactionValueFx: valueFx,
         transactionValueNgn: valueNgn,
@@ -515,6 +547,8 @@ export class AdminTransactionsService {
         customerTransientWalletId: wallet?.id || null,
         receiptUrl,
         receipt: receiptObj,
+        paymentDetails,
+        transactionSettlement,
       },
       workflowLine,
       raw: {
@@ -558,6 +592,29 @@ export class AdminTransactionsService {
       where: { transactionId },
       data: { verificationStatus: VerificationStatus.PENDING as any },
     });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_MORE_INFO_REQUESTED",
+        performedBy: adminId,
+        notes: payload.notes || "",
+        metadata: { fields: payload.fields },
+      } as any,
+    });
+
+    const fullTx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, referenceNumber: true },
+    });
+
+    if (fullTx) {
+      eventBus.publish(EventTypes.TRANSACTION_INFO_REQUESTED, {
+        userId: fullTx.userId,
+        transaction: { id: transactionId, referenceNumber: fullTx.referenceNumber },
+        info: payload.notes || "Additional information is required for your transaction.",
+      });
+    }
 
     return { message: "Request for information recorded" };
   }
