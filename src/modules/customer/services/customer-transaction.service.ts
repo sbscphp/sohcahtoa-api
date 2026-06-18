@@ -1678,7 +1678,6 @@ export class CustomerTransactionService {
       personalInfo: {
         bvn: userKyc?.bvn ?? null,
         nin: userKyc?.nin ?? null,
-        tin: userKyc?.tin ?? stepTin ?? null,
         tinNumber: userKyc?.tin ?? stepTin ?? null,
         admissionType,
         studentName,
