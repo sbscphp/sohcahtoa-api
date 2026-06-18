@@ -923,6 +923,33 @@ UserManagementRouter.get(
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               branch:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               isDefault:
+ *                 type: boolean
+ *               isActive:
+ *                 type: boolean
+ *               permissions:
+ *                 oneOf:
+ *                   - type: object
+ *                     additionalProperties:
+ *                       type: object
+ *                       additionalProperties:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                           enum: [can.view, can.edit, can.create, can.delete, can.export, view, edit, create, delete, export]
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                       example: "TRANSACTIONS - MODULE - can.view"
  *     responses:
  *       200:
  *         description: Role updated
