@@ -759,3 +759,40 @@ TransactionRouter.post(
   adminTransactionsController.settle
 );
 
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/refund:
+ *   post:
+ *     summary: Initiate a refund for a transaction
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Refund initiated and queued for approval or auto-approved
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/refund",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.refund
+);
+

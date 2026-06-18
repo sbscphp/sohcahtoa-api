@@ -115,6 +115,15 @@ export class AdminTransactionsService {
     }
 
     if (filters.userId) where.userId = filters.userId;
+    if (filters.transactionRef) {
+      where.referenceNumber = { contains: (filters.transactionRef as string).trim(), mode: "insensitive" };
+    }
+    if (filters.ref) {
+      where.referenceNumber = { contains: (filters.ref as string).trim(), mode: "insensitive" };
+    }
+    if (filters.reference) {
+      where.referenceNumber = { contains: (filters.reference as string).trim(), mode: "insensitive" };
+    }
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
@@ -241,7 +250,7 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const [user, wallet] = await Promise.all([
+    const [user, wallet, settlement, paymentReceipt] = await Promise.all([
       prisma.user.findUnique({
         where: { id: (trx as any).userId },
         include: { profile: true, kyc: true },
@@ -250,6 +259,14 @@ export class AdminTransactionsService {
         where: { userId: (trx as any).userId },
         select: { id: true },
       }),
+      prisma.settlement.findUnique({
+        where: { transactionId: id },
+        include: { bankDetails: true }
+      }).catch(() => null),
+      (prisma as any).paymentReceipt.findFirst({
+        where: { transactionId: id },
+        orderBy: { generatedAt: "desc" }
+      }).catch(() => null)
     ]);
     const name =
       user?.profile
@@ -263,11 +280,15 @@ export class AdminTransactionsService {
     const receiptDoc = Array.isArray((trx as any).documents)
       ? (trx as any).documents.find((d: any) => d.documentType === "RECEIPT")
       : null;
-    const receiptUrl = (trx as any).receipt?.pdfUrl || receiptDoc?.fileUrl || null;
+    const receiptUrl = (trx as any).receipt?.pdfUrl || receiptDoc?.fileUrl || paymentReceipt?.pdfUrl || settlement?.proofOfPayment || null;
     const receiptObj = (trx as any).receipt
       ? { receiptNumber: (trx as any).receipt.receiptNumber, pdfUrl: (trx as any).receipt.pdfUrl, generatedAt: (trx as any).receipt.generatedAt }
       : receiptDoc
       ? { receiptNumber: receiptDoc.fileName || `receipt-${trx.id}`, pdfUrl: receiptDoc.fileUrl, generatedAt: receiptDoc.createdAt }
+      : paymentReceipt
+      ? { receiptNumber: paymentReceipt.receiptNumber, pdfUrl: paymentReceipt.pdfUrl, generatedAt: paymentReceipt.generatedAt }
+      : settlement?.proofOfPayment
+      ? { receiptNumber: settlement.paymentReference || `receipt-${trx.id}`, pdfUrl: settlement.proofOfPayment, generatedAt: settlement.confirmedAt || settlement.createdAt }
       : null;
     const pickup = (trx as any).cashPickup || null;
     const valueFx = Number(trx.foreignAmount || 0);
@@ -466,6 +487,26 @@ export class AdminTransactionsService {
       })),
     })) || [];
 
+    const paymentDetails = {
+      transactionId: trx.id,
+      transactionDate: trx.createdAt,
+      transactionTime: trx.createdAt,
+      transactionReceipt: receiptUrl,
+      paidTo: settlement?.bankDetails?.accountName || "—",
+      bankName: settlement?.bankDetails?.bankName || "—",
+    };
+
+    const transactionSettlement = {
+      settlementId: settlement?.id || "—",
+      settlementDate: settlement?.depositedAt || settlement?.createdAt || "—",
+      settlementTime: settlement?.depositedAt || settlement?.createdAt || "—",
+      settlementReceipt: settlement?.proofOfPayment || "—",
+      settlementStructureCash: "—",
+      settlementStructurePrepaidCard: "—",
+      seventyFivePercentPaidInto: "—",
+      settlementStatus: trx.currentStep || trx.status,
+    };
+
     return {
       id: trx.id,
       reference: trx.referenceNumber,
@@ -489,6 +530,8 @@ export class AdminTransactionsService {
         pendingAssignees,
         workflowStages,
       },
+      paymentDetails,
+      transactionSettlement,
       details: {
         transactionValueFx: valueFx,
         transactionValueNgn: valueNgn,
@@ -504,9 +547,16 @@ export class AdminTransactionsService {
         customerTransientWalletId: wallet?.id || null,
         receiptUrl,
         receipt: receiptObj,
+        paymentDetails,
+        transactionSettlement,
       },
       workflowLine,
-      raw: { ...(trx as any), history: decoratedHistory },
+      raw: {
+        ...(trx as any),
+        receipt: (trx as any).receipt || receiptObj,
+        receiptUrl: (trx as any).receipt?.pdfUrl || receiptUrl,
+        history: decoratedHistory,
+      },
     };
   }
 
@@ -542,6 +592,29 @@ export class AdminTransactionsService {
       where: { transactionId },
       data: { verificationStatus: VerificationStatus.PENDING as any },
     });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DOCUMENT_MORE_INFO_REQUESTED",
+        performedBy: adminId,
+        notes: payload.notes || "",
+        metadata: { fields: payload.fields },
+      } as any,
+    });
+
+    const fullTx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, referenceNumber: true },
+    });
+
+    if (fullTx) {
+      eventBus.publish(EventTypes.TRANSACTION_INFO_REQUESTED, {
+        userId: fullTx.userId,
+        transaction: { id: transactionId, referenceNumber: fullTx.referenceNumber },
+        info: payload.notes || "Additional information is required for your transaction.",
+      });
+    }
 
     return { message: "Request for information recorded" };
   }
@@ -750,6 +823,7 @@ export class AdminTransactionsService {
     let isFinalApproval = true;
     let nextStageId: string | null = null;
     let nextStageAssignees: string[] = [];
+    let isRefundWorkflow = false;
 
     if (tx.workflowTemplateId && !tx.currentWorkflowStageId) {
       throw new Error("Transaction workflow state is invalid (missing current stage).");
@@ -767,6 +841,7 @@ export class AdminTransactionsService {
       });
 
       if (workflow) {
+        isRefundWorkflow = workflow.approvalType === "REFUND";
         let currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
         
         if (currentStageIndex === -1) {
@@ -799,6 +874,46 @@ export class AdminTransactionsService {
     }
 
     if (isFinalApproval) {
+      if (isRefundWorkflow) {
+        const updateResult = await prisma.transaction.updateMany({
+          where: { 
+            id: transactionId,
+            currentWorkflowStageId: tx.currentWorkflowStageId
+          },
+          data: {
+            status: TransactionStatus.CANCELLED as any,
+            currentWorkflowStageId: null,
+            updatedAt: new Date(),
+          },
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("Transaction state changed during approval. Please refresh and try again.");
+        }
+
+        // Reverse wallet debit (refund)
+        await walletService.reverseDebit({
+          transactionId,
+          reason: reason || "Transaction refund approved",
+        });
+
+        await prisma.transactionHistory.create({
+          data: {
+            transactionId,
+            action: "REFUND_APPROVED",
+            performedBy: adminId,
+            notes: reason || "Transaction refund approved and processed",
+          },
+        });
+
+        eventBus.publish(EventTypes.TRANSACTION_CANCELLED, {
+          userId: tx.userId,
+          transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+        });
+
+        return { message: "Transaction refund approved and processed successfully" };
+      }
+
       const updateResult = await prisma.transaction.updateMany({
         where: { 
           id: transactionId,
@@ -906,6 +1021,8 @@ export class AdminTransactionsService {
     if (!tx) throw new Error("Transaction not found");
     if (tx.status === "REJECTED") throw new Error("Transaction is already rejected");
 
+    let isRefundWorkflow = false;
+
     if (tx.workflowTemplateId && tx.currentWorkflowStageId) {
       const workflow = await prisma.workflowTemplate.findUnique({
         where: { id: tx.workflowTemplateId },
@@ -913,6 +1030,7 @@ export class AdminTransactionsService {
       });
 
       if (workflow) {
+        isRefundWorkflow = workflow.approvalType === "REFUND";
         const currentStage = workflow.stages.find((s: any) => s.id === tx.currentWorkflowStageId);
         if (currentStage) {
           const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
@@ -921,6 +1039,29 @@ export class AdminTransactionsService {
           }
         }
       }
+    }
+
+    if (isRefundWorkflow) {
+      const transaction = await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.APPROVED as any,
+          workflowTemplateId: null,
+          currentWorkflowStageId: null,
+          updatedAt: new Date(),
+        },
+      } as any);
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "REFUND_REJECTED",
+          performedBy: adminId,
+          notes: reason,
+        },
+      });
+
+      return { message: "Transaction refund rejected successfully" };
     }
 
     const transaction = await prisma.transaction.update({
@@ -1117,7 +1258,7 @@ export class AdminTransactionsService {
     const updated = await prisma.transactionDocument.update({
       where: { id: documentId },
       data: {
-        verificationStatus: VerificationStatus.PENDING as any,
+        verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW as any,
         verificationNotes: comment,
         verifiedAt: null,
         verifiedBy: null,
@@ -1344,6 +1485,113 @@ export class AdminTransactionsService {
     }
 
     return balances;
+  }
+
+  async initiateTransactionRefund(transactionId: string, adminId: string, reason?: string) {
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      }
+    });
+
+    if (!tx) throw new Error("Transaction not found");
+
+    const invalidStatuses = ["DRAFT", "REJECTED", "CANCELLED"];
+    if (invalidStatuses.includes(tx.status)) {
+      throw new Error(`Cannot refund transaction with status ${tx.status}`);
+    }
+
+    if (tx.workflowTemplateId) {
+      const currentTemplate = await prisma.workflowTemplate.findUnique({
+        where: { id: tx.workflowTemplateId },
+        select: { approvalType: true }
+      });
+      if (currentTemplate?.approvalType === "REFUND") {
+        throw new Error("A refund has already been initiated/completed for this transaction");
+      }
+    }
+
+    const template = await workflowService.attachRefundWorkflowToTransaction(transactionId);
+
+    if (template) {
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.ADMIN_APPROVAL_PENDING as any,
+          updatedAt: new Date(),
+        }
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "REFUND_INITIATED",
+          performedBy: adminId,
+          notes: reason || "Refund initiated and queued for approval",
+        }
+      });
+
+      const firstStage = template.stages[0];
+      const adminIds = firstStage.assignees.map((a: any) => a.adminId);
+      if (adminIds.length > 0) {
+        const user = await prisma.user.findUnique({
+          where: { id: tx.userId },
+          select: { profile: { select: { firstName: true, lastName: true } }, email: true },
+        });
+        const customerName = user?.profile
+          ? `${user.profile.firstName} ${user.profile.lastName}`.trim()
+          : user?.email;
+
+        eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+          adminIds,
+          transaction: {
+            id: tx.id,
+            referenceNumber: tx.referenceNumber,
+            type: tx.type,
+            foreignAmount: tx.foreignAmount,
+            nairaEquivalent: tx.nairaEquivalent,
+            userId: tx.userId,
+            customerName,
+          },
+        });
+      }
+
+      return { message: "Refund initiated and queued for approval" };
+    } else {
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.CANCELLED as any,
+          workflowTemplateId: null,
+          currentWorkflowStageId: null,
+          updatedAt: new Date(),
+        }
+      });
+
+      await walletService.reverseDebit({
+        transactionId,
+        reason: reason || "Auto-approved transaction refund",
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "REFUND_AUTO_APPROVED",
+          performedBy: adminId,
+          notes: reason || "Refund auto-approved (no refund template matching)",
+        }
+      });
+
+      eventBus.publish(EventTypes.TRANSACTION_CANCELLED, {
+        userId: tx.userId,
+        transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+      });
+
+      return { message: "Refund auto-approved and processed successfully" };
+    }
   }
 }
 

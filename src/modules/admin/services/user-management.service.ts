@@ -114,7 +114,7 @@ class UserManagementService {
             ]);
 
             const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "https://sohcahtoa-app.vercel.app/";
-            const url = new URL("/admin/auth/reset-password", baseUrl);
+            const url = new URL("/admin/reset-password", baseUrl);
             url.searchParams.set("otp", otp);
             const resetPasswordUrl = url.toString();
 
@@ -674,6 +674,7 @@ class UserManagementService {
                     const mapped = v === "update" ? "edit" : v; // treat update as edit
                     return allowed.has(mapped) ? mapped : null;
                 };
+                const norm = (s: string) => s.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
                 if (!perms) return {};
                 if (Array.isArray(perms)) {
                     const result: Record<string, Record<string, string[]>> = {};
@@ -681,8 +682,8 @@ class UserManagementService {
                         const s = (p || "").toString();
                         const parts = s.split(" - ").map(x => x.trim());
                         if (parts.length < 3) continue;
-                        const module = parts[0];
-                        const feature = parts[1];
+                        const module = norm(parts[0]);
+                        const feature = norm(parts[1]);
                         const action = sanitize(parts[2]);
                         if (!action) continue;
                         result[module] = result[module] || {};
@@ -696,9 +697,11 @@ class UserManagementService {
                 const obj = perms as Record<string, Record<string, string[]>>;
                 const result: Record<string, Record<string, string[]>> = {};
                 for (const module of Object.keys(obj)) {
+                    const normalizedModule = norm(module);
                     const features = obj[module] || {};
-                    result[module] = {};
+                    result[normalizedModule] = {};
                     for (const feature of Object.keys(features)) {
+                        const normalizedFeature = norm(feature);
                         const actions = Array.isArray(features[feature]) ? features[feature] : [];
                         const clean = Array.from(
                             new Set(
@@ -707,7 +710,7 @@ class UserManagementService {
                                     .filter((a): a is string => !!a)
                             )
                         );
-                        result[module][feature] = clean;
+                        result[normalizedModule][normalizedFeature] = clean;
                     }
                 }
                 return result;
@@ -938,6 +941,7 @@ class UserManagementService {
                     const mapped = v === "update" ? "edit" : v;
                     return allowed.has(mapped) ? mapped : null;
                 };
+                const norm = (s: string) => s.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
                 if (!perms) return undefined;
                 if (Array.isArray(perms)) {
                     const result: Record<string, Record<string, string[]>> = {};
@@ -945,8 +949,8 @@ class UserManagementService {
                         const s = (p || "").toString();
                         const parts = s.split(" - ").map(x => x.trim());
                         if (parts.length < 3) continue;
-                        const module = parts[0];
-                        const feature = parts[1];
+                        const module = norm(parts[0]);
+                        const feature = norm(parts[1]);
                         const action = sanitize(parts[2]);
                         if (!action) continue;
                         result[module] = result[module] || {};
@@ -960,9 +964,11 @@ class UserManagementService {
                 const obj = perms as Record<string, Record<string, string[]>>;
                 const result: Record<string, Record<string, string[]>> = {};
                 for (const module of Object.keys(obj)) {
+                    const normalizedModule = norm(module);
                     const features = obj[module] || {};
-                    result[module] = {};
+                    result[normalizedModule] = {};
                     for (const feature of Object.keys(features)) {
+                        const normalizedFeature = norm(feature);
                         const actions = Array.isArray(features[feature]) ? features[feature] : [];
                         const clean = Array.from(
                             new Set(
@@ -971,7 +977,7 @@ class UserManagementService {
                                     .filter((a): a is string => !!a)
                             )
                         );
-                        result[module][feature] = clean;
+                        result[normalizedModule][normalizedFeature] = clean;
                     }
                 }
                 return result;
@@ -1149,6 +1155,8 @@ class UserManagementService {
             const role = await this.prisma.role.findUnique({ where: { id: roleId } });
             if (!role) throw new NotFoundError("Role not found");
 
+            const norm = (s: string) => s.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
+
             if (role.name === "SUPER_ADMIN") {
                 const allPermissions = await this.prisma.permission.findMany({
                     where: { isActive: true },
@@ -1157,8 +1165,8 @@ class UserManagementService {
 
                 if (format === "flat") {
                     return allPermissions.map(p => ({
-                        module: p.module,
-                        featureKey: p.featureKey,
+                        module: norm(p.module),
+                        featureKey: norm(p.featureKey),
                         action: p.action,
                         label: p.label || `${p.featureKey} ${p.action}`,
                     }));
@@ -1166,8 +1174,8 @@ class UserManagementService {
 
                 const grouped: Record<string, Record<string, string[]>> = {};
                 for (const p of allPermissions) {
-                    const mod = p.module;
-                    const feat = p.featureKey;
+                    const mod = norm(p.module);
+                    const feat = norm(p.featureKey);
                     const action = p.action.toLowerCase();
                     grouped[mod] = grouped[mod] || {};
                     grouped[mod][feat] = grouped[mod][feat] || [];
@@ -1184,8 +1192,8 @@ class UserManagementService {
 
             if (format === "flat") {
                 return links.map(l => ({
-                    module: l.permission.module,
-                    featureKey: l.permission.featureKey,
+                    module: norm(l.permission.module),
+                    featureKey: norm(l.permission.featureKey),
                     action: l.permission.action,
                     label: l.permission.label || `${l.permission.featureKey} ${l.permission.action}`,
                 }));
@@ -1193,8 +1201,8 @@ class UserManagementService {
 
             const grouped: Record<string, Record<string, string[]>> = {};
             for (const l of links) {
-                const mod = l.permission.module;
-                const feat = l.permission.featureKey;
+                const mod = norm(l.permission.module);
+                const feat = norm(l.permission.featureKey);
                 const action = l.permission.action.toLowerCase();
                 grouped[mod] = grouped[mod] || {};
                 grouped[mod][feat] = grouped[mod][feat] || [];

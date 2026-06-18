@@ -102,6 +102,7 @@ export const EventTypes = {
   TRANSACTION_REJECTED: 'transaction.rejected',
   TRANSACTION_COMPLETED: 'transaction.completed',
   TRANSACTION_CANCELLED: 'transaction.cancelled',
+  TRANSACTION_INFO_REQUESTED: 'transaction.info.requested',
 
   // Payment events
   DEPOSIT_INITIATED: 'payment.deposit.initiated',

@@ -33,7 +33,7 @@ RegulatoryRouter.get(
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: search
+ *         name: keyword
  *         schema: { type: string }
  *       - in: query
  *         name: status
