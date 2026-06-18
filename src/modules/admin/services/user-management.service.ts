@@ -114,7 +114,7 @@ class UserManagementService {
             ]);
 
             const baseUrl = process.env.ADMIN_FRONTEND_URL ?? "https://sohcahtoa-app.vercel.app/";
-            const url = new URL("/admin/auth/reset-password", baseUrl);
+            const url = new URL("/admin/reset-password", baseUrl);
             url.searchParams.set("otp", otp);
             const resetPasswordUrl = url.toString();
 
