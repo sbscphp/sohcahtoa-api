@@ -694,12 +694,16 @@ export class AdminWalletService {
       where: { id: entryId },
       data: {
         refundedBy: adminId,
+        refundStatus: "PENDING_APPROVAL",
+        refundedAt: new Date(),
       },
     });
 
     return {
       id: updated.id,
       refundStatus: "PENDING_APPROVAL",
+      refundedBy: adminId,
+      refundedAt: updated.refundedAt,
       message: "Refund initiated and queued for approval",
     };
   }

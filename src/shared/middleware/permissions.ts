@@ -30,7 +30,7 @@ export const requirePermission =
         return next(new UnauthorizedError("Authentication required"));
       }
 
-      if (req.user.role === UserRole.SUPER_ADMIN) {
+      if (req.user.role === UserRole.SUPER_ADMIN || req.user.role === UserRole.ADMIN) {
         return next();
       }
 
@@ -61,7 +61,7 @@ export const requirePermission =
         return next(new ForbiddenError("Insufficient permissions"));
       }
 
-      if (user.role?.name === "SUPER_ADMIN") {
+      if (user.role?.name === UserRole.SUPER_ADMIN || user.role?.name === UserRole.ADMIN) {
         return next();
       }
 

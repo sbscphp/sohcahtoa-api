@@ -300,12 +300,12 @@ export class AdminTransactionsService {
         ? "Under Review"
         : trx.status === TransactionStatus.REJECTED
         ? "Rejected"
-        : trx.status === TransactionStatus.APPROVED
+        : trx.status === TransactionStatus.APPROVED || trx.status === TransactionStatus.AWAITING_DEPOSIT
         ? "Approved"
         : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
         ? "Pending Record Validation"
-        : trx.status === (TransactionStatus.DISBURSEMENT_IN_PROGRESS as any)
-        ? "Disbursement In Progress"
+        : trx.status === (TransactionStatus.AWAITING_DISBURSEMENT || TransactionStatus.COMPLETED as any)
+        ? "Completed" 
         : "Pending";      
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
@@ -897,6 +897,15 @@ export class AdminTransactionsService {
           reason: reason || "Transaction refund approved",
         });
 
+        await prisma.walletEntry.updateMany({
+          where: { transactionId, type: "DEBIT", status: "REVERSED" },
+          data: {
+            refundStatus: "COMPLETED",
+            refundedBy: adminId,
+            refundedAt: new Date(),
+          }
+        });
+
         await prisma.transactionHistory.create({
           data: {
             transactionId,
@@ -1059,6 +1068,13 @@ export class AdminTransactionsService {
           performedBy: adminId,
           notes: reason,
         },
+      });
+
+      await prisma.walletEntry.updateMany({
+        where: { transactionId, type: "DEBIT", status: "COMPLETED" },
+        data: {
+          refundStatus: "FAILED",
+        }
       });
 
       return { message: "Transaction refund rejected successfully" };
@@ -1525,6 +1541,15 @@ export class AdminTransactionsService {
         }
       });
 
+      await prisma.walletEntry.updateMany({
+        where: { transactionId, type: "DEBIT", status: "COMPLETED" },
+        data: {
+          refundStatus: "PENDING_APPROVAL",
+          refundedBy: adminId,
+          refundedAt: new Date(),
+        }
+      });
+
       await prisma.transactionHistory.create({
         data: {
           transactionId,
@@ -1574,6 +1599,15 @@ export class AdminTransactionsService {
       await walletService.reverseDebit({
         transactionId,
         reason: reason || "Auto-approved transaction refund",
+      });
+
+      await prisma.walletEntry.updateMany({
+        where: { transactionId, type: "DEBIT", status: "REVERSED" },
+        data: {
+          refundStatus: "COMPLETED",
+          refundedBy: adminId,
+          refundedAt: new Date(),
+        }
       });
 
       await prisma.transactionHistory.create({
