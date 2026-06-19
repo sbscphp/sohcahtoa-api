@@ -356,7 +356,7 @@ export class AdminTransactionsService {
         ? "Approved"
         : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
         ? "Pending Record Validation"
-        : trx.status === (TransactionStatus.AWAITING_DISBURSEMENT || TransactionStatus.COMPLETED as any)
+        : trx.status === TransactionStatus.AWAITING_DISBURSEMENT || trx.status === TransactionStatus.COMPLETED
         ? "Completed" 
         : "Pending";      
 
