@@ -312,18 +312,20 @@ export class DepositVerificationService {
         },
       });
 
-      // Wallet: credit the wallet when deposit is confirmed. Admin approval
-      // (which places the debit) always precedes the customer deposit, so the
-      // wallet will already have a matching debit entry for this transaction.
+      // Wallet: credit the settled amount when deposit is confirmed. Admin approval
+      // (which places the settled amount debit + fees debit) always precedes the customer deposit.
+      // This credit should match the settled amount debit, making the net for transaction zero.
+      // Fees remain as a separate debit (representing commission/revenue).
+      const settledAmountForCredit = Number(receivedAmount); // receivedAmount is settledAmount from Providus
       const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
       if (!alreadyCredited) {
         await walletService.creditWallet({
           userId: transaction.userId,
-          amount: Number(receivedAmount),
+          amount: settledAmountForCredit,
           transactionId,
           transactionRef: transaction.referenceNumber,
           sessionId: deposit.sessionId,
-          description: `Credit confirmed via Providus session ${deposit.sessionId}`,
+          description: `Settlement confirmed via Providus session ${deposit.sessionId} (settled: ₦${settledAmountForCredit})`,
         }).catch((err) =>
           logger.error('Wallet credit failed on deposit confirmation', { transactionId, depositId, error: err.message }),
         );
