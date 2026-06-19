@@ -51,6 +51,18 @@ function applyBuySellFxFilter(where: any, rawType: string) {
   return false;
 }
 
+function parseFilterValues(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (Array.isArray(raw)) {
+    return raw.flatMap((item) => parseFilterValues(item));
+  }
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 type SettlePayload = {
   disbursementMethod: string;
   settlementReference: string;
@@ -105,29 +117,69 @@ export class AdminTransactionsService {
   }
 
   private async buildTransactionsListQuery(filters: any) {
+    const normalizedFilters = { ...filters } as any;
+    if (filters.stage && !filters.step) normalizedFilters.step = filters.stage;
+    if (filters.transactionStage && !filters.step) normalizedFilters.step = filters.transactionStage;
+    if (filters.transaction_stage && !filters.step) normalizedFilters.step = filters.transaction_stage;
+    if (filters.startDate && !filters.dateFrom) normalizedFilters.dateFrom = filters.startDate;
+    if (filters.endDate && !filters.dateTo) normalizedFilters.dateTo = filters.endDate;
+    if (filters.workflowStage && !filters.status) normalizedFilters.status = filters.workflowStage;
+    if (filters.workflow_stage && !filters.status) normalizedFilters.status = filters.workflow_stage;
+
     const where: any = {};
-    if (filters.status) where.status = (filters.status as string).toUpperCase();
-    if (filters.step) where.currentStep = (filters.step as string).toUpperCase();
 
-    const rawType = (filters.type || "").toString().trim().toLowerCase();
-    if (!applyBuySellFxFilter(where, rawType) && rawType) {
-      where.type = (filters.type as string).toUpperCase();
+    const statusValues = parseFilterValues(normalizedFilters.status).map((status) => status.toUpperCase());
+    if (statusValues.length === 1) where.status = statusValues[0];
+    else if (statusValues.length > 1) where.status = { in: statusValues as any };
+
+    const stepValues = parseFilterValues(normalizedFilters.step).map((step) => step.toUpperCase());
+    if (stepValues.length === 1) where.currentStep = stepValues[0];
+    else if (stepValues.length > 1) where.currentStep = { in: stepValues as any };
+
+    const typeValues = parseFilterValues(normalizedFilters.type);
+    if (typeValues.length === 1) {
+      const rawType = typeValues[0].toLowerCase();
+      if (!applyBuySellFxFilter(where, rawType) && rawType) {
+        where.type = typeValues[0].toUpperCase();
+      }
+    } else if (typeValues.length > 1) {
+      const typeClauses: any[] = [];
+      const normalTypes = typeValues
+        .filter((type) => !["buyfx", "sellfx", "receivefx"].includes(type.toLowerCase()))
+        .map((type) => type.toUpperCase());
+      if (normalTypes.length) {
+        typeClauses.push({ type: { in: normalTypes as any } });
+      }
+      if (typeValues.some((type) => type.toLowerCase() === "buyfx")) {
+        typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.BUY as any }] });
+        typeClauses.push({ type: { in: BUY_GROUP_TYPES as any } });
+      }
+      if (typeValues.some((type) => type.toLowerCase() === "sellfx")) {
+        typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.SELL as any }] });
+        typeClauses.push({ type: { in: SELL_GROUP_TYPES as any } });
+      }
+      if (typeValues.some((type) => type.toLowerCase() === "receivefx")) {
+        typeClauses.push({ disbursementMethod: DisbursementMethod.IMTO });
+      }
+      if (typeClauses.length) {
+        appendOrFilter(where, typeClauses);
+      }
     }
 
-    if (filters.userId) where.userId = filters.userId;
-    if (filters.transactionRef) {
-      where.referenceNumber = { contains: (filters.transactionRef as string).trim(), mode: "insensitive" };
+    if (normalizedFilters.userId) where.userId = normalizedFilters.userId;
+    if (normalizedFilters.transactionRef) {
+      where.referenceNumber = { contains: (normalizedFilters.transactionRef as string).trim(), mode: "insensitive" };
     }
-    if (filters.ref) {
-      where.referenceNumber = { contains: (filters.ref as string).trim(), mode: "insensitive" };
+    if (normalizedFilters.ref) {
+      where.referenceNumber = { contains: (normalizedFilters.ref as string).trim(), mode: "insensitive" };
     }
-    if (filters.reference) {
-      where.referenceNumber = { contains: (filters.reference as string).trim(), mode: "insensitive" };
+    if (normalizedFilters.reference) {
+      where.referenceNumber = { contains: (normalizedFilters.reference as string).trim(), mode: "insensitive" };
     }
-    if (filters.dateFrom || filters.dateTo) {
+    if (normalizedFilters.dateFrom || normalizedFilters.dateTo) {
       where.createdAt = {};
-      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+      if (normalizedFilters.dateFrom) where.createdAt.gte = new Date(normalizedFilters.dateFrom);
+      if (normalizedFilters.dateTo) where.createdAt.lte = new Date(normalizedFilters.dateTo);
     }
 
     const search = (filters.search || "").toString().trim();

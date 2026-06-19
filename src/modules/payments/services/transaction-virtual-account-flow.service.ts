@@ -156,8 +156,9 @@ export class TransactionVirtualAccountFlowService {
       accountNumber: virtualAccount.accountNumber,
     });
 
+    const nairaEquivalentNumber = transaction.nairaEquivalent != null ? (transaction.nairaEquivalent as any).toNumber() : null;
     const { baseAmount, feeAmount, totalAmount } = computeVirtualAccountPaymentAmounts(
-      transaction.nairaEquivalent
+      nairaEquivalentNumber
     );
 
     return {
@@ -288,8 +289,9 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     }
 
+    const nairaEquivalentNumber = transaction.nairaEquivalent != null ? (transaction.nairaEquivalent as any).toNumber() : null;
     const { baseAmount, feeAmount, totalAmount } = computeVirtualAccountPaymentAmounts(
-      transaction.nairaEquivalent
+      nairaEquivalentNumber
     );
 
     return {
