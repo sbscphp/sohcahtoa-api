@@ -221,6 +221,11 @@ export class CustomerService {
     const lockedUntil = creds?.lockedUntil ? new Date(creds.lockedUntil) : null;
     const isLocked = lockedUntil !== null && lockedUntil > now;
 
+    const wallet = await (prisma as any).customerWallet.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
     return {
       id: user.id,
       name,
@@ -238,6 +243,7 @@ export class CustomerService {
         lockedUntil: isLocked ? lockedUntil!.toISOString() : null,
         failedAttempts: creds?.failedAttempts ?? 0,
       },
+      transientWalletId: wallet?.id || null,
     };
   }
 
