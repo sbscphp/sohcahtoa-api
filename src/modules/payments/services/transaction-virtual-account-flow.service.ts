@@ -8,6 +8,15 @@ import depositVerificationService from './deposit-verification.service';
 const prisma = getDatabase();
 const logger = createLogger('transaction-virtual-account-flow');
 
+const PROVIDUS_VIRTUAL_ACCOUNT_FEE_RATE = 0.015; // 1.5%
+
+function computeVirtualAccountPaymentAmounts(amount: number | null | undefined) {
+  const baseAmount = Number(amount ?? 0);
+  const feeAmount = parseFloat((baseAmount * PROVIDUS_VIRTUAL_ACCOUNT_FEE_RATE).toFixed(2));
+  const totalAmount = parseFloat((baseAmount + feeAmount).toFixed(2));
+  return { baseAmount, feeAmount, totalAmount };
+}
+
 export const DEFAULT_RECREATE_VA_MESSAGE_CUSTOMER =
   'This virtual account has expired. Please create a new one by calling POST /api/customer/transactions/:transactionId/virtual-account';
 
@@ -147,6 +156,11 @@ export class TransactionVirtualAccountFlowService {
       accountNumber: virtualAccount.accountNumber,
     });
 
+    const nairaEquivalentNumber = transaction.nairaEquivalent != null ? (transaction.nairaEquivalent as any).toNumber() : null;
+    const { baseAmount, feeAmount, totalAmount } = computeVirtualAccountPaymentAmounts(
+      nairaEquivalentNumber
+    );
+
     return {
       httpStatus: 201 as const,
       data: {
@@ -156,10 +170,13 @@ export class TransactionVirtualAccountFlowService {
         status: virtualAccount.status,
         expiresAt: virtualAccount.expiresAt,
         createdAt: virtualAccount.createdAt,
-        depositAmount: transaction.nairaEquivalent,
+        depositAmount: totalAmount,
+        feeAmount,
+        baseAmount,
         currency: 'NGN',
         instructions: [
-          'Transfer the exact amount specified to the account number provided',
+          `Transfer the exact total amount of ₦${totalAmount.toFixed(2)} to the account number provided.`,
+          `This amount includes a Providus processing fee of ₦${feeAmount.toFixed(2)}.`,
           'Use your registered name as the sender name',
           'The account is valid for single use only',
           virtualAccount.expiresAt
@@ -168,7 +185,7 @@ export class TransactionVirtualAccountFlowService {
           'Your transaction will be automatically confirmed once the deposit is received',
           'Do not share this account number with anyone',
         ],
-        warningNote: 'Please transfer the exact amount. Any discrepancy may delay processing.',
+        warningNote: 'Please transfer the exact amount including the processing fee. Any discrepancy may delay processing.',
       },
       message: 'Virtual account created successfully',
     };
@@ -272,15 +289,23 @@ export class TransactionVirtualAccountFlowService {
       virtualAccount = await virtualAccountService.getVirtualAccountByTransaction(transactionId);
     }
 
+    const nairaEquivalentNumber = transaction.nairaEquivalent != null ? (transaction.nairaEquivalent as any).toNumber() : null;
+    const { baseAmount, feeAmount, totalAmount } = computeVirtualAccountPaymentAmounts(
+      nairaEquivalentNumber
+    );
+
     return {
       accountNumber: virtualAccount.accountNumber,
       accountName: virtualAccount.accountName,
       bankName: virtualAccount.bankName,
-      amount: transaction.nairaEquivalent,
+      amount: totalAmount,
+      baseAmount,
+      feeAmount,
       currency: 'NGN',
       expiresAt: virtualAccount.expiresAt,
       instructions: [
-        'Transfer the exact amount specified to the account number provided',
+        `Transfer the exact total amount of ₦${totalAmount.toFixed(2)} to the account number provided.`,
+        `This amount includes a Providus processing fee of ₦${feeAmount.toFixed(2)}.`,
         'Use your registered name as the sender name',
         'The account is valid for single use only',
         virtualAccount.expiresAt
@@ -289,7 +314,7 @@ export class TransactionVirtualAccountFlowService {
         'Your transaction will be automatically confirmed once the deposit is received',
         'Do not share this account number with anyone',
       ],
-      warningNote: 'Please transfer the exact amount. Any discrepancy may delay processing.',
+      warningNote: 'Please transfer the exact amount including the processing fee. Any discrepancy may delay processing.',
     };
   }
 

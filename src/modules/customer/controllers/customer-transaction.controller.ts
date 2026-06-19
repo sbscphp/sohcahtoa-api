@@ -160,10 +160,15 @@ class CustomerTransactionController {
         q: req.query.q as string | undefined,
         status: req.query.status as string | undefined,
         type: req.query.type as string | undefined,
+        stage: req.query.stage as string | undefined,
+        transactionStage: req.query.transactionStage as string | undefined,
+        transaction_stage: req.query.transaction_stage as string | undefined,
         group: req.query.group as string | undefined,
         currency: req.query.currency as string | undefined,
         startDate: req.query.startDate as string | undefined,
         endDate: req.query.endDate as string | undefined,
+        dateFrom: req.query.dateFrom as string | undefined,
+        dateTo: req.query.dateTo as string | undefined,
         sortBy: req.query.sortBy as string | undefined,
         sortOrder: (req.query.sortOrder as "asc" | "desc") || "desc",
       };
@@ -193,10 +198,15 @@ class CustomerTransactionController {
         q: req.query.q as string | undefined,
         status: req.query.status as string | undefined,
         type: req.query.type as string | undefined,
+        stage: req.query.stage as string | undefined,
+        transactionStage: req.query.transactionStage as string | undefined,
+        transaction_stage: req.query.transaction_stage as string | undefined,
         group: req.query.group as string | undefined,
         currency: req.query.currency as string | undefined,
         startDate: req.query.startDate as string | undefined,
         endDate: req.query.endDate as string | undefined,
+        dateFrom: req.query.dateFrom as string | undefined,
+        dateTo: req.query.dateTo as string | undefined,
       };
 
       const csv = await customerTransactionService.exportCustomerTransactions(userId, filters);

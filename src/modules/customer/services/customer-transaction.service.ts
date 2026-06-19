@@ -1123,6 +1123,11 @@ export class CustomerTransactionService {
       currency?: string;
       startDate?: string;
       endDate?: string;
+      stage?: string;
+      transactionStage?: string;
+      transaction_stage?: string;
+      dateFrom?: string;
+      dateTo?: string;
     }
   ) {
     const where: any = { userId };
@@ -1149,6 +1154,9 @@ export class CustomerTransactionService {
       if (groupTypes) where.type = { in: groupTypes };
     }
 
+    const transactionStage = filters.stage || filters.transactionStage || filters.transaction_stage;
+    if (transactionStage) where.currentStep = transactionStage.toUpperCase();
+
     if (filters.startDate || filters.endDate) {
       where.createdAt = {};
       if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
@@ -1156,6 +1164,33 @@ export class CustomerTransactionService {
     }
 
     return where;
+  }
+
+  private normalizeCustomerFilters(filters: {
+    q?: string;
+    status?: string;
+    type?: string;
+    group?: string;
+    mode?: string;
+    currency?: string;
+    startDate?: string;
+    endDate?: string;
+    stage?: string;
+    transactionStage?: string;
+    transaction_stage?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) {
+    const normalized: any = { ...filters };
+    normalized.startDate = normalized.startDate || normalized.dateFrom;
+    normalized.endDate = normalized.endDate || normalized.dateTo;
+    normalized.status = normalized.status || normalized.workflowStage || normalized.workflow_stage;
+    normalized.type = normalized.type || normalized.transactionType || normalized.transaction_type;
+    normalized.mode = normalized.mode || normalized.transactionMode || normalized.transaction_mode;
+    normalized.stage = normalized.stage || normalized.transactionStage || normalized.transaction_stage;
+    return normalized;
   }
 
   /**
@@ -1186,6 +1221,11 @@ export class CustomerTransactionService {
       endDate?: string;
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
+      stage?: string;
+      transactionStage?: string;
+      transaction_stage?: string;
+      dateFrom?: string;
+      dateTo?: string;
     } = {},
     page = 1,
     limit = 10
@@ -1198,7 +1238,8 @@ export class CustomerTransactionService {
     });
 
     const skip = (page - 1) * limit;
-    const where = this.buildTransactionWhere(userId, filters);
+    const normalizedFilters = this.normalizeCustomerFilters(filters);
+    const where = this.buildTransactionWhere(userId, normalizedFilters);
 
     const allowedSortFields: Record<string, boolean> = {
       createdAt: true,
@@ -1322,6 +1363,11 @@ export class CustomerTransactionService {
       currency?: string;
       startDate?: string;
       endDate?: string;
+      stage?: string;
+      transactionStage?: string;
+      transaction_stage?: string;
+      dateFrom?: string;
+      dateTo?: string;
     } = {}
   ): Promise<string> {
     logger.info(`[exportCustomerTransactions] Exporting transactions for user`, {
@@ -1329,7 +1375,8 @@ export class CustomerTransactionService {
       filters,
     });
 
-    const where = this.buildTransactionWhere(userId, filters);
+    const normalizedFilters = this.normalizeCustomerFilters(filters);
+    const where = this.buildTransactionWhere(userId, normalizedFilters);
 
     const transactions = await prisma.transaction.findMany({
       where,
