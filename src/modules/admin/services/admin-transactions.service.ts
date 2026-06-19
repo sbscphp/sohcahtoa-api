@@ -1009,41 +1009,23 @@ export class AdminTransactionsService {
         transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
       });
 
-      // Wallet: debit settled amount (after fees) on final approval. The customer will
-      // deposit the settled amount after this approval, and the credit fires in
-      // DepositVerificationService.confirmTransactionDeposit.
-      // Settled amount = nairaEquivalent - fees (where fees = 1.5% of nairaEquivalent)
+      // Wallet: debit the converted amount on final approval. The customer should
+      // pay a slightly higher total (including fees), but only the converted amount
+      // is held in wallet for settlement.
       if (tx.nairaEquivalent && Number(tx.nairaEquivalent) > 0) {
         const nairaAmount = Number(tx.nairaEquivalent);
-        const feeRate = 0.015; // 1.5%
-        const feeAmount = parseFloat((nairaAmount * feeRate).toFixed(2));
-        const settledAmount = parseFloat((nairaAmount - feeAmount).toFixed(2));
 
         const alreadyDebited = await walletService.hasDebitFor(transactionId);
         if (!alreadyDebited) {
-          // Debit settled amount (what customer will actually receive)
           await walletService.debitWallet({
             userId: transaction.userId,
-            amount: settledAmount,
+            amount: nairaAmount,
             transactionId,
             transactionRef: transaction.referenceNumber,
-            description: `Debit for approved transaction ${transaction.referenceNumber} (settled amount: ₦${settledAmount})`,
+            description: `Debit for approved transaction ${transaction.referenceNumber}`,
           }).catch((err) =>
-            logger.error('Wallet debit (settled) failed on approval', { transactionId, error: err.message }),
+            logger.error('Wallet debit failed on approval', { transactionId, error: err.message }),
           );
-
-          // Separately debit fees (to track fees as a separate liability)
-          if (feeAmount > 0) {
-            await walletService.debitWallet({
-              userId: transaction.userId,
-              amount: feeAmount,
-              transactionId,
-              transactionRef: transaction.referenceNumber,
-              description: `Service fees for transaction ${transaction.referenceNumber} (₦${feeAmount})`,
-            }).catch((err) =>
-              logger.error('Wallet debit (fees) failed on approval', { transactionId, error: err.message }),
-            );
-          }
         }
       }
 
