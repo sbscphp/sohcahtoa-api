@@ -102,13 +102,16 @@ export class SimulationPaymentService {
 
     const virtualAccount = await this.resolveVirtualAccount(options.transactionId);
     const expectedAmount = await this.resolveExpectedAmount(options.transactionId);
-    const { settledAmount, feeAmount, vatAmount } = computeFees(expectedAmount);
+    const feeAmount = parseFloat((expectedAmount * FEE_RATE).toFixed(2));
+    const settledAmount = expectedAmount;
+    const transactionAmount = parseFloat((expectedAmount + feeAmount).toFixed(2));
+    const vatAmount = 0;
 
     const payload = {
       sessionId: generateSimSessionId(),
       settlementId: generateSimSettlementId(),
       accountNumber: virtualAccount.accountNumber,
-      transactionAmount: expectedAmount,
+      transactionAmount,
       settledAmount,
       feeAmount,
       vatAmount,
