@@ -483,6 +483,12 @@ async submitNewPassword(resetToken: string, newPassword: string) {
             },
           },
         },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
     if (!user) throw new NotFoundError("User not found");
@@ -511,7 +517,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     const tokenPayload = {
       userId: user.id,
       email: user.email,
-      role: UserRole.ADMIN,
+      role: user.role.name as UserRole,
       sessionId,
     };
 
@@ -519,7 +525,7 @@ async submitNewPassword(resetToken: string, newPassword: string) {
     const refreshToken = generateRefreshToken(tokenPayload);
 
     let userPermissions = [];
-    if (user.role?.name === "SUPER_ADMIN") {
+    if (user.role?.name === UserRole.SUPER_ADMIN) {
       userPermissions = await this.prisma.permission.findMany({
         where: { isActive: true },
         select: {
@@ -543,8 +549,15 @@ async submitNewPassword(resetToken: string, newPassword: string) {
         }));
     }
 
-    const { password: _password, role: _role, ...userWithoutPassword } = user as any;
-    return { ...userWithoutPassword, userPermissions, accessToken, refreshToken };
+    const { password: _password, role: _role, department: _department, ...userWithoutPassword } = user as any;
+    return {
+      ...userWithoutPassword,
+      roleName: user.role?.name || null,
+      departmentName: (user as any).department?.name || null,
+      userPermissions,
+      accessToken,
+      refreshToken,
+    };
   }
 
   async resendLoginOtp(email: string) {
