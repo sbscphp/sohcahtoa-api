@@ -950,6 +950,50 @@ UserManagementRouter.get(
  *                     items:
  *                       type: string
  *                       example: "TRANSACTIONS - MODULE - can.view"
+ *           examples:
+ *             groupedPermissions:
+ *               summary: Grouped permissions object (recommended)
+ *               value:
+ *                 name: "Operations Manager"
+ *                 description: "Ops role with broad access"
+ *                 branch: "Head Office"
+ *                 department: "Operations"
+ *                 isDefault: false
+ *                 permissions:
+ *                   TRANSACTIONS:
+ *                     MODULE: ["can.view", "can.edit", "can.create", "can.delete"]
+ *                   CUSTOMERS:
+ *                     MODULE: ["can.view", "can.edit"]
+ *                   AGENTS:
+ *                     MODULE: ["can.view", "can.create", "can.edit"]
+ *                   SETTLEMENTS:
+ *                     MODULE: ["can.view", "can.edit"]
+ *                   RATES:
+ *                     MODULE: ["can.view", "can.edit", "can.create"]
+ *                   USER_MANAGEMENT:
+ *                     ROLES: ["can.view", "can.create", "can.edit", "can.delete"]
+ *                     USERS: ["can.view", "can.create", "can.edit"]
+ *                   WORKFLOW:
+ *                     MODULE: ["can.view", "can.edit"]
+ *                   COMPLIANCE:
+ *                     MODULE: ["can.view", "can.edit"]
+ *                   REPORTS:
+ *                     MODULE: ["can.view", "can.create"]
+ *                   AUDIT:
+ *                     MODULE: ["can.view"]
+ *             flattenedPermissions:
+ *               summary: Flattened array format
+ *               value:
+ *                 name: "Operations Manager"
+ *                 description: "Ops role with broad access"
+ *                 branch: "Head Office"
+ *                 department: "Operations"
+ *                 isDefault: false
+ *                 permissions:
+ *                   - "TRANSACTIONS - MODULE - can.view"
+ *                   - "TRANSACTIONS - MODULE - can.edit"
+ *                   - "TRANSACTIONS - MODULE - can.create"
+ *                   - "TRANSACTIONS - MODULE - can.delete"
  *     responses:
  *       200:
  *         description: Role updated

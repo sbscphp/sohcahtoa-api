@@ -926,11 +926,10 @@ class UserManagementService {
 
             let departmentId: string | undefined = undefined;
             if (sanitized.department) {
-                const department = await this.prisma.department.findFirst({
-                    where: { name: { equals: sanitized.department, mode: "insensitive" }, isActive: true },
-                });
-                if (!department) throw new NotFoundError(`Department '${sanitized.department}' not found`);
-                departmentId = department.id;
+                const byId = await this.prisma.department.findUnique({ where: { id: sanitized.department } });
+                const dept = byId ?? await this.prisma.department.findUnique({ where: { name: sanitized.department } });
+                if (!dept) throw new NotFoundError(`Department '${sanitized.department}' not found`);
+                departmentId = dept.id;
             }
 
             const normalizePermissions = (perms?: string[] | Record<string, Record<string, string[]>>) => {
