@@ -35,6 +35,7 @@ export enum TransactionStatus {
   COMPLETED = 'COMPLETED',
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
+  AWAITING_REFUND_VERIFICATION = 'AWAITING_REFUND_VERIFICATION',
 }
 
 export enum TransactionStep {
@@ -47,6 +48,8 @@ export enum TransactionStep {
   COMPLIANCE_CHECK = 'COMPLIANCE_CHECK',
   ADMIN_REVIEW = 'ADMIN_REVIEW',
   DISBURSEMENT = 'DISBURSEMENT',
+  REFUNDED = 'REFUNDED',
+  COMPLETED = 'COMPLETED',
 }
 
 export enum DisbursementMethod {

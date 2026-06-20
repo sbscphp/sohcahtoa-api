@@ -466,6 +466,21 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'AWAITING_REFUND_VERIFICATION';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "TransactionStep" ADD VALUE IF NOT EXISTS 'REFUNDED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "TransactionStep" ADD VALUE IF NOT EXISTS 'COMPLETED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================

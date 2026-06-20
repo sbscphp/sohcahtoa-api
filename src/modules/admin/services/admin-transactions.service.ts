@@ -2,6 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod, TransactionType } from "../../../shared/types";
+import { ActionType } from "../../../shared/types/action-type";
 import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
@@ -352,11 +353,11 @@ export class AdminTransactionsService {
         ? "Under Review"
         : trx.status === TransactionStatus.REJECTED
         ? "Rejected"
-        : trx.status === TransactionStatus.APPROVED || trx.status === TransactionStatus.AWAITING_DEPOSIT
+        : trx.status === TransactionStatus.APPROVED || trx.status === TransactionStatus.AWAITING_DEPOSIT || trx.status === TransactionStatus.AWAITING_DISBURSEMENT
         ? "Approved"
         : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
         ? "Pending Record Validation"
-        : trx.status === TransactionStatus.AWAITING_DISBURSEMENT || trx.status === TransactionStatus.COMPLETED
+        : trx.status === TransactionStatus.COMPLETED || trx.status === TransactionStatus.CANCELLED
         ? "Completed" 
         : "Pending";      
 
@@ -934,6 +935,7 @@ export class AdminTransactionsService {
           },
           data: {
             status: TransactionStatus.CANCELLED as any,
+            currentStep: TransactionStep.REFUNDED as any,
             currentWorkflowStageId: null,
             updatedAt: new Date(),
           },
@@ -966,6 +968,21 @@ export class AdminTransactionsService {
             notes: reason || "Transaction refund approved and processed",
           },
         });
+
+        const affectedEntries = await prisma.walletEntry.findMany({
+          where: { transactionId, type: "DEBIT" },
+          select: { id: true, walletId: true }
+        });
+        for (const entry of affectedEntries) {
+          await auditTrailService.logAction({
+            adminId,
+            actionType: ActionType.WALLET_REFUND,
+            actionLabel: "Approve transaction refund",
+            resourceType: "WALLET",
+            resourceId: entry.walletId,
+            metadata: { entryId: entry.id, transactionId, reason },
+          }).catch((err) => logger.error("Audit log failed for wallet entry refund approval", { error: err.message }));
+        }
 
         eventBus.publish(EventTypes.TRANSACTION_CANCELLED, {
           userId: tx.userId,
@@ -1108,7 +1125,7 @@ export class AdminTransactionsService {
       const transaction = await prisma.transaction.update({
         where: { id: transactionId },
         data: {
-          status: TransactionStatus.APPROVED as any,
+          status: TransactionStatus.AWAITING_DISBURSEMENT as any,
           workflowTemplateId: null,
           currentWorkflowStageId: null,
           updatedAt: new Date(),
@@ -1130,6 +1147,21 @@ export class AdminTransactionsService {
           refundStatus: "FAILED",
         }
       });
+
+      const affectedEntries = await prisma.walletEntry.findMany({
+        where: { transactionId, type: "DEBIT" },
+        select: { id: true, walletId: true }
+      });
+      for (const entry of affectedEntries) {
+        await auditTrailService.logAction({
+          adminId,
+          actionType: ActionType.WALLET_REFUND,
+          actionLabel: "Reject transaction refund",
+          resourceType: "WALLET",
+          resourceId: entry.walletId,
+          metadata: { entryId: entry.id, transactionId, reason },
+        }).catch((err) => logger.error("Audit log failed for wallet entry refund rejection", { error: err.message }));
+      }
 
       return { message: "Transaction refund rejected successfully" };
     }
@@ -1590,7 +1622,7 @@ export class AdminTransactionsService {
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
-          status: TransactionStatus.ADMIN_APPROVAL_PENDING as any,
+          status: TransactionStatus.AWAITING_REFUND_VERIFICATION as any,
           updatedAt: new Date(),
         }
       });
@@ -1612,6 +1644,21 @@ export class AdminTransactionsService {
           notes: reason || "Refund initiated and queued for approval",
         }
       });
+
+      const affectedEntries = await prisma.walletEntry.findMany({
+        where: { transactionId, type: "DEBIT" },
+        select: { id: true, walletId: true }
+      });
+      for (const entry of affectedEntries) {
+        await auditTrailService.logAction({
+          adminId,
+          actionType: ActionType.WALLET_REFUND,
+          actionLabel: "Initiate transaction refund (queued for approval)",
+          resourceType: "WALLET",
+          resourceId: entry.walletId,
+          metadata: { entryId: entry.id, transactionId, reason },
+        }).catch((err) => logger.error("Audit log failed for wallet entry refund initiation", { error: err.message }));
+      }
 
       const firstStage = template.stages[0];
       const adminIds = firstStage.assignees.map((a: any) => a.adminId);
@@ -1672,6 +1719,21 @@ export class AdminTransactionsService {
           notes: reason || "Refund auto-approved (no refund template matching)",
         }
       });
+
+      const affectedEntries = await prisma.walletEntry.findMany({
+        where: { transactionId, type: "DEBIT" },
+        select: { id: true, walletId: true }
+      });
+      for (const entry of affectedEntries) {
+        await auditTrailService.logAction({
+          adminId,
+          actionType: ActionType.WALLET_REFUND,
+          actionLabel: "Initiate transaction refund (auto-approved)",
+          resourceType: "WALLET",
+          resourceId: entry.walletId,
+          metadata: { entryId: entry.id, transactionId, reason },
+        }).catch((err) => logger.error("Audit log failed for wallet entry refund auto-approval", { error: err.message }));
+      }
 
       eventBus.publish(EventTypes.TRANSACTION_CANCELLED, {
         userId: tx.userId,
