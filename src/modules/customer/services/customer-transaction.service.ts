@@ -653,7 +653,9 @@ export class CustomerTransactionService {
    * Upload documents for a transaction
    */
   async uploadDocuments(payload: UploadDocumentPayload) {
-    const { transactionId, userId, documentType, files } = payload;
+    const { transactionId, userId, files } = payload;
+    // Normalize to uppercase so casing mismatches from frontend don't cause rejections
+    const documentType = (payload.documentType ?? '').toUpperCase();
 
     logger.info(`[uploadDocuments] Starting document upload`, {
       transactionId,
