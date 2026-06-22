@@ -39,6 +39,8 @@ const TEMPLATES = {
   passwordResetConfirm:   process.env.TERMII_TEMPLATE_ID_PASSWORD_RESET_CONFIRM  || '',
   // Variables: {{first_name}}, {{temporary_password}}
   passwordCreation:       process.env.TERMII_TEMPLATE_ID_PASSWORD_CREATION       || '',
+  // Variables: {{first_name}}, {{otp}}
+  passwordResetOtp:       process.env.TERMII_TEMPLATE_ID_PASSWORD_RESET_OTP      || '',
   // Variables: {{first_name}}, {{transaction_ref}}, {{amount}}
   transactionApproved:    process.env.TERMII_TEMPLATE_ID_TRANSACTION_APPROVED    || '',
   // Variables: {{first_name}}, {{transaction_ref}}, {{reason}}
@@ -167,16 +169,26 @@ class EmailService {
 
   // ── OTP email ────────────────────────────────────────────────────────────
 
-  async sendOtpEmail(email: string, otp: string, purpose: string): Promise<boolean> {
+  async sendOtpEmail(email: string, otp: string, purpose: string, firstName: string = 'User'): Promise<boolean> {
     if (this.useTermii) {
       try {
+        if (purpose === 'PASSWORD_RESET' && TEMPLATES.passwordResetOtp) {
+          const result = await emailClient.sendTemplateEmail(
+            email,
+            TEMPLATES.passwordResetOtp,
+            { otp, first_name: firstName, email },
+            otpSubject(purpose),
+          );
+          return result.success;
+        }
+
         // Use Termii's dedicated OTP endpoint if template ID is not configured,
         // otherwise use the template (allows custom branding)
         if (TEMPLATES.otp) {
           const result = await emailClient.sendTemplateEmail(
             email,
             TEMPLATES.otp,
-            { otp, purpose_text: otpPurposeText(purpose), expiry_minutes: 5 },
+            { otp, purpose_text: otpPurposeText(purpose), expiry_minutes: 5, first_name: firstName },
             otpSubject(purpose),
           );
           return result.success;

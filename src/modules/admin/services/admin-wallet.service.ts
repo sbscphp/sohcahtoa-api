@@ -894,6 +894,16 @@ export class AdminWalletService {
 
     const targetTrxId = entry.linkedTransactionId || entry.transactionId;
     if (targetTrxId) {
+      await (prisma as any).transaction.update({
+        where: { id: targetTrxId },
+        data: {
+          status: "COMPLETED",
+          currentStep: "COMPLETED",
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        }
+      });
+
       await (prisma as any).transactionHistory.create({
         data: {
           transactionId: targetTrxId,

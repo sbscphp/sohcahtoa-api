@@ -135,6 +135,7 @@ enum TransactionStatus {
   COMPLETED
   REJECTED
   CANCELLED
+  AWAITING_REFUND_VERIFICATION
 }
 
 enum TransactionStep {
@@ -147,6 +148,8 @@ enum TransactionStep {
   COMPLIANCE_CHECK
   ADMIN_REVIEW
   DISBURSEMENT
+  REFUNDED
+  COMPLETED
 }
 
 enum DisbursementMethod {
