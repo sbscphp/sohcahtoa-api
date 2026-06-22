@@ -38,9 +38,21 @@ export interface AgentTransactionListItem {
 }
 
 export interface AgentTransactionListFilters {
+  q?: string;
+  status?: string;
   transaction_status?: string;
-  transaction_stage?: string;
+  type?: string;
   group?: string;
+  mode?: string;
+  currency?: string;
+  stage?: string;
+  transaction_stage?: string;
+  startDate?: string;
+  endDate?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface AgentTransactionStats {
@@ -265,20 +277,56 @@ class AgentTransactionService {
     const agent = await this.resolveAgent(agentUserId);
 
     const where: any = { createdByAgentId: agent.id };
-    if (filters.transaction_status) where.status = filters.transaction_status;
-    if (filters.transaction_stage) where.currentStep = filters.transaction_stage;
-    if (filters.group) {
+
+    // Normalize aliases
+    const status = filters.status || filters.transaction_status;
+    const stage  = filters.stage  || filters.transaction_stage;
+    const startDate = filters.startDate || filters.dateFrom;
+    const endDate   = filters.endDate   || filters.dateTo;
+
+    // Full-text search across reference number and purpose
+    if (filters.q) {
+      where.OR = [
+        { referenceNumber: { contains: filters.q, mode: 'insensitive' } },
+        { purpose: { contains: filters.q, mode: 'insensitive' } },
+        { destinationCountry: { contains: filters.q, mode: 'insensitive' } },
+        { currency: { contains: filters.q, mode: 'insensitive' } },
+      ];
+    }
+
+    if (status) where.status = status.toUpperCase();
+
+    if (filters.type) {
+      where.type = filters.type.toUpperCase();
+    } else if (filters.group) {
       const groupTypes = AgentTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
       if (groupTypes) where.type = { in: groupTypes };
     }
+
+    if (stage)          where.currentStep = stage.toUpperCase();
+    if (filters.mode)   where.transactionMode = filters.mode.toUpperCase();
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate)   where.createdAt.lte = new Date(endDate);
+    }
+
+    const allowedSortFields: Record<string, boolean> = {
+      createdAt: true, updatedAt: true, foreignAmount: true,
+      nairaEquivalent: true, status: true, type: true,
+    };
+    const sortBy    = filters.sortBy && allowedSortFields[filters.sortBy] ? filters.sortBy : 'createdAt';
+    const sortOrder = filters.sortOrder === 'asc' ? 'asc' : 'desc';
 
     const skip = (page - 1) * limit;
 
     const [rows, total] = await Promise.all([
       (prisma as any).transaction.findMany({
         where,
-        select: { id: true, createdAt: true, type: true, currentStep: true, status: true },
-        orderBy: { createdAt: "desc" },
+        select: { id: true, createdAt: true, type: true, currentStep: true, status: true, referenceNumber: true, currency: true, foreignAmount: true, transactionMode: true },
+        orderBy: { [sortBy]: sortOrder },
         skip,
         take: limit,
       }),
@@ -291,6 +339,10 @@ class AgentTransactionService {
       transaction_type: t.type,
       transaction_stage: t.currentStep,
       transaction_status: t.status,
+      referenceNumber: t.referenceNumber,
+      currency: t.currency,
+      foreignAmount: t.foreignAmount,
+      mode: t.transactionMode,
     }));
 
     return {

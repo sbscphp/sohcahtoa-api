@@ -66,9 +66,21 @@ class AgentTransactionController {
       const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "20", 10) || 20));
 
       const filters = {
+        q:                  req.query.q                  as string | undefined,
+        status:             req.query.status             as string | undefined,
         transaction_status: req.query.transaction_status as string | undefined,
-        transaction_stage: req.query.transaction_stage as string | undefined,
-        group: req.query.group as string | undefined,
+        type:               req.query.type               as string | undefined,
+        group:              req.query.group              as string | undefined,
+        mode:               req.query.mode               as string | undefined,
+        currency:           req.query.currency           as string | undefined,
+        stage:              req.query.stage              as string | undefined,
+        transaction_stage:  req.query.transaction_stage  as string | undefined,
+        startDate:          req.query.startDate          as string | undefined,
+        endDate:            req.query.endDate            as string | undefined,
+        dateFrom:           req.query.dateFrom           as string | undefined,
+        dateTo:             req.query.dateTo             as string | undefined,
+        sortBy:             req.query.sortBy             as string | undefined,
+        sortOrder:          req.query.sortOrder          as 'asc' | 'desc' | undefined,
       };
 
       const result = await agentTransactionService.listTransactions(
