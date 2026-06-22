@@ -1695,7 +1695,7 @@ export class AuthService {
         setPasswordUrl.searchParams.set('otp', otp);
         await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp, setPasswordUrl.toString());
       } else {
-        await emailService.sendOtpEmail(data.email, otp, data.purpose);
+        await emailService.sendOtpEmail(data.email, otp, data.purpose, data.firstName);
       }
     } else {
       // Log OTP for development
@@ -2045,7 +2045,7 @@ export class AuthService {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, isActive: true, role: true },
+      include: { profile: true },
     });
 
     // Always return the same message to prevent email enumeration
@@ -2059,6 +2059,7 @@ export class AuthService {
       email,
       phoneNumber: '',
       purpose: OtpPurpose.PASSWORD_RESET,
+      firstName: user.profile?.firstName,
     });
 
     // Publish password reset requested event for notifications
@@ -2277,7 +2278,7 @@ export class AuthService {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, isActive: true, role: true },
+      include: { profile: true },
     });
 
     // Always return the same message to prevent email enumeration
@@ -2285,7 +2286,12 @@ export class AuthService {
       return { message: 'If an agent account with that email exists, a password reset OTP has been sent' };
     }
 
-    const otpResult = await this.sendOtp({ email, phoneNumber: '', purpose: OtpPurpose.PASSWORD_RESET });
+    const otpResult = await this.sendOtp({ 
+      email, 
+      phoneNumber: '', 
+      purpose: OtpPurpose.PASSWORD_RESET,
+      firstName: user.profile?.firstName || 'Agent',
+    });
 
     logger.info('Agent forgot password OTP sent', { userId: user.id });
 

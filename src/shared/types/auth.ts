@@ -78,6 +78,7 @@ export interface OtpRequest {
   email: string;
   phoneNumber: string;
   purpose: OtpPurpose;
+  firstName?: string;
 }
 
 export enum OtpPurpose {
