@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authController from '../controllers/auth.controller';
+import agentAuthController from '../../agents/controllers/agent-auth.controller';
 import { authenticate, uploadPassport } from '../../../shared/middleware';
 
 const router: Router = Router();
@@ -1388,6 +1389,10 @@ router.post('/agent/login', authController.loginAgent);
  *         description: Unauthorized
  */
 router.post('/agent/verify-login', authController.verifyAgentLogin);
+
+router.post('/agent/forgot-password', agentAuthController.forgotPassword);
+router.post('/agent/forgot-password/verify', agentAuthController.verifyForgotPasswordOtp);
+router.post('/agent/reset-password', agentAuthController.resetPassword);
 
 /**
  * @swagger
