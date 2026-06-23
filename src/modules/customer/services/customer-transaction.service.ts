@@ -2261,178 +2261,84 @@ export class CustomerTransactionService {
    * @param userId - The customer ID
    */
   async getTotalsByGroup(
-    userId: string
+    userId: string,
+    currency: string,
+    date?: string
   ): Promise<{
-    all: { totalAmount: number; currency: string; transactionCount: number };
-    buy: { totalAmount: number; currency: string; transactionCount: number };
-    sell: { totalAmount: number; currency: string; transactionCount: number };
-    remittance: { totalAmount: number; currency: string; transactionCount: number };
+    currency: string;
+    all:        { totalAmount: number; transactionCount: number };
+    buy:        { totalAmount: number; transactionCount: number };
+    sell:       { totalAmount: number; transactionCount: number };
+    remittance: { totalAmount: number; transactionCount: number };
   }> {
-    logger.info(`[getTotalsByGroup] Fetching transaction totals by group for user`, { userId });
+    logger.info(`[getTotalsByGroup] Fetching transaction totals for user`, { userId, currency });
 
-    // Fetch all completed transactions for the customer
+    // Default to today if no date provided
+    const targetDate = date ?? new Date().toISOString().split('T')[0];
+    const start = new Date(`${targetDate}T00:00:00.000Z`);
+    const end   = new Date(`${targetDate}T23:59:59.999Z`);
+    const createdAt = { gte: start, lte: end };
+
     const transactions = await prisma.transaction.findMany({
       where: {
         userId,
         status: 'COMPLETED',
+        currency: { equals: currency, mode: 'insensitive' },
         foreignAmount: { not: null },
+        createdAt,
       },
       select: {
-        id: true,
         type: true,
         transactionMode: true,
-        currency: true,
         foreignAmount: true,
       },
     });
 
     logger.debug(`[getTotalsByGroup] Found ${transactions.length} completed transactions`, {
       userId,
+      currency,
       transactionCount: transactions.length,
     });
 
-    // Collect the distinct currencies present in the user's transactions
-    const currencies = [...new Set(transactions.map((t) => t.currency.toUpperCase()))];
-
-    await expireExpiredRates();
-
-    // Fetch the latest active admin-defined rates for each of those currencies (all → NGN)
-    const now = new Date();
-    const client: any = prisma as any;
-    const ngnRates: any[] = await client.exchangeRate.findMany({
-      where: {
-        fromCurrency: { in: currencies },
-        toCurrency: 'NGN',
-        isActive: true,
-        validFrom: { lte: now },
-        validUntil: { gt: now },
-      },
-      select: { fromCurrency: true, sellRate: true, buyRate: true, rate: true, updatedAt: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    // Keep only the latest row per fromCurrency
-    const latestNgnRateMap = new Map<string, number>();
-    for (const r of ngnRates) {
-      if (!latestNgnRateMap.has(r.fromCurrency)) {
-        latestNgnRateMap.set(
-          r.fromCurrency,
-          parseFloat(r.sellRate ?? r.buyRate ?? r.rate ?? '0'),
-        );
-      }
-    }
-
-    // Ensure we have the USD→NGN rate (may already be in the map; fetch separately if not)
-    if (!latestNgnRateMap.has('USD')) {
-      const usdRow: any = await client.exchangeRate.findFirst({
-        where: {
-          fromCurrency: 'USD',
-          toCurrency: 'NGN',
-          isActive: true,
-          validFrom: { lte: now },
-          validUntil: { gt: now },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-      if (usdRow) {
-        latestNgnRateMap.set('USD', parseFloat(usdRow.sellRate ?? usdRow.buyRate ?? usdRow.rate ?? '0'));
-      }
-    }
-
-    const usdNgnRate = latestNgnRateMap.get('USD') ?? 0;
-
-    logger.debug(`[getTotalsByGroup] Admin rates loaded`, {
-      userId,
-      usdNgnRate,
-      currencies: Object.fromEntries(latestNgnRateMap),
-    });
-
-    // Build a currencyToUSD factor map:
-    //   factor = currencyNgnRate / usdNgnRate
-    //   so: amountInUSD = foreignAmount * factor
-    const rateMap = new Map<string, number>();
-    rateMap.set('USD', 1);
-    if (usdNgnRate > 0) {
-      rateMap.set('NGN', 1 / usdNgnRate);
-      for (const [ccy, ngnRate] of latestNgnRateMap.entries()) {
-        if (ccy !== 'USD') rateMap.set(ccy, ngnRate / usdNgnRate);
-      }
-    }
-
-    // Group transactions and calculate totals
     const totals = {
-      all: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
-      buy: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
-      sell: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
-      remittance: { totalAmount: 0, currency: 'USD', transactionCount: 0 },
+      all:        { totalAmount: 0, transactionCount: 0 },
+      buy:        { totalAmount: 0, transactionCount: 0 },
+      sell:       { totalAmount: 0, transactionCount: 0 },
+      remittance: { totalAmount: 0, transactionCount: 0 },
     };
 
-    for (const transaction of transactions) {
-      const group = this.resolveTransactionGroup(
-        transaction.type as string,
-        transaction.transactionMode
-      );
-      const currency = transaction.currency.toUpperCase();
-      const foreignAmount = parseFloat(transaction.foreignAmount?.toString() || '0');
+    for (const tx of transactions) {
+      const amount = parseFloat(tx.foreignAmount?.toString() || '0');
+      if (!amount) continue;
 
-      // Convert to USD using the admin-defined NGN-pivot factor
-      let amountInUSD = foreignAmount;
-      if (currency !== 'USD') {
-        const rate = rateMap.get(currency);
-        if (rate) {
-          amountInUSD = foreignAmount * rate;
-          logger.debug(`[getTotalsByGroup] Converting ${currency} to USD`, {
-            userId,
-            transactionId: transaction.id,
-            currency,
-            foreignAmount,
-            rate,
-            amountInUSD,
-          });
-        } else {
-          logger.warn(`[getTotalsByGroup] No exchange rate found for ${currency}`, {
-            userId,
-            transactionId: transaction.id,
-            currency,
-            foreignAmount,
-          });
-          // Skip this transaction if no rate is available
-          continue;
-        }
-      }
+      const group = this.resolveTransactionGroup(tx.type as string, tx.transactionMode);
 
-      // Add to all total
-      totals.all.totalAmount += amountInUSD;
+      totals.all.totalAmount += amount;
       totals.all.transactionCount += 1;
 
-      // Add to appropriate group
       if (group === 'BUY') {
-        totals.buy.totalAmount += amountInUSD;
+        totals.buy.totalAmount += amount;
         totals.buy.transactionCount += 1;
       } else if (group === 'SELL') {
-        totals.sell.totalAmount += amountInUSD;
+        totals.sell.totalAmount += amount;
         totals.sell.transactionCount += 1;
       } else if (group === 'REMITTANCE') {
-        totals.remittance.totalAmount += amountInUSD;
+        totals.remittance.totalAmount += amount;
         totals.remittance.transactionCount += 1;
       }
     }
 
-    // Round to 2 decimal places
-    totals.all.totalAmount = Math.round(totals.all.totalAmount * 100) / 100;
-    totals.buy.totalAmount = Math.round(totals.buy.totalAmount * 100) / 100;
-    totals.sell.totalAmount = Math.round(totals.sell.totalAmount * 100) / 100;
-    totals.remittance.totalAmount = Math.round(totals.remittance.totalAmount * 100) / 100;
+    const round = (n: number) => Math.round(n * 100) / 100;
 
-    logger.info(`[getTotalsByGroup] Transaction totals calculated successfully`, {
-      userId,
-      all: totals.all,
-      buy: totals.buy,
-      sell: totals.sell,
-      remittance: totals.remittance,
-    });
+    logger.info(`[getTotalsByGroup] Totals calculated`, { userId, currency, totals });
 
-    return totals;
+    return {
+      currency,
+      all:        { totalAmount: round(totals.all.totalAmount),        transactionCount: totals.all.transactionCount },
+      buy:        { totalAmount: round(totals.buy.totalAmount),        transactionCount: totals.buy.transactionCount },
+      sell:       { totalAmount: round(totals.sell.totalAmount),       transactionCount: totals.sell.transactionCount },
+      remittance: { totalAmount: round(totals.remittance.totalAmount), transactionCount: totals.remittance.transactionCount },
+    };
   }
 }
 

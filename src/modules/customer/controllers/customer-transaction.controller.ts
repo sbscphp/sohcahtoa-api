@@ -384,7 +384,12 @@ class CustomerTransactionController {
       const userId = this.resolveUserId(req, res, false);
       if (userId === null) return;
 
-      const totals = await customerTransactionService.getTotalsByGroup(userId);
+      const currency = (req.body.currency || req.query.currency as string)?.toUpperCase();
+      if (!currency) {
+        return res.status(400).json({ success: false, message: 'currency is required' });
+      }
+      const date = req.body.date || req.query.date as string | undefined;
+      const totals = await customerTransactionService.getTotalsByGroup(userId, currency, date);
 
       return res.json(successResponse(totals));
     } catch (error) {
