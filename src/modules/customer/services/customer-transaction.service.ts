@@ -2064,9 +2064,9 @@ export class CustomerTransactionService {
       required = [
         ...required,
         'PROOF_OF_FUNDS',
-        'SOURCE_OF_FUNDS_DECLARATION',
         'DIGITAL_SIGNATURE',
       ];
+      // SOURCE_OF_FUNDS_DECLARATION is always optional
     }
 
     return required;

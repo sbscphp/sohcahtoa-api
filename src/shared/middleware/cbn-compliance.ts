@@ -312,7 +312,8 @@ export const checkSupportingDocuments = (
                              (type === 'TOURIST_FX' && mode === 'SELL');
 
     if (isSellTransaction && amount && Number(amount) >= 10000) {
-      required = [...required, 'PROOF_OF_FUNDS', 'SOURCE_OF_FUNDS_DECLARATION', 'DIGITAL_SIGNATURE'];
+      required = [...required, 'PROOF_OF_FUNDS', 'DIGITAL_SIGNATURE'];
+      // SOURCE_OF_FUNDS_DECLARATION is always optional
     }
 
     if (!required.length) {
