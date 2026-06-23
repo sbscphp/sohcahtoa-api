@@ -47,6 +47,9 @@ interface CreateCustomerTransactionPayload {
   // School fees specific fields
   admissionType?: 'UNDERGRADUATE' | 'POSTGRADUATE' | 'OTHER';
   studentName?: string;
+  studentPassportDocumentNumber?: string;
+  studentPassportIssueDate?: string;
+  studentPassportExpiryDate?: string;
 
   // Documents submitted inline with transaction creation.
   // Supports all DocumentType values including DIGITAL_SIGNATURE (optional for all types).
@@ -154,6 +157,9 @@ export class CustomerTransactionService {
       passportExpiryDate,
       admissionType,
       studentName,
+      studentPassportDocumentNumber,
+      studentPassportIssueDate,
+      studentPassportExpiryDate,
       documents,
       disbursementOption,
       beneficiaryDetails,
@@ -451,6 +457,9 @@ export class CustomerTransactionService {
           formAId,
           admissionType: admissionType ?? null,
           studentName: studentName ?? null,
+          studentPassportDocumentNumber: studentPassportDocumentNumber ?? null,
+          studentPassportIssueDate: studentPassportIssueDate ?? null,
+          studentPassportExpiryDate: studentPassportExpiryDate ?? null,
           passportDocumentNumber: passportDocumentNumber ?? null,
           passportIssueDate: passportIssueDate ?? null,
           passportExpiryDate: passportExpiryDate ?? null,
@@ -490,6 +499,7 @@ export class CustomerTransactionService {
         'SOURCE_OF_FUNDS_DECLARATION',
         'DIGITAL_SIGNATURE',
         'BANK_VERIFICATION',
+        'STUDENT_PASSPORT',
       ];
 
       const validDocs = documents.filter((doc) => validDocumentTypes.includes(doc.documentType));
@@ -1566,11 +1576,14 @@ export class CustomerTransactionService {
     const personalInfoData = personalInfoStep?.data as any;
 
     // Passport fields stored in the step log at creation time
-    const passportDocumentNumber = personalInfoData?.passportDocumentNumber ?? null;
-    const passportIssueDate      = personalInfoData?.passportIssueDate      ?? null;
-    const passportExpiryDate     = personalInfoData?.passportExpiryDate     ?? null;
-    const studentName            = personalInfoData?.studentName            ?? null;
-    const stepTin                = personalInfoData?.tin                    ?? null;
+    const passportDocumentNumber        = personalInfoData?.passportDocumentNumber        ?? null;
+    const passportIssueDate             = personalInfoData?.passportIssueDate             ?? null;
+    const passportExpiryDate            = personalInfoData?.passportExpiryDate            ?? null;
+    const studentName                   = personalInfoData?.studentName                   ?? null;
+    const studentPassportDocumentNumber = personalInfoData?.studentPassportDocumentNumber ?? null;
+    const studentPassportIssueDate      = personalInfoData?.studentPassportIssueDate      ?? null;
+    const studentPassportExpiryDate     = personalInfoData?.studentPassportExpiryDate     ?? null;
+    const stepTin                       = personalInfoData?.tin                           ?? null;
 
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
     const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
@@ -1730,6 +1743,9 @@ export class CustomerTransactionService {
         tinNumber: userKyc?.tin ?? stepTin ?? null,
         admissionType,
         studentName,
+        studentPassportDocumentNumber,
+        studentPassportIssueDate,
+        studentPassportExpiryDate,
         passportDocumentNumber,
         passportIssueDate,
         passportExpiryDate,

@@ -157,6 +157,9 @@ export interface AgentCreateTransactionPayload {
   passportExpiryDate?: string;
   admissionType?: "UNDERGRADUATE" | "POSTGRADUATE" | "OTHER";
   studentName?: string;
+  studentPassportDocumentNumber?: string;
+  studentPassportIssueDate?: string;
+  studentPassportExpiryDate?: string;
   documents?: Array<{ documentType: string; fileUrl: string; fileName: string; fileSize?: number }>;
   beneficiaryDetails?: {
     name?: string;
