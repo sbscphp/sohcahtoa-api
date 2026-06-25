@@ -497,9 +497,6 @@ WalletRouter.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - transactionId
- *               - reason
  *             properties:
  *               transactionId:
  *                 type: string

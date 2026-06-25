@@ -40,7 +40,7 @@ class AuditTrailService {
     };
     const client: any = prisma as any;
     try {
-      return client.adminAction.create({ data });
+      return await client.adminAction.create({ data });
     } catch (error: any) {
       const msg = String(error?.message || "");
       if (
@@ -52,13 +52,13 @@ class AuditTrailService {
       ) {
         if (data.actionType === "AGENT_APPROVE" || data.actionType === "AGENT_DEACTIVATE") {
           data.actionType = "AGENT_UPDATE_STATUS";
-          return client.adminAction.create({ data });
+          return await client.adminAction.create({ data });
         }
         // Fallback: preserve original as label and default to REPORT_GENERATE
         data.actionLabel = data.actionLabel || String(payload.actionType || "");
         data.actionType = "REPORT_GENERATE";
         try {
-          return client.adminAction.create({ data });
+          return await client.adminAction.create({ data });
         } catch (_err: any) {
           // Final fallback: raw SQL insert to bypass Prisma model/type mismatch
           const id = uuidv4();

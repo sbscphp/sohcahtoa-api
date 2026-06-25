@@ -594,6 +594,100 @@ export class AdminWalletService {
   }
 
   /**
+   * Automatically link a transaction to an unmatched wallet entry.
+   */
+  async autoLinkTransaction(walletId: string, entryId: string, adminId: string, reason?: string) {
+    const entry = await (prisma as any).walletEntry.findFirst({
+      where: { id: entryId, walletId },
+    });
+
+    if (!entry) {
+      throw new Error("Wallet entry not found");
+    }
+
+    if (entry.matchStatus === "MATCHED" || entry.linkedTransactionId) {
+      throw new Error("Wallet entry is already matched");
+    }
+
+    const wallet = await prisma.customerWallet.findUnique({
+      where: { id: walletId },
+    });
+
+    if (!wallet) {
+      throw new Error("Wallet not found");
+    }
+
+    let matchingTransactions: any[] = [];
+
+    // Try to find by transactionRef first if it exists
+    if (entry.transactionRef) {
+      const txByRef = await prisma.transaction.findFirst({
+        where: {
+          userId: wallet.userId,
+          referenceNumber: entry.transactionRef,
+        },
+      });
+      if (txByRef) {
+        matchingTransactions = [txByRef];
+      }
+    }
+
+    // If no match by ref, try matching by amount and status
+    if (matchingTransactions.length === 0) {
+      matchingTransactions = await prisma.transaction.findMany({
+        where: {
+          userId: wallet.userId,
+          status: {
+            in: ["AWAITING_DEPOSIT", "PENDING_RECORD_VALIDATION", "DRAFT", "DEPOSIT_PENDING"]
+          },
+          OR: [
+            { nairaEquivalent: entry.amount },
+            { foreignAmount: entry.amount },
+            { amountPaid: entry.amount },
+            { balanceDue: entry.amount }
+          ],
+        },
+      });
+    }
+
+    if (matchingTransactions.length === 0) {
+      throw new Error("Could not find any matching transaction to auto-link");
+    }
+
+    if (matchingTransactions.length > 1) {
+      throw new Error("Multiple matching transactions found. Please link manually.");
+    }
+
+    const transaction = matchingTransactions[0];
+
+    const updated = await (prisma as any).walletEntry.update({
+      where: { id: entryId },
+      data: {
+        linkedTransactionId: transaction.id,
+        linkReason: reason || "Auto-linked by system",
+        matchStatus: "MATCHED",
+      },
+    });
+
+    logger.info("Transaction auto-linked to wallet entry", {
+      walletId,
+      entryId,
+      transactionId: transaction.id,
+      adminId,
+      reason: updated.linkReason,
+    });
+
+    return {
+      id: updated.id,
+      linkedTransactionId: updated.linkedTransactionId,
+      linkReason: updated.linkReason,
+      matchStatus: updated.matchStatus,
+      message: "Transaction auto-linked successfully",
+      transactionRef: transaction.referenceNumber,
+    };
+  }
+
+  /**
    * Unlink a transaction from a wallet entry.
    */
   async unlinkTransaction(walletId: string, entryId: string, adminId: string) {
@@ -650,6 +744,29 @@ export class AdminWalletService {
         flaggedAt: new Date(),
       },
     });
+
+    if (entry.transactionId) {
+      const tx = await (prisma as any).transaction.findUnique({
+        where: { id: entry.transactionId },
+      });
+      if (tx) {
+        await (prisma as any).transaction.update({
+          where: { id: entry.transactionId },
+          data: {
+            status: "COMPLIANCE_REVIEW",
+            updatedAt: new Date(),
+          },
+        });
+        await (prisma as any).transactionHistory.create({
+          data: {
+            transactionId: entry.transactionId,
+            action: "ADMIN_FLAGGED",
+            performedBy: adminId,
+            notes: `Transaction flagged via wallet entry: ${reason}`,
+          },
+        });
+      }
+    }
 
     logger.info("Wallet entry flagged", { walletId, entryId, adminId, reason });
 

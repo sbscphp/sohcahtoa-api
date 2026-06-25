@@ -208,21 +208,28 @@ class AdminWalletController {
   linkTransaction = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const { transactionId, reason } = req.body;
-    if (!transactionId) {
-      res.status(400).json({ success: false, message: "transactionId is required" });
-      return;
+    let result;
+    if (transactionId) {
+      if (!reason || !reason.trim()) {
+        res.status(400).json({ success: false, message: "Reason is required when manually linking" });
+        return;
+      }
+      result = await adminWalletService.linkTransaction(
+        req.params.id,
+        req.params.entryId,
+        transactionId,
+        adminId,
+        reason.trim()
+      );
+    } else {
+      result = await adminWalletService.autoLinkTransaction(
+        req.params.id,
+        req.params.entryId,
+        adminId,
+        reason?.trim()
+      );
     }
-    if (!reason || !reason.trim()) {
-      res.status(400).json({ success: false, message: "Reason is required" });
-      return;
-    }
-    const result = await adminWalletService.linkTransaction(
-      req.params.id,
-      req.params.entryId,
-      transactionId,
-      adminId,
-      reason.trim()
-    );
+
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;
