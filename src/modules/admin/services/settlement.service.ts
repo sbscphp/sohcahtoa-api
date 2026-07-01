@@ -50,23 +50,21 @@ export class SettlementService {
         { notes: { not: null } },
       ],
     };
-    const [total, rows] = await Promise.all([
-      (prisma as any).settlement.count({ where }),
-      (prisma as any).settlement.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          transactionId: true,
-          amount: true,
-          status: true,
-          notes: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+    const total = await (prisma as any).settlement.count({ where });
+    const rows = await (prisma as any).settlement.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        transactionId: true,
+        amount: true,
+        status: true,
+        notes: true,
+        createdAt: true,
+      },
+    });
     const data = rows.map((r: any) => {
       const amt = Number(r.amount || 0);
       const priority = amt >= 500000 ? "High" : amt >= 100000 ? "Medium" : "Low";
@@ -86,24 +84,22 @@ export class SettlementService {
   async pendingReconciliations(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
     const where: any = { OR: [{ status: "PENDING" }, { status: "AWAITING_CONFIRMATION" }] };
-    const [total, rows] = await Promise.all([
-      (prisma as any).settlement.count({ where }),
-      (prisma as any).settlement.findMany({
-        where,
-        orderBy: { createdAt: "asc" },
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          transactionId: true,
-          paymentReference: true,
-          depositedAt: true,
-          createdAt: true,
-          status: true,
-          amount: true,
-        },
-      }),
-    ]);
+    const total = await (prisma as any).settlement.count({ where });
+    const rows = await (prisma as any).settlement.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        transactionId: true,
+        paymentReference: true,
+        depositedAt: true,
+        createdAt: true,
+        status: true,
+        amount: true,
+      },
+    });
     const data = rows.map((r: any) => {
       const mins = this.minutesSince(r.depositedAt || r.createdAt);
       const priority = mins >= 120 ? "High" : mins >= 60 ? "Medium" : "Low";
@@ -152,6 +148,12 @@ export class SettlementService {
 
   async fundingTransactions(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
+    
+    // Fallback if paymentReceipt doesn't exist
+    if (!(prisma as any).paymentReceipt) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
+
     const [total, receipts] = await Promise.all([
       (prisma as any).paymentReceipt.count(),
       (prisma as any).paymentReceipt.findMany({
@@ -169,30 +171,33 @@ export class SettlementService {
         },
       }),
     ]);
-    // Fetch settlement status per receipt (small lists only)
+
+    // Fetch settlement status per receipt using a single query (solves N+1 connection pool exhaustion)
     const statusMap: Record<string, string> = {};
-    await Promise.all(
-      receipts.map(async (r: any) => {
-        if (r.settlementId && !statusMap[r.settlementId]) {
-          try {
-            const s = await (prisma as any).settlement.findUnique({
-              where: { id: r.settlementId },
-              select: { status: true },
-            });
-            statusMap[r.settlementId] = s?.status || "PENDING";
-          } catch {
-            statusMap[r.settlementId] = "PENDING";
-          }
-        }
-      })
-    );
+    const settlementIds = [...new Set(receipts.map((r: any) => r.settlementId).filter(Boolean))];
+
+    if (settlementIds.length > 0) {
+      try {
+        const settlements = await (prisma as any).settlement.findMany({
+          where: { id: { in: settlementIds } },
+          select: { id: true, status: true },
+        });
+        settlements.forEach((s: any) => {
+          statusMap[s.id] = s.status || "PENDING";
+        });
+      } catch (error) {
+        console.error("Error fetching settlements for funding transactions:", error);
+      }
+    }
+
     const data = receipts.map((r: any) => ({
       referenceId: r.receiptNumber,
       amount: Number(r.amount || 0),
       currency: r.currency,
       fundDate: r.generatedAt,
-      status: r.settlementId ? statusMap[r.settlementId] : "PENDING",
+      status: r.settlementId ? (statusMap[r.settlementId] || "PENDING") : "PENDING",
     }));
+
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
