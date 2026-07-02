@@ -426,24 +426,6 @@ export class AdminService {
       },
     });
 
-    await prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        currentStep: TransactionStep.DEPOSIT_CONFIRMATION as any,
-        status: TransactionStatus.DEPOSIT_CONFIRMED as any,
-        updatedAt: new Date(),
-      },
-    });
-
-    await prisma.transactionStepLog.create({
-      data: {
-        transactionId,
-        step: TransactionStep.DEPOSIT_CONFIRMATION as any,
-        status: "COMPLETED",
-        data: { confirmedBy: adminId, paymentReference },
-        completedAt: new Date(),
-      },
-    });
 
     await prisma.transactionHistory.create({
       data: {

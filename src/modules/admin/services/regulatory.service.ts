@@ -2,7 +2,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { trmsClient } from "../../../integrations/trms/trms.client";
 import { fnWindowClient } from "../../../integrations/fn-window/fn-window.client";
-import { DocumentType, TransactionStatus, TransactionType } from "../../../shared/types";
+import { DocumentType, TransactionStatus, TransactionType } from "@prisma/client";
 
 class RegulatoryService {
   private formATypes = [
@@ -69,11 +69,16 @@ class RegulatoryService {
     });
     let onTimeSubmissions = 0;
     let lateSubmissions = 0;
+    let totalResolutionTimeMs = 0;
     reviewedForLatency.forEach((r: any) => {
       const diff = new Date(r.reviewedAt).getTime() - new Date(r.createdAt).getTime();
+      totalResolutionTimeMs += diff;
       if (diff <= slaMs) onTimeSubmissions += 1;
       else lateSubmissions += 1;
     });
+    const avgResolutionHours = reviewedForLatency.length > 0 
+      ? Math.round((totalResolutionTimeMs / reviewedForLatency.length) / (1000 * 60 * 60) * 10) / 10 
+      : 0;
     // Fallback if we sampled subset smaller than total reviewed
     if (onTimeSubmissions + lateSubmissions < reviewsCompleted) {
       const remaining = reviewsCompleted - (onTimeSubmissions + lateSubmissions);
@@ -131,6 +136,7 @@ class RegulatoryService {
           missed,
           trend: { delta: trendDeltaPercent }, // percentage difference vs last week
           target: 90,
+          averageResolutionTimeHours: avgResolutionHours,
         },
         screening: {
           passed: amlPassed,

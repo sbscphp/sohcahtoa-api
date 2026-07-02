@@ -1199,7 +1199,7 @@ class AgentTransactionService {
 
     const transaction = await prisma.transaction.findFirst({
       where: { id: input.transactionId, createdByAgentId: agent.id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, currentStep: true },
     });
 
     if (!transaction) {
@@ -1265,31 +1265,6 @@ class AgentTransactionService {
         },
       });
 
-      const updatedTransaction = await tx.transaction.update({
-        where: { id: input.transactionId },
-        data: {
-          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
-          currentStep: TransactionStep.DISBURSEMENT as any,
-          updatedAt: new Date(),
-        },
-      });
-
-      await tx.transactionStepLog.create({
-        data: {
-          transactionId: input.transactionId,
-          step: TransactionStep.DISBURSEMENT as any,
-          status: "COMPLETED",
-          data: {
-            source: "AGENT_INBOUND_PAYMENT",
-            recordedByAgentUserId: agentUserId,
-            paymentReference,
-            method: input.method,
-            amount: input.amount,
-            receiptUrl: uploaded.fileUrl,
-          },
-          completedAt: new Date(),
-        },
-      });
 
       await tx.transactionHistory.create({
         data: {
@@ -1306,7 +1281,7 @@ class AgentTransactionService {
         },
       });
 
-      return { settlement, transaction: updatedTransaction };
+      return { settlement, transaction };
     });
 
     logger.info("[recordInboundPayment] Inbound payment recorded by agent", {

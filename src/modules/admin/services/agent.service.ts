@@ -507,9 +507,22 @@ class AgentService {
       if (toDate) where.createdAt.lte = new Date(toDate);
     }
     if (search) {
+      const matchedUsers = await client.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u: any) => u.id);
+
       where.OR = [
         { referenceNumber: { contains: search, mode: "insensitive" } },
-        { type: { contains: search.toUpperCase(), mode: "insensitive" } },
+        ...(userIds.length > 0 ? [{ userId: { in: userIds } }] : []),
       ];
     }
 
@@ -591,9 +604,22 @@ class AgentService {
       if (toDate) where.createdAt.lte = new Date(toDate);
     }
     if (search) {
+      const matchedUsers = await client.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phoneNumber: { contains: search, mode: "insensitive" } },
+            { profile: { firstName: { contains: search, mode: "insensitive" } } },
+            { profile: { lastName: { contains: search, mode: "insensitive" } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const userIds = matchedUsers.map((u: any) => u.id);
+
       where.OR = [
         { referenceNumber: { contains: search, mode: "insensitive" } },
-        { type: { contains: search.toUpperCase(), mode: "insensitive" } },
+        ...(userIds.length > 0 ? [{ userId: { in: userIds } }] : []),
       ];
     }
 
