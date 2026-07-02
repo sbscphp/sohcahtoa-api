@@ -1685,7 +1685,10 @@ export class AdminTransactionsService {
         });
       }
 
-      return { message: "Refund initiated and queued for approval" };
+      return { 
+        message: "Refund initiated successfully, pending approval",
+        entryIds: affectedEntries.map(e => e.id)
+      };
     } else {
       await prisma.transaction.update({
         where: { id: transactionId },
@@ -1740,7 +1743,10 @@ export class AdminTransactionsService {
         transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
       });
 
-      return { message: "Refund auto-approved and processed successfully" };
+      return { 
+        message: "Refund auto-approved and processed successfully",
+        entryIds: affectedEntries.map(e => e.id)
+      };
     }
   }
 }

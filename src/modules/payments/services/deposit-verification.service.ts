@@ -252,8 +252,6 @@ export class DepositVerificationService {
         data: {
           amountPaid: totalAmountPaid,
           balanceDue: balanceDue,
-          status: isUnderpaid ? 'DEPOSIT_PENDING' : 'DEPOSIT_CONFIRMED',
-          currentStep: 'DEPOSIT_CONFIRMATION',
         },
       });
 
@@ -277,25 +275,6 @@ export class DepositVerificationService {
         },
       });
 
-      // Create transaction step log
-      await prisma.transactionStepLog.create({
-        data: {
-          transactionId,
-          step: 'DEPOSIT_CONFIRMATION',
-          status: isUnderpaid ? 'IN_PROGRESS' : 'COMPLETED',
-          data: {
-            depositId,
-            sessionId: deposit.sessionId,
-            amount: deposit.amount.toString(),
-            settledAmount: deposit.settledAmount.toString(),
-            totalAmountPaid: totalAmountPaid.toString(),
-            balanceDue: balanceDue?.toString() ?? null,
-            paymentStatus: isUnderpaid ? 'UNDERPAID' : isOverpaid ? 'OVERPAID' : 'EXACT',
-            sourceAccount: deposit.sourceAccountNumber,
-          },
-          completedAt: new Date(),
-        },
-      });
 
       // Send notification to customer
       await notificationService.sendNotification({

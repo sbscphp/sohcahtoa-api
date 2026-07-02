@@ -220,14 +220,7 @@ class AdminTransactionsController {
     const adminId = (req as any).user?.userId as string;
     const reason = req.body?.reason || req.body?.notes;
     const result = await adminTransactionsService.initiateTransactionRefund(req.params.id, adminId, reason);
-    await auditTrailService.logAction({
-      adminId,
-      actionType: ActionType.TRANSACTION_REFUND,
-      actionLabel: "Initiate transaction refund",
-      resourceType: "TRANSACTION",
-      resourceId: req.params.id,
-      reason,
-    });
+
     res.json(successResponse(result));
   });
 }

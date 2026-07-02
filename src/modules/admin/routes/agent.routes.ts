@@ -323,6 +323,11 @@ AgentRouter.patch(
  *           type: string
  *           description: Transaction status filter (e.g., DRAFT, APPROVED, COMPLETED)
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *           description: Search query (reference number, user name, email, or phone number)
+ *       - in: query
  *         name: dateFrom
  *         schema:
  *           type: string

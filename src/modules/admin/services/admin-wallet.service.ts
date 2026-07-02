@@ -750,13 +750,7 @@ export class AdminWalletService {
         where: { id: entry.transactionId },
       });
       if (tx) {
-        await (prisma as any).transaction.update({
-          where: { id: entry.transactionId },
-          data: {
-            status: "COMPLIANCE_REVIEW",
-            updatedAt: new Date(),
-          },
-        });
+
         await (prisma as any).transactionHistory.create({
           data: {
             transactionId: entry.transactionId,
