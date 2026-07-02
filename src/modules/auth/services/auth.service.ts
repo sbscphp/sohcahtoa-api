@@ -538,6 +538,11 @@ export class AuthService {
       throw new ValidationError('current password not correct');
     }
 
+    const isSamePassword = await comparePassword(data.newPassword, agent.password);
+    if (isSamePassword) {
+      throw new ValidationError('New password cannot be the same as your current password');
+    }
+
     const hashed = await hashPassword(data.newPassword);
 
     await client.agent.update({
@@ -589,6 +594,11 @@ export class AuthService {
     const isOldPasswordValid = await comparePassword(data.oldPassword, userCredential.passwordHash);
     if (!isOldPasswordValid) {
       throw new ValidationError('Current password is incorrect');
+    }
+
+    const isSamePassword = await comparePassword(data.newPassword, userCredential.passwordHash);
+    if (isSamePassword) {
+      throw new ValidationError('New password cannot be the same as your current password');
     }
 
     const hashed = await hashPassword(data.newPassword);

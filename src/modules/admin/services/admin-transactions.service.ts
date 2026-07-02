@@ -1301,7 +1301,7 @@ export class AdminTransactionsService {
     const updated = await prisma.transactionDocument.update({
       where: { id: documentId },
       data: {
-        verificationStatus: VerificationStatus.FAILED as any,
+        verificationStatus: VerificationStatus.REJECTED as any,
         verificationNotes: reason || null,
         verifiedAt: new Date(),
         verifiedBy: adminId,

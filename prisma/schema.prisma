@@ -170,6 +170,7 @@ enum VerificationStatus {
   IN_PROGRESS
   VERIFIED
   FAILED
+  REJECTED
   REQUIRES_MANUAL_REVIEW
 }
 

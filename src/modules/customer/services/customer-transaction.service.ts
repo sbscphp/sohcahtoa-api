@@ -10,6 +10,7 @@ import { workflowService } from '../../admin/services/workflow.service';
 import { createLogger } from '../../../shared/utils/logger';
 import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
+import { eventBus, EventTypes } from '../../../events/event-bus';
 
 const prisma = getDatabase();
 const logger = createLogger('customer-transaction-service');
@@ -114,6 +115,13 @@ interface CreateCustomerTransactionPayload {
     scheduledPickupDate?: string;
     scheduledPickupTime?: string;
   };
+
+  // Refund bank details — the customer's own account to refund to if the transaction is reversed
+  refundBankDetails?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
 }
 
 interface UploadDocumentPayload {
@@ -164,6 +172,7 @@ export class CustomerTransactionService {
       disbursementOption,
       beneficiaryDetails,
       pickupLocation,
+      refundBankDetails,
     } = payload;
 
     // Normalize tin — accept either `tin` or `tinNumber` from the payload
@@ -464,6 +473,7 @@ export class CustomerTransactionService {
           passportIssueDate: passportIssueDate ?? null,
           passportExpiryDate: passportExpiryDate ?? null,
           beneficiaryDetails,
+          refundBankDetails: refundBankDetails ?? null,
           pickupLocation,
         },
         completedAt: new Date(),
@@ -638,6 +648,13 @@ export class CustomerTransactionService {
       action: 'CREATED',
       newStatus: transaction.status,
       metadata: { type, referenceNumber: transaction.referenceNumber, hasDocuments },
+    });
+
+    // Notify about transaction creation
+    eventBus.publish(EventTypes.TRANSACTION_CREATED, {
+      transactionId: transaction.id,
+      referenceNumber: transaction.referenceNumber,
+      userId,
     });
 
     // Attach applicable workflow template to the transaction
@@ -1586,7 +1603,8 @@ export class CustomerTransactionService {
     const stepTin                       = personalInfoData?.tin                           ?? null;
 
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
-    const stepPickupLocation = personalInfoData?.pickupLocation as any ?? null;
+    const stepPickupLocation   = personalInfoData?.pickupLocation   as any ?? null;
+    const refundBankDetails    = personalInfoData?.refundBankDetails as any ?? null;
 
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
@@ -1753,6 +1771,7 @@ export class CustomerTransactionService {
 
       // Beneficiary details from step data (all fields, including correspondence bank)
       beneficiaryDetails: personalInfoData?.beneficiaryDetails ?? null,
+      refundBankDetails,
 
       // Customer's own bank accounts attached to this transaction
       bankAccounts: (transactionBankAccounts as any[]).map((r: any) => r.bankAccount),

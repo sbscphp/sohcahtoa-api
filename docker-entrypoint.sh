@@ -486,6 +486,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TYPE "VerificationStatus" ADD VALUE IF NOT EXISTS 'REJECTED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================

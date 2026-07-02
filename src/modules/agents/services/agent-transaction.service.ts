@@ -201,6 +201,11 @@ export interface AgentCreateTransactionPayload {
     scheduledPickupDate?: string;
     scheduledPickupTime?: string;
   };
+  refundBankDetails?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
 }
 
 export interface AgentRecordDisbursementInput {
