@@ -163,6 +163,7 @@ enum DisbursementOption {
   ELECTRONIC_TRANSFER // 100% bank transfer
   CARD                // 100% prepaid card
   CARD_AND_CASH       // 75% card + 25% cash (max $500 cash)
+  CASH_AND_TRANSFER   // 25% cash + 75% electronic transfer (min cash balance gap: 500)
 }
 
 enum VerificationStatus {
@@ -1121,6 +1122,7 @@ enum ProvidusTransactionStatus {
   VERIFIED
   SETTLED
   FAILED
+  REVERSED
 }
 
 model ProvidusDeposit {

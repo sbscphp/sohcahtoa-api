@@ -101,7 +101,7 @@ interface CreateCustomerTransactionPayload {
   // ELECTRONIC_TRANSFER – 100% bank transfer (no pickup)
   // CARD              – 100% prepaid card     (no pickup)
   // CARD_AND_CASH     – 75% card + 25% cash, max $500 cash (pickup location required)
-  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH';
+  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH' | 'CASH_AND_TRANSFER';
 
   // Pickup Location details — required when disbursementOption is CARD_AND_CASH
   pickupLocation?: {
@@ -232,7 +232,7 @@ export class CustomerTransactionService {
     logger.debug(`[createTransaction] Transaction type validated: ${type}`, { userId, type });
 
     // Validate disbursement option
-    const VALID_DISBURSEMENT_OPTIONS = ['ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH'];
+    const VALID_DISBURSEMENT_OPTIONS = ['ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH', 'CASH_AND_TRANSFER'];
     if (disbursementOption && !VALID_DISBURSEMENT_OPTIONS.includes(disbursementOption)) {
       throw new ValidationError(
         `Invalid disbursement option. Must be one of: ${VALID_DISBURSEMENT_OPTIONS.join(', ')}`
@@ -242,11 +242,18 @@ export class CustomerTransactionService {
       throw new ValidationError('A pickup location is required when selecting Card + Cash disbursement');
     }
 
-    // For CARD_AND_CASH: cash component = 25% of amount, capped at $500 equivalent
+    // CARD_AND_CASH: cash component = 25% of amount, capped at $500 equivalent
+    // CASH_AND_TRANSFER: cash component = 25% of amount (uncapped; enforced at disbursement time via agent cash balance)
     const CASH_CAP = 500;
     const cashAmount =
       disbursementOption === 'CARD_AND_CASH'
         ? Math.min(amount * 0.25, CASH_CAP)
+        : disbursementOption === 'CASH_AND_TRANSFER'
+          ? amount * 0.25
+          : null;
+    const transferAmount =
+      disbursementOption === 'CASH_AND_TRANSFER'
+        ? amount * 0.75
         : null;
 
     // Strip masked values (e.g. "*******7624" sent back by the frontend) and
@@ -435,6 +442,7 @@ export class CustomerTransactionService {
         disbursementOption === 'ELECTRONIC_TRANSFER' ? 'BANK_TRANSFER'
         : disbursementOption === 'CARD'              ? 'PREPAID_CARD'
         : disbursementOption === 'CARD_AND_CASH'     ? 'CASH_PICKUP'
+        : disbursementOption === 'CASH_AND_TRANSFER' ? 'BANK_TRANSFER'
         : pickupLocation                             ? 'CASH_PICKUP'
         : beneficiaryDetails                         ? 'BANK_TRANSFER'
         : null
@@ -475,6 +483,8 @@ export class CustomerTransactionService {
           beneficiaryDetails,
           refundBankDetails: refundBankDetails ?? null,
           pickupLocation,
+          cashAmount: cashAmount ?? null,
+          transferAmount: transferAmount ?? null,
         },
         completedAt: new Date(),
       },

@@ -491,6 +491,16 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TYPE "DisbursementOption" ADD VALUE IF NOT EXISTS 'CASH_AND_TRANSFER';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "ProvidusTransactionStatus" ADD VALUE IF NOT EXISTS 'REVERSED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================

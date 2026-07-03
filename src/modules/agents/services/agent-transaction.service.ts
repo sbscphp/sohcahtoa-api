@@ -15,6 +15,9 @@ import {
   resolveDashboardDateRange,
 } from "../../../shared/utils/date-range-presets";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
+import { WalletService } from "../../wallet/services/wallet.service";
+
+const walletService = new WalletService();
 
 const prisma = getDatabase();
 const logger = createLogger("agent-transaction-service");
@@ -189,7 +192,7 @@ export interface AgentCreateTransactionPayload {
     correspondenceBankSwiftCode?: string;
     otherInformation?: string;
   };
-  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH';
+  disbursementOption?: 'ELECTRONIC_TRANSFER' | 'CARD' | 'CARD_AND_CASH' | 'CASH_AND_TRANSFER';
   pickupLocation?: {
     id?: string;
     name: string;
@@ -1068,6 +1071,10 @@ class AgentTransactionService {
         status: true,
         currentStep: true,
         currency: true,
+        disbursementOption: true,
+        foreignAmount: true,
+        userId: true,
+        referenceNumber: true,
       },
     });
 
@@ -1086,9 +1093,79 @@ class AgentTransactionService {
       throw new ValidationError("Disbursement can only be recorded for DISBURSEMENT_IN_PROGRESS transactions");
     }
 
+    // ── CASH_AND_TRANSFER balance check ─────────────────────────────────────
+    // Rule: 25% cash + 75% electronic transfer.
+    // The agent must hold enough cash to cover the 25% portion while
+    // maintaining a minimum cash balance gap of 500 units (in the transaction
+    // currency). If 25% of the requested amount itself exceeds 500, the
+    // transaction is allowed — but if the agent's remaining balance after
+    // deduction would drop below 500, block it unless the cash portion alone
+    // already exceeds 500 (meaning the deduction is justified).
+    const CASH_BALANCE_GAP = 500;
+    if (transaction.disbursementOption === "CASH_AND_TRANSFER") {
+      const txAmount = Number(transaction.foreignAmount ?? input.totalAmount);
+      const cashPortion = txAmount * 0.25;
+
+      // Calculate the agent's current cash balance in this currency
+      const agentTxIds = await prisma.transaction.findMany({
+        where: { createdByAgentId: agent.id },
+        select: { id: true },
+      });
+      const agentTxIdList = agentTxIds.map((t: { id: string }) => t.id);
+
+      const adminRows = await prisma.adminUser.findMany({ select: { id: true } });
+      const adminIds = adminRows.map((a: { id: string }) => a.id);
+
+      const receivedAgg = await prisma.settlement.aggregate({
+        where: {
+          status: "CONFIRMED",
+          currency: transaction.currency,
+          transactionId: { in: agentTxIdList },
+          OR: [
+            { paymentMethod: "CASH_DEPOSIT", confirmedBy: agent.userId ?? agentUserId },
+            { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
+            ...(adminIds.length > 0 ? [{ confirmedBy: { in: adminIds } }] : []),
+          ],
+        },
+        _sum: { amount: true },
+      });
+
+      const disbursedAgg = await prisma.outboundSettlement.aggregate({
+        where: {
+          status: "COMPLETED",
+          currency: transaction.currency,
+          transactionId: { in: agentTxIdList },
+          initiatedBy: agent.id,
+        },
+        _sum: { amount: true },
+      });
+
+      const currentBalance =
+        Number(receivedAgg._sum?.amount ?? 0) - Number(disbursedAgg._sum?.amount ?? 0);
+      const balanceAfterDeduction = currentBalance - cashPortion;
+
+      // Allow if:
+      //   a) balance after deduction is >= gap, OR
+      //   b) the cash portion itself exceeds 500 (the 25% rule takes precedence)
+      if (cashPortion <= CASH_BALANCE_GAP && balanceAfterDeduction < CASH_BALANCE_GAP) {
+        throw new ValidationError(
+          `Insufficient cash balance. Current balance: ${currentBalance.toFixed(2)} ${transaction.currency}. ` +
+          `Required cash portion: ${cashPortion.toFixed(2)}. ` +
+          `A minimum cash balance of ${CASH_BALANCE_GAP} must be maintained after disbursement.`
+        );
+      }
+    }
+
     const uploaded = await uploadFile(input.receiptFile, {
       folder: "agent-disbursements",
     });
+
+    // For CASH_AND_TRANSFER: cash portion deducted from agent balance via outbound settlement;
+    // transfer portion (75%) credited to the customer's main wallet.
+    const isCashAndTransfer = transaction.disbursementOption === "CASH_AND_TRANSFER";
+    const txAmount = Number(transaction.foreignAmount ?? input.totalAmount);
+    const cashPortion = isCashAndTransfer ? txAmount * 0.25 : input.totalAmount;
+    const transferPortion = isCashAndTransfer ? txAmount * 0.75 : 0;
 
     const result = await (prisma as any).$transaction(async (tx: any) => {
       const updatedTransaction = await tx.transaction.update({
@@ -1105,6 +1182,7 @@ class AgentTransactionService {
               newValue: JSON.stringify({
                 method: input.disbursementMethod,
                 amount: input.totalAmount,
+                ...(isCashAndTransfer ? { cashPortion, transferPortion } : {}),
                 receiptUrl: uploaded.fileUrl,
               }),
             },
@@ -1119,12 +1197,15 @@ class AgentTransactionService {
         where: { transactionId: input.transactionId },
       });
 
+      // For CASH_AND_TRANSFER the outbound settlement tracks only the cash portion
+      const outboundAmount = isCashAndTransfer ? cashPortion : input.totalAmount;
+
       let outbound;
       if (existingOutbound) {
         outbound = await tx.outboundSettlement.update({
           where: { id: existingOutbound.id },
           data: {
-            amount: input.totalAmount as any,
+            amount: outboundAmount as any,
             currency: transaction.currency,
             paymentMethod: input.disbursementMethod,
             paymentProof: uploaded.fileUrl,
@@ -1132,6 +1213,7 @@ class AgentTransactionService {
             status: "COMPLETED",
             metadata: {
               ...(existingOutbound.metadata || {}),
+              ...(isCashAndTransfer ? { cashPortion, transferPortion, disbursementOption: "CASH_AND_TRANSFER" } : {}),
               receiptFile: {
                 fileUrl: uploaded.fileUrl,
                 fileName: uploaded.fileName,
@@ -1147,7 +1229,7 @@ class AgentTransactionService {
             batchId: null,
             transactionId: input.transactionId,
             referenceNumber: generateId(),
-            amount: input.totalAmount as any,
+            amount: outboundAmount as any,
             currency: transaction.currency,
             status: "COMPLETED",
             beneficiaryName: "",
@@ -1156,6 +1238,7 @@ class AgentTransactionService {
             paymentProof: uploaded.fileUrl,
             initiatedBy: agent.id,
             metadata: {
+              ...(isCashAndTransfer ? { cashPortion, transferPortion, disbursementOption: "CASH_AND_TRANSFER" } : {}),
               receiptFile: {
                 fileUrl: uploaded.fileUrl,
                 fileName: uploaded.fileName,
@@ -1167,10 +1250,41 @@ class AgentTransactionService {
         });
       }
 
+      // For CASH_AND_TRANSFER: credit the 75% transfer portion to the customer's wallet
+      let walletEntry = null;
+      if (isCashAndTransfer && transferPortion > 0 && transaction.userId) {
+        const wallet = await tx.customerWallet.findUnique({
+          where: { userId: transaction.userId },
+        });
+        if (wallet) {
+          const balanceBefore = Number(wallet.balance);
+          const balanceAfter = balanceBefore + transferPortion;
+          await tx.customerWallet.update({
+            where: { id: wallet.id },
+            data: { balance: balanceAfter },
+          });
+          walletEntry = await tx.walletEntry.create({
+            data: {
+              walletId: wallet.id,
+              transactionId: input.transactionId,
+              transactionRef: transaction.referenceNumber,
+              type: "CREDIT",
+              amount: transferPortion,
+              balanceBefore,
+              balanceAfter,
+              description: `Transfer portion (75%) of CASH_AND_TRANSFER disbursement`,
+              status: "COMPLETED",
+              matchStatus: "UNMATCHED",
+            },
+          });
+        }
+      }
+
       return {
         transaction: updatedTransaction,
         outboundSettlement: outbound,
         paymentReceiptUrl: uploaded.fileUrl,
+        ...(isCashAndTransfer ? { cashPortion, transferPortion, walletEntry } : {}),
       };
     });
 
