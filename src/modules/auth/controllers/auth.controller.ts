@@ -156,11 +156,11 @@ export class AuthController {
   // Tourist Flow - Step 1: Verify passport
   async verifyPassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl, passportNumber } = req.body;
-      if (!passportDocumentUrl) {
-        throw new ValidationError('Passport document URL is required');
+      const { passportDocumentUrl, passportNumber, email, phoneNumber } = req.body;
+      if (!passportDocumentUrl && !passportNumber) {
+        throw new ValidationError('passportDocumentUrl or passportNumber is required');
       }
-      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST');
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST', email, phoneNumber);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -203,11 +203,11 @@ export class AuthController {
   // Expatriate Flow - Step 1: Verify passport (same as tourist but different customer type)
   async verifyExpatriatePassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl, passportNumber } = req.body;
-      if (!passportDocumentUrl) {
-        throw new ValidationError('Passport document URL is required');
+      const { passportDocumentUrl, passportNumber, email, phoneNumber } = req.body;
+      if (!passportDocumentUrl && !passportNumber) {
+        throw new ValidationError('passportDocumentUrl or passportNumber is required');
       }
-      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE');
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE', email, phoneNumber);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

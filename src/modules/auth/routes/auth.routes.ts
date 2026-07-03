@@ -646,8 +646,23 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  * @swagger
  * /api/auth/signup/tourist/verify-passport:
  *   post:
- *     summary: Step 1 - Verify tourist passport for signup
- *     description: Upload and verify passport document. The system extracts passport information automatically.
+ *     summary: "Tourist signup — Step 1: Verify passport"
+ *     description: |
+ *       Verifies the tourist's passport via the QoreID API and starts a 30-minute verification session.
+ *
+ *       **Identity source:** QoreID passport verification (requires `passportNumber`).
+ *       When QoreID credentials are not configured, the server falls back to a dev mock.
+ *
+ *       **Contact info:** QoreID does not return email or phone number. The frontend **must**
+ *       supply `email` and `phoneNumber` in this request — they are stored server-side and used
+ *       to send the OTP in Step 2.
+ *
+ *       **At least one of** `passportNumber` or `passportDocumentUrl` is required.
+ *       Providing `passportNumber` enables live QoreID verification. `passportDocumentUrl`
+ *       is only used as a fallback identifier when a passport number is not available.
+ *
+ *       On success a `verificationToken` is returned. All sensitive data is stored server-side
+ *       in Redis (30-minute TTL) — the frontend only holds the token.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -655,21 +670,36 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - passportDocumentUrl
  *             properties:
+ *               passportNumber:
+ *                 type: string
+ *                 description: |
+ *                   Passport document number. Required for QoreID verification.
+ *                   At least one of passportNumber or passportDocumentUrl must be provided.
+ *                 example: "A12345678"
  *               passportDocumentUrl:
  *                 type: string
  *                 format: uri
- *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
- *                 example: "https://cloudinary.com/passport/abc123.jpg"
- *               passportNumber:
+ *                 description: |
+ *                   URL of the uploaded passport image (upload via POST /api/auth/kyc/passport/upload first).
+ *                   Used as a fallback reference when passportNumber is not provided.
+ *                 example: "https://res.cloudinary.com/demo/image/upload/passport/abc123.jpg"
+ *               email:
  *                 type: string
- *                 description: Optional passport number
- *                 example: "GB123456789"
+ *                 format: email
+ *                 description: |
+ *                   User's email address. Required — QoreID does not return contact details.
+ *                   Stored server-side and used to deliver the OTP in Step 2.
+ *                 example: "john.doe@example.com"
+ *               phoneNumber:
+ *                 type: string
+ *                 description: |
+ *                   User's phone number (international format). Required — QoreID does not return contact details.
+ *                   Stored server-side and used to deliver the OTP in Step 2.
+ *                 example: "+447911123456"
  *     responses:
  *       200:
- *         description: Passport verified successfully
+ *         description: Passport verified — use the verificationToken in all subsequent steps
  *         content:
  *           application/json:
  *             schema:
@@ -683,7 +713,7 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *                   properties:
  *                     verificationToken:
  *                       type: string
- *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
+ *                       description: Use this in Steps 2, 3, and 4. Valid for 30 minutes.
  *                       example: "xyz789abc123"
  *                     message:
  *                       type: string
@@ -696,19 +726,22 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *                       example: "Doe"
  *                     dateOfBirth:
  *                       type: string
- *                       example: "1990-01-01"
+ *                       format: date
+ *                       example: "1990-01-15"
  *                     email:
  *                       type: string
- *                       description: Partially redacted email address
+ *                       description: Partially redacted — for display only
  *                       example: "j***@example.com"
  *                     phoneNumber:
  *                       type: string
- *                       description: Partially redacted phone number
- *                       example: "+44****567890"
+ *                       description: Partially redacted — for display only
+ *                       example: "+44****3456"
  *                     nationality:
  *                       type: string
- *                       example: "British"
+ *                       example: "United Kingdom"
  *       400:
+ *         description: |
+ *           Validation error, passport not found, or an account with this passport already exists.
  *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many requests
@@ -954,8 +987,24 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  * @swagger
  * /api/auth/signup/expatriate/verify-passport:
  *   post:
- *     summary: Step 1 - Verify expatriate passport for signup
- *     description: Upload and verify passport document. The system extracts passport information automatically.
+ *     summary: "Expatriate signup — Step 1: Verify passport"
+ *     description: |
+ *       Verifies the expatriate's passport via the QoreID API and starts a 30-minute verification session.
+ *       Identical to the tourist flow but sets `customerType` to `EXPATRIATE` on account creation.
+ *
+ *       **Identity source:** QoreID passport verification (requires `passportNumber`).
+ *       When QoreID credentials are not configured, the server falls back to a dev mock.
+ *
+ *       **Contact info:** QoreID does not return email or phone number. The frontend **must**
+ *       supply `email` and `phoneNumber` in this request — they are stored server-side and used
+ *       to send the OTP in Step 2.
+ *
+ *       **At least one of** `passportNumber` or `passportDocumentUrl` is required.
+ *       Providing `passportNumber` enables live QoreID verification. `passportDocumentUrl`
+ *       is only used as a fallback identifier when a passport number is not available.
+ *
+ *       On success a `verificationToken` is returned. All sensitive data is stored server-side
+ *       in Redis (30-minute TTL) — the frontend only holds the token.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -963,21 +1012,36 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - passportDocumentUrl
  *             properties:
+ *               passportNumber:
+ *                 type: string
+ *                 description: |
+ *                   Passport document number. Required for QoreID verification.
+ *                   At least one of passportNumber or passportDocumentUrl must be provided.
+ *                 example: "ES987654321"
  *               passportDocumentUrl:
  *                 type: string
  *                 format: uri
- *                 description: URL of the uploaded passport document (upload via /api/auth/kyc/passport/upload first)
- *                 example: "https://cloudinary.com/passport/abc123.jpg"
- *               passportNumber:
+ *                 description: |
+ *                   URL of the uploaded passport image (upload via POST /api/auth/kyc/passport/upload first).
+ *                   Used as a fallback reference when passportNumber is not provided.
+ *                 example: "https://res.cloudinary.com/demo/image/upload/passport/xyz789.jpg"
+ *               email:
  *                 type: string
- *                 description: Optional passport number
- *                 example: "ES987654321"
+ *                 format: email
+ *                 description: |
+ *                   User's email address. Required — QoreID does not return contact details.
+ *                   Stored server-side and used to deliver the OTP in Step 2.
+ *                 example: "maria.garcia@example.com"
+ *               phoneNumber:
+ *                 type: string
+ *                 description: |
+ *                   User's phone number (international format). Required — QoreID does not return contact details.
+ *                   Stored server-side and used to deliver the OTP in Step 2.
+ *                 example: "+34612345678"
  *     responses:
  *       200:
- *         description: Passport verified successfully
+ *         description: Passport verified — use the verificationToken in all subsequent steps
  *         content:
  *           application/json:
  *             schema:
@@ -991,7 +1055,7 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *                   properties:
  *                     verificationToken:
  *                       type: string
- *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
+ *                       description: Use this in Steps 2, 3, and 4. Valid for 30 minutes.
  *                       example: "xyz789abc123"
  *                     message:
  *                       type: string
@@ -1004,19 +1068,22 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *                       example: "Garcia"
  *                     dateOfBirth:
  *                       type: string
+ *                       format: date
  *                       example: "1988-05-15"
  *                     email:
  *                       type: string
- *                       description: Partially redacted email address
+ *                       description: Partially redacted — for display only
  *                       example: "m***@example.com"
  *                     phoneNumber:
  *                       type: string
- *                       description: Partially redacted phone number
- *                       example: "+34****567890"
+ *                       description: Partially redacted — for display only
+ *                       example: "+34****5678"
  *                     nationality:
  *                       type: string
- *                       example: "Spanish"
+ *                       example: "Spain"
  *       400:
+ *         description: |
+ *           Validation error, passport not found, or an account with this passport already exists.
  *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many requests

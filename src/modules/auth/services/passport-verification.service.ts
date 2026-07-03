@@ -1,4 +1,8 @@
 import { ValidationError } from '../../../shared/utils';
+import { createLogger } from '../../../shared/utils/logger';
+import qoreIDClient from '../../../integrations/qoreid/qoreid.client';
+
+const logger = createLogger('PassportVerificationService');
 
 export interface PassportVerificationResult {
   success: boolean;
@@ -16,24 +20,60 @@ export interface PassportVerificationResult {
 }
 
 export class PassportVerificationService {
-  async verifyPassport(passportDocumentUrl: string): Promise<PassportVerificationResult> {
-    if (!passportDocumentUrl) {
-      throw new ValidationError('Passport document URL is required');
+  /**
+   * Verify a passport document.
+   * When QoreID is configured (QOREID_CLIENT_ID + QOREID_SECRET set) and a
+   * passportNumber is provided, the live QoreID API is called.
+   * Otherwise falls back to a dev mock that generates plausible data.
+   */
+  async verifyPassport(
+    passportDocumentUrl: string,
+    passportNumber?: string
+  ): Promise<PassportVerificationResult> {
+    if (!passportDocumentUrl && !passportNumber) {
+      throw new ValidationError('Passport document URL or passport number is required');
     }
 
+    if (passportNumber && qoreIDClient.isConfigured) {
+      return this.verifyWithQoreID(passportNumber);
+    }
+
+    logger.warn('QoreID not configured or passport number not provided — using mock passport verification');
+    return this.mockPassportVerification(passportDocumentUrl);
+  }
+
+  private async verifyWithQoreID(passportNumber: string): Promise<PassportVerificationResult> {
     try {
-      // TODO: Replace with actual document verification service integration
-      // This would typically involve:
-      // 1. OCR to extract text from passport image/PDF
-      // 2. Validate passport format and security features
-      // 3. Verify with immigration database if available
-      // 4. Extract and structure the data
+      const result = await qoreIDClient.verifyPassport(passportNumber);
 
-      const result = await this.mockPassportVerification(passportDocumentUrl);
+      const state = result.status?.state?.toUpperCase();
+      if (state !== 'VERIFIED' && state !== 'ID_VERIFIED') {
+        return {
+          success: false,
+          message: `Passport verification failed: ${result.status?.status || state}`,
+        };
+      }
 
-      return result;
+      const p = result.passport;
+      if (!p) {
+        return { success: false, message: 'No passport data returned from verification service' };
+      }
+
+      return {
+        success: true,
+        message: 'Passport verified successfully',
+        data: {
+          firstName: p.firstname || '',
+          lastName: p.lastname || '',
+          dateOfBirth: p.birthdate || '',
+          passportNumber: p.id || passportNumber,
+          nationality: p.nationality || p.birthplace || '',
+          email: p.email || undefined,
+          phoneNumber: p.mobile || undefined,
+        },
+      };
     } catch (error: any) {
-      console.error('Passport verification error:', error);
+      logger.error('QoreID passport verification error', { error: error.message });
       return {
         success: false,
         message: 'Passport verification failed',
@@ -43,126 +83,50 @@ export class PassportVerificationService {
   }
 
   private async mockPassportVerification(documentUrl: string): Promise<PassportVerificationResult> {
-    // Simulate OCR and verification delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Simulate verification delay
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Generate dynamic user data based on document URL
-    // This ensures each unique document URL generates consistent but unique data
     const timestamp = Date.now();
-    const urlHash = documentUrl.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const urlHash = (documentUrl || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
     const firstNames = ['John', 'Maria', 'Wei', 'Ahmed', 'Sophie', 'Raj', 'Elena', 'Kwame', 'Yuki', 'Carlos'];
-    const lastNames = ['Smith', 'Garcia', 'Zhang', 'Al-Fayed', 'Dubois', 'Patel', 'Rossi', 'Osei', 'Tanaka', 'Silva'];
-
+    const lastNames  = ['Smith', 'Garcia', 'Zhang', 'Al-Fayed', 'Dubois', 'Patel', 'Rossi', 'Osei', 'Tanaka', 'Silva'];
     const nationalities = [
       { name: 'United Kingdom', prefix: 'GB', phoneCode: '+44' },
-      { name: 'Spain', prefix: 'ES', phoneCode: '+34' },
-      { name: 'China', prefix: 'CN', phoneCode: '+86' },
-      { name: 'United Arab Emirates', prefix: 'AE', phoneCode: '+971' },
-      { name: 'France', prefix: 'FR', phoneCode: '+33' },
-      { name: 'India', prefix: 'IN', phoneCode: '+91' },
-      { name: 'Italy', prefix: 'IT', phoneCode: '+39' },
-      { name: 'Ghana', prefix: 'GH', phoneCode: '+233' },
-      { name: 'Japan', prefix: 'JP', phoneCode: '+81' },
-      { name: 'Brazil', prefix: 'BR', phoneCode: '+55' },
+      { name: 'Spain',          prefix: 'ES', phoneCode: '+34' },
+      { name: 'China',          prefix: 'CN', phoneCode: '+86' },
+      { name: 'France',         prefix: 'FR', phoneCode: '+33' },
+      { name: 'India',          prefix: 'IN', phoneCode: '+91' },
+      { name: 'Ghana',          prefix: 'GH', phoneCode: '+233' },
     ];
 
-    const firstNameIndex = urlHash % firstNames.length;
-    const lastNameIndex = (urlHash * 2) % lastNames.length;
-    const nationalityIndex = urlHash % nationalities.length;
+    const firstName   = firstNames[urlHash % firstNames.length];
+    const lastName    = lastNames[(urlHash * 2) % lastNames.length];
+    const nationality = nationalities[urlHash % nationalities.length];
 
-    const firstName = firstNames[firstNameIndex];
-    const lastName = lastNames[lastNameIndex];
-    const nationality = nationalities[nationalityIndex];
-
-    // Generate unique email using timestamp
     const emailPrefix = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${String(timestamp).slice(-9)}`;
-    const email = `${emailPrefix}@yopmail.com`;
-
-    // Generate unique passport number using nationality prefix and timestamp
     const passportNumber = `${nationality.prefix}${String(timestamp).slice(-8)}`;
+    const phoneNumber    = `${nationality.phoneCode}${String(timestamp).slice(-9)}`;
 
-    // Generate unique phone number
-    const phoneDigits = String(timestamp).slice(-9);
-    const phoneNumber = `${nationality.phoneCode}${phoneDigits}`;
-
-    // Generate date of birth (between 18 and 70 years old)
-    const age = 18 + (urlHash % 52);
+    const age  = 18 + (urlHash % 52);
     const year = new Date().getFullYear() - age;
     const month = String(1 + (urlHash % 12)).padStart(2, '0');
-    const day = String(1 + (urlHash % 28)).padStart(2, '0');
-    const dateOfBirth = `${year}-${month}-${day}`;
-
-    const passportData = {
-      firstName,
-      lastName,
-      dateOfBirth,
-      passportNumber,
-      nationality: nationality.name,
-      email,
-      phoneNumber,
-    };
+    const day   = String(1 + (urlHash % 28)).padStart(2, '0');
 
     return {
       success: true,
-      data: passportData,
       message: 'Passport verified successfully',
+      data: {
+        firstName,
+        lastName,
+        dateOfBirth: `${year}-${month}-${day}`,
+        passportNumber,
+        nationality: nationality.name,
+        email:       `${emailPrefix}@yopmail.com`,
+        phoneNumber,
+      },
     };
   }
-
-  /**
-   * Production implementation would look like this:
-   *
-   * private async callDocumentVerificationService(documentUrl: string): Promise<PassportVerificationResult> {
-   *   const apiUrl = process.env.DOCUMENT_SERVICE_URL;
-   *
-   *   // Step 1: Upload document for OCR processing
-   *   const response = await fetch(`${apiUrl}/verify/passport`, {
-   *     method: 'POST',
-   *     headers: {
-   *       'Content-Type': 'application/json',
-   *       'Authorization': `Bearer ${process.env.DOCUMENT_SERVICE_API_KEY}`,
-   *     },
-   *     body: JSON.stringify({
-   *       documentUrl,
-   *       verificationType: 'PASSPORT',
-   *     }),
-   *   });
-   *
-   *   if (!response.ok) {
-   *     throw new Error('Document verification failed');
-   *   }
-   *
-   *   const result = await response.json();
-   *
-   *   // Step 2: Extract structured data from OCR result
-   *   return {
-   *     success: result.status === 'VERIFIED',
-   *     data: result.extractedData,
-   *     message: result.message,
-   *   };
-   * }
-   *
-   * // Alternative: Use existing document-service
-   * private async useExistingDocumentService(documentUrl: string, userId: string): Promise<string> {
-   *   // Call the document-service verification.service.ts
-   *   // This would create a VerificationRequest and process it
-   *
-   *   const verificationRequest = await fetch(`${DOCUMENT_SERVICE_URL}/api/verify`, {
-   *     method: 'POST',
-   *     headers: { 'Content-Type': 'application/json' },
-   *     body: JSON.stringify({
-   *       userId,
-   *       documentUrl,
-   *       verificationType: 'PASSPORT',
-   *       transactionId: generateId(), // or null for signup
-   *     }),
-   *   });
-   *
-   *   const { verificationId } = await verificationRequest.json();
-   *   return verificationId;
-   * }
-   */
 }
 
 export default new PassportVerificationService();

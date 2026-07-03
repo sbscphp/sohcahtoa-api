@@ -1153,7 +1153,9 @@ export class AuthService {
   async verifyPassportForSignup(
     passportDocumentUrl: string,
     passportNumber?: string,
-    customerType: 'TOURIST' | 'EXPATRIATE' = 'TOURIST'
+    customerType: 'TOURIST' | 'EXPATRIATE' = 'TOURIST',
+    callerEmail?: string,
+    callerPhoneNumber?: string
   ): Promise<{
     verificationToken: string;
     message: string;
@@ -1227,7 +1229,7 @@ export class AuthService {
     }
 
     // New passport (or number not provided) — run OCR/verification to extract data
-    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl);
+    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl, passportNumber);
 
     if (!passportResult.success || !passportResult.data) {
       throw new ValidationError(passportResult.message || 'Passport verification failed');
@@ -1307,8 +1309,9 @@ export class AuthService {
       customerType,
       firstName: passportResult.data.firstName,
       lastName: passportResult.data.lastName,
-      email: passportResult.data.email!,
-      phoneNumber: passportResult.data.phoneNumber!,
+      // QoreID typically does not return email/phone — use caller-supplied values as fallback
+      email: passportResult.data.email || callerEmail || '',
+      phoneNumber: passportResult.data.phoneNumber || callerPhoneNumber || '',
       dateOfBirth: passportResult.data.dateOfBirth,
       nationality: passportResult.data.nationality,
     };
