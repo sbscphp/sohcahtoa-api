@@ -45,8 +45,7 @@ export class SettlementService {
     const skip = (page - 1) * limit;
     const where: any = {
       OR: [
-        { status: "FAILED" },
-        { status: "REFUNDED" },
+        { status: { in: ["FAILED", "REFUNDED"] } },
         { notes: { not: null } },
       ],
     };
@@ -83,7 +82,7 @@ export class SettlementService {
 
   async pendingReconciliations(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
-    const where: any = { OR: [{ status: "PENDING" }, { status: "AWAITING_CONFIRMATION" }] };
+    const where: any = { status: { in: ["PENDING", "AWAITING_CONFIRMATION"] } };
     const total = await (prisma as any).settlement.count({ where });
     const rows = await (prisma as any).settlement.findMany({
       where,
@@ -149,28 +148,45 @@ export class SettlementService {
   async fundingTransactions(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
     
-    // Fallback if paymentReceipt doesn't exist
-    if (!(prisma as any).paymentReceipt) {
+    let total = 0;
+    let receipts: any[] = [];
+
+    try {
+      if ((prisma as any).paymentReceipt) {
+        [total, receipts] = await Promise.all([
+          (prisma as any).paymentReceipt.count(),
+          (prisma as any).paymentReceipt.findMany({
+            orderBy: { generatedAt: "desc" },
+            skip,
+            take: limit,
+            select: {
+              id: true,
+              transactionId: true,
+              receiptNumber: true,
+              amount: true,
+              currency: true,
+              generatedAt: true,
+              settlementId: true,
+            },
+          }),
+        ]);
+      } else {
+        const countRes = await prisma.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*)::bigint AS count FROM "payment_receipts"`;
+        total = Number(countRes?.[0]?.count || 0);
+
+        if (total > 0) {
+          receipts = await prisma.$queryRaw<any[]>`
+            SELECT "id", "transactionId", "receiptNumber", "amount", "currency", "generatedAt", "settlementId"
+            FROM "payment_receipts"
+            ORDER BY "generatedAt" DESC
+            LIMIT ${limit} OFFSET ${skip}
+          `;
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching payment receipts:", error);
       return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
     }
-
-    const [total, receipts] = await Promise.all([
-      (prisma as any).paymentReceipt.count(),
-      (prisma as any).paymentReceipt.findMany({
-        orderBy: { generatedAt: "desc" },
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          transactionId: true,
-          receiptNumber: true,
-          amount: true,
-          currency: true,
-          generatedAt: true,
-          settlementId: true,
-        },
-      }),
-    ]);
 
     // Fetch settlement status per receipt using a single query (solves N+1 connection pool exhaustion)
     const statusMap: Record<string, string> = {};
