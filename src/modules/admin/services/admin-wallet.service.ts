@@ -750,7 +750,7 @@ export class AdminWalletService {
         where: { id: entry.transactionId },
       });
       if (tx) {
-
+           
         await (prisma as any).transactionHistory.create({
           data: {
             transactionId: entry.transactionId,

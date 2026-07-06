@@ -1379,6 +1379,16 @@ class AgentTransactionService {
         },
       });
 
+      const updatedTx = await tx.transaction.update({
+        where: { id: input.transactionId },
+        data: {
+          status: 'DEPOSIT_CONFIRMED' as any,
+          currentStep: 'DEPOSIT_CONFIRMATION' as any,
+          amountPaid: input.amount as any,
+          balanceDue: 0,
+        }
+      });
+
 
       await tx.transactionHistory.create({
         data: {
@@ -1395,7 +1405,7 @@ class AgentTransactionService {
         },
       });
 
-      return { settlement, transaction };
+      return { settlement, transaction: updatedTx };
     });
 
     logger.info("[recordInboundPayment] Inbound payment recorded by agent", {

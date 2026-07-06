@@ -51,6 +51,7 @@ import passportVerificationService from './passport-verification.service';
 import auditService from '../../audit/services/audit.service';
 import { smsClient } from '../../../integrations';
 import walletService from '../../wallet/services/wallet.service';
+import { is } from 'zod/v4/locales';
 
 const prisma = getDatabase();
 
@@ -260,7 +261,9 @@ export class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    if (!agent.isActive) {
+    // If an agent has a password, they are fully onboarded. 
+    // If isActive is false at this point, they were explicitly deactivated.
+    if (agent.password && !agent.isActive) {
       throw new UnauthorizedError('Account is deactivated');
     }
 
@@ -452,9 +455,7 @@ export class AuthService {
       throw new UnauthorizedError('Agent not found');
     }
 
-    if (!agent.isActive) {
-      throw new UnauthorizedError('Account is deactivated');
-    }
+    // Agent is created with isActive = false. We don't check it here because setting the password activates them.
 
     if (agent.password) {
       throw new ValidationError('Password has already been set. Please use the login flow.');
@@ -474,7 +475,7 @@ export class AuthService {
 
     await client.agent.update({
       where: { id: agent.id },
-      data: { password: hashed, isApproved: true },
+      data: { password: hashed, isApproved: true, isActive: true },
     });
 
     const existingUser = await prisma.user.findUnique({
@@ -1665,7 +1666,8 @@ export class AuthService {
 
   async sendOtp(data: OtpRequest): Promise<{ message: string; otp?: string }> {
     const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    const expiryMinutes = data.purpose === OtpPurpose.AGENT_SET_PASSWORD ? 24 * 60 : OTP_EXPIRY_MINUTES;
+    const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
     // Store OTP in database
     await prisma.otpLog.create({
@@ -1681,7 +1683,7 @@ export class AuthService {
     // Cache OTP in Redis for faster validation
     // Store with both email/phone key and OTP-only key for flexible validation
     const cacheKey = `otp:${data.email || data.phoneNumber}:${data.purpose}`;
-    await redis.setex(cacheKey, OTP_EXPIRY_MINUTES * 60, otp);
+    await redis.setex(cacheKey, expiryMinutes * 60, otp);
 
     // Also store with OTP code as key for validation without email/phone
     const otpOnlyKey = `otp:code:${otp}:${data.purpose}`;
@@ -1691,7 +1693,7 @@ export class AuthService {
       otp,
       purpose: data.purpose,
     });
-    await redis.setex(otpOnlyKey, OTP_EXPIRY_MINUTES * 60, otpData);
+    await redis.setex(otpOnlyKey, expiryMinutes * 60, otpData);
 
     // Send OTP via email if email service is configured
     if (emailService.isReady() && data.email) {
@@ -1702,8 +1704,9 @@ export class AuthService {
           where: { email: data.email },
           select: { name: true },
         });
-        const agentBaseUrl = process.env.AGENT_FRONTEND_URL ?? 'https://sohcahtoa-app.vercel.app';
-        const setPasswordUrl = new URL('/auth/set-password', agentBaseUrl);
+        // https://sohcahtoa-test.vercel.app/agent/auth/create-password?email=agentname@yopmail.com&otp=915050
+        const agentBaseUrl = process.env.AGENT_FRONTEND_URL ?? 'https://sohcahtoa-test.vercel.app';
+        const setPasswordUrl = new URL('/agent/auth/create-password', agentBaseUrl);
         setPasswordUrl.searchParams.set('email', data.email);
         setPasswordUrl.searchParams.set('otp', otp);
         await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp, setPasswordUrl.toString());
@@ -2449,6 +2452,35 @@ export class AuthService {
     }
 
     return this.sendOtp({ email: user.email, phoneNumber: '', purpose: OtpPurpose.CHANGE_PASSWORD });
+  }
+
+  async resendAgentSetupOtp(email: string): Promise<{ message: string }> {
+    if (!email) {
+      throw new ValidationError('Email is required');
+    }
+
+    const client: any = prisma as any;
+    const agent = await client.agent.findUnique({
+      where: { email },
+    });
+
+    if (!agent) {
+      throw new NotFoundError('Agent not found');
+    }
+
+    // Setup OTP can be resent even if isActive = false, because new agents are inactive by default.
+
+    if (agent.password) {
+      throw new ValidationError('Password has already been set. Please use the login flow.');
+    }
+
+    await this.sendOtp({
+      email: agent.email,
+      phoneNumber: agent.phoneNumber || '',
+      purpose: OtpPurpose.AGENT_SET_PASSWORD,
+    });
+
+    return { message: 'Setup OTP has been resent successfully to your email' };
   }
 
   /**

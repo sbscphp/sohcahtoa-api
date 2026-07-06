@@ -620,7 +620,7 @@ model Agent {
   email       String   @unique
   phoneNumber String   @unique
   password    String?
-  isActive    Boolean  @default(true)
+  isActive    Boolean  @default(false)
   isApproved  Boolean  @default(false)
   branchId    String?
   branch      Branch?  @relation(fields: [branchId], references: [id])

@@ -171,6 +171,12 @@ ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
 -- Ensure agents.password column exists
 ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "password" TEXT;
 
+-- Ensure agents.isActive defaults to false
+ALTER TABLE "agents" ALTER COLUMN "isActive" SET DEFAULT false;
+
+-- Ensure agents.isApproved defaults to false
+ALTER TABLE "agents" ALTER COLUMN "isApproved" SET DEFAULT false;
+
 -- Ensure departments.isDefault exists
 ALTER TABLE "departments" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;
 
