@@ -82,36 +82,71 @@ export class SettlementService {
 
   async pendingReconciliations(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
-    const where: any = { status: { in: ["PENDING", "AWAITING_CONFIRMATION"] } };
-    const total = await (prisma as any).settlement.count({ where });
-    const rows = await (prisma as any).settlement.findMany({
-      where,
-      orderBy: { createdAt: "asc" },
-      skip,
-      take: limit,
-      select: {
-        id: true,
-        transactionId: true,
-        paymentReference: true,
-        depositedAt: true,
-        createdAt: true,
-        status: true,
-        amount: true,
-      },
-    });
+    
+    const countRes = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*)::bigint AS count FROM (
+        SELECT id FROM "settlements" WHERE status = 'PENDING'
+        UNION ALL
+        SELECT id FROM "providus_deposits" WHERE "transactionId" IS NULL OR status = 'PENDING'
+      ) as combined
+    `;
+    const total = Number(countRes?.[0]?.count || 0);
+
+    let rows: any[] = [];
+    if (total > 0) {
+      rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          id, 
+          'MANUAL_UPLOAD' as source,
+          COALESCE("paymentReference", "transactionId") as "referenceId",
+          COALESCE("depositedAt", "createdAt") as "fundDate",
+          amount,
+          currency,
+          status::text,
+          "transactionId",
+          NULL as "virtualAccountNumber"
+        FROM "settlements" 
+        WHERE status = 'PENDING'
+        
+        UNION ALL
+        
+        SELECT 
+          id, 
+          'ORPHAN_DEPOSIT' as source,
+          "sessionId" as "referenceId",
+          "tranDateTime" as "fundDate",
+          amount,
+          currency,
+          status::text,
+          "transactionId",
+          "accountNumber" as "virtualAccountNumber"
+        FROM "providus_deposits" 
+        WHERE "transactionId" IS NULL OR status = 'PENDING'
+        
+        ORDER BY "fundDate" ASC NULLS LAST
+        LIMIT ${limit} OFFSET ${skip}
+      `;
+    }
+
     const data = rows.map((r: any) => {
-      const mins = this.minutesSince(r.depositedAt || r.createdAt);
+      const fundDate = r.fundDate || new Date();
+      const mins = this.minutesSince(fundDate);
       const priority = mins >= 120 ? "High" : mins >= 60 ? "Medium" : "Low";
       return {
         id: r.id,
-        referenceId: r.paymentReference || r.transactionId,
-        fundDate: r.depositedAt || r.createdAt,
+        source: r.source,
+        referenceId: r.referenceId,
+        fundDate: r.fundDate,
+        amount: Number(r.amount || 0),
+        currency: r.currency,
         overdueMinutes: mins,
         priority,
         status: r.status,
-        amount: Number(r.amount || 0),
+        transactionId: r.transactionId,
+        virtualAccountNumber: r.virtualAccountNumber,
       };
     });
+
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -148,71 +183,39 @@ export class SettlementService {
   async fundingTransactions(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
     
-    let total = 0;
-    let receipts: any[] = [];
+    const countRes = await prisma.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*)::bigint AS count FROM "settlements" WHERE status = 'CONFIRMED'`;
+    const total = Number(countRes?.[0]?.count || 0);
 
-    try {
-      if ((prisma as any).paymentReceipt) {
-        [total, receipts] = await Promise.all([
-          (prisma as any).paymentReceipt.count(),
-          (prisma as any).paymentReceipt.findMany({
-            orderBy: { generatedAt: "desc" },
-            skip,
-            take: limit,
-            select: {
-              id: true,
-              transactionId: true,
-              receiptNumber: true,
-              amount: true,
-              currency: true,
-              generatedAt: true,
-              settlementId: true,
-            },
-          }),
-        ]);
-      } else {
-        const countRes = await prisma.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*)::bigint AS count FROM "payment_receipts"`;
-        total = Number(countRes?.[0]?.count || 0);
+    let data: any[] = [];
+    if (total > 0) {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          s.id, 
+          s."transactionId", 
+          COALESCE(s."paymentReference", s."transactionId") as "referenceId", 
+          s.amount, 
+          s.currency, 
+          COALESCE(s."confirmedAt", s."createdAt") as "fundDate", 
+          s."paymentMethod", 
+          pr."receiptNumber"
+        FROM "settlements" s
+        LEFT JOIN "payment_receipts" pr ON pr."settlementId" = s.id
+        WHERE s.status = 'CONFIRMED'
+        ORDER BY s."confirmedAt" DESC NULLS LAST
+        LIMIT ${limit} OFFSET ${skip}
+      `;
 
-        if (total > 0) {
-          receipts = await prisma.$queryRaw<any[]>`
-            SELECT "id", "transactionId", "receiptNumber", "amount", "currency", "generatedAt", "settlementId"
-            FROM "payment_receipts"
-            ORDER BY "generatedAt" DESC
-            LIMIT ${limit} OFFSET ${skip}
-          `;
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching payment receipts:", error);
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+      data = rows.map(r => ({
+        id: r.id,
+        transactionId: r.transactionId,
+        referenceId: r.referenceId,
+        amount: Number(r.amount || 0),
+        currency: r.currency,
+        fundDate: r.fundDate,
+        paymentMethod: r.paymentMethod,
+        receiptNumber: r.receiptNumber || null,
+      }));
     }
-
-    // Fetch settlement status per receipt using a single query (solves N+1 connection pool exhaustion)
-    const statusMap: Record<string, string> = {};
-    const settlementIds = [...new Set(receipts.map((r: any) => r.settlementId).filter(Boolean))];
-
-    if (settlementIds.length > 0) {
-      try {
-        const settlements = await (prisma as any).settlement.findMany({
-          where: { id: { in: settlementIds } },
-          select: { id: true, status: true },
-        });
-        settlements.forEach((s: any) => {
-          statusMap[s.id] = s.status || "PENDING";
-        });
-      } catch (error) {
-        console.error("Error fetching settlements for funding transactions:", error);
-      }
-    }
-
-    const data = receipts.map((r: any) => ({
-      referenceId: r.receiptNumber,
-      amount: Number(r.amount || 0),
-      currency: r.currency,
-      fundDate: r.generatedAt,
-      status: r.settlementId ? (statusMap[r.settlementId] || "PENDING") : "PENDING",
-    }));
 
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
