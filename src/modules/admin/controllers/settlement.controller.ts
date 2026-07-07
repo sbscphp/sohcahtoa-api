@@ -62,6 +62,22 @@ class SettlementController {
     });
     res.json(successResponse(result));
   });
+
+  listInboundSettlements = asyncHandler(async (req: Request, res: Response) => {
+    const page  = Math.max(1, parseInt(req.query.page  as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const result = await settlementService.listInboundSettlements({
+      status:        req.query.status        as string | undefined,
+      paymentMethod: req.query.paymentMethod as string | undefined,
+      currency:      req.query.currency      as string | undefined,
+      startDate:     req.query.startDate     as string | undefined,
+      endDate:       req.query.endDate       as string | undefined,
+      q:             req.query.q             as string | undefined,
+      page,
+      limit,
+    });
+    res.json(successResponse(result.data, { pagination: result.meta }));
+  });
 }
 
 export const settlementController = new SettlementController();

@@ -18,6 +18,67 @@ const SettlementRouter: Router = Router();
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
+/**
+ * @swagger
+ * /api/admin/settlement:
+ *   get:
+ *     summary: List all inbound settlements (customer NGN deposits)
+ *     tags: [admin-settlement]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, AWAITING_CONFIRMATION, CONFIRMED, FAILED, REFUNDED]
+ *         description: Filter by settlement status
+ *       - in: query
+ *         name: paymentMethod
+ *         schema:
+ *           type: string
+ *           enum: [BANK_TRANSFER, CARD, MOBILE_MONEY, CASH_DEPOSIT]
+ *       - in: query
+ *         name: currency
+ *         schema:
+ *           type: string
+ *           example: NGN
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search by payment reference, notes, or transaction reference number
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Settlements list with pagination
+ */
+SettlementRouter.get(
+  "/",
+  authenticate,
+  requirePermission({ module: "SETTLEMENTS", feature: "MODULE", action: "view" }),
+  settlementController.listInboundSettlements
+);
+
 SettlementRouter.get(
   "/stats",
   authenticate,

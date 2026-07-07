@@ -332,6 +332,129 @@ export class SettlementService {
       });
     }
   }
+
+  /**
+   * List all inbound Settlement records (customer NGN deposits) with filters and pagination.
+   */
+  async listInboundSettlements(filters: {
+    status?: string;
+    paymentMethod?: string;
+    currency?: string;
+    startDate?: string;
+    endDate?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, paymentMethod, currency, startDate, endDate, q, page = 1, limit = 20 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      ...(status && { status }),
+      ...(paymentMethod && { paymentMethod }),
+      ...(currency && { currency }),
+      ...(startDate || endDate
+        ? {
+            createdAt: {
+              ...(startDate && { gte: new Date(startDate) }),
+              ...(endDate && { lte: new Date(endDate) }),
+            },
+          }
+        : {}),
+      ...(q && {
+        OR: [
+          { paymentReference: { contains: q, mode: 'insensitive' } },
+          { notes: { contains: q, mode: 'insensitive' } },
+          { transaction: { referenceNumber: { contains: q, mode: 'insensitive' } } },
+        ],
+      }),
+    };
+
+    const [total, rows] = await Promise.all([
+      (prisma as any).settlement.count({ where }),
+      (prisma as any).settlement.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          transactionId: true,
+          amount: true,
+          currency: true,
+          status: true,
+          paymentMethod: true,
+          paymentReference: true,
+          depositedAt: true,
+          confirmedAt: true,
+          confirmedBy: true,
+          proofOfPayment: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
+          bankDetails: {
+            select: {
+              bankName: true,
+              accountNumber: true,
+              accountName: true,
+              reference: true,
+            },
+          },
+          transaction: {
+            select: {
+              referenceNumber: true,
+              type: true,
+              status: true,
+              currency: true,
+              foreignAmount: true,
+              nairaEquivalent: true,
+              user: {
+                select: {
+                  email: true,
+                  profile: { select: { firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: rows.map((r: any) => ({
+        id: r.id,
+        transactionId: r.transactionId,
+        referenceNumber: r.transaction?.referenceNumber ?? null,
+        transactionType: r.transaction?.type ?? null,
+        transactionStatus: r.transaction?.status ?? null,
+        customer: r.transaction?.user
+          ? {
+              email: r.transaction.user.email,
+              name: `${r.transaction.user.profile?.firstName ?? ''} ${r.transaction.user.profile?.lastName ?? ''}`.trim(),
+            }
+          : null,
+        amount: Number(r.amount),
+        currency: r.currency,
+        status: r.status,
+        paymentMethod: r.paymentMethod,
+        paymentReference: r.paymentReference,
+        bankDetails: r.bankDetails ?? null,
+        depositedAt: r.depositedAt,
+        confirmedAt: r.confirmedAt,
+        confirmedBy: r.confirmedBy,
+        proofOfPayment: r.proofOfPayment,
+        notes: r.notes,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }
 
 export const settlementService = new SettlementService();
