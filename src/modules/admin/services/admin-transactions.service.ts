@@ -1241,11 +1241,12 @@ export class AdminTransactionsService {
 
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { userId: true, id: true, referenceNumber: true, currentStep: true },
+      select: { userId: true, id: true, referenceNumber: true, currentStep: true, createdByAgentId: true },
     });
     if (tx) {
       eventBus.publish(EventTypes.DOCUMENT_VERIFIED, {
         userId: tx.userId,
+        agentId: (tx as any).createdByAgentId ?? null,
         documentId: updated.id,
         transactionId,
         documentType: updated.documentType,
@@ -1280,6 +1281,7 @@ export class AdminTransactionsService {
       if (tx) {
         eventBus.publish(EventTypes.TRANSACTION_UPDATED, {
           userId: tx.userId,
+          agentId: (tx as any).createdByAgentId ?? null,
           transactionId,
           step: (tx as any).currentStep || "DOCUMENT_UPLOAD",
           status: "VERIFICATION_COMPLETED",
@@ -1333,11 +1335,12 @@ export class AdminTransactionsService {
 
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { userId: true, id: true, referenceNumber: true },
+      select: { userId: true, id: true, referenceNumber: true, createdByAgentId: true },
     });
     if (tx) {
       eventBus.publish(EventTypes.DOCUMENT_REJECTED, {
         userId: tx.userId,
+        agentId: (tx as any).createdByAgentId ?? null,
         documentId: updated.id,
         transactionId,
         documentType: updated.documentType,
@@ -1389,6 +1392,22 @@ export class AdminTransactionsService {
         metadata: { documentId, documentType: updated.documentType },
       } as any,
     });
+
+    const txForEvent = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, id: true, referenceNumber: true, createdByAgentId: true },
+    });
+    if (txForEvent) {
+      eventBus.publish(EventTypes.DOCUMENT_MORE_INFO_REQUESTED, {
+        userId: txForEvent.userId,
+        agentId: (txForEvent as any).createdByAgentId ?? null,
+        documentId: updated.id,
+        transactionId,
+        documentType: updated.documentType,
+        comment,
+        transaction: { id: txForEvent.id, referenceNumber: txForEvent.referenceNumber },
+      });
+    }
 
     return updated;
   }

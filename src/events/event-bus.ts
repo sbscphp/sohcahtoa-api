@@ -124,6 +124,7 @@ export const EventTypes = {
   DOCUMENT_VERIFICATION_STARTED: 'document.verification.started',
   DOCUMENT_VERIFIED: 'document.verified',
   DOCUMENT_REJECTED: 'document.rejected',
+  DOCUMENT_MORE_INFO_REQUESTED: 'document.more_info_requested',
 
   // Notification events
   NOTIFICATION_SEND_EMAIL: 'notification.send.email',

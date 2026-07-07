@@ -682,7 +682,7 @@ export class NotificationHandler {
   private handleDocumentEvents() {
     eventBus.on(EventTypes.DOCUMENT_VERIFIED, async (event: any) => {
       try {
-        const { userId, transaction } = event;
+        const { userId, agentId, transaction, documentType } = event;
 
         const template = NotificationTemplates.VERIFICATION_COMPLETED({
           referenceNumber: transaction.referenceNumber,
@@ -698,6 +698,26 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        if (agentId) {
+          await notificationService.sendNotification({
+            userId: agentId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl },
+            transactionId: transaction.id,
+          });
+        }
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService
+            .sendDocumentApprovedEmail(user.email, user.firstName, transaction.referenceNumber, documentType || 'document')
+            .catch((e) => logger.error('Error sending document approved email:', e));
+        }
       } catch (error) {
         logger.error('Error sending document verified notification:', error);
       }
@@ -705,7 +725,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.DOCUMENT_REJECTED, async (event: any) => {
       try {
-        const { userId, transaction, reason } = event;
+        const { userId, agentId, transaction, reason, documentType } = event;
 
         const template = NotificationTemplates.VERIFICATION_FAILED({
           referenceNumber: transaction.referenceNumber,
@@ -722,8 +742,125 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        if (agentId) {
+          await notificationService.sendNotification({
+            userId: agentId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl },
+            transactionId: transaction.id,
+          });
+        }
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService
+            .sendDocumentRejectedEmail(user.email, user.firstName, transaction.referenceNumber, documentType || "document", reason || "")
+            .catch((e) => logger.error("Error sending document rejected email:", e));
+        }
       } catch (error) {
-        logger.error('Error sending document rejected notification:', error);
+        logger.error("Error sending document rejected notification:", error);
+      }
+    });
+
+    eventBus.on(EventTypes.DOCUMENT_MORE_INFO_REQUESTED, async (event: any) => {
+      try {
+        const { userId, agentId, transaction, documentType, comment } = event;
+
+        const notifBody = "More information is required for your " + (documentType || "document") + " on transaction " + transaction.referenceNumber + ".";
+
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: NotificationPriority.HIGH,
+          title: "Additional Information Required",
+          body: notifBody,
+          data: { actionUrl: "/transactions/" + transaction.id },
+          transactionId: transaction.id,
+        });
+
+        if (agentId) {
+          await notificationService.sendNotification({
+            userId: agentId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: NotificationPriority.HIGH,
+            title: "Additional Information Required",
+            body: notifBody,
+            data: { actionUrl: "/transactions/" + transaction.id },
+            transactionId: transaction.id,
+          });
+        }
+
+        const user = await getUserEmailInfo(userId);
+        if (user) {
+          await emailService
+            .sendDocumentResubmissionEmail(user.email, user.firstName, transaction.referenceNumber, documentType || "document", comment || "")
+            .catch((e) => logger.error("Error sending document resubmission email:", e));
+        }
+      } catch (error) {
+        logger.error("Error sending document more info requested notification:", error);
+      }
+    });
+
+    eventBus.on(EventTypes.TRANSACTION_UPDATED, async (event: any) => {
+      try {
+        const { userId, agentId, transaction, status } = event;
+        if (status !== "VERIFICATION_COMPLETED") return;
+
+        const va = await prisma.virtualAccount.findFirst({
+          where: { transactionId: transaction.id },
+          select: { accountNumber: true, bankName: true, accountName: true },
+        });
+
+        const paymentBody = va
+          ? "Your documents have been verified. Please make payment to " + va.bankName + " - " + va.accountNumber + " (" + va.accountName + ") for transaction " + transaction.referenceNumber + "."
+          : "Your documents have been verified for transaction " + transaction.referenceNumber + ". Please proceed with payment.";
+
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: NotificationPriority.HIGH,
+          title: "Documents Verified - Payment Required",
+          body: paymentBody,
+          data: { actionUrl: "/transactions/" + transaction.id },
+          transactionId: transaction.id,
+        });
+
+        if (agentId) {
+          await notificationService.sendNotification({
+            userId: agentId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: NotificationPriority.HIGH,
+            title: "Documents Verified - Payment Required",
+            body: paymentBody,
+            data: { actionUrl: "/transactions/" + transaction.id },
+            transactionId: transaction.id,
+          });
+        }
+
+        const user = await getUserEmailInfo(userId);
+        if (user && va) {
+          await emailService
+            .sendPaymentDetailsEmail(
+              user.email,
+              user.firstName,
+              transaction.referenceNumber,
+              transaction.amount ? transaction.amount.toString() : "",
+              transaction.currency || "",
+              va,
+            )
+            .catch((e) => logger.error("Error sending payment details email:", e));
+        }
+      } catch (error) {
+        logger.error("Error sending verification completed notification:", error);
       }
     });
   }

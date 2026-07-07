@@ -364,6 +364,8 @@ model UserKyc {
   tin                 String?
   passportNumber      String?
   passportDocumentUrl String?
+  passportIssueDate   DateTime?
+  passportExpiryDate  DateTime?
   bvnVerified         Boolean   @default(false)
   ninVerified         Boolean   @default(false)
   tinVerified         Boolean   @default(false)

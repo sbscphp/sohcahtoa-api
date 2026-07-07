@@ -209,6 +209,7 @@ export interface AgentCreateTransactionPayload {
     accountNumber?: string;
     accountName?: string;
   };
+  nigeriaAddress?: string;
 }
 
 export interface AgentRecordDisbursementInput {
@@ -1991,6 +1992,44 @@ class AgentTransactionService {
     });
 
     return [headers.join(","), ...csvRows].join("\n");
+  }
+
+  async markTransactionAsPaid(agentId: string, transactionId: string): Promise<object> {
+    const tx = await prisma.transaction.findFirst({
+      where: { id: transactionId },
+      select: {
+        id: true,
+        referenceNumber: true,
+        status: true,
+        createdByAgentId: true,
+      },
+    });
+
+    if (!tx) throw new NotFoundError("Transaction not found");
+    if (tx.createdByAgentId !== agentId) throw new ValidationError("You do not have access to this transaction");
+    if (tx.status !== TransactionStatus.VERIFICATION_COMPLETED) {
+      throw new ValidationError("Transaction must be in VERIFICATION_COMPLETED status to mark as paid");
+    }
+
+    const updated = await prisma.transaction.update({
+      where: { id: transactionId },
+      data: { status: TransactionStatus.DEPOSIT_CONFIRMED },
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: TransactionStatus.DEPOSIT_CONFIRMED,
+        notes: "Agent confirmed customer payment received",
+        performedBy: agentId,
+      },
+    });
+
+    return {
+      id: updated.id,
+      referenceNumber: updated.referenceNumber,
+      status: updated.status,
+    };
   }
 }
 

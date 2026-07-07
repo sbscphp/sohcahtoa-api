@@ -121,7 +121,7 @@ interface ConsentInitiateRequest {
   dataProcessorId: string;
   dataOwnerID: string; // actual BVN/NIN identifier, never the redacted form
   requestType: string; // e.g. "YYYY"
-  consentType: 'RedirectLink' | 'OfflineConsent';
+  consentType: 'RedirectLink';
   dataSubjectPresent: boolean;
   authenticationDate: string; // YYYY-MM-DD
 }

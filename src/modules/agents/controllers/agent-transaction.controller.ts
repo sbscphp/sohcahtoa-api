@@ -50,6 +50,7 @@ class AgentTransactionController {
         refundBankDetails: body.refundBankDetails,
         beneficiaryDetails: body.beneficiaryDetails,
         pickupLocation: body.pickupLocation,
+        nigeriaAddress: (body as any).nigeriaAddress,
       };
 
       const result = await agentTransactionService.createTransaction(authUser.userId, payload);
@@ -484,6 +485,19 @@ class AgentTransactionController {
         customerUserId,
         transactionId
       );
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async markTransactionAsPaid(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError("Authentication required");
+      const agentId = authUser.userId;
+      const { transactionId } = req.params;
+      const data = await agentTransactionService.markTransactionAsPaid(agentId, transactionId);
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);

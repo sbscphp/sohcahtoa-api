@@ -116,6 +116,9 @@ interface CreateCustomerTransactionPayload {
     scheduledPickupTime?: string;
   };
 
+  // Nigeria address — required for Tourist Sell FX transactions
+  nigeriaAddress?: string;
+
   // Refund bank details — the customer's own account to refund to if the transaction is reversed
   refundBankDetails?: {
     bankName?: string;
@@ -173,10 +176,17 @@ export class CustomerTransactionService {
       beneficiaryDetails,
       pickupLocation,
       refundBankDetails,
+      nigeriaAddress,
     } = payload;
 
     // Normalize tin — accept either `tin` or `tinNumber` from the payload
     const tin = tinRaw ?? tinNumber ?? undefined;
+
+    // Coerce amount to number — guards against string values from JSON body
+    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+    if (!numericAmount || isNaN(numericAmount) || numericAmount <= 0) {
+      throw new ValidationError('amount must be a positive number');
+    }
 
     logger.info(`[createTransaction] Starting transaction creation for user: ${userId}`, {
       userId,
@@ -207,6 +217,11 @@ export class CustomerTransactionService {
       hasKyc: !!user.kyc,
       hasProfile: !!user.profile,
     });
+
+    // Validate required fields
+    if (!type)     throw new ValidationError('type is required');
+    if (!currency) throw new ValidationError('currency is required');
+    if (!purpose)  throw new ValidationError('purpose is required');
 
     // Validate transaction type
     const validTypes = [
@@ -247,13 +262,13 @@ export class CustomerTransactionService {
     const CASH_CAP = 500;
     const cashAmount =
       disbursementOption === 'CARD_AND_CASH'
-        ? Math.min(amount * 0.25, CASH_CAP)
+        ? Math.min(numericAmount * 0.25, CASH_CAP)
         : disbursementOption === 'CASH_AND_TRANSFER'
-          ? amount * 0.25
+          ? numericAmount * 0.25
           : null;
     const transferAmount =
       disbursementOption === 'CASH_AND_TRANSFER'
-        ? amount * 0.75
+        ? numericAmount * 0.75
         : null;
 
     // Strip masked values (e.g. "*******7624" sent back by the frontend) and
@@ -288,6 +303,9 @@ export class CustomerTransactionService {
       if (cleanBvn) kycData.bvn = cleanBvn;
       if (cleanNin) kycData.nin = cleanNin;
       if (tin) kycData.tin = tin;
+      if (passportDocumentNumber) kycData.passportNumber = passportDocumentNumber;
+      if (passportIssueDate) kycData.passportIssueDate = new Date(passportIssueDate);
+      if (passportExpiryDate) kycData.passportExpiryDate = new Date(passportExpiryDate);
 
       try {
         const newKyc = await prisma.userKyc.create({
@@ -312,6 +330,11 @@ export class CustomerTransactionService {
       if (cleanBvn && !user.kyc.bvn) kycUpdate.bvn = cleanBvn;
       if (cleanNin && !user.kyc.nin) kycUpdate.nin = cleanNin;
       if (tin && !user.kyc.tin) kycUpdate.tin = tin;
+      if (passportDocumentNumber && !user.kyc.passportNumber) kycUpdate.passportNumber = passportDocumentNumber;
+      if (payload.documents?.find(d => d.documentType === 'PASSPORT')?.fileUrl && !user.kyc.passportDocumentUrl)
+        kycUpdate.passportDocumentUrl = payload.documents.find(d => d.documentType === 'PASSPORT')!.fileUrl;
+      if (passportIssueDate) kycUpdate.passportIssueDate = new Date(passportIssueDate);
+      if (passportExpiryDate) kycUpdate.passportExpiryDate = new Date(passportExpiryDate);
 
       if (Object.keys(kycUpdate).length > 0) {
         logger.debug(`[createTransaction] Updating existing KYC with missing BVN/NIN`, {
@@ -432,7 +455,7 @@ export class CustomerTransactionService {
       purpose,
       destinationCountry: destinationCountry || null,
       currency,
-      foreignAmount: amount as any,
+      foreignAmount: numericAmount as any,
       nairaEquivalent: nairaEquivalent as any,
       exchangeRate: exchangeRate as any,
       formAId,
@@ -482,6 +505,7 @@ export class CustomerTransactionService {
           passportExpiryDate: passportExpiryDate ?? null,
           beneficiaryDetails,
           refundBankDetails: refundBankDetails ?? null,
+          nigeriaAddress: nigeriaAddress ?? null,
           pickupLocation,
           cashAmount: cashAmount ?? null,
           transferAmount: transferAmount ?? null,
@@ -582,7 +606,7 @@ export class CustomerTransactionService {
             pickupCode,
             recipientName: pickupLocation.recipientName || null,
             recipientPhone: pickupLocation.recipientPhone || null,
-            amount: (cashAmount ?? amount) as any,
+            amount: (cashAmount ?? numericAmount) as any,
             currency,
             scheduledPickupDate: (() => {
               if (!pickupLocation.scheduledPickupDate) return null;
@@ -645,7 +669,7 @@ export class CustomerTransactionService {
         existingDocuments,
         admissionType,
         mode,
-        amount
+        numericAmount
       ),
       message: hasDocuments
         ? 'Transaction submitted successfully and is awaiting admin review.'
@@ -1615,6 +1639,7 @@ export class CustomerTransactionService {
     // Extract pickup location from step data (used as fallback if cashPickup record is missing)
     const stepPickupLocation   = personalInfoData?.pickupLocation   as any ?? null;
     const refundBankDetails    = personalInfoData?.refundBankDetails as any ?? null;
+    const nigeriaAddress       = personalInfoData?.nigeriaAddress as string ?? null;
 
     // Get transaction mode
     const transactionMode = transaction.transactionMode || null;
@@ -1782,6 +1807,7 @@ export class CustomerTransactionService {
       // Beneficiary details from step data (all fields, including correspondence bank)
       beneficiaryDetails: personalInfoData?.beneficiaryDetails ?? null,
       refundBankDetails,
+      nigeriaAddress,
 
       // Customer's own bank accounts attached to this transaction
       bankAccounts: (transactionBankAccounts as any[]).map((r: any) => r.bankAccount),
@@ -2369,6 +2395,111 @@ export class CustomerTransactionService {
       remittance: { totalAmount: round(totals.remittance.totalAmount), transactionCount: totals.remittance.transactionCount },
     };
   }
+  /**
+   * Update editable transaction fields (allowed while in DRAFT or early verification stages)
+   */
+  async updateTransaction(
+    userId: string,
+    transactionId: string,
+    updates: {
+      refundBankDetails?: { bankName?: string; accountNumber?: string; accountName?: string };
+      beneficiaryDetails?: Record<string, any>;
+      passportDocumentNumber?: string;
+      passportIssueDate?: string;
+      passportExpiryDate?: string;
+      nigeriaAddress?: string;
+    }
+  ) {
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, userId },
+      include: {
+        steps: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!transaction) throw new NotFoundError('Transaction not found');
+
+    const editableStatuses = [
+      'DRAFT',
+      'AWAITING_VERIFICATION',
+      'VERIFICATION_IN_PROGRESS',
+      'VERIFICATION_COMPLETED',
+    ];
+    if (!editableStatuses.includes(transaction.status as string)) {
+      throw new ValidationError(
+        'Transaction can only be updated while in draft or verification stage'
+      );
+    }
+
+    const personalInfoStep =
+      transaction.steps.find((s) => (s.step as string) === 'PERSONAL_INFO') ??
+      transaction.steps.find((s) => (s.step as string) === 'DOCUMENT_UPLOAD');
+    const existingData = (personalInfoStep?.data as any) ?? {};
+
+    const merged = {
+      ...existingData,
+      ...(updates.refundBankDetails !== undefined ? { refundBankDetails: updates.refundBankDetails } : {}),
+      ...(updates.beneficiaryDetails !== undefined ? { beneficiaryDetails: updates.beneficiaryDetails } : {}),
+      ...(updates.passportDocumentNumber !== undefined ? { passportDocumentNumber: updates.passportDocumentNumber } : {}),
+      ...(updates.passportIssueDate !== undefined ? { passportIssueDate: updates.passportIssueDate } : {}),
+      ...(updates.passportExpiryDate !== undefined ? { passportExpiryDate: updates.passportExpiryDate } : {}),
+      ...(updates.nigeriaAddress !== undefined ? { nigeriaAddress: updates.nigeriaAddress } : {}),
+    };
+
+    if (personalInfoStep) {
+      await prisma.transactionStepLog.update({
+        where: { id: personalInfoStep.id },
+        data: { data: merged },
+      });
+    } else {
+      await prisma.transactionStepLog.create({
+        data: {
+          transactionId,
+          step: 'PERSONAL_INFO' as any,
+          status: 'COMPLETED',
+          data: merged,
+          completedAt: new Date(),
+        },
+      });
+    }
+
+    if (updates.passportIssueDate || updates.passportExpiryDate || updates.passportDocumentNumber) {
+      const kycUpdate: any = {};
+      if (updates.passportDocumentNumber) kycUpdate.passportNumber = updates.passportDocumentNumber;
+      if (updates.passportIssueDate) kycUpdate.passportIssueDate = new Date(updates.passportIssueDate);
+      if (updates.passportExpiryDate) kycUpdate.passportExpiryDate = new Date(updates.passportExpiryDate);
+      await prisma.userKyc.upsert({
+        where: { userId },
+        update: kycUpdate,
+        create: { userId, ...kycUpdate },
+      });
+    }
+
+    return { transactionId, updated: true, fields: Object.keys(updates) };
+  }
+
+  /**
+   * Get the authenticated customer's stored KYC data for pre-filling forms
+   */
+  async getCustomerKyc(userId: string) {
+    const kyc = await prisma.userKyc.findUnique({
+      where: { userId },
+    }) as any;
+    if (!kyc) return null;
+    return {
+      bvn: kyc.bvn ? `*******${kyc.bvn.slice(-4)}` : null,
+      nin: kyc.nin ? `*******${kyc.nin.slice(-4)}` : null,
+      tin: kyc.tin ?? null,
+      passportNumber: kyc.passportNumber ?? null,
+      passportDocumentUrl: kyc.passportDocumentUrl ?? null,
+      passportIssueDate: kyc.passportIssueDate ? (kyc.passportIssueDate as Date).toISOString().split('T')[0] : null,
+      passportExpiryDate: kyc.passportExpiryDate ? (kyc.passportExpiryDate as Date).toISOString().split('T')[0] : null,
+      bvnVerified: kyc.bvnVerified,
+      ninVerified: kyc.ninVerified,
+      passportVerified: kyc.passportVerified,
+      kycStatus: kyc.status,
+    };
+  }
+
 }
 
 export default new CustomerTransactionService();

@@ -1552,4 +1552,93 @@ router.get("/transactions/pickup-locations/availability-slots", customerTransact
  */
 router.post("/transactions/totals", customerTransactionController.getTransactionTotals);
 
+
+/**
+ * @swagger
+ * /api/customer/transactions/{transactionId}:
+ *   patch:
+ *     summary: Update editable transaction fields
+ *     description: |
+ *       Update refund bank details, beneficiary details, passport information, or Nigeria address
+ *       on a transaction that is still in a draft or verification stage.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refundBankDetails:
+ *                 type: object
+ *                 properties:
+ *                   bankName:
+ *                     type: string
+ *                   accountNumber:
+ *                     type: string
+ *                   accountName:
+ *                     type: string
+ *               beneficiaryDetails:
+ *                 type: object
+ *               passportDocumentNumber:
+ *                 type: string
+ *               passportIssueDate:
+ *                 type: string
+ *                 format: date
+ *               passportExpiryDate:
+ *                 type: string
+ *                 format: date
+ *               nigeriaAddress:
+ *                 type: string
+ *                 description: Required for Tourist Sell FX transactions
+ *     responses:
+ *       200:
+ *         description: Transaction updated successfully
+ */
+router.patch('/transactions/:transactionId', customerTransactionController.updateTransaction);
+
+/**
+ * @swagger
+ * /api/customer/kyc:
+ *   get:
+ *     summary: Get my KYC data for form pre-fill
+ *     description: Returns the authenticated customer's stored KYC data (BVN, NIN, passport details) for pre-filling transaction forms. BVN and NIN are masked.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: KYC data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 bvn:
+ *                   type: string
+ *                   example: "*******1234"
+ *                 nin:
+ *                   type: string
+ *                   example: "*******5678"
+ *                 passportNumber:
+ *                   type: string
+ *                 passportDocumentUrl:
+ *                   type: string
+ *                 passportIssueDate:
+ *                   type: string
+ *                   format: date
+ *                 passportExpiryDate:
+ *                   type: string
+ *                   format: date
+ */
+router.get('/kyc', customerTransactionController.getCustomerKyc);
+
 export default router;

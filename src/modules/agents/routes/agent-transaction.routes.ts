@@ -906,4 +906,52 @@ router.post(
   agentTransactionController.recordInboundPayment
 );
 
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/mark-paid:
+ *   post:
+ *     summary: Mark transaction as paid by customer
+ *     description: |
+ *       Agent marks that the customer has made payment for a VERIFICATION_COMPLETED transaction.
+ *       Transitions the transaction to PAYMENT_CONFIRMED status.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Transaction marked as paid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     referenceNumber:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                       example: DEPOSIT_CONFIRMED
+ *       400:
+ *         description: Transaction not in correct status
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction not found or not created by this agent
+ */
+router.post("/:transactionId/mark-paid", agentTransactionController.markTransactionAsPaid);
 export default router;

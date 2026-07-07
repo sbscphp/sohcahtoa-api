@@ -396,6 +396,55 @@ class CustomerTransactionController {
       return next(error);
     }
   };
+  /**
+   * Get the authenticated customer's KYC data (for form pre-fill)
+   */
+  getCustomerKyc = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const data = await customerTransactionService.getCustomerKyc(userId);
+      res.status(200).json(successResponse(data));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Update editable fields on a transaction (refund bank details, beneficiary, passport info)
+   */
+  updateTransaction = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = this.resolveUserId(req, res, true);
+      if (userId === null) return;
+
+      const { transactionId } = req.params;
+      const {
+        refundBankDetails,
+        beneficiaryDetails,
+        passportDocumentNumber,
+        passportIssueDate,
+        passportExpiryDate,
+        nigeriaAddress,
+      } = req.body;
+
+      const result = await customerTransactionService.updateTransaction(userId, transactionId, {
+        refundBankDetails,
+        beneficiaryDetails,
+        passportDocumentNumber,
+        passportIssueDate,
+        passportExpiryDate,
+        nigeriaAddress,
+      });
+      res.status(200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
 }
 
 export default new CustomerTransactionController();

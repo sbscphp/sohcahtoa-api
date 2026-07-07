@@ -59,6 +59,8 @@ const TEMPLATES = {
   accountActivated:       process.env.TERMII_TEMPLATE_ID_ACCOUNT_ACTIVATED       || '',
   // Variables: {{first_name}}, {{transaction_ref}}, {{info}}
   additionalInfoRequired: process.env.TERMII_TEMPLATE_ID_ADDITIONAL_INFO_REQUIRED || '',
+  documentApproved:       process.env.TERMII_TEMPLATE_ID_DOCUMENT_APPROVED       || '',
+  documentRejected:       process.env.TERMII_TEMPLATE_ID_DOCUMENT_REJECTED       || '',
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -323,6 +325,55 @@ class EmailService {
       text: `Hi ${firstName}, your Sochatoa account has been reactivated. You now have full access to all features.`,
     });
   }
+
+
+  // Document approved
+
+  async sendDocumentApprovedEmail(email: string, firstName: string, transactionRef: string, documentType: string): Promise<boolean> {
+    return this.sendTemplate(email, 'documentApproved', { first_name: firstName, transaction_ref: transactionRef, document_type: documentType }, {
+      subject: `Document Approved - ${transactionRef}`,
+      text: `Hi ${firstName}, your ${documentType} document for transaction ${transactionRef} has been approved. You will be notified once all documents are verified.`,
+    });
+  }
+
+  // Document rejected
+
+  async sendDocumentRejectedEmail(email: string, firstName: string, transactionRef: string, documentType: string, reason: string): Promise<boolean> {
+    return this.sendTemplate(email, 'documentRejected', { first_name: firstName, transaction_ref: transactionRef, document_type: documentType, reason }, {
+      subject: `Document Rejected - ${transactionRef}`,
+      text: `Hi ${firstName}, your ${documentType} document for transaction ${transactionRef} was rejected. Reason: ${reason}. Please resubmit a valid document.`,
+    });
+  }
+
+  // Document resubmission requested
+
+  async sendDocumentResubmissionEmail(email: string, firstName: string, transactionRef: string, documentType: string, comment: string): Promise<boolean> {
+    return this.sendTemplate(email, 'additionalInfoRequired', { first_name: firstName, transaction_ref: transactionRef, info: comment }, {
+      subject: `Action Required: Document Resubmission - ${transactionRef}`,
+      text: `Hi ${firstName}, additional information is required for your ${documentType} document on transaction ${transactionRef}: ${comment}. Please resubmit with corrections.`,
+    });
+  }
+
+  // Payment details (virtual account)
+
+  async sendPaymentDetailsEmail(
+    email: string,
+    firstName: string,
+    transactionRef: string,
+    amount: string,
+    currency: string,
+    virtualAccount: { accountNumber: string; accountName: string; bankName: string }
+  ): Promise<boolean> {
+    return this.sendTemplate(email, 'transactionApproved', {
+      first_name: firstName,
+      transaction_ref: transactionRef,
+      amount: `${currency} ${amount}`,
+    }, {
+      subject: `Payment Details - ${transactionRef}`,
+      text: `Hi ${firstName}, your documents for transaction ${transactionRef} have been approved. Please make payment of ${currency} ${amount} to:\n\nBank: ${virtualAccount.bankName}\nAccount Name: ${virtualAccount.accountName}\nAccount Number: ${virtualAccount.accountNumber}\n\nThis virtual account is unique to your transaction. Payment is automatically confirmed when funds arrive.`,
+    });
+  }
+
 
   // ── Additional Information Required ───────────────────────────────────────
 
