@@ -219,6 +219,44 @@ AgentRouter.post(
 
 /**
  * @swagger
+ * /api/admin/agent/create-password/resend-otp:
+ *   post:
+ *     summary: Resend agent setup OTP
+ *     description: Resends the OTP used for creating an agent's initial password.
+ *     tags: [admin-agent]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *       400:
+ *         description: Invalid input or password already set
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Agent not found
+ */
+AgentRouter.post(
+  "/create-password/resend-otp",
+  authenticate,
+  requirePermission({ module: "AGENTS", feature: "MODULE", action: "create" }),
+  agentController.resendSetupOtp
+);
+
+/**
+ * @swagger
  * /api/admin/agent/{id}:
  *   get:
  *     summary: Get agent by ID

@@ -8,6 +8,7 @@ import { uploadToCloudinary } from "../../../shared/utils/cloudinary";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
+import authService from "../../auth/services/auth.service";
 
 class AgentController {
   private safeFilename(name: string) {
@@ -208,6 +209,12 @@ class AgentController {
       });
     }
     res.json(successResponse(updated));
+  });
+
+  resendSetupOtp = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { email } = req.body;
+    const result = await authService.resendAgentSetupOtp(email);
+    res.json(successResponse(result));
   });
 
   update = asyncHandler(async (req: AuthRequest, res: Response) => {

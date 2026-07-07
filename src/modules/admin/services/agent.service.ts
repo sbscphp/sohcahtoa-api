@@ -461,7 +461,7 @@ class AgentService {
         email: data.email,
         phoneNumber: data.phoneNumber,
         branchId: foundBranch.id,
-        isApproved: true,
+        isApproved: false,
         attachments: data.attachment
           ? {
               create: {

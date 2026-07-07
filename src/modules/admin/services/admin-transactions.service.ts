@@ -999,7 +999,7 @@ export class AdminTransactionsService {
         },
         data: {
           status: TransactionStatus.APPROVED as any,
-          currentStep: TransactionStep.ADMIN_REVIEW as any,
+          currentStep: TransactionStep.DEPOSIT_INFO as any,
           currentWorkflowStageId: null,
           updatedAt: new Date(),
         },

@@ -201,7 +201,12 @@ export class DepositVerificationService {
         }),
         prisma.transaction.update({
           where: { id: transactionId },
-          data:  { amountPaid: expectedAmount, balanceDue: 0 },
+          data:  { 
+            amountPaid: expectedAmount, 
+            balanceDue: 0,
+            status: 'DEPOSIT_CONFIRMED' as any,
+            currentStep: 'DEPOSIT_CONFIRMATION' as any
+          },
         }),
         // Confirmed settlement for only the expected amount
         prisma.settlement.create({
@@ -271,7 +276,12 @@ export class DepositVerificationService {
       }),
       prisma.transaction.update({
         where: { id: transactionId },
-        data:  { amountPaid: totalAmountPaid, balanceDue },
+        data:  { 
+          amountPaid: totalAmountPaid, 
+          balanceDue,
+          status: 'DEPOSIT_CONFIRMED' as any,
+          currentStep: 'DEPOSIT_CONFIRMATION' as any
+        },
       }),
       prisma.settlement.create({
         data: {
