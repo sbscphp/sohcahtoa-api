@@ -522,6 +522,26 @@ DO $$ BEGIN
 EXCEPTION WHEN others THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TABLE "customer_bank_accounts" ADD COLUMN IF NOT EXISTS "swiftCode" TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "customer_bank_accounts" ADD COLUMN IF NOT EXISTS "iban" TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "customer_bank_accounts" ADD COLUMN IF NOT EXISTS "routingNumber" TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "customer_bank_accounts" ADD COLUMN IF NOT EXISTS "bankAddress" TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================

@@ -95,6 +95,11 @@ interface CreateCustomerTransactionPayload {
 
     // Additional notes or information
     otherInformation?: string;
+
+    // Domiciliary account flag — when true, the account is auto-saved to the customer's profile
+    isDomiciliaryAccount?: boolean;
+    currency?: string;      // currency of the domiciliary account, e.g. USD
+    currencyCode?: string;  // alias for currency
   };
 
   // How the customer wishes to collect the disbursed funds.
@@ -658,6 +663,36 @@ export class CustomerTransactionService {
       },
       orderBy: { uploadedAt: 'desc' },
     });
+
+    // Auto-save domiciliary account if beneficiaryDetails.isDomiciliaryAccount is set
+    if (
+      beneficiaryDetails?.isDomiciliaryAccount &&
+      beneficiaryDetails?.accountNumber &&
+      beneficiaryDetails?.bankName &&
+      beneficiaryDetails?.accountName
+    ) {
+      const currency = (beneficiaryDetails.currency || beneficiaryDetails.currencyCode || 'USD').toUpperCase();
+      const domiciliaryFields = {
+        bankName: beneficiaryDetails.bankName,
+        accountName: beneficiaryDetails.accountName,
+        currency,
+        swiftCode: beneficiaryDetails.swiftCode ?? null,
+        iban: beneficiaryDetails.iban ?? null,
+        routingNumber: beneficiaryDetails.routingNumber ?? null,
+        bankAddress: beneficiaryDetails.bankAddress ?? null,
+        isVerified: true,
+        updatedAt: new Date(),
+      };
+      await (prisma as any).customerBankAccount.upsert({
+        where: { userId_accountNumber: { userId, accountNumber: beneficiaryDetails.accountNumber } },
+        update: domiciliaryFields,
+        create: {
+          userId,
+          accountNumber: beneficiaryDetails.accountNumber,
+          ...domiciliaryFields,
+        },
+      });
+    }
 
     // Fetch the customer's saved bank accounts so the frontend can pre-fill
     const savedBankAccounts = await (prisma as any).customerBankAccount.findMany({

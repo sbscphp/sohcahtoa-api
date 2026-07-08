@@ -178,6 +178,22 @@ router.get('/bank-accounts', (req, res, next) =>
  *                 type: string
  *                 description: Currency of the account. Omit or use NGN for local accounts; use USD/GBP/EUR etc. for domiciliary accounts.
  *                 example: "USD"
+ *               swiftCode:
+ *                 type: string
+ *                 description: SWIFT/BIC code — required for international/domiciliary transfers
+ *                 example: "GTBINGLA"
+ *               iban:
+ *                 type: string
+ *                 description: IBAN — required for SEPA / European transfers
+ *                 example: "GB29NWBK60161331926819"
+ *               routingNumber:
+ *                 type: string
+ *                 description: Routing/ABA number — required for USD wire transfers
+ *                 example: "021000021"
+ *               bankAddress:
+ *                 type: string
+ *                 description: Full address of the beneficiary bank
+ *                 example: "1 Finance Street, New York, NY 10001"
  *     responses:
  *       201:
  *         description: Bank account saved

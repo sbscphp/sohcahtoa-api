@@ -863,6 +863,10 @@ model CustomerBankAccount {
   accountNumber String
   accountName   String
   currency      String?  // e.g. NGN, USD, GBP — null/NGN = regular; any foreign currency = domiciliary
+  swiftCode     String?
+  iban          String?
+  routingNumber String?
+  bankAddress   String?
   isVerified    Boolean  @default(false) // true once name was confirmed via lookup
   isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())

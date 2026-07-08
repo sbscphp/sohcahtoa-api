@@ -103,6 +103,10 @@ export class CustomerBankAccountService {
     accountNumber: string;
     accountName: string;
     currency?: string;
+    swiftCode?: string;
+    iban?: string;
+    routingNumber?: string;
+    bankAddress?: string;
   }) {
     const { bankName, accountNumber, accountName } = data;
     const currency = data.currency ? data.currency.toUpperCase().trim() : null;
@@ -117,18 +121,23 @@ export class CustomerBankAccountService {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundError('User not found');
 
+    const fields = {
+      bankName,
+      accountName,
+      currency,
+      swiftCode: data.swiftCode ?? null,
+      iban: data.iban ?? null,
+      routingNumber: data.routingNumber ?? null,
+      bankAddress: data.bankAddress ?? null,
+      isVerified: true,
+      updatedAt: new Date(),
+    };
+
     // Upsert so that re-adding the same account just returns the existing record
     const bankAccount = await (prisma as any).customerBankAccount.upsert({
       where: { userId_accountNumber: { userId, accountNumber } },
-      update: { bankName, accountName, currency, isVerified: true, updatedAt: new Date() },
-      create: {
-        userId,
-        bankName,
-        accountNumber,
-        accountName,
-        currency,
-        isVerified: true,
-      },
+      update: fields,
+      create: { userId, accountNumber, ...fields },
     });
 
     logger.info('[addBankAccount] Bank account saved', { userId, bankAccountId: bankAccount.id });

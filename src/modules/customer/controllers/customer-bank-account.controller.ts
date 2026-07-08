@@ -56,12 +56,16 @@ export class CustomerBankAccountController {
   async addBankAccount(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
-      const { bankName, accountNumber, accountName, currency } = req.body;
+      const { bankName, accountNumber, accountName, currency, swiftCode, iban, routingNumber, bankAddress } = req.body;
       const account = await customerBankAccountService.addBankAccount(userId, {
         bankName,
         accountNumber,
         accountName,
         currency,
+        swiftCode,
+        iban,
+        routingNumber,
+        bankAddress,
       });
       res.status(201).json(successResponse(account, 'Bank account saved'));
     } catch (err) {
