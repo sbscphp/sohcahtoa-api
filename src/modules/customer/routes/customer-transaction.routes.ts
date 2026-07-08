@@ -1607,6 +1607,58 @@ router.patch('/transactions/:transactionId', customerTransactionController.updat
 
 /**
  * @swagger
+ * /api/customer/bank-accounts:
+ *   get:
+ *     summary: Get saved domiciliary/bank accounts
+ *     description: Returns all saved bank accounts for the authenticated customer, ordered by default first then newest.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of saved bank accounts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       bankName:
+ *                         type: string
+ *                         example: Access Bank
+ *                       accountNumber:
+ *                         type: string
+ *                         example: "0123456789"
+ *                       accountName:
+ *                         type: string
+ *                         example: John Doe
+ *                       currency:
+ *                         type: string
+ *                         example: USD
+ *                       isDefault:
+ *                         type: boolean
+ *                       isVerified:
+ *                         type: boolean
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/bank-accounts', customerTransactionController.getDomiciliaryAccounts);
+
+/**
+ * @swagger
  * /api/customer/kyc:
  *   get:
  *     summary: Get my KYC data for form pre-fill
