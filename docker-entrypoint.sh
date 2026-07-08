@@ -502,20 +502,20 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
-DO $ BEGIN
+DO $$ BEGIN
   ALTER TYPE "ProvidusTransactionStatus" ADD VALUE IF NOT EXISTS 'REVERSED';
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $;
+END $$;
 
-DO $ BEGIN
+DO $$ BEGIN
   ALTER TABLE "user_kyc" ADD COLUMN IF NOT EXISTS "passportIssueDate" TIMESTAMPTZ;
 EXCEPTION WHEN others THEN NULL;
-END $;
+END $$;
 
-DO $ BEGIN
+DO $$ BEGIN
   ALTER TABLE "user_kyc" ADD COLUMN IF NOT EXISTS "passportExpiryDate" TIMESTAMPTZ;
 EXCEPTION WHEN others THEN NULL;
-END $;
+END $$;
 
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
