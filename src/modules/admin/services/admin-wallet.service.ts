@@ -1083,7 +1083,7 @@ export class AdminWalletService {
         actionLabel: a.actionLabel,
         previousState: a.previousState,
         newState: a.newState,
-        reason: a.reason,
+        reason: a.reason || a.metadata?.reason || null,
         metadata: a.metadata,
         status: a.status,
         ipAddress: a.ipAddress,

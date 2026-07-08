@@ -127,9 +127,9 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Exact payment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
-    await prisma.transaction.update({
+    const updatedTx = await prisma.transaction.findUnique({
       where: { id: options.transactionId },
-      data: { status: 'AWAITING_DISBURSEMENT' },
+      select: { status: true },
     });
 
     return {
@@ -141,7 +141,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
-      transactionStatus: 'AWAITING_DISBURSEMENT',
+      transactionStatus: updatedTx?.status || 'UNKNOWN',
     };
   }
 
@@ -178,9 +178,9 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Overpayment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
-    await prisma.transaction.update({
+    const updatedTx = await prisma.transaction.findUnique({
       where: { id: options.transactionId },
-      data: { status: 'AWAITING_DISBURSEMENT' },
+      select: { status: true },
     });
 
     return {
@@ -193,7 +193,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
-      transactionStatus: 'AWAITING_DISBURSEMENT',
+      transactionStatus: updatedTx?.status || 'UNKNOWN',
     };
   }
 
@@ -240,7 +240,12 @@ export class SimulationPaymentService {
     logger.info('SIMULATION: Split payment webhook payload', payload);
     const deposit = await depositVerificationService.handleDepositWebhook(payload);
 
-    // Underpayment: transaction remains DEPOSIT_PENDING until balance is settled
+    const updatedTx = await prisma.transaction.findUnique({
+      where: { id: options.transactionId },
+      select: { status: true },
+    });
+
+    // Underpayment: transaction remains AWAITING_DEPOSIT until balance is settled
     return {
       type: 'split',
       expectedAmount,
@@ -252,7 +257,7 @@ export class SimulationPaymentService {
       sessionId: payload.sessionId,
       depositId: deposit.id,
       status: deposit.status,
-      transactionStatus: 'DEPOSIT_PENDING',
+      transactionStatus: updatedTx?.status || 'UNKNOWN',
     };
   }
 

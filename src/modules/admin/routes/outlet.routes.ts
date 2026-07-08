@@ -584,7 +584,7 @@ OutletRouter.put(
 OutletRouter.get(
   "/pickup-stations",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "view" }),
   outletController.listPickupStations
 );
 
@@ -622,7 +622,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/pickup-stations/export",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "view" }),
   outletController.exportPickupStations
 );
 
@@ -668,7 +668,7 @@ OutletRouter.get(
 OutletRouter.post(
   "/pickup-stations",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "create" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "create" }),
   outletController.createPickupStation
 );
 
@@ -697,7 +697,7 @@ OutletRouter.post(
 OutletRouter.get(
   "/pickup-stations/:id",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "view" }),
   outletController.getPickupStation
 );
 
@@ -752,7 +752,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/pickup-stations/:id/requests",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "view" }),
   outletController.listPickupStationRequests
 );
 
@@ -799,7 +799,7 @@ OutletRouter.get(
 OutletRouter.get(
   "/pickup-stations/:id/requests/export",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "view" }),
   outletController.exportPickupStationRequests
 );
 
@@ -854,7 +854,7 @@ OutletRouter.get(
 OutletRouter.put(
   "/pickup-stations/:id",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "edit" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "edit" }),
   outletController.updatePickupStation
 );
 
@@ -883,7 +883,7 @@ OutletRouter.put(
 OutletRouter.delete(
   "/pickup-stations/:id",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "delete" }),
+  requirePermission({ module: "PICKUP_STATIONS", feature: "MODULE", action: "delete" }),
   outletController.deletePickupStation
 );
 

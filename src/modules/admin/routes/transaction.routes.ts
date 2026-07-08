@@ -783,6 +783,10 @@ TransactionRouter.post(
  *                 type: string
  *               notes:
  *                 type: string
+ *               entryId:
+ *                 type: string
+ *               walletId:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Refund initiated and queued for approval or auto-approved

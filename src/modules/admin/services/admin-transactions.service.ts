@@ -1664,20 +1664,6 @@ export class AdminTransactionsService {
         }
       });
 
-      const affectedEntries = await prisma.walletEntry.findMany({
-        where: { transactionId, type: "DEBIT" },
-        select: { id: true, walletId: true }
-      });
-      for (const entry of affectedEntries) {
-        await auditTrailService.logAction({
-          adminId,
-          actionType: ActionType.WALLET_REFUND,
-          actionLabel: "Initiate transaction refund (queued for approval)",
-          resourceType: "WALLET",
-          resourceId: entry.walletId,
-          metadata: { entryId: entry.id, transactionId, reason },
-        }).catch((err) => logger.error("Audit log failed for wallet entry refund initiation", { error: err.message }));
-      }
 
       const firstStage = template.stages[0];
       const adminIds = firstStage.assignees.map((a: any) => a.adminId);
@@ -1706,7 +1692,6 @@ export class AdminTransactionsService {
 
       return { 
         message: "Refund initiated successfully, pending approval",
-        entryIds: affectedEntries.map(e => e.id)
       };
     } else {
       await prisma.transaction.update({
@@ -1747,7 +1732,16 @@ export class AdminTransactionsService {
         select: { id: true, walletId: true }
       });
 
-    
+      await auditTrailService.logAction({
+        adminId,
+        actionType: ActionType.TRANSACTION_REFUND,
+        actionLabel: "Initiate transaction refund (auto-approved)",
+        resourceType: "TRANSACTION",
+        resourceId: transactionId,
+        reason,
+        metadata: { transactionId, reason },
+      }).catch((err) => logger.error("Audit log failed for transaction refund auto-approval", { error: err.message }));
+
       for (const entry of affectedEntries) {
         await auditTrailService.logAction({
           adminId,
@@ -1755,6 +1749,7 @@ export class AdminTransactionsService {
           actionLabel: "Initiate transaction refund (auto-approved)",
           resourceType: "WALLET",
           resourceId: entry.walletId,
+          reason,
           metadata: { entryId: entry.id, transactionId, reason },
         }).catch((err) => logger.error("Audit log failed for wallet entry refund auto-approval", { error: err.message }));
       }
