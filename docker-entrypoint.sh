@@ -938,21 +938,7 @@ CREATE TABLE IF NOT EXISTS "wallet_entry_notes" (
 CREATE INDEX IF NOT EXISTS "wallet_entry_notes_entryId_idx" ON "wallet_entry_notes"("entryId");
 EOF
 
-node -e "
-const { PrismaClient } = require('@prisma/client');
-const fs = require('fs');
-(async () => {
-  const prisma = new PrismaClient();
-  try {
-    const sql = fs.readFileSync('/tmp/schema-fallback.sql', 'utf8');
-    await prisma.\$executeRawUnsafe(sql);
-  } catch (e) {
-    console.log('⚠️ Schema fallback error: ' + (e.message || e));
-  } finally {
-    await prisma.\$disconnect();
-  }
-})();
-"
+psql "${DATABASE_URL%\?*}" -f /tmp/schema-fallback.sql
 
 echo "✅ Schema verification completed"
 echo ""
