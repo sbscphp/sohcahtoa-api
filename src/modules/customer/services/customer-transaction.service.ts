@@ -839,6 +839,7 @@ export class CustomerTransactionService {
       'SOURCE_OF_FUNDS_DECLARATION',
       'DIGITAL_SIGNATURE',
       'BANK_VERIFICATION',
+      'STUDENT_PASSPORT',
     ];
 
     if (!validDocumentTypes.includes(documentType)) {
@@ -2146,7 +2147,7 @@ export class CustomerTransactionService {
         'CORPORATE_BODY_LETTER',
         'PARTNER_INVITATION_LETTER',
       ],
-      SCHOOL_FEES: ['PASSPORT', 'SCHOOL_ADMISSION', 'INVOICE'],
+      SCHOOL_FEES: ['PASSPORT', 'STUDENT_PASSPORT', 'SCHOOL_ADMISSION', 'INVOICE'],
       MEDICAL: [
         'PASSPORT',
         'VISA',
@@ -2181,19 +2182,14 @@ export class CustomerTransactionService {
     }
 
     // For transactions above $10,000, require proof of funds and digital signature
-    // This applies to SELL transactions (RESIDENT_FX, EXPATRIATE_FX, TOURIST_FX with mode=SELL)
-    const sellTransactionTypes = ['RESIDENT_FX', 'EXPATRIATE_FX'];
-    const isSellTransaction =
-      sellTransactionTypes.includes(transactionType) ||
-      (transactionType === 'TOURIST_FX' && transactionMode === 'SELL');
-
-    if (isSellTransaction && amount && amount >= 10000) {
+    // This applies to ALL transaction types and modes (BUY or SELL)
+    if (amount && amount >= 10000) {
       required = [
         ...required,
         'PROOF_OF_FUNDS',
+        'SOURCE_OF_FUNDS_DECLARATION',
         'DIGITAL_SIGNATURE',
       ];
-      // SOURCE_OF_FUNDS_DECLARATION is always optional
     }
 
     return required;

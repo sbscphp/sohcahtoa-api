@@ -36,7 +36,7 @@ router.use(authenticate);
  *       **Required documents per type:**
  *       - `PTA`: VISA, RETURN_TICKET
  *       - `BTA`: TCC, PASSPORT, VISA, RETURN_TICKET, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER
- *       - `SCHOOL_FEES`: PASSPORT, SCHOOL_ADMISSION, INVOICE (+ STATEMENT_OF_RESULT, DEGREE for postgraduate)
+ *       - `SCHOOL_FEES`: PASSPORT, STUDENT_PASSPORT, SCHOOL_ADMISSION, INVOICE (+ STATEMENT_OF_RESULT, DEGREE for postgraduate)
  *       - `MEDICAL`: PASSPORT, VISA, RETURN_TICKET, FORM_A_DOCUMENT, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER
  *       - `PROFESSIONAL_BODY`: MEMBERSHIP_CARD, INVOICE
  *       - `TOURIST_FX`: VISA, PASSPORT, RETURN_TICKET, RECEIPT
@@ -45,8 +45,7 @@ router.use(authenticate);
  *       - `IMTO_REMITTANCE`: (no required documents)
  *       - `CASH_REMITTANCE`: (no required documents)
  *
- *       **Additional documents for SELL transactions ≥ $10,000:**
- *       For RESIDENT_FX, EXPATRIATE_FX, or TOURIST_FX (mode=SELL) with amount ≥ $10,000:
+ *       **Additional documents for ALL transactions ≥ $10,000 (BUY or SELL):**
  *       - `PROOF_OF_FUNDS`: Evidence of fund source
  *       - `SOURCE_OF_FUNDS_DECLARATION`: Declaration form about fund sources
  *       - `DIGITAL_SIGNATURE`: Customer's digital signature
@@ -144,7 +143,7 @@ router.use(authenticate);
  *                   properties:
  *                     documentType:
  *                       type: string
- *                       enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, TCC, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, STATEMENT_OF_RESULT, DEGREE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, WORK_PERMIT, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
+ *                       enum: [PASSPORT, STUDENT_PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, TCC, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, STATEMENT_OF_RESULT, DEGREE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, WORK_PERMIT, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
  *                       description: Type of document. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
  *                       example: PASSPORT
  *                     fileUrl:
@@ -352,7 +351,7 @@ router.post("/transactions", customerTransactionController.createTransaction);
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: [PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
+ *                 enum: [PASSPORT, STUDENT_PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
  *                 description: Type of document being uploaded. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
  *               documents:
  *                 type: array
