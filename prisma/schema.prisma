@@ -842,6 +842,7 @@ model Transaction {
   cashPickup   CashPickup?
   prepaidCard  PrepaidCard?
   receipt      Receipt?
+  settlement   Settlement?
   bankAccounts TransactionBankAccount[]
 
   @@index([userId])
@@ -1045,6 +1046,7 @@ model Settlement {
   updatedAt        DateTime      @updatedAt
 
   bankDetails BankDetail?
+  transaction Transaction @relation(fields: [transactionId], references: [id])
 
   @@index([transactionId])
   @@index([status])

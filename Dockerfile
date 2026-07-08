@@ -36,7 +36,7 @@ FROM node:18-slim
 WORKDIR /app
 
 # Install OpenSSL for Prisma and netcat for health checks
-RUN apt-get update -y && apt-get install -y openssl netcat-openbsd && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y openssl netcat-openbsd postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json ./
