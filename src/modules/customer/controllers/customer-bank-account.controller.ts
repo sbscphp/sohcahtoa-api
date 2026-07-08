@@ -40,7 +40,8 @@ export class CustomerBankAccountController {
   async listBankAccounts(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
-      const accounts = await customerBankAccountService.listBankAccounts(userId);
+      const currency = req.query.currency as string | undefined;
+      const accounts = await customerBankAccountService.listBankAccounts(userId, currency);
       res.json(successResponse(accounts));
     } catch (err) {
       next(err);
@@ -55,11 +56,12 @@ export class CustomerBankAccountController {
   async addBankAccount(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
-      const { bankName, accountNumber, accountName } = req.body;
+      const { bankName, accountNumber, accountName, currency } = req.body;
       const account = await customerBankAccountService.addBankAccount(userId, {
         bankName,
         accountNumber,
         accountName,
+        currency,
       });
       res.status(201).json(successResponse(account, 'Bank account saved'));
     } catch (err) {

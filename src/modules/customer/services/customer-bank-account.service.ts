@@ -102,8 +102,10 @@ export class CustomerBankAccountService {
     bankName: string;
     accountNumber: string;
     accountName: string;
+    currency?: string;
   }) {
     const { bankName, accountNumber, accountName } = data;
+    const currency = data.currency ? data.currency.toUpperCase().trim() : null;
 
     if (!bankName?.trim()) throw new ValidationError('bankName is required');
     if (!accountNumber?.trim()) throw new ValidationError('accountNumber is required');
@@ -118,12 +120,13 @@ export class CustomerBankAccountService {
     // Upsert so that re-adding the same account just returns the existing record
     const bankAccount = await (prisma as any).customerBankAccount.upsert({
       where: { userId_accountNumber: { userId, accountNumber } },
-      update: { bankName, accountName, isVerified: true, updatedAt: new Date() },
+      update: { bankName, accountName, currency, isVerified: true, updatedAt: new Date() },
       create: {
         userId,
         bankName,
         accountNumber,
         accountName,
+        currency,
         isVerified: true,
       },
     });
@@ -133,11 +136,26 @@ export class CustomerBankAccountService {
   }
 
   /**
-   * List all bank accounts belonging to a customer.
+   * List bank accounts belonging to a customer.
+   * Pass currency='NGN' for local accounts, any other currency for domiciliary,
+   * or 'FOREIGN' to get all non-NGN accounts. Omit to get all.
    */
-  async listBankAccounts(userId: string) {
+  async listBankAccounts(userId: string, currency?: string) {
+    const where: any = { userId };
+    if (currency) {
+      const cur = currency.toUpperCase().trim();
+      if (cur === 'FOREIGN') {
+        // All non-NGN accounts (domiciliary)
+        where.AND = [
+          { currency: { not: null } },
+          { currency: { not: 'NGN' } },
+        ];
+      } else {
+        where.currency = cur === 'NGN' ? { in: ['NGN', null] } : cur;
+      }
+    }
     const accounts = await (prisma as any).customerBankAccount.findMany({
-      where: { userId },
+      where,
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
     return accounts;

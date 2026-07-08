@@ -517,6 +517,11 @@ DO $$ BEGIN
 EXCEPTION WHEN others THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TABLE "customer_bank_accounts" ADD COLUMN IF NOT EXISTS "currency" TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
 -- ========================================
 -- PROVIDUS BANK & SETTLEMENT SYSTEM
 -- ========================================
