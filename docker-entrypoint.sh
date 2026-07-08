@@ -164,7 +164,7 @@ echo ""
 
 # Ensure critical schema changes are applied (fallback for migration issues)
 echo "🔧 Verifying critical schema changes..."
-npx prisma db execute --stdin <<'EOF'
+cat > /tmp/schema-fallback.sql <<'EOF'
 -- Ensure taxClearanceNumber column exists
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "taxClearanceNumber" TEXT;
 
@@ -937,6 +937,22 @@ CREATE TABLE IF NOT EXISTS "wallet_entry_notes" (
 
 CREATE INDEX IF NOT EXISTS "wallet_entry_notes_entryId_idx" ON "wallet_entry_notes"("entryId");
 EOF
+
+node -e "
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+(async () => {
+  const prisma = new PrismaClient();
+  try {
+    const sql = fs.readFileSync('/tmp/schema-fallback.sql', 'utf8');
+    await prisma.\$executeRawUnsafe(sql);
+  } catch (e) {
+    console.log('⚠️ Schema fallback error: ' + (e.message || e));
+  } finally {
+    await prisma.\$disconnect();
+  }
+})();
+"
 
 echo "✅ Schema verification completed"
 echo ""
