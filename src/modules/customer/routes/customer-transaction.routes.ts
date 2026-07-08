@@ -270,6 +270,31 @@ router.use(authenticate);
  *                                 type: string
  *                                 format: date-time
  *                                 nullable: true
+ *                     savedBankAccounts:
+ *                       type: array
+ *                       description: Customer's previously saved bank/domiciliary accounts for pre-filling refund or payment details
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           bankName:
+ *                             type: string
+ *                             example: Access Bank
+ *                           accountNumber:
+ *                             type: string
+ *                             example: "0123456789"
+ *                           accountName:
+ *                             type: string
+ *                             example: John Doe
+ *                           currency:
+ *                             type: string
+ *                             example: USD
+ *                           isDefault:
+ *                             type: boolean
+ *                           isVerified:
+ *                             type: boolean
  *                     message:
  *                       type: string
  *                       example: "Transaction initiated successfully. Please upload required documents to proceed."
@@ -1082,6 +1107,50 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *                         updatedAt:
  *                           type: string
  *                           format: date-time
+ *                     bankAccounts:
+ *                       type: array
+ *                       description: Bank accounts linked to this specific transaction
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           bankName:
+ *                             type: string
+ *                           accountNumber:
+ *                             type: string
+ *                           accountName:
+ *                             type: string
+ *                           isDefault:
+ *                             type: boolean
+ *                           isVerified:
+ *                             type: boolean
+ *                     savedBankAccounts:
+ *                       type: array
+ *                       description: All saved bank/domiciliary accounts for this customer (for pre-filling)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           bankName:
+ *                             type: string
+ *                             example: Access Bank
+ *                           accountNumber:
+ *                             type: string
+ *                             example: "0123456789"
+ *                           accountName:
+ *                             type: string
+ *                             example: John Doe
+ *                           currency:
+ *                             type: string
+ *                             example: USD
+ *                           isDefault:
+ *                             type: boolean
+ *                           isVerified:
+ *                             type: boolean
  *                     prepaidCard:
  *                       type: object
  *                       nullable: true
@@ -1604,6 +1673,58 @@ router.post("/transactions/totals", customerTransactionController.getTransaction
  *         description: Transaction updated successfully
  */
 router.patch('/transactions/:transactionId', customerTransactionController.updateTransaction);
+
+/**
+ * @swagger
+ * /api/customer/bank-accounts:
+ *   get:
+ *     summary: Get saved domiciliary/bank accounts
+ *     description: Returns all saved bank accounts for the authenticated customer, ordered by default first then newest.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of saved bank accounts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       bankName:
+ *                         type: string
+ *                         example: Access Bank
+ *                       accountNumber:
+ *                         type: string
+ *                         example: "0123456789"
+ *                       accountName:
+ *                         type: string
+ *                         example: John Doe
+ *                       currency:
+ *                         type: string
+ *                         example: USD
+ *                       isDefault:
+ *                         type: boolean
+ *                       isVerified:
+ *                         type: boolean
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/bank-accounts', customerTransactionController.getDomiciliaryAccounts);
 
 /**
  * @swagger

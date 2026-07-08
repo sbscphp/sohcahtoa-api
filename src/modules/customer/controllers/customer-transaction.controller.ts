@@ -414,6 +414,23 @@ class CustomerTransactionController {
   };
 
   /**
+   * GET /api/customer/bank-accounts — list saved domiciliary/bank accounts
+   */
+  getDomiciliaryAccounts = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+      const data = await customerTransactionService.getDomiciliaryAccounts(userId);
+      res.json(successResponse(data));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * Update editable fields on a transaction (refund bank details, beneficiary, passport info)
    */
   updateTransaction = async (req: AuthRequest, res: Response, next: NextFunction) => {

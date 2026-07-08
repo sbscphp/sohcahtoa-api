@@ -659,6 +659,20 @@ export class CustomerTransactionService {
       orderBy: { uploadedAt: 'desc' },
     });
 
+    // Fetch the customer's saved bank accounts so the frontend can pre-fill
+    const savedBankAccounts = await (prisma as any).customerBankAccount.findMany({
+      where: { userId },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        accountName: true,
+        isDefault: true,
+        isVerified: true,
+      },
+    });
+
     const result = {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -671,6 +685,7 @@ export class CustomerTransactionService {
         mode,
         numericAmount
       ),
+      savedBankAccounts,
       message: hasDocuments
         ? 'Transaction submitted successfully and is awaiting admin review.'
         : 'Transaction initiated successfully. Please upload required documents to proceed.',
@@ -1674,7 +1689,7 @@ export class CustomerTransactionService {
 
     // Fetch payment and settlement details in parallel
     const client = prisma as any;
-    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts, transactionBankAccounts] =
+    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts, transactionBankAccounts, savedBankAccounts] =
       await Promise.all([
         prisma.settlement
           .findUnique({ where: { transactionId }, include: { bankDetails: true } })
@@ -1768,6 +1783,20 @@ export class CustomerTransactionService {
             orderBy: { createdAt: 'asc' as const },
           })
           .catch(() => []),
+        client.customerBankAccount
+          .findMany({
+            where: { userId: transaction.userId },
+            orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'desc' as const }],
+            select: {
+              id: true,
+              bankName: true,
+              accountNumber: true,
+              accountName: true,
+              isDefault: true,
+              isVerified: true,
+            },
+          })
+          .catch(() => []),
       ]);
 
     return {
@@ -1811,6 +1840,9 @@ export class CustomerTransactionService {
 
       // Customer's own bank accounts attached to this transaction
       bankAccounts: (transactionBankAccounts as any[]).map((r: any) => r.bankAccount),
+
+      // All saved bank accounts for this customer (for pre-fill)
+      savedBankAccounts: savedBankAccounts as any[],
 
       rejection: transaction.rejectionReason
         ? {
@@ -2498,6 +2530,27 @@ export class CustomerTransactionService {
       passportVerified: kyc.passportVerified,
       kycStatus: kyc.status,
     };
+  }
+
+  /**
+   * Get all saved domiciliary/bank accounts for a customer
+   */
+  async getDomiciliaryAccounts(userId: string) {
+    const accounts = await (prisma as any).customerBankAccount.findMany({
+      where: { userId },
+      orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'desc' as const }],
+      select: {
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        accountName: true,
+        currency: true,
+        isDefault: true,
+        isVerified: true,
+        createdAt: true,
+      },
+    });
+    return accounts;
   }
 
 }
