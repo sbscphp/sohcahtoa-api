@@ -449,7 +449,7 @@ export class NIBSSClient {
         dataProcessorId:    this.consentClientId,
         dataOwnerID:        dataOwnerId,
         requestType,
-        consentType:       'OfflineConsent',
+        consentType:        'RedirectLink',
         dataSubjectPresent,
         authenticationDate: today,
       };
@@ -482,7 +482,7 @@ export class NIBSSClient {
       }
 
       if (res.data.responseCode === '25') {
-        logger.info('Consent Hub: no contact info on record — proceeding with OfflineConsent session', {
+        logger.info('Consent Hub: no contact info on record — proceeding with session', {
           sessionId: res.data.sessionId,
         });
       }
@@ -501,7 +501,7 @@ export class NIBSSClient {
       // If a sessionId is present in the error body, treat it as a successful session creation.
       const errorData = error.response?.data as ConsentInitiateResponse | undefined;
       if (errorData?.responseCode === '25' && errorData?.sessionId) {
-        logger.info('Consent Hub: no contact info (code 25) — proceeding with OfflineConsent session', {
+        logger.info('Consent Hub: no contact info (code 25) — proceeding with session', {
           sessionId: errorData.sessionId,
         });
         return {
