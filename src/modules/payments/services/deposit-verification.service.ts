@@ -144,7 +144,7 @@ export class DepositVerificationService {
       await Promise.all([
         prisma.providusDeposit.update({
           where: { id: depositId },
-          data:  { status: ProvidusTransactionStatus.REVERSED },
+          data:  { status: 'REVERSED' as any },
         }),
         prisma.settlement.create({
           data: {
@@ -197,7 +197,7 @@ export class DepositVerificationService {
       await Promise.all([
         prisma.providusDeposit.update({
           where: { id: depositId },
-          data:  { status: ProvidusTransactionStatus.REVERSED },
+          data:  { status: 'REVERSED' as any },
         }),
         prisma.transaction.update({
           where: { id: transactionId },

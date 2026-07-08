@@ -48,6 +48,7 @@ interface CreateCustomerTransactionPayload {
   // School fees specific fields
   admissionType?: 'UNDERGRADUATE' | 'POSTGRADUATE' | 'OTHER';
   studentName?: string;
+  studentNin?: string;
   studentPassportDocumentNumber?: string;
   studentPassportIssueDate?: string;
   studentPassportExpiryDate?: string;
@@ -173,6 +174,7 @@ export class CustomerTransactionService {
       passportExpiryDate,
       admissionType,
       studentName,
+      studentNin,
       studentPassportDocumentNumber,
       studentPassportIssueDate,
       studentPassportExpiryDate,
@@ -502,6 +504,7 @@ export class CustomerTransactionService {
           formAId,
           admissionType: admissionType ?? null,
           studentName: studentName ?? null,
+          studentNin: studentNin ?? null,
           studentPassportDocumentNumber: studentPassportDocumentNumber ?? null,
           studentPassportIssueDate: studentPassportIssueDate ?? null,
           studentPassportExpiryDate: studentPassportExpiryDate ?? null,
@@ -1681,6 +1684,7 @@ export class CustomerTransactionService {
     const passportIssueDate             = personalInfoData?.passportIssueDate             ?? null;
     const passportExpiryDate            = personalInfoData?.passportExpiryDate            ?? null;
     const studentName                   = personalInfoData?.studentName                   ?? null;
+    const studentNin                    = personalInfoData?.studentNin                    ?? null;
     const studentPassportDocumentNumber = personalInfoData?.studentPassportDocumentNumber ?? null;
     const studentPassportIssueDate      = personalInfoData?.studentPassportIssueDate      ?? null;
     const studentPassportExpiryDate     = personalInfoData?.studentPassportExpiryDate     ?? null;
@@ -1860,6 +1864,7 @@ export class CustomerTransactionService {
         tinNumber: userKyc?.tin ?? stepTin ?? null,
         admissionType,
         studentName,
+        studentNin,
         studentPassportDocumentNumber,
         studentPassportIssueDate,
         studentPassportExpiryDate,
