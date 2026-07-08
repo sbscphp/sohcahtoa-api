@@ -26,10 +26,12 @@ class AgentService {
     const statusRaw = (filters.status ?? filters.isActive ?? "").toString().trim().toLowerCase();
     if (statusRaw === "active") {
       where.isActive = true;
+      where.isApproved = true;
     } else if (statusRaw === "deactivated") {
       where.isActive = false;
+      where.isApproved = true;
     } else if (statusRaw === "pending") {
-      where.isActive = true; // Fallback so we don't break existing queries entirely, but technically pending doesn't exist.
+      where.isApproved = false;
     } else if (statusRaw === "true") {
       where.isActive = true;
     } else if (statusRaw === "false") {
@@ -176,7 +178,7 @@ class AgentService {
       return {
         ...agentWithoutBranchObj,
         branchName,
-        status: a.isActive ? "Active" : "Deactivated",
+        status: !a.isApproved ? "Pending" : (a.isActive ? "Active" : "Deactivated"),
         totalTransactions: totals.count,
         totalTransactionsVolume: totals.volume,
       };
@@ -199,6 +201,7 @@ class AgentService {
         email: true,
         phoneNumber: true,
         isActive: true,
+        isApproved: true,
         branchId: true,
         branch: { select: { name: true } },
       },
@@ -232,7 +235,7 @@ class AgentService {
           contactEmail: a.email,
           totalTransactions: count,
           transactionVolume: vol,
-          status: a.isActive ? "Active" : "Deactivated",
+          status: !a.isApproved ? "Pending" : (a.isActive ? "Active" : "Deactivated"),
         };
       })
     );
@@ -297,7 +300,7 @@ class AgentService {
     const volPickup = Number((sumPickupAgg as any)?._sum?.amount || 0);
     const totalTransactionsVolume = volNaira + volForeign + volPickup;
     const { branchId: _omit, ...rest } = agent as any;
-    const status = agent.isActive ? "Active" : "Deactivated";
+    const status = !agent.isApproved ? "Pending" : (agent.isActive ? "Active" : "Deactivated");
     return { ...rest, status, totalTransactions, totalTransactionsVolume };
   }
 

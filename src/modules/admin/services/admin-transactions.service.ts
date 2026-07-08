@@ -1746,6 +1746,8 @@ export class AdminTransactionsService {
         where: { transactionId, type: "DEBIT" },
         select: { id: true, walletId: true }
       });
+
+    
       for (const entry of affectedEntries) {
         await auditTrailService.logAction({
           adminId,
