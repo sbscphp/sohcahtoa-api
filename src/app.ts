@@ -23,6 +23,7 @@ import customerSupportRoutes from './modules/customer/routes/customer-support.ro
 import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
 import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
+import { securityFilter } from './shared/middleware/security-filter';
 import notificationRoutes from './modules/notifications/routes/notification.routes';
 import providusWebhookRoutes from './modules/payments/routes/providus-webhook.routes';
 import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.routes';
@@ -38,6 +39,9 @@ const logger = createLogger('app');
 
 export const createApp = async (): Promise<Application> => {
   const app = express();
+
+  // Block scanners, exploit probes, and malicious paths before any other processing
+  app.use(securityFilter);
 
   // Security middleware
   app.use(
