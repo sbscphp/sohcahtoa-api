@@ -62,6 +62,7 @@ interface CreateCustomerTransactionPayload {
     // Beneficiary identity
     name?: string;
     organizationName?: string;
+    schoolName?: string;        // alias for organizationName on SCHOOL_FEES transactions
     beneficiaryName?: string;
     beneficiaryPhone?: string;
     beneficiaryEmail?: string;
