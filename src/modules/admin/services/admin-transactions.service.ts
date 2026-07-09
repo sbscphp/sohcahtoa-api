@@ -437,6 +437,7 @@ export class AdminTransactionsService {
     });
     let isApprovalOfficer = false;
     let approvalState: string | null = null;
+    let currentOrder: number | null = null;
     let pendingAssignees: any[] = [];
 
     // Find workflow template
@@ -516,6 +517,7 @@ export class AdminTransactionsService {
         if (currentStageIndex !== -1) {
           const totalStages = workflow.stages.length;
           approvalState = `Stage ${currentStageIndex + 1} of ${totalStages} (${activeStage.name})`;
+          currentOrder = currentStageIndex + 1;
 
           pendingAssignees = activeStage.assignees.map((a: any) => ({
             adminId: a.adminId,
@@ -580,6 +582,7 @@ export class AdminTransactionsService {
         approvalType: workflow?.approvalType || null,
         isApprovalOfficer,
         approvalState,
+        currentOrder,
         pendingAssignees,
         workflowStages,
       },
