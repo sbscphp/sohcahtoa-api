@@ -5,22 +5,55 @@ const logger = createLogger('security-filter');
 
 // Paths that are never valid for a Node.js API — instant reject
 const BLOCKED_PATH_PATTERNS = [
+  // PHP exploits
   /\.php$/i,
   /phpunit/i,
   /eval-stdin/i,
   /wp-admin/i,
   /wp-login/i,
   /xmlrpc\.php/i,
-  /\.env$/i,
-  /\/etc\/passwd/i,
   /pearcmd/i,
   /invokefunction/i,
   /shell_exec/i,
-  /\/containers\/json/i,   // Docker API probe
-  /\/v\d+\/containers/i,   // Docker API probe
-  /hello\.world/i,
+
+  // RCE / injection
   /allow_url_include/i,
   /auto_prepend_file/i,
+  /\/etc\/passwd/i,
+  /hello\.world/i,
+
+  // Docker / container API probes
+  /\/containers\/json/i,
+  /\/v\d+\/containers/i,
+  /\.docker\/config/i,
+
+  // Credential & config file harvesting
+  /\.env$/i,
+  /\.env\./i,
+  /google-credentials\.json/i,
+  /serviceAccountKey\.json/i,
+  /firebase-adminsdk\.json/i,
+  /\.aws\/credentials/i,
+  /\.ssh\//i,
+  /\/id_rsa/i,
+  /\.pgpass/i,
+  /\.my\.cnf/i,
+  /\.htpasswd/i,
+  /\.netrc/i,
+  /\.npmrc/i,
+  /\.pypirc/i,
+
+  // Database dump probes
+  /\.(sql|bak|dump)$/i,
+  /database\.(yml|yaml|json)/i,
+
+  // Log file probes
+  /storage\/logs\//i,
+  /laravel\.log/i,
+
+  // Spring Boot / Go actuator probes
+  /\/actuator\//i,
+  /\/debug\/vars/i,
 ];
 
 // Known malicious user agents
