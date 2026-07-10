@@ -17,6 +17,8 @@ export const validate = (req: Request, res: Response, next: NextFunction) => {
     });
 };
 
+const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export const createWorkflowValidation = [
     body('name').notEmpty().withMessage('Workflow name is required'),
     body('type').notEmpty().withMessage('Workflow type is required').isString().withMessage('Workflow type must be a string'),
@@ -24,11 +26,11 @@ export const createWorkflowValidation = [
     body('hasPtaRequest').optional().isBoolean().withMessage('hasPtaRequest must be a boolean'),
     body('transactionType').optional().isString().withMessage('transactionType must be a string'),
     body('stages').isArray({ min: 1 }).withMessage('At least one stage is required'),
-    body('stages.*.id').optional().isUUID().withMessage('Invalid stage ID'),
+    body('stages.*.id').optional().matches(uuidRegex).withMessage('Invalid stage ID'),
     body('stages.*.order').isInt({ min: 1 }).withMessage('Stage order must be at least 1'),
     body('stages.*.assignees').isArray({ min: 1 }).withMessage('At least one assignee is required for each stage'),
-    body('stages.*.assignees.*.id').optional().isUUID().withMessage('Invalid assignee ID'),
-    body('stages.*.assignees.*.adminId').isUUID().withMessage('Invalid admin ID'),
+    body('stages.*.assignees.*.id').optional().matches(uuidRegex).withMessage('Invalid assignee ID'),
+    body('stages.*.assignees.*.adminId').matches(uuidRegex).withMessage('Invalid admin ID'),
 ];
 
 export const createStageTypeValidation = [
