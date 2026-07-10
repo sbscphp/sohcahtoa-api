@@ -68,10 +68,11 @@ export interface AgentTransactionStats {
 export interface AgentCashStatsResult {
   currency: string;
   currencyName: string;
-  date: string; // YYYY-MM-DD (UTC) — always today
-  totalCashReceivedFromCustomer: number;
-  totalCashReceivedFromAdmin: number;
-  totalCashDisbursed: number;
+  period: { preset: string; start: string; end: string };
+  totalCashDisbursedFromCustomer: number; // cash received from customer transactions
+  totalCashDisbursedFromAdmin: number;    // cash received from admin
+  totalCashDisbursedToAgent: number;      // total cash disbursed to agent (customer + admin)
+  totalCashDisbursed: number;             // total cash agent disbursed out (outbound settlements)
 }
 
 export const AGENT_PAYMENT_MOVEMENT_TYPES = [
@@ -534,17 +535,13 @@ class AgentTransactionService {
    */
   async getCashStats(
     agentUserId: string,
-    currencyParam?: string
+    currencyParam?: string,
+    periodPreset?: string
   ): Promise<AgentCashStatsResult> {
     const agent = await this.resolveAgent(agentUserId);
     const currency = (currencyParam || "NGN").trim().toUpperCase();
 
-    // today's window in UTC
-    const now = new Date();
-    const start = new Date(now);
-    start.setUTCHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setUTCHours(23, 59, 59, 999);
+    const { start, end } = resolveAgentCashStatsDateRange(periodPreset || "last_month");
     const today = start.toISOString().slice(0, 10);
 
     const currencyNames: Record<string, string> = {
@@ -563,11 +560,11 @@ class AgentTransactionService {
     const agentTransactionIds = agentTransactions.map((t) => t.id);
 
     if (agentTransactionIds.length === 0) {
-      return { currency, currencyName, date: today, totalCashReceivedFromCustomer: 0, totalCashReceivedFromAdmin: 0, totalCashDisbursed: 0 };
+      return { currency, currencyName, period: { preset: periodPreset || "last_month", start: start.toISOString(), end: end.toISOString() }, totalCashDisbursedFromCustomer: 0, totalCashDisbursedFromAdmin: 0, totalCashDisbursedToAgent: 0, totalCashDisbursed: 0 };
     }
 
     const txIdFilter = { in: agentTransactionIds };
-    const todayRange = { gte: start, lte: end };
+    const periodRange = { gte: start, lte: end };
 
     const adminRows = await prisma.adminUser.findMany({ select: { id: true } });
     const adminIds  = adminRows.map((a) => a.id);
@@ -575,7 +572,7 @@ class AgentTransactionService {
     const [fromCustomerAgg, disbursedAgg, fromAdminAgg] = await Promise.all([
       prisma.settlement.aggregate({
         where: {
-          status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: todayRange,
+          status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: periodRange,
           OR: [
             { paymentMethod: "CASH_DEPOSIT", confirmedBy: agentUserId },
             { paymentMethod: "BANK_TRANSFER", confirmedBy: "SYSTEM" },
@@ -584,24 +581,34 @@ class AgentTransactionService {
         _sum: { amount: true },
       }),
       prisma.outboundSettlement.aggregate({
-        where: { status: "COMPLETED", currency, transactionId: txIdFilter, initiatedBy: agent.id, updatedAt: todayRange },
+        where: { status: "COMPLETED", currency, transactionId: txIdFilter, initiatedBy: agent.id, updatedAt: periodRange },
         _sum: { amount: true },
       }),
       adminIds.length > 0
         ? prisma.settlement.aggregate({
-            where: { status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: todayRange, confirmedBy: { in: adminIds } },
+            where: { status: "CONFIRMED", currency, transactionId: txIdFilter, confirmedAt: periodRange, confirmedBy: { in: adminIds } },
             _sum: { amount: true },
           })
         : Promise.resolve({ _sum: { amount: null } }),
     ]);
 
+    const totalCashReceivedFromCustomer = round2(Number(fromCustomerAgg._sum?.amount ?? 0));
+    const totalCashReceivedFromAdmin    = round2(Number(fromAdminAgg._sum?.amount    ?? 0));
+    const totalCashDisbursed            = round2(Number(disbursedAgg._sum?.amount    ?? 0));
+    const totalCashDisbursedToAgent     = round2(totalCashReceivedFromCustomer + totalCashReceivedFromAdmin);
+
     return {
       currency,
       currencyName,
-      date: today,
-      totalCashReceivedFromCustomer: round2(Number(fromCustomerAgg._sum?.amount ?? 0)),
-      totalCashReceivedFromAdmin:    round2(Number(fromAdminAgg._sum?.amount    ?? 0)),
-      totalCashDisbursed:            round2(Number(disbursedAgg._sum?.amount    ?? 0)),
+      period: {
+        preset: periodPreset || "last_month",
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      totalCashDisbursedFromCustomer: totalCashReceivedFromCustomer,
+      totalCashDisbursedFromAdmin:    totalCashReceivedFromAdmin,
+      totalCashDisbursedToAgent,
+      totalCashDisbursed,
     };
   }
 

@@ -55,7 +55,8 @@ class AgentDashboardController {
       if (!authUser) throw new ValidationError("Authentication required");
 
       const currency = (req.query.currency as string | undefined)?.trim();
-      const data = await agentTransactionService.getCashStats(authUser.userId, currency);
+      const period   = (req.query.period   as string | undefined)?.trim();
+      const data = await agentTransactionService.getCashStats(authUser.userId, currency, period);
       res.json(successResponse(data));
     } catch (error) {
       next(error);
