@@ -462,6 +462,18 @@ class CustomerTransactionController {
     }
   };
 
+  getTransactionStats = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
+
+      const result = await customerTransactionService.getTransactionStats(userId);
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
 }
 
 export default new CustomerTransactionController();

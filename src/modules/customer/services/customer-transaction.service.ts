@@ -2572,6 +2572,28 @@ export class CustomerTransactionService {
   /**
    * Get all saved domiciliary/bank accounts for a customer
    */
+  async getTransactionStats(userId: string) {
+    const baseWhere = { userId };
+
+    const [total, pending, completed, rejected] = await Promise.all([
+      (prisma as any).transaction.count({ where: baseWhere }),
+      (prisma as any).transaction.count({
+        where: {
+          ...baseWhere,
+          status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELLED'] },
+        },
+      }),
+      (prisma as any).transaction.count({
+        where: { ...baseWhere, status: 'COMPLETED' },
+      }),
+      (prisma as any).transaction.count({
+        where: { ...baseWhere, status: 'REJECTED' },
+      }),
+    ]);
+
+    return { total, pending, completed, rejected };
+  }
+
   async getDomiciliaryAccounts(userId: string) {
     const accounts = await (prisma as any).customerBankAccount.findMany({
       where: { userId },

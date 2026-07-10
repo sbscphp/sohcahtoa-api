@@ -1761,4 +1761,40 @@ router.get('/bank-accounts', customerTransactionController.getDomiciliaryAccount
  */
 router.get('/kyc', customerTransactionController.getCustomerKyc);
 
+/**
+ * @swagger
+ * /api/customer/transactions/stats:
+ *   get:
+ *     summary: Get transaction stats for the authenticated customer
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Transaction statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       description: Total number of transactions
+ *                     pending:
+ *                       type: integer
+ *                       description: Transactions not yet completed, rejected, or cancelled
+ *                     completed:
+ *                       type: integer
+ *                       description: Completed transactions
+ *                     rejected:
+ *                       type: integer
+ *                       description: Rejected transactions
+ */
+router.get('/transactions/stats', customerTransactionController.getTransactionStats);
+
 export default router;
