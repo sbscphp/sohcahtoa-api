@@ -131,6 +131,11 @@ interface CreateCustomerTransactionPayload {
     bankName?: string;
     accountNumber?: string;
     accountName?: string;
+    currency?: string;
+    swiftCode?: string;
+    iban?: string;
+    routingNumber?: string;
+    bankAddress?: string;
   };
 }
 
@@ -667,6 +672,31 @@ export class CustomerTransactionService {
       },
       orderBy: { uploadedAt: 'desc' },
     });
+
+    // Auto-save refund bank details to customerBankAccount
+    if (
+      refundBankDetails?.accountNumber &&
+      refundBankDetails?.bankName &&
+      refundBankDetails?.accountName
+    ) {
+      const refundCurrency = (refundBankDetails.currency || 'NGN').toUpperCase();
+      const refundFields = {
+        bankName: refundBankDetails.bankName,
+        accountName: refundBankDetails.accountName,
+        currency: refundCurrency,
+        swiftCode: refundBankDetails.swiftCode ?? null,
+        iban: refundBankDetails.iban ?? null,
+        routingNumber: refundBankDetails.routingNumber ?? null,
+        bankAddress: refundBankDetails.bankAddress ?? null,
+        isVerified: true,
+        updatedAt: new Date(),
+      };
+      await (prisma as any).customerBankAccount.upsert({
+        where: { userId_accountNumber: { userId, accountNumber: refundBankDetails.accountNumber } },
+        update: refundFields,
+        create: { userId, accountNumber: refundBankDetails.accountNumber, ...refundFields },
+      });
+    }
 
     // Auto-save domiciliary account if beneficiaryDetails.isDomiciliaryAccount is set
     if (
@@ -2486,7 +2516,7 @@ export class CustomerTransactionService {
     userId: string,
     transactionId: string,
     updates: {
-      refundBankDetails?: { bankName?: string; accountNumber?: string; accountName?: string };
+      refundBankDetails?: { bankName?: string; accountNumber?: string; accountName?: string; currency?: string; swiftCode?: string; iban?: string; routingNumber?: string; bankAddress?: string };
       beneficiaryDetails?: Record<string, any>;
       passportDocumentNumber?: string;
       passportIssueDate?: string;
@@ -2555,6 +2585,28 @@ export class CustomerTransactionService {
         where: { userId },
         update: kycUpdate,
         create: { userId, ...kycUpdate },
+      });
+    }
+
+    // Auto-save refund bank details to customerBankAccount
+    const rbd = updates.refundBankDetails;
+    if (rbd?.accountNumber && rbd?.bankName && rbd?.accountName) {
+      const refundCurrency = (rbd.currency || 'NGN').toUpperCase();
+      const refundFields = {
+        bankName: rbd.bankName,
+        accountName: rbd.accountName,
+        currency: refundCurrency,
+        swiftCode: rbd.swiftCode ?? null,
+        iban: rbd.iban ?? null,
+        routingNumber: rbd.routingNumber ?? null,
+        bankAddress: rbd.bankAddress ?? null,
+        isVerified: true,
+        updatedAt: new Date(),
+      };
+      await (prisma as any).customerBankAccount.upsert({
+        where: { userId_accountNumber: { userId, accountNumber: rbd.accountNumber } },
+        update: refundFields,
+        create: { userId, accountNumber: rbd.accountNumber, ...refundFields },
       });
     }
 
