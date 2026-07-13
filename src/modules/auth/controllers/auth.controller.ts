@@ -74,23 +74,41 @@ export class AuthController {
     }
   }
 
-  // NIBSS Callback: NIBSS POSTs retrievalToken here after user authenticates on their portal
+  // NIBSS Callback: NIBSS redirects (GET) or POSTs retrievalToken here after user authenticates
   async nibssConsentCallback(req: Request, res: Response, next: NextFunction) {
     try {
-      // NIBSS may send sessionId/retrievalToken in various field names — handle common variants
-      const sessionId = req.body.sessionId || req.body.session_id || req.query.sessionId as string;
-      const retrievalToken = req.body.retrievalToken || req.body.retrieval_token || req.body.token;
+      // NIBSS may send sessionId/retrievalToken in body (POST/OfflineConsent) or
+      // query params (GET/RedirectLink browser redirect) — handle both
+      const sessionId =
+        (req.query.sessionId as string) ||
+        (req.query.session_id as string) ||
+        req.body.sessionId ||
+        req.body.session_id;
+
+      const retrievalToken =
+        (req.query.retrievalToken as string) ||
+        (req.query.retrieval_token as string) ||
+        (req.query.token as string) ||
+        req.body.retrievalToken ||
+        req.body.retrieval_token ||
+        req.body.token;
 
       if (!sessionId || !retrievalToken) {
         res.status(400).json({ success: false, message: 'sessionId and retrievalToken are required' });
         return;
       }
 
-      // Process asynchronously — respond 200 immediately so NIBSS doesn't retry
-      res.status(200).json({ success: true, message: 'Callback received' });
+      // For GET redirects (browser), respond with a page the user can close.
+      // For POST callbacks (server-to-server), respond 200 JSON so NIBSS doesn't retry.
+      if (req.method === 'GET') {
+        res.status(200).send(
+          '<!DOCTYPE html><html><body><p>BVN consent received. You may close this tab and return to the app.</p></body></html>'
+        );
+      } else {
+        res.status(200).json({ success: true, message: 'Callback received' });
+      }
 
       await authService.handleNibssConsentCallback(sessionId, retrievalToken).catch((err) => {
-        // Log but don't crash — response already sent
         console.error('NIBSS callback processing error', err);
       });
     } catch (error) {

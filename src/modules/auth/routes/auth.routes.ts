@@ -221,7 +221,8 @@ router.post('/signup', authController.signup);
 router.get('/nibss/igree/callback', authController.iGreeCallback);
 router.post('/nibss/igree/callback', authController.iGreeCallback);
 
-// NIBSS Consent Hub callback (legacy — called by NIBSS POSTing retrievalToken)
+// NIBSS Consent Hub callback — POST for OfflineConsent (server-to-server), GET for RedirectLink (browser redirect)
+router.get('/nibss/callback', authController.nibssConsentCallback);
 router.post('/nibss/callback', authController.nibssConsentCallback);
 
 // Nigerian signup flow (4 steps)
