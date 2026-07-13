@@ -156,13 +156,34 @@ export class CustomerBankAccountService {
     if (currency) {
       const cur = currency.toUpperCase().trim();
       if (cur === 'FOREIGN') {
-        // All non-NGN accounts (domiciliary)
+        // All non-NGN accounts — explicit foreign currency OR has domiciliary fields (swiftCode/iban)
+        where.OR = [
+          { currency: { not: null, notIn: ['NGN'] } },
+          { swiftCode: { not: null } },
+          { iban: { not: null } },
+          { routingNumber: { not: null } },
+        ];
+      } else if (cur === 'NGN') {
+        // NGN accounts: explicit NGN or no currency set and no domiciliary fields
         where.AND = [
-          { currency: { not: null } },
-          { currency: { not: 'NGN' } },
+          { OR: [{ currency: 'NGN' }, { currency: null }] },
+          { swiftCode: null },
+          { iban: null },
+          { routingNumber: null },
         ];
       } else {
-        where.currency = cur === 'NGN' ? { in: ['NGN', null] } : cur;
+        // Specific foreign currency: exact match OR null currency with domiciliary fields
+        where.OR = [
+          { currency: cur },
+          {
+            currency: null,
+            OR: [
+              { swiftCode: { not: null } },
+              { iban: { not: null } },
+              { routingNumber: { not: null } },
+            ],
+          },
+        ];
       }
     }
     const accounts = await (prisma as any).customerBankAccount.findMany({

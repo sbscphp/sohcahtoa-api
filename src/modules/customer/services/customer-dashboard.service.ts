@@ -191,11 +191,23 @@ class CustomerDashboardService {
 
     const [total, pending, completed, rejected] = await Promise.all([
       prisma.transaction.count({ where: base }),
-      prisma.transaction.count({
-        where: { ...base, status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELLED'] as any } },
+      (prisma as any).transaction.count({
+        where: {
+          ...base,
+          status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELLED'] },
+          rejectedAt: null,
+        },
       }),
       prisma.transaction.count({ where: { ...base, status: 'COMPLETED' as any } }),
-      prisma.transaction.count({ where: { ...base, status: 'REJECTED' as any } }),
+      (prisma as any).transaction.count({
+        where: {
+          ...base,
+          OR: [
+            { status: 'REJECTED' },
+            { rejectedAt: { not: null } },
+          ],
+        },
+      }),
     ]);
 
     logger.debug('[getTransactionStats] Stats computed', { userId, total, pending, completed, rejected });

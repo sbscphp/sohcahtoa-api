@@ -2596,13 +2596,20 @@ export class CustomerTransactionService {
         where: {
           ...baseWhere,
           status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELLED'] },
+          rejectedAt: null,
         },
       }),
       (prisma as any).transaction.count({
         where: { ...baseWhere, status: 'COMPLETED' },
       }),
       (prisma as any).transaction.count({
-        where: { ...baseWhere, status: 'REJECTED' },
+        where: {
+          ...baseWhere,
+          OR: [
+            { status: 'REJECTED' },
+            { rejectedAt: { not: null } },
+          ],
+        },
       }),
     ]);
 
