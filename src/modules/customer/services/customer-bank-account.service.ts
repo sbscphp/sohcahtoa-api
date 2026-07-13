@@ -114,8 +114,10 @@ export class CustomerBankAccountService {
     if (!bankName?.trim()) throw new ValidationError('bankName is required');
     if (!accountNumber?.trim()) throw new ValidationError('accountNumber is required');
     if (!accountName?.trim()) throw new ValidationError('accountName is required');
-    if (!/^\d{10}$/.test(accountNumber)) {
-      throw new ValidationError('accountNumber must be exactly 10 digits');
+
+    const isNgnAccount = !currency || currency === 'NGN';
+    if (isNgnAccount && !/^\d{10}$/.test(accountNumber)) {
+      throw new ValidationError('accountNumber must be exactly 10 digits for NGN accounts');
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
