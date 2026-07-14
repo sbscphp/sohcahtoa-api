@@ -954,4 +954,35 @@ router.post(
  *         description: Transaction not found or not created by this agent
  */
 router.post("/:transactionId/mark-paid", agentTransactionController.markTransactionAsPaid);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/receipt:
+ *   get:
+ *     summary: Download a PDF receipt for a completed transaction
+ *     description: Generates and streams a PDF receipt on demand. Only available for COMPLETED transactions.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PDF receipt file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Transaction is not completed
+ *       404:
+ *         description: Transaction not found
+ */
+router.get("/:transactionId/receipt", agentTransactionController.downloadReceipt);
+
 export default router;

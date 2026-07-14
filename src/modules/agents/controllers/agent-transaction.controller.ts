@@ -9,6 +9,7 @@ import {
   AgentPaymentMovementType,
   AgentTransactionExportFilters,
 } from "../services/agent-transaction.service";
+import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
 
 class AgentTransactionController {
   async createTransaction(req: AuthRequest, res: Response, next: NextFunction) {
@@ -499,6 +500,28 @@ class AgentTransactionController {
       const { transactionId } = req.params;
       const data = await agentTransactionService.markTransactionAsPaid(agentId, transactionId);
       res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async downloadReceipt(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError("Authentication required");
+
+      const { transactionId } = req.params;
+      if (!transactionId) {
+        res.status(400).json({ success: false, message: 'transactionId is required' });
+        return;
+      }
+
+      const { pdf, filename } = await generateTransactionReceipt(transactionId, authUser.userId, 'AGENT');
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdf.length);
+      res.end(pdf);
     } catch (error) {
       next(error);
     }

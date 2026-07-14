@@ -47,7 +47,6 @@ router.use(authenticate);
  *
  *       **Additional documents for ALL transactions ≥ $10,000 (BUY or SELL):**
  *       - `PROOF_OF_FUNDS`: Evidence of fund source
- *       - `SOURCE_OF_FUNDS_DECLARATION`: Declaration form about fund sources
  *       - `DIGITAL_SIGNATURE`: Customer's digital signature
  *     tags: [Customer Transactions]
  *     security:
@@ -144,7 +143,7 @@ router.use(authenticate);
  *                     documentType:
  *                       type: string
  *                       enum: [PASSPORT, STUDENT_PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, TCC, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, STATEMENT_OF_RESULT, DEGREE, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, WORK_PERMIT, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
- *                       description: Type of document. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
+ *                       description: Type of document. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS and DIGITAL_SIGNATURE are required.
  *                       example: PASSPORT
  *                     fileUrl:
  *                       type: string
@@ -352,7 +351,7 @@ router.post("/transactions", customerTransactionController.createTransaction);
  *               documentType:
  *                 type: string
  *                 enum: [PASSPORT, STUDENT_PASSPORT, VISA, TICKET, RETURN_TICKET, BVN, NIN, TIN, FORM_A_DOCUMENT, CORPORATE_BODY_LETTER, PARTNER_INVITATION_LETTER, SCHOOL_ADMISSION, MEDICAL_LETTER, OVERSEAS_MEDICAL_LETTER, PROFESSIONAL_BODY_LETTER, MEMBERSHIP_CARD, INVOICE, RECEIPT, UTILITY_BILL, PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, DIGITAL_SIGNATURE]
- *                 description: Type of document being uploaded. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS, SOURCE_OF_FUNDS_DECLARATION, and DIGITAL_SIGNATURE are required.
+ *                 description: Type of document being uploaded. For transactions above $10,000 (SELL transactions), PROOF_OF_FUNDS and DIGITAL_SIGNATURE are required.
  *               documents:
  *                 type: array
  *                 items:
@@ -1796,5 +1795,36 @@ router.get('/kyc', customerTransactionController.getCustomerKyc);
  *                       description: Rejected transactions
  */
 router.get('/transactions/stats', customerTransactionController.getTransactionStats);
+
+/**
+ * @swagger
+ * /api/customer/transactions/{transactionId}/receipt:
+ *   get:
+ *     summary: Download a PDF receipt for a completed transaction
+ *     description: Generates and streams a PDF receipt on demand. Only available for COMPLETED transactions.
+ *     tags: [Customer Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Transaction ID or reference number
+ *     responses:
+ *       200:
+ *         description: PDF receipt file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Transaction is not completed
+ *       404:
+ *         description: Transaction not found
+ */
+router.get('/transactions/:transactionId/receipt', customerTransactionController.downloadReceipt);
 
 export default router;

@@ -3,6 +3,7 @@ import customerTransactionService from "../services/customer-transaction.service
 import { successResponse, paginatedResponse } from "../../../shared/utils";
 import { AuthRequest } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
+import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
 
 class CustomerTransactionController {
   /**
@@ -457,6 +458,28 @@ class CustomerTransactionController {
         nigeriaAddress,
       });
       res.status(200).json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  downloadReceipt = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const userId = this.resolveUserId(req, res, false);
+      if (userId === null) return;
+
+      const { transactionId } = req.params;
+      if (!transactionId) {
+        res.status(400).json({ success: false, message: 'transactionId is required' });
+        return;
+      }
+
+      const { pdf, filename } = await generateTransactionReceipt(transactionId, userId, 'CUSTOMER');
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdf.length);
+      res.end(pdf);
     } catch (error) {
       next(error);
     }
