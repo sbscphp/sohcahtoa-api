@@ -9,7 +9,7 @@ import { workflowService } from "./workflow.service";
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
 
-  async getDashboard(month?: number, year?: number, txnType?: string, range?: string) {
+  async getDashboard(startDate?: string, endDate?: string, txnType?: string, range?: string) {
     const now = new Date();
     const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -57,18 +57,21 @@ export class AdminService {
         throw new ValidationError(`Invalid range preset: ${range}`);
       }
     } else {
-      const filterYear = year !== undefined ? year : now.getFullYear();
-      if (month !== undefined) {
-        // Calendar month is 1-indexed (Jan = 1, Dec = 12)
-        start = new Date(filterYear, month - 1, 1, 0, 0, 0, 0);
-        end = new Date(filterYear, month, 0, 23, 59, 59, 999);
-        windowDays = new Date(filterYear, month, 0).getDate();
+      if (startDate) {
+        start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
       } else {
-        // Full year
-        start = new Date(filterYear, 0, 1, 0, 0, 0, 0);
-        end = new Date(filterYear, 11, 31, 23, 59, 59, 999);
-        windowDays = 365;
+        start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
       }
+      
+      if (endDate) {
+        end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+      } else {
+        end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      }
+      
+      windowDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)));
     }
 
     const txWhere: any = { createdAt: { gte: start, lte: end } };
@@ -283,40 +286,67 @@ export class AdminService {
         }
       }
     } else {
-      const filterYear = year !== undefined ? year : now.getFullYear();
-      if (month !== undefined) {
-        const lastDay = new Date(filterYear, month, 0).getDate();
-        labels = Array.from({ length: lastDay }, (_, i) => String(i + 1));
+      if (windowDays <= 90) {
+        // Daily labels for 90 days or less
+        labels = Array(windowDays).fill("");
         series = {
-          completed: Array(lastDay).fill(0),
-          pending: Array(lastDay).fill(0),
-          rejected: Array(lastDay).fill(0),
+          completed: Array(windowDays).fill(0),
+          pending: Array(windowDays).fill(0),
+          rejected: Array(windowDays).fill(0),
         };
+        const dateList: Date[] = [];
+        for (let i = 0; i < windowDays; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          dateList.push(d);
+          labels[i] = `${monthsShort[d.getMonth()]} ${d.getDate()}`;
+        }
         for (const tx of yearTransactions) {
-          const d = new Date(tx.createdAt).getDate();
-          if (tx.status === TransactionStatus.COMPLETED) {
-            series.completed[d - 1] += 1;
-          } else if (tx.status === TransactionStatus.REJECTED) {
-            series.rejected[d - 1] += 1;
-          } else {
-            series.pending[d - 1] += 1;
+          const txDate = new Date(tx.createdAt);
+          const slot = dateList.findIndex((d) => d.toDateString() === txDate.toDateString());
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
           }
         }
       } else {
-        labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        // Monthly labels for more than 90 days
+        const startYear = start.getFullYear();
+        const startMonth = start.getMonth();
+        const endYear = end.getFullYear();
+        const endMonth = end.getMonth();
+        const monthsCount = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+        
+        labels = Array(monthsCount).fill("");
         series = {
-          completed: Array(12).fill(0),
-          pending: Array(12).fill(0),
-          rejected: Array(12).fill(0),
+          completed: Array(monthsCount).fill(0),
+          pending: Array(monthsCount).fill(0),
+          rejected: Array(monthsCount).fill(0),
         };
+        const monthSlots: { year: number; month: number }[] = [];
+        for (let i = 0; i < monthsCount; i++) {
+          const d = new Date(startYear, startMonth + i, 1);
+          monthSlots.push({ year: d.getFullYear(), month: d.getMonth() });
+          labels[i] = `${monthsShort[d.getMonth()]} ${d.getFullYear().toString().substring(2)}`;
+        }
         for (const tx of yearTransactions) {
-          const m = new Date(tx.createdAt).getMonth();
-          if (tx.status === TransactionStatus.COMPLETED) {
-            series.completed[m] += 1;
-          } else if (tx.status === TransactionStatus.REJECTED) {
-            series.rejected[m] += 1;
-          } else {
-            series.pending[m] += 1;
+          const txDate = new Date(tx.createdAt);
+          const slot = monthSlots.findIndex(
+            (m) => m.year === txDate.getFullYear() && m.month === txDate.getMonth()
+          );
+          if (slot !== -1) {
+            if (tx.status === TransactionStatus.COMPLETED) {
+              series.completed[slot] += 1;
+            } else if (tx.status === TransactionStatus.REJECTED) {
+              series.rejected[slot] += 1;
+            } else {
+              series.pending[slot] += 1;
+            }
           }
         }
       }
@@ -357,8 +387,8 @@ export class AdminService {
         totalUsers,
       },
       transactionSummary: {
-        year: range ? null : (year !== undefined ? year : now.getFullYear()),
-        month: range ? null : (month || null),
+        startDate: range ? null : (startDate || null),
+        endDate: range ? null : (endDate || null),
         rangePreset: range || null,
         labels,
         series,

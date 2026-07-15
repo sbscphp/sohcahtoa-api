@@ -134,6 +134,7 @@ export class DepositVerificationService {
 
     const isUnderpaid = balanceDue !== null && balanceDue >  0.01;
     const isOverpaid  = balanceDue !== null && balanceDue < -0.01;
+    const shouldUpdateStep = ['AWAITING_DEPOSIT', 'DEPOSIT_PENDING'].includes(transaction.status);
 
     // ── Auto-reversal on mismatch ─────────────────────────────────────────────
     if (isUnderpaid) {
@@ -141,7 +142,7 @@ export class DepositVerificationService {
         transactionId, expectedAmount, receivedAmount, balanceDue,
       });
 
-      await Promise.all([
+      const updates: any[] = [
         prisma.providusDeposit.update({
           where: { id: depositId },
           data:  { status: 'REVERSED' as any },
@@ -159,13 +160,19 @@ export class DepositVerificationService {
             confirmedBy:      'SYSTEM',
             notes: `Underpayment reversed via Providus. Session: ${deposit.sessionId}. Expected: ₦${expectedAmount.toFixed(2)}, Received: ₦${receivedAmount.toFixed(2)}.`,
           },
-        }),
-        // Reset transaction back to awaiting deposit
-        prisma.transaction.update({
-          where: { id: transactionId },
-          data:  { status: 'AWAITING_DEPOSIT' as any },
-        }),
-      ]);
+        })
+      ];
+
+      if (shouldUpdateStep) {
+        updates.push(
+          prisma.transaction.update({
+            where: { id: transactionId },
+            data:  { status: 'AWAITING_DEPOSIT' as any },
+          })
+        );
+      }
+
+      await Promise.all(updates);
 
       notificationService.sendNotification({
         userId:  transaction.userId,
@@ -204,8 +211,10 @@ export class DepositVerificationService {
           data:  { 
             amountPaid: expectedAmount, 
             balanceDue: 0,
-            status: 'DEPOSIT_CONFIRMED' as any,
-            currentStep: 'DEPOSIT_CONFIRMATION' as any
+            ...(shouldUpdateStep ? {
+              status: 'DEPOSIT_CONFIRMED' as any,
+              currentStep: 'DEPOSIT_CONFIRMATION' as any
+            } : {})
           },
         }),
         // Confirmed settlement for only the expected amount
@@ -279,8 +288,10 @@ export class DepositVerificationService {
         data:  { 
           amountPaid: totalAmountPaid, 
           balanceDue,
-          status: 'DEPOSIT_CONFIRMED' as any,
-          currentStep: 'DEPOSIT_CONFIRMATION' as any
+          ...(shouldUpdateStep ? {
+            status: 'DEPOSIT_CONFIRMED' as any,
+            currentStep: 'DEPOSIT_CONFIRMATION' as any
+          } : {})
         },
       }),
       prisma.settlement.create({

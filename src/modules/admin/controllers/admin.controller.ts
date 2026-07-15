@@ -7,11 +7,11 @@ import { successResponse } from "../../../shared/utils";
 class AdminController {
   getDashboard = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const month = req.query.month ? parseInt(req.query.month as string, 10) : undefined;
-      const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
+      const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+      const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
       const txnType = (req.query.txnType || req.query.type) ? String(req.query.txnType || req.query.type) : undefined;
       const range = (req.query.range || req.query.period) ? String(req.query.range || req.query.period) : undefined;
-      const result = await adminService.getDashboard(month, year, txnType, range);
+      const result = await adminService.getDashboard(startDate, endDate, txnType, range);
       res.json(successResponse(result));
     } catch (error) {
       next(error);

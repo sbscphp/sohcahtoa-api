@@ -62,15 +62,17 @@ const router: Router = Router();
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: month
+ *         name: startDate
  *         schema:
- *           type: integer
- *         description: Calendar month (1-12)
+ *           type: string
+ *           format: date
+ *         description: Start date (YYYY-MM-DD)
  *       - in: query
- *         name: year
+ *         name: endDate
  *         schema:
- *           type: integer
- *         description: Calendar year
+ *           type: string
+ *           format: date
+ *         description: End date (YYYY-MM-DD)
  *       - in: query
  *         name: txnType
  *         schema:
