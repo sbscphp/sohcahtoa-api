@@ -462,8 +462,17 @@ export class AdminTransactionsService {
       });
     }
 
+    // Statuses that indicate the workflow has already been completed (approved or beyond)
+    const workflowCompletedStatuses = [
+      "APPROVED", "REJECTED", "CANCELLED",
+      "DEPOSIT_CONFIRMED", "AWAITING_DEPOSIT", "DEPOSIT_PENDING",
+      "DISBURSEMENT_IN_PROGRESS", "COMPLETED", "AWAITING_DISBURSEMENT",
+      "PENDING_RECORD_VALIDATION",
+    ];
+    const isWorkflowCompleted = workflowCompletedStatuses.includes(trx.status);
+
     // If template ID is set but workflow not found, or no template ID set, try to re-attach
-    if (!workflow && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
+    if (!workflow && !isWorkflowCompleted) {
       const updated = await workflowService.attachWorkflowToTransaction(id).catch(() => null);
       if (updated && updated.workflowTemplateId) {
         workflow = await prisma.workflowTemplate.findUnique({
@@ -508,7 +517,8 @@ export class AdminTransactionsService {
       } 
       
       // Fallback to first stage if not officially started but still pending
-      if (!activeStage && workflow.stages.length > 0 && trx.status !== "APPROVED" && trx.status !== "REJECTED") {
+      // Do NOT fall back if the workflow has already been completed (post-approval statuses)
+      if (!activeStage && workflow.stages.length > 0 && !isWorkflowCompleted) {
         activeStage = workflow.stages[0];
       }
 
@@ -525,8 +535,8 @@ export class AdminTransactionsService {
             roleName: a.admin?.role?.name || "No Role",
           }));
         }
-      } else if (trx.status === "APPROVED") {
-        approvalState = "Approved (Workflow Completed)";
+      } else if (isWorkflowCompleted) {
+        approvalState = trx.status === "REJECTED" ? "Rejected (Workflow Completed)" : "Approved (Workflow Completed)";
       }
     }
 
