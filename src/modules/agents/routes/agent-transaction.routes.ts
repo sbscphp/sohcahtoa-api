@@ -852,11 +852,12 @@ router.post(
  * @swagger
  * /api/agent/transactions/{transactionId}/payment/record:
  *   post:
- *     summary: Record inbound customer payment (non-virtual-account only)
+ *     summary: Record inbound cash payment from customer
  *     description: |
- *       Records NGN **cash** received from the customer with proof-of-payment (branch / in-person collection).
- *       Updates `settlements` and sets the transaction to DEPOSIT_CONFIRMED.
+ *       Records NGN **cash** received from the customer (in-person / branch collection) with proof-of-payment receipt.
+ *       Creates or updates the `Settlement` record with `paymentMethod = CASH_DEPOSIT` and moves the transaction to `DEPOSIT_CONFIRMED` — the same state reached via bank transfer — so the normal disbursement workflow continues.
  *       **Not available** if a virtual account exists for this transaction — use the Providus / VA deposit flow instead.
+ *       Eligible statuses: `VERIFICATION_COMPLETED`, `APPROVED`, `AWAITING_DEPOSIT`, `DEPOSIT_PENDING`.
  *     tags: [Agent Transactions]
  *     security:
  *       - bearerAuth: []
@@ -880,8 +881,8 @@ router.post(
  *             properties:
  *               method:
  *                 type: string
- *                 enum: [CASH_PICKUP]
- *                 description: Must be CASH_PICKUP (cash collection; VA deposits are automatic)
+ *                 enum: [CASH_DEPOSIT, CASH_PICKUP]
+ *                 description: Use CASH_DEPOSIT when the customer pays the agent cash directly
  *               amount:
  *                 type: number
  *                 description: NGN amount received

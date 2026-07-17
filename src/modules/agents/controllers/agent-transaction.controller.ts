@@ -379,8 +379,9 @@ class AgentTransactionController {
       }
 
       const rawMethod = String(method).trim().toUpperCase().replace(/\s+/g, "_");
-      if (rawMethod !== "CASH_PICKUP" && rawMethod !== "CASHPICKUP") {
-        throw new ValidationError("method must be CASH_PICKUP (cash only; not for virtual-account deposits)");
+      const validMethods = ["CASH_PICKUP", "CASHPICKUP", "CASH_DEPOSIT", "CASHDEPOSIT"];
+      if (!validMethods.includes(rawMethod)) {
+        throw new ValidationError("method must be CASH_DEPOSIT or CASH_PICKUP");
       }
       const normalizedMethod = "CASH_PICKUP" as const;
 

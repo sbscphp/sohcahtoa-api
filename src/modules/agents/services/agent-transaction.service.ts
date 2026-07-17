@@ -1339,6 +1339,7 @@ class AgentTransactionService {
     }
 
     const payableStatuses: string[] = [
+      TransactionStatus.VERIFICATION_COMPLETED,
       TransactionStatus.APPROVED,
       TransactionStatus.AWAITING_DEPOSIT,
       TransactionStatus.DEPOSIT_PENDING,
