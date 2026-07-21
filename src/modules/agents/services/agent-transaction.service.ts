@@ -16,6 +16,7 @@ import {
 } from "../../../shared/utils/date-range-presets";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
 import { WalletService } from "../../wallet/services/wallet.service";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const walletService = new WalletService();
 
@@ -1083,6 +1084,7 @@ class AgentTransactionService {
         foreignAmount: true,
         userId: true,
         referenceNumber: true,
+        type: true,
       },
     });
 
@@ -1180,7 +1182,8 @@ class AgentTransactionService {
         where: { id: input.transactionId },
         data: {
           disbursementMethod: input.disbursementMethod,
-          status: TransactionStatus.PENDING_RECORD_VALIDATION as any,
+          status: 'COMPLETED' as any,
+          completedAt: new Date(),
           currentStep: TransactionStep.DISBURSEMENT as any,
           updatedAt: new Date(),
           history: {
@@ -1294,6 +1297,25 @@ class AgentTransactionService {
         paymentReceiptUrl: uploaded.fileUrl,
         ...(isCashAndTransfer ? { cashPortion, transferPortion, walletEntry } : {}),
       };
+    });
+
+    // Auto-complete: fire the TRANSACTION_COMPLETED event so the customer gets notified
+    eventBus.publish(EventTypes.TRANSACTION_COMPLETED, {
+      userId: transaction.userId,
+      transaction: {
+        id: transaction.id,
+        referenceNumber: transaction.referenceNumber,
+        foreignAmount: transaction.foreignAmount,
+        nairaEquivalent: null,
+        currency: transaction.currency,
+        type: transaction.type,
+      },
+      settlement: {
+        beneficiaryName:    null,
+        beneficiaryBank:    null,
+        beneficiaryAccount: null,
+        beneficiaryAddress: null,
+      },
     });
 
     return result;

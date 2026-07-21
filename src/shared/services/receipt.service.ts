@@ -149,7 +149,7 @@ interface ReceiptData {
 
 function buildPdf(data: ReceiptData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc    = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
+    const doc    = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
     const chunks: Buffer[] = [];
 
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -185,12 +185,14 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     // Brand name
     fill(doc, WHITE);
     doc.font('Helvetica-Bold').fontSize(20).text('SOCHATOA', PAD + CARD_X, CARD_Y + 28);
+    (doc as any).y = 0;
 
     // "PAYMENT RECEIPT" label
     doc.font('Helvetica').fontSize(9)
       .fillOpacity(0.85)
       .text('PAYMENT RECEIPT', PAD + CARD_X, CARD_Y + 56, { characterSpacing: 2 });
     doc.fillOpacity(1);
+    (doc as any).y = 0;
 
     // Receipt number + date (right-aligned)
     fill(doc, WHITE);
@@ -198,6 +200,7 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     doc.text(`No: ${data.receiptNumber}`, CARD_X, CARD_Y + 28, { width: CARD_W - PAD, align: 'right' });
     doc.text(fmtDate(data.completedAt),   CARD_X, CARD_Y + 44, { width: CARD_W - PAD, align: 'right' });
     doc.fillOpacity(1);
+    (doc as any).y = 0;
 
     // ── Body start ────────────────────────────────────────────────────────────
     let y = CARD_Y + HEADER_H + 32;
@@ -209,6 +212,7 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     fill(doc, GREEN_TEXT);
     doc.font('Helvetica-Bold').fontSize(11)
       .text('\u2713  Transaction Completed Successfully', CARD_X + PAD + 16, y + 15);
+    (doc as any).y = 0;
 
     y += 60;
 
@@ -216,12 +220,15 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     fill(doc, DARK);
     doc.font('Helvetica-Bold').fontSize(18)
       .text('Your Payment is Complete', CARD_X + PAD, y);
+    (doc as any).y = 0;
     y += 26;
     fill(doc, GREY);
     doc.font('Helvetica').fontSize(10).lineGap(4)
       .text(`Hi ${data.fullName},`, CARD_X + PAD, y);
+    (doc as any).y = 0;
     y += 16;
-    doc.text('Your transaction has been completed successfully. Please keep this document as your official payment receipt.', CARD_X + PAD, y, { width: CW });
+    doc.text('Your transaction has been completed successfully. Please keep this receipt.', CARD_X + PAD, y, { width: CW, lineBreak: false });
+    (doc as any).y = 0;
     y += 40;
 
     // ── Amount highlight card ─────────────────────────────────────────────────
@@ -232,16 +239,19 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     fill(doc, LABEL_GREY);
     doc.font('Helvetica').fontSize(8)
       .text('AMOUNT DISBURSED', CARD_X + PAD + 16, y + 12, { characterSpacing: 1.5 });
+    (doc as any).y = 0;
 
     fill(doc, ORANGE);
     doc.font('Helvetica-Bold').fontSize(24)
       .text(fmt(data.foreignAmount, data.currency), CARD_X + PAD + 16, y + 26);
+    (doc as any).y = 0;
 
     if (data.nairaEquivalent) {
       const rate = data.exchangeRate ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
       fill(doc, LABEL_GREY);
       doc.font('Helvetica').fontSize(8)
         .text(`\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rate}`, CARD_X + PAD + 16, y + 54);
+      (doc as any).y = 0;
     }
 
     y += 86;
@@ -312,8 +322,11 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
 
     fill(doc, LABEL_GREY);
     doc.font('Helvetica').fontSize(8)
-      .text('Sochatoa \u2014 Secure Foreign Exchange Platform', CARD_X, FOOTER_Y + 12, { width: CARD_W, align: 'center' })
-      .text('Need help? Contact us at support@sochatoa.com',   CARD_X, FOOTER_Y + 26, { width: CARD_W, align: 'center' });
+      .text('Sochatoa \u2014 Secure Foreign Exchange Platform', CARD_X, FOOTER_Y + 12, { width: CARD_W, align: 'center' });
+    (doc as any).y = 0;
+    doc.font('Helvetica').fontSize(8)
+      .text('Need help? Contact us at support@sochatoa.com', CARD_X, FOOTER_Y + 26, { width: CARD_W, align: 'center' });
+    (doc as any).y = 0;
 
     doc.end();
   });
@@ -347,6 +360,7 @@ function drawTable(
     doc.font('Helvetica-Bold').fontSize(9)
       .text(value, x + COL_L + PADDING, y + ROW_H / 2 - 4.5, { width: width - COL_L - PADDING * 2, lineBreak: false });
 
+    (doc as any).y = 0;
     y += ROW_H;
   }
 
@@ -363,7 +377,8 @@ function drawSection(
   rows: [string, string][]
 ): number {
   fill(doc, DARK);
-  doc.font('Helvetica-Bold').fontSize(9).text(title, x, y, { characterSpacing: 0.5 });
+  doc.font('Helvetica-Bold').fontSize(9).text(title, x, y, { characterSpacing: 0.5, lineBreak: false });
+  (doc as any).y = 0;
   y += 14;
   return drawTable(doc, x, y, width, rows);
 }

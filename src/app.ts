@@ -34,6 +34,7 @@ import customerWalletRoutes from './modules/wallet/routes/customer-wallet.routes
 import adminWalletRoutes from './modules/wallet/routes/admin-wallet.routes';
 import customerBankAccountRoutes from './modules/customer/routes/customer-bank-account.routes';
 import customerDashboardRoutes from './modules/customer/routes/customer-dashboard.routes';
+import agentBankAccountRoutes from './modules/agents/routes/agent-bank-account.routes';
 
 const logger = createLogger('app');
 
@@ -171,6 +172,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/customer', customerDashboardRoutes);
   logger.info('Customer dashboard routes registered');
+
+  app.use('/api/agent/bank-accounts', agentBankAccountRoutes);
+  logger.info('Agent bank account routes registered');
 
   // Simulation endpoints — only active when PROVIDUS_SIMULATION_MODE=true
   app.use('/api/simulate/payments', simulationPaymentRoutes);

@@ -633,11 +633,34 @@ model Agent {
   createdCustomers User[]            @relation("AgentCreatedCustomers")
   createdTransactions Transaction[] @relation("AgentCreatedTransactions")
   createdTickets   Ticket[]        @relation("TicketCreatedByAgent")
+  bankAccounts     AgentBankAccount[] @relation("AgentBankAccounts")
 
 
   @@index([branchId])
   @@index([name])
   @@map("agents")
+}
+
+model AgentBankAccount {
+  id            String   @id @default(uuid())
+  agentId       String
+  bankName      String
+  accountNumber String
+  accountName   String
+  currency      String?
+  swiftCode     String?
+  iban          String?
+  routingNumber String?
+  bankAddress   String?
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  agent Agent @relation("AgentBankAccounts", fields: [agentId], references: [id])
+
+  @@unique([agentId, accountNumber])
+  @@index([agentId])
+  @@map("agent_bank_accounts")
 }
 
 model AgentAttachment {

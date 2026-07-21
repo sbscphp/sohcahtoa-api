@@ -22,6 +22,25 @@ async function getUserEmailInfo(userId: string): Promise<{ email: string; firstN
   }
 }
 
+async function getAgentEmailInfo(transactionId: string): Promise<{ email: string; firstName: string } | null> {
+  try {
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { createdByAgentId: true },
+    });
+    if (!tx?.createdByAgentId) return null;
+    const agent = await (prisma as any).agent.findUnique({
+      where: { id: tx.createdByAgentId },
+      select: { email: true, name: true },
+    });
+    if (!agent) return null;
+    const firstName = agent.name?.split(' ')[0] || 'Agent';
+    return { email: agent.email, firstName };
+  } catch {
+    return null;
+  }
+}
+
 export class NotificationHandler {
   /**
    * Initialize all notification event handlers
@@ -386,6 +405,17 @@ export class NotificationHandler {
             logger.error('Error sending transaction approved email:', e)
           );
         }
+        const agent = await getAgentEmailInfo(transaction.id);
+        if (agent) {
+          const amount = transaction.foreignAmount
+            ? `${transaction.foreignAmount} ${transaction.currency || ''}`.trim()
+            : transaction.nairaEquivalent
+            ? `NGN ${transaction.nairaEquivalent}`
+            : '';
+          await emailService.sendTransactionApprovedEmail(agent.email, agent.firstName, transaction.referenceNumber, amount).catch((e) =>
+            logger.error('Error sending transaction approved email to agent:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending transaction approved notification:', error);
       }
@@ -417,6 +447,12 @@ export class NotificationHandler {
             logger.error('Error sending transaction rejected email:', e)
           );
         }
+        const agent = await getAgentEmailInfo(transaction.id);
+        if (agent) {
+          await emailService.sendTransactionRejectedEmail(agent.email, agent.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
+            logger.error('Error sending transaction rejected email to agent:', e)
+          );
+        }
       } catch (error) {
         logger.error('Error sending transaction rejected notification:', error);
       }
@@ -424,7 +460,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_COMPLETED, async (event: any) => {
       try {
-        const { userId, transaction } = event;
+        const { userId, transaction, settlement } = event;
 
         const template = NotificationTemplates.TRANSACTION_COMPLETED({
           referenceNumber: transaction.referenceNumber,
@@ -444,14 +480,54 @@ export class NotificationHandler {
         });
 
         const user = await getUserEmailInfo(userId);
-        if (user) {
-          await emailService.sendTransactionCompletedEmail(
+        if (user && transaction.type) {
+          // Build human-readable amount display
+          const fxAmount   = transaction.foreignAmount ? `${transaction.currency || 'USD'} ${transaction.foreignAmount}` : null;
+          const nairaStr   = transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : null;
+          const amountDisplay = fxAmount && nairaStr ? `${fxAmount} (${nairaStr})` : fxAmount || nairaStr || '0';
+
+          // Receipt URL is the frontend transaction detail page where the customer can download it
+          const appUrl   = process.env.APP_URL || '';
+          const receiptUrl = `${appUrl}/transactions/${transaction.referenceNumber}`;
+
+          await emailService.sendSettledTransactionEmail(
+            transaction.type,
             user.email,
             user.firstName,
-            transaction.referenceNumber,
-            transaction.foreignAmount?.toString() || '0',
-            transaction.currency || 'USD',
-          ).catch((e) => logger.error('Error sending transaction completed email:', e));
+            {
+              transactionId:      transaction.referenceNumber,
+              amountDisplay,
+              receiptUrl,
+              // PTA / BTA
+              bankName:           settlement?.beneficiaryBank    || undefined,
+              accountNumber:      settlement?.beneficiaryAccount || undefined,
+              // School / Medical / Professional Body
+              beneficiaryName:    settlement?.beneficiaryName    || undefined,
+              beneficiaryAccount: settlement?.beneficiaryAccount || undefined,
+            },
+          ).catch((e) => logger.error('Error sending settled transaction email:', e));
+        }
+        const agentInfo = await getAgentEmailInfo(transaction.id);
+        if (agentInfo) {
+          const fxAmount   = transaction.foreignAmount ? `${transaction.currency || 'USD'} ${transaction.foreignAmount}` : null;
+          const nairaStr   = transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : null;
+          const amountDisplay = fxAmount && nairaStr ? `${fxAmount} (${nairaStr})` : fxAmount || nairaStr || '0';
+          const appUrl   = process.env.APP_URL || '';
+          const receiptUrl = `${appUrl}/transactions/${transaction.referenceNumber}`;
+          await emailService.sendSettledTransactionEmail(
+            transaction.type,
+            agentInfo.email,
+            agentInfo.firstName,
+            {
+              transactionId: transaction.referenceNumber,
+              amountDisplay,
+              receiptUrl,
+              bankName:           settlement?.beneficiaryBank    || undefined,
+              accountNumber:      settlement?.beneficiaryAccount || undefined,
+              beneficiaryName:    settlement?.beneficiaryName    || undefined,
+              beneficiaryAccount: settlement?.beneficiaryAccount || undefined,
+            },
+          ).catch((e) => logger.error('Error sending settled transaction email to agent:', e));
         }
       } catch (error) {
         logger.error('Error sending transaction completed notification:', error);
@@ -558,6 +634,13 @@ export class NotificationHandler {
           const amountStr = amount ? `NGN ${amount}` : transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : '';
           await emailService.sendDepositConfirmedEmail(user.email, user.firstName, transaction.referenceNumber, amountStr).catch((e) =>
             logger.error('Error sending deposit confirmed email:', e)
+          );
+        }
+        const agent = await getAgentEmailInfo(transaction.id);
+        if (agent) {
+          const amountStr = amount ? `NGN ${amount}` : transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : '';
+          await emailService.sendDepositConfirmedEmail(agent.email, agent.firstName, transaction.referenceNumber, amountStr).catch((e) =>
+            logger.error('Error sending deposit confirmed email to agent:', e)
           );
         }
       } catch (error) {

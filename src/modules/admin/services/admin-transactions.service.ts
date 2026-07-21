@@ -7,6 +7,7 @@ import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import walletService from "../../wallet/services/wallet.service";
+import { emailService } from "../../../shared/utils/email";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -1680,6 +1681,33 @@ export class AdminTransactionsService {
 
       const firstStage = template.stages[0];
       const adminIds = firstStage.assignees.map((a: any) => a.adminId);
+
+      // Notify the customer to provide refund bank details
+      const customer = await prisma.user.findUnique({
+        where: { id: tx.userId },
+        select: { profile: { select: { firstName: true } }, email: true },
+      });
+      if (customer?.email) {
+        const typeLabels: Record<string, string> = {
+          PTA: 'PTA', BTA: 'BTA', SCHOOL_FEES: 'School Fees',
+          MEDICAL: 'Medical', PROFESSIONAL_BODY: 'Professional Body Fee',
+          TOURIST_FX: 'Tourist FX', RESIDENT_FX: 'Resident FX',
+          EXPATRIATE_FX: 'Expatriate FX', IMTO_REMITTANCE: 'Remittance',
+          CASH_REMITTANCE: 'Cash Remittance',
+        };
+        const appUrl = process.env.APP_URL || '';
+        await emailService.sendRefundBankDetailsEmail(
+          customer.email,
+          customer.profile?.firstName || 'Customer',
+          {
+            transactionId:         tx.referenceNumber,
+            transactionTypeLabel:  typeLabels[tx.type] || tx.type,
+            refundAmountDisplay:   tx.nairaEquivalent ? `NGN ${tx.nairaEquivalent}` : `${tx.currency || ''} ${tx.foreignAmount || ''}`.trim(),
+            provideBankDetailsUrl: `${appUrl}/transactions/${tx.referenceNumber}/refund-bank-details`,
+          },
+        ).catch((e) => logger.error('Error sending refund bank details email:', e));
+      }
+
       if (adminIds.length > 0) {
         const user = await prisma.user.findUnique({
           where: { id: tx.userId },

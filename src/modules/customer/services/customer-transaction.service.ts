@@ -930,8 +930,11 @@ export class CustomerTransactionService {
         });
 
         // If a document of the same type already exists and requires review or has failed/been rejected,
-        // replace it rather than creating a duplicate record
-        const existingReviewDoc = await prisma.transactionDocument.findFirst({
+        // replace it rather than creating a duplicate record.
+        // PROOF_OF_FUNDS supports multiple uploads — always create new records.
+        const supportsMultipleUploads = documentType === 'PROOF_OF_FUNDS';
+
+        const existingReviewDoc = supportsMultipleUploads ? null : await prisma.transactionDocument.findFirst({
           where: {
             transactionId,
             documentType: documentType as any,

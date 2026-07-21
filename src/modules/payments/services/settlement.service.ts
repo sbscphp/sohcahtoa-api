@@ -455,7 +455,7 @@ export class SettlementService {
         const transaction = await prisma.transaction.update({
           where: { id: updated.transactionId },
           data: { status: 'COMPLETED', completedAt: new Date() },
-          select: { id: true, userId: true, referenceNumber: true, foreignAmount: true, currency: true },
+          select: { id: true, userId: true, referenceNumber: true, foreignAmount: true, nairaEquivalent: true, currency: true, type: true },
         });
 
         // Triggers push notification + payment receipt email in the notification handler
@@ -465,7 +465,15 @@ export class SettlementService {
             id: transaction.id,
             referenceNumber: transaction.referenceNumber,
             foreignAmount: transaction.foreignAmount,
+            nairaEquivalent: transaction.nairaEquivalent,
             currency: transaction.currency,
+            type: transaction.type,
+          },
+          settlement: {
+            beneficiaryName:    updated.beneficiaryName,
+            beneficiaryBank:    updated.beneficiaryBank,
+            beneficiaryAccount: updated.beneficiaryAccount,
+            beneficiaryAddress: updated.beneficiaryAddress,
           },
         });
 
