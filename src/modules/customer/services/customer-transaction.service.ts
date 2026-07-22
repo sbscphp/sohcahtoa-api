@@ -2119,7 +2119,16 @@ export class CustomerTransactionService {
   }
 
   /**
-   * Build document status list for a transaction type, merging with uploaded docs
+   * Document types that support multiple simultaneous uploads.
+   * These entries return an `uploads` array instead of a single `uploaded` object.
+   */
+  private static readonly MULTI_UPLOAD_TYPES = new Set(['PROOF_OF_FUNDS']);
+
+  /**
+   * Build document status list for a transaction type, merging with uploaded docs.
+   * For PROOF_OF_FUNDS (and any other multi-upload type) all uploaded files are
+   * returned in an `uploads` array. For all other types a single `uploaded` object
+   * (the most recent) is returned.
    */
   private buildDocumentStatus(
     transactionType: string,
@@ -2144,33 +2153,54 @@ export class CustomerTransactionService {
       amount
     );
 
-    const toEntry = (docType: string, doc: typeof uploadedDocuments[number] | null) => ({
-      type: docType,
-      required: required.includes(docType),
-      uploaded: doc
-        ? {
-            id: doc.id,
-            fileName: doc.fileName,
-            fileUrl: doc.fileUrl,
-            status: doc.verificationStatus,
-            rejectionNotes:
-              doc.verificationStatus === 'FAILED' ? (doc.verificationNotes ?? null) : null,
-            uploadedAt: doc.uploadedAt,
-            verifiedAt: doc.verifiedAt ?? null,
-          }
-        : null,
+    const toFileEntry = (doc: typeof uploadedDocuments[number]) => ({
+      id: doc.id,
+      fileName: doc.fileName,
+      fileUrl: doc.fileUrl,
+      status: doc.verificationStatus,
+      rejectionNotes: doc.verificationStatus === 'FAILED' ? (doc.verificationNotes ?? null) : null,
+      uploadedAt: doc.uploadedAt,
+      verifiedAt: doc.verifiedAt ?? null,
     });
+
+    const toEntry = (docType: string, docs: typeof uploadedDocuments) => {
+      const isMulti = CustomerTransactionService.MULTI_UPLOAD_TYPES.has(docType);
+
+      if (isMulti) {
+        return {
+          type: docType,
+          required: required.includes(docType),
+          // `uploads` contains every file; `uploaded` is the most recent for backwards compat
+          uploads: docs.map(toFileEntry),
+          uploaded: docs.length > 0 ? toFileEntry(docs[0]) : null,
+        };
+      }
+
+      const doc = docs[0] ?? null;
+      return {
+        type: docType,
+        required: required.includes(docType),
+        uploaded: doc ? toFileEntry(doc) : null,
+      };
+    };
+
+    // Group all uploaded docs by type (sorted newest-first, already ordered by uploadedAt desc)
+    const byType = new Map<string, typeof uploadedDocuments>();
+    for (const doc of uploadedDocuments) {
+      const existing = byType.get(doc.documentType) ?? [];
+      existing.push(doc);
+      byType.set(doc.documentType, existing);
+    }
 
     // Required documents (uploaded or not)
-    const result = required.map((docType) => {
-      const doc = uploadedDocuments.find((d) => d.documentType === docType) ?? null;
-      return toEntry(docType, doc);
-    });
+    const result = required.map((docType) =>
+      toEntry(docType, byType.get(docType) ?? [])
+    );
 
     // Any additional documents uploaded beyond the required set
-    for (const doc of uploadedDocuments) {
-      if (!required.includes(doc.documentType)) {
-        result.push(toEntry(doc.documentType, doc));
+    for (const [docType, docs] of byType.entries()) {
+      if (!required.includes(docType)) {
+        result.push(toEntry(docType, docs));
       }
     }
 
