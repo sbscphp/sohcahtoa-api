@@ -22,6 +22,35 @@ async function getUserEmailInfo(userId: string): Promise<{ email: string; firstN
   }
 }
 
+/**
+ * Resolve an Agent record (by Agent.id) to the fields needed for notifications.
+ * Agents authenticate as User records (role=AGENT) linked by email — so push
+ * notifications must use the User.id, not the Agent.id.
+ */
+async function resolveAgentNotifyInfo(
+  agentRecordId: string
+): Promise<{ userId: string; email: string; firstName: string } | null> {
+  try {
+    const agent = await (prisma as any).agent.findUnique({
+      where: { id: agentRecordId },
+      select: { email: true, name: true },
+    });
+    if (!agent) return null;
+
+    // Find the User row that corresponds to this agent (matched by email)
+    const user = await prisma.user.findUnique({
+      where: { email: agent.email },
+      select: { id: true },
+    });
+    if (!user) return null;
+
+    const firstName = agent.name?.split(' ')[0] || 'Agent';
+    return { userId: user.id, email: agent.email, firstName };
+  } catch {
+    return null;
+  }
+}
+
 async function getAgentEmailInfo(transactionId: string): Promise<{ email: string; firstName: string } | null> {
   try {
     const tx = await prisma.transaction.findUnique({
@@ -29,13 +58,9 @@ async function getAgentEmailInfo(transactionId: string): Promise<{ email: string
       select: { createdByAgentId: true },
     });
     if (!tx?.createdByAgentId) return null;
-    const agent = await (prisma as any).agent.findUnique({
-      where: { id: tx.createdByAgentId },
-      select: { email: true, name: true },
-    });
-    if (!agent) return null;
-    const firstName = agent.name?.split(' ')[0] || 'Agent';
-    return { email: agent.email, firstName };
+    const info = await resolveAgentNotifyInfo(tx.createdByAgentId);
+    if (!info) return null;
+    return { email: info.email, firstName: info.firstName };
   } catch {
     return null;
   }
@@ -783,16 +808,22 @@ export class NotificationHandler {
         });
 
         if (agentId) {
-          await notificationService.sendNotification({
-            userId: agentId,
-            type: NotificationType.PUSH,
-            channel: NotificationChannel.ALL,
-            priority: template.priority,
-            title: template.title,
-            body: template.body,
-            data: { actionUrl: template.actionUrl },
-            transactionId: transaction.id,
-          });
+          const agentInfo = await resolveAgentNotifyInfo(agentId);
+          if (agentInfo) {
+            await notificationService.sendNotification({
+              userId: agentInfo.userId,
+              type: NotificationType.PUSH,
+              channel: NotificationChannel.ALL,
+              priority: template.priority,
+              title: template.title,
+              body: template.body,
+              data: { actionUrl: template.actionUrl },
+              transactionId: transaction.id,
+            });
+            await emailService
+              .sendDocumentApprovedEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, documentType || 'document')
+              .catch((e) => logger.error('Error sending document approved email to agent:', e));
+          }
         }
 
         const user = await getUserEmailInfo(userId);
@@ -827,16 +858,22 @@ export class NotificationHandler {
         });
 
         if (agentId) {
-          await notificationService.sendNotification({
-            userId: agentId,
-            type: NotificationType.PUSH,
-            channel: NotificationChannel.ALL,
-            priority: template.priority,
-            title: template.title,
-            body: template.body,
-            data: { actionUrl: template.actionUrl },
-            transactionId: transaction.id,
-          });
+          const agentInfo = await resolveAgentNotifyInfo(agentId);
+          if (agentInfo) {
+            await notificationService.sendNotification({
+              userId: agentInfo.userId,
+              type: NotificationType.PUSH,
+              channel: NotificationChannel.ALL,
+              priority: template.priority,
+              title: template.title,
+              body: template.body,
+              data: { actionUrl: template.actionUrl },
+              transactionId: transaction.id,
+            });
+            await emailService
+              .sendDocumentRejectedEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, documentType || 'document', reason || '')
+              .catch((e) => logger.error('Error sending document rejected email to agent:', e));
+          }
         }
 
         const user = await getUserEmailInfo(userId);
@@ -868,16 +905,22 @@ export class NotificationHandler {
         });
 
         if (agentId) {
-          await notificationService.sendNotification({
-            userId: agentId,
-            type: NotificationType.PUSH,
-            channel: NotificationChannel.ALL,
-            priority: NotificationPriority.HIGH,
-            title: "Additional Information Required",
-            body: notifBody,
-            data: { actionUrl: "/transactions/" + transaction.id },
-            transactionId: transaction.id,
-          });
+          const agentInfo = await resolveAgentNotifyInfo(agentId);
+          if (agentInfo) {
+            await notificationService.sendNotification({
+              userId: agentInfo.userId,
+              type: NotificationType.PUSH,
+              channel: NotificationChannel.ALL,
+              priority: NotificationPriority.HIGH,
+              title: "Additional Information Required",
+              body: notifBody,
+              data: { actionUrl: "/transactions/" + transaction.id },
+              transactionId: transaction.id,
+            });
+            await emailService
+              .sendDocumentResubmissionEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, documentType || 'document', comment || '')
+              .catch((e) => logger.error('Error sending document resubmission email to agent:', e));
+          }
         }
 
         const user = await getUserEmailInfo(userId);
@@ -917,16 +960,19 @@ export class NotificationHandler {
         });
 
         if (agentId) {
-          await notificationService.sendNotification({
-            userId: agentId,
-            type: NotificationType.PUSH,
-            channel: NotificationChannel.ALL,
-            priority: NotificationPriority.HIGH,
-            title: "Documents Verified - Payment Required",
-            body: paymentBody,
-            data: { actionUrl: "/transactions/" + transaction.id },
-            transactionId: transaction.id,
-          });
+          const agentInfo = await resolveAgentNotifyInfo(agentId);
+          if (agentInfo) {
+            await notificationService.sendNotification({
+              userId: agentInfo.userId,
+              type: NotificationType.PUSH,
+              channel: NotificationChannel.ALL,
+              priority: NotificationPriority.HIGH,
+              title: "Documents Verified - Payment Required",
+              body: paymentBody,
+              data: { actionUrl: "/transactions/" + transaction.id },
+              transactionId: transaction.id,
+            });
+          }
         }
 
         const user = await getUserEmailInfo(userId);

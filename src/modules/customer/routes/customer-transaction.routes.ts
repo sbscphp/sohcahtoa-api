@@ -1192,6 +1192,8 @@ router.get("/transactions/pickup-points", customerTransactionController.getPicku
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
+router.get('/transactions/stats', customerTransactionController.getTransactionStats);
+router.get('/transactions/:transactionId/receipt', customerTransactionController.downloadReceipt);
 router.get("/transactions/:transactionId", customerTransactionController.getTransactionDetails);
 
 /**
@@ -1794,8 +1796,6 @@ router.get('/kyc', customerTransactionController.getCustomerKyc);
  *                       type: integer
  *                       description: Rejected transactions
  */
-router.get('/transactions/stats', customerTransactionController.getTransactionStats);
-
 /**
  * @swagger
  * /api/customer/transactions/{transactionId}/receipt:
@@ -1825,6 +1825,5 @@ router.get('/transactions/stats', customerTransactionController.getTransactionSt
  *       404:
  *         description: Transaction not found
  */
-router.get('/transactions/:transactionId/receipt', customerTransactionController.downloadReceipt);
 
 export default router;
