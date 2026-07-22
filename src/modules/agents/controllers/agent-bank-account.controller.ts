@@ -5,7 +5,8 @@ export const agentBankAccountController = {
   async addBankAccount(req: Request, res: Response) {
     try {
       const agentUserId = (req as any).user.id;
-      const account = await agentBankAccountService.addBankAccount(agentUserId, req.body);
+      const { customerId } = req.params;
+      const account = await agentBankAccountService.addBankAccount(agentUserId, customerId, req.body);
       res.status(201).json({ success: true, data: account });
     } catch (e: any) {
       res.status(e.statusCode || 400).json({ success: false, message: e.message });
@@ -15,19 +16,10 @@ export const agentBankAccountController = {
   async listBankAccounts(req: Request, res: Response) {
     try {
       const agentUserId = (req as any).user.id;
+      const { customerId } = req.params;
       const { currency } = req.query as any;
-      const accounts = await agentBankAccountService.listBankAccounts(agentUserId, currency);
+      const accounts = await agentBankAccountService.listBankAccounts(agentUserId, customerId, currency);
       res.json({ success: true, data: accounts });
-    } catch (e: any) {
-      res.status(e.statusCode || 400).json({ success: false, message: e.message });
-    }
-  },
-
-  async updateBankAccount(req: Request, res: Response) {
-    try {
-      const agentUserId = (req as any).user.id;
-      const account = await agentBankAccountService.updateBankAccount(agentUserId, req.params.accountId, req.body);
-      res.json({ success: true, data: account });
     } catch (e: any) {
       res.status(e.statusCode || 400).json({ success: false, message: e.message });
     }
@@ -36,7 +28,8 @@ export const agentBankAccountController = {
   async deleteBankAccount(req: Request, res: Response) {
     try {
       const agentUserId = (req as any).user.id;
-      const result = await agentBankAccountService.deleteBankAccount(agentUserId, req.params.accountId);
+      const { customerId, accountId } = req.params;
+      const result = await agentBankAccountService.deleteBankAccount(agentUserId, customerId, accountId);
       res.json({ success: true, ...result });
     } catch (e: any) {
       res.status(e.statusCode || 404).json({ success: false, message: e.message });
@@ -46,7 +39,8 @@ export const agentBankAccountController = {
   async setDefault(req: Request, res: Response) {
     try {
       const agentUserId = (req as any).user.id;
-      const account = await agentBankAccountService.setDefault(agentUserId, req.params.accountId);
+      const { customerId, accountId } = req.params;
+      const account = await agentBankAccountService.setDefault(agentUserId, customerId, accountId);
       res.json({ success: true, data: account });
     } catch (e: any) {
       res.status(e.statusCode || 400).json({ success: false, message: e.message });

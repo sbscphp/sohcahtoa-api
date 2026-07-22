@@ -173,7 +173,7 @@ export const createApp = async (): Promise<Application> => {
   app.use('/api/customer', customerDashboardRoutes);
   logger.info('Customer dashboard routes registered');
 
-  app.use('/api/agent/bank-accounts', agentBankAccountRoutes);
+  app.use('/api/agent', agentBankAccountRoutes);
   logger.info('Agent bank account routes registered');
 
   // Simulation endpoints — only active when PROVIDUS_SIMULATION_MODE=true

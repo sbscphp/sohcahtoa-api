@@ -1,129 +1,79 @@
 import { getDatabase } from '../../../config/database';
 import { ValidationError, NotFoundError } from '../../../shared/utils';
-import { UserRole } from '../../../shared/types';
+import { customerBankAccountService } from '../../customer/services/customer-bank-account.service';
 
 const prisma = getDatabase();
 
-interface AgentBankAccountInput {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  currency?: string;
-  swiftCode?: string;
-  iban?: string;
-  routingNumber?: string;
-  bankAddress?: string;
-  isDefault?: boolean;
-}
+/**
+ * Resolve the agent record from the authenticated user ID, then verify
+ * that the given customerId belongs to a customer created by that agent.
+ * Returns the customer's userId for downstream operations.
+ */
+async function resolveCustomerForAgent(agentUserId: string, customerId: string): Promise<string> {
+  // Resolve Agent record from the authenticated user (agents log in as Users with role AGENT)
+  const agentUser = await prisma.user.findUnique({ where: { id: agentUserId }, select: { email: true } });
+  if (!agentUser) throw new NotFoundError('Agent not found');
 
-async function resolveAgentId(agentUserId: string): Promise<string> {
-  // Agents authenticate as Users with role AGENT; resolve to Agent record via email
-  const agentUser = await prisma.user.findUnique({ where: { id: agentUserId } });
-  if (!agentUser || agentUser.role !== UserRole.AGENT) {
-    throw new ValidationError('Only agents can manage bank accounts');
-  }
   const agent = await (prisma as any).agent.findUnique({
     where: { email: agentUser.email },
     select: { id: true },
   });
   if (!agent) throw new NotFoundError('Agent profile not found');
-  return agent.id;
+
+  // Confirm the customer was created by this agent
+  const customer = await prisma.user.findFirst({
+    where: { id: customerId, createdByAgentId: agent.id },
+    select: { id: true },
+  });
+  if (!customer) throw new NotFoundError('Customer not found or not managed by this agent');
+
+  return customer.id;
 }
 
 export const agentBankAccountService = {
-  async addBankAccount(agentUserId: string, input: AgentBankAccountInput) {
-    const agentId = await resolveAgentId(agentUserId);
-
-    const isNgn = !input.currency || input.currency === 'NGN';
-    if (isNgn && !/^\d{10}$/.test(input.accountNumber)) {
-      throw new ValidationError('Nigerian account numbers must be exactly 10 digits');
+  /**
+   * Add a bank account for a customer on the agent's behalf.
+   */
+  async addBankAccount(
+    agentUserId: string,
+    customerId: string,
+    data: {
+      bankName: string;
+      accountNumber: string;
+      accountName: string;
+      currency?: string;
+      swiftCode?: string;
+      iban?: string;
+      routingNumber?: string;
+      bankAddress?: string;
     }
-
-    const existing = await (prisma as any).agentBankAccount.findFirst({
-      where: { agentId, accountNumber: input.accountNumber },
-    });
-    if (existing) throw new ValidationError('Account number already saved');
-
-    if (input.isDefault) {
-      await (prisma as any).agentBankAccount.updateMany({ where: { agentId }, data: { isDefault: false } });
-    }
-
-    return (prisma as any).agentBankAccount.create({
-      data: {
-        agentId,
-        bankName:      input.bankName,
-        accountNumber: input.accountNumber,
-        accountName:   input.accountName,
-        currency:      input.currency || 'NGN',
-        swiftCode:     input.swiftCode,
-        iban:          input.iban,
-        routingNumber: input.routingNumber,
-        bankAddress:   input.bankAddress,
-        isDefault:     input.isDefault ?? false,
-      },
-    });
+  ) {
+    const userId = await resolveCustomerForAgent(agentUserId, customerId);
+    return customerBankAccountService.addBankAccount(userId, data);
   },
 
-  async listBankAccounts(agentUserId: string, currency?: string) {
-    const agentId = await resolveAgentId(agentUserId);
-    const where: any = { agentId };
-
-    if (currency) {
-      const cur = currency.toUpperCase();
-      if (cur === 'NGN') {
-        where.AND = [{ OR: [{ currency: 'NGN' }, { currency: null }] }, { swiftCode: null }, { iban: null }, { routingNumber: null }];
-      } else if (cur === 'FOREIGN') {
-        where.OR = [
-          { currency: { not: null, notIn: ['NGN'] } },
-          { swiftCode: { not: null } },
-          { iban: { not: null } },
-          { routingNumber: { not: null } },
-        ];
-      } else {
-        where.currency = cur;
-      }
-    }
-
-    return (prisma as any).agentBankAccount.findMany({ where, orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }] });
+  /**
+   * List bank accounts for a customer.
+   */
+  async listBankAccounts(agentUserId: string, customerId: string, currency?: string) {
+    const userId = await resolveCustomerForAgent(agentUserId, customerId);
+    return customerBankAccountService.listBankAccounts(userId, currency);
   },
 
-  async updateBankAccount(agentUserId: string, accountId: string, input: Partial<AgentBankAccountInput>) {
-    const agentId = await resolveAgentId(agentUserId);
-    const account = await (prisma as any).agentBankAccount.findFirst({ where: { id: accountId, agentId } });
-    if (!account) throw new NotFoundError('Bank account not found');
-
-    if (input.isDefault) {
-      await (prisma as any).agentBankAccount.updateMany({ where: { agentId }, data: { isDefault: false } });
-    }
-
-    return (prisma as any).agentBankAccount.update({
-      where: { id: accountId },
-      data: {
-        ...(input.bankName      !== undefined && { bankName: input.bankName }),
-        ...(input.accountName   !== undefined && { accountName: input.accountName }),
-        ...(input.currency      !== undefined && { currency: input.currency }),
-        ...(input.swiftCode     !== undefined && { swiftCode: input.swiftCode }),
-        ...(input.iban          !== undefined && { iban: input.iban }),
-        ...(input.routingNumber !== undefined && { routingNumber: input.routingNumber }),
-        ...(input.bankAddress   !== undefined && { bankAddress: input.bankAddress }),
-        ...(input.isDefault     !== undefined && { isDefault: input.isDefault }),
-      },
-    });
-  },
-
-  async deleteBankAccount(agentUserId: string, accountId: string) {
-    const agentId = await resolveAgentId(agentUserId);
-    const account = await (prisma as any).agentBankAccount.findFirst({ where: { id: accountId, agentId } });
-    if (!account) throw new NotFoundError('Bank account not found');
-    await (prisma as any).agentBankAccount.delete({ where: { id: accountId } });
+  /**
+   * Remove a bank account from a customer's profile.
+   */
+  async deleteBankAccount(agentUserId: string, customerId: string, bankAccountId: string) {
+    const userId = await resolveCustomerForAgent(agentUserId, customerId);
+    await customerBankAccountService.deleteBankAccount(userId, bankAccountId);
     return { message: 'Bank account removed' };
   },
 
-  async setDefault(agentUserId: string, accountId: string) {
-    const agentId = await resolveAgentId(agentUserId);
-    const account = await (prisma as any).agentBankAccount.findFirst({ where: { id: accountId, agentId } });
-    if (!account) throw new NotFoundError('Bank account not found');
-    await (prisma as any).agentBankAccount.updateMany({ where: { agentId }, data: { isDefault: false } });
-    return (prisma as any).agentBankAccount.update({ where: { id: accountId }, data: { isDefault: true } });
+  /**
+   * Set a bank account as the customer's default.
+   */
+  async setDefault(agentUserId: string, customerId: string, bankAccountId: string) {
+    const userId = await resolveCustomerForAgent(agentUserId, customerId);
+    return customerBankAccountService.setDefault(userId, bankAccountId);
   },
 };
