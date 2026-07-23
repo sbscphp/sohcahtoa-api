@@ -83,7 +83,9 @@ export class WalletService {
   }
 
   /**
-   * Credit the wallet when a Providus deposit is confirmed for an approved transaction.
+   * Credit the wallet when a Providus deposit is received for a transaction.
+   * status defaults to 'COMPLETED'; pass 'PENDING' when the deposit is received but
+   * not yet fully bank-confirmed — call markCreditConfirmed() once confirmed.
    */
   async creditWallet(params: {
     userId: string;
@@ -92,8 +94,9 @@ export class WalletService {
     transactionRef: string;
     sessionId?: string;
     description?: string;
+    status?: 'PENDING' | 'COMPLETED';
   }) {
-    const { userId, amount, transactionId, transactionRef, sessionId, description } = params;
+    const { userId, amount, transactionId, transactionRef, sessionId, description, status = 'COMPLETED' } = params;
 
     if (amount <= 0) {
       throw new ValidationError('Credit amount must be greater than zero');
@@ -120,7 +123,7 @@ export class WalletService {
           balanceBefore,
           balanceAfter,
           description: description ?? `Credit for transaction ${transactionRef}`,
-          status: 'COMPLETED',
+          status,
           matchStatus: 'UNMATCHED',
         },
       }),
@@ -136,6 +139,85 @@ export class WalletService {
     });
 
     return { wallet: updatedWallet, entry };
+  }
+
+  /**
+   * Promote a PENDING CREDIT entry to COMPLETED + MATCHED once the bank confirms settlement.
+   */
+  async markCreditConfirmed(creditEntryId: string): Promise<void> {
+    await (prisma as any).walletEntry.update({
+      where: { id: creditEntryId },
+      data: { status: 'COMPLETED', matchStatus: 'MATCHED' },
+    });
+
+    logger.info('Wallet credit confirmed and matched', { creditEntryId });
+  }
+
+  /**
+   * Reverse a CREDIT entry when a transaction is refunded after payment was received.
+   * Creates a DEBIT refund entry immediately marked COMPLETED + MATCHED, and deducts
+   * the amount from the wallet balance.
+   *
+   * Returns null (silently) if no unrefunded CREDIT entry exists for the transaction.
+   */
+  async reverseCredit(params: {
+    transactionId: string;
+    reason?: string;
+  }): Promise<{ wallet: any; refundEntry: any } | null> {
+    const { transactionId, reason } = params;
+
+    const creditEntry = await (prisma as any).walletEntry.findFirst({
+      where: {
+        transactionId,
+        type: 'CREDIT',
+        status: { not: 'REVERSED' },
+        refundStatus: { not: 'COMPLETED' },
+      },
+      include: { wallet: true },
+    });
+
+    if (!creditEntry) {
+      logger.debug('No unrefunded CREDIT entry found to reverse', { transactionId });
+      return null;
+    }
+
+    const wallet = creditEntry.wallet;
+    const refundAmount = Number(creditEntry.amount);
+    const balanceBefore = Number(wallet.balance);
+    const balanceAfter = balanceBefore - refundAmount;
+
+    const [updatedWallet, refundEntry] = await (prisma as any).$transaction([
+      (prisma as any).customerWallet.update({
+        where: { id: wallet.id },
+        data: { balance: balanceAfter },
+      }),
+      (prisma as any).walletEntry.create({
+        data: {
+          walletId:       wallet.id,
+          transactionId,
+          transactionRef: creditEntry.transactionRef,
+          sessionId:      creditEntry.sessionId ?? null,
+          type:           'DEBIT',
+          amount:         refundAmount,
+          balanceBefore,
+          balanceAfter,
+          description:    reason ?? `Refund debit for transaction ${creditEntry.transactionRef}`,
+          status:         'COMPLETED',
+          matchStatus:    'MATCHED',
+          metadata:       { refundOf: creditEntry.id },
+        },
+      }),
+    ]);
+
+    logger.info('Wallet credit reversed (refund debit created)', {
+      walletId: wallet.id,
+      transactionId,
+      refundAmount,
+      balanceBefore,
+      balanceAfter,
+    });
+
+    return { wallet: updatedWallet, refundEntry };
   }
 
   /**

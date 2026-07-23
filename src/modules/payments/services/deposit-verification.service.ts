@@ -9,6 +9,8 @@ import walletService from '../../wallet/services/wallet.service';
 const prisma = new PrismaClient();
 const logger = createLogger('DepositVerificationService');
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export interface WebhookPayload {
   sessionId: string;
   accountNumber: string;
@@ -234,7 +236,7 @@ export class DepositVerificationService {
         }),
       ]);
 
-      // Credit only the expected amount to the wallet
+      // Credit only the expected amount to the wallet (PENDING until bank confirms)
       const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
       if (!alreadyCredited) {
         try {
@@ -244,9 +246,12 @@ export class DepositVerificationService {
             transactionId,
             transactionRef: transaction.referenceNumber,
             sessionId:      deposit.sessionId,
-            description:    `Deposit confirmed via Providus (overpayment adjusted) | session ${deposit.sessionId} | credited ₦${expectedAmount}`,
+            description:    `Deposit received via Providus (overpayment adjusted) | session ${deposit.sessionId} | credited ₦${expectedAmount}`,
+            status:         'PENDING',
           });
 
+          // Simulate bank settlement confirmation delay before marking COMPLETED + MATCHED
+          await sleep(3000);
           await this.matchWalletEntries(transactionId, creditEntry.id);
         } catch (err: any) {
           logger.error('Wallet credit failed on overpayment confirmation', {
@@ -310,7 +315,7 @@ export class DepositVerificationService {
       }),
     ]);
 
-    // ── Wallet credit + auto-match ───────────────────────────────────────────
+    // ── Wallet credit (PENDING) + bank confirmation (MATCHED) ───────────────
     const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
     if (!alreadyCredited) {
       try {
@@ -320,10 +325,12 @@ export class DepositVerificationService {
           transactionId,
           transactionRef: transaction.referenceNumber,
           sessionId:      deposit.sessionId,
-          description:    `Deposit confirmed via Providus | session ${deposit.sessionId} | settled ₦${receivedAmount}`,
+          description:    `Deposit received via Providus | session ${deposit.sessionId} | ₦${receivedAmount}`,
+          status:         'PENDING',
         });
 
-        // Auto-match the CREDIT entry against the existing DEBIT entry
+        // Simulate bank settlement confirmation delay before marking COMPLETED + MATCHED
+        await sleep(3000);
         await this.matchWalletEntries(transactionId, creditEntry.id);
       } catch (err: any) {
         logger.error('Wallet credit failed on deposit confirmation', {
@@ -353,48 +360,18 @@ export class DepositVerificationService {
   }
 
   /**
-   * Match the newly created CREDIT wallet entry to the DEBIT entry for the same
-   * transaction. Both entries are updated to matchStatus = 'MATCHED' atomically.
-   *
-   * This links the customer deposit payment to the transaction approval debit,
-   * making reconciliation trivial: every matched pair represents a completed
-   * payment cycle.
+   * Bank (Providus) has confirmed the deposit settlement — promote the PENDING CREDIT
+   * entry to COMPLETED + MATCHED. The corresponding DEBIT is created separately when
+   * the agent confirms cash disbursement to the customer.
    */
   private async matchWalletEntries(transactionId: string, creditEntryId: string) {
     try {
-      const debitEntry = await (prisma as any).walletEntry.findFirst({
-        where: {
-          transactionId,
-          type:         'DEBIT',
-          status:       { not: 'REVERSED' },
-          matchStatus:  'UNMATCHED',
-        },
-      });
+      await walletService.markCreditConfirmed(creditEntryId);
 
-      if (!debitEntry) {
-        logger.debug('No unmatched DEBIT entry found for transaction — skipping match', { transactionId });
-        return;
-      }
-
-      await (prisma as any).$transaction([
-        (prisma as any).walletEntry.update({
-          where: { id: debitEntry.id },
-          data:  { matchStatus: 'MATCHED', metadata: { ...(debitEntry.metadata ?? {}), matchedCreditId: creditEntryId } },
-        }),
-        (prisma as any).walletEntry.update({
-          where: { id: creditEntryId },
-          data:  { matchStatus: 'MATCHED', metadata: { matchedDebitId: debitEntry.id } },
-        }),
-      ]);
-
-      logger.info('Wallet entries matched', {
-        transactionId,
-        debitEntryId:  debitEntry.id,
-        creditEntryId,
-      });
+      logger.info('Wallet credit confirmed by bank', { transactionId, creditEntryId });
     } catch (err: any) {
       // Non-fatal — matching failure doesn't affect the payment itself
-      logger.error('Failed to match wallet entries', { transactionId, creditEntryId, error: err.message });
+      logger.error('Failed to confirm wallet credit', { transactionId, creditEntryId, error: err.message });
     }
   }
 

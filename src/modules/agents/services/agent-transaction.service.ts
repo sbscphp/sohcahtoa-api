@@ -1082,6 +1082,7 @@ class AgentTransactionService {
         currency: true,
         disbursementOption: true,
         foreignAmount: true,
+        nairaEquivalent: true,
         userId: true,
         referenceNumber: true,
         type: true,
@@ -1298,6 +1299,23 @@ class AgentTransactionService {
         ...(isCashAndTransfer ? { cashPortion, transferPortion, walletEntry } : {}),
       };
     });
+
+    // Wallet: debit the naira equivalent now that the agent has confirmed cash disbursement
+    if (transaction.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
+      const nairaAmount = Number(transaction.nairaEquivalent);
+      const alreadyDebited = await walletService.hasDebitFor(input.transactionId);
+      if (!alreadyDebited) {
+        await walletService.debitWallet({
+          userId:         transaction.userId,
+          amount:         nairaAmount,
+          transactionId:  input.transactionId,
+          transactionRef: transaction.referenceNumber,
+          description:    `Debit on cash disbursement for transaction ${transaction.referenceNumber}`,
+        }).catch((err: any) =>
+          logger.error('Wallet debit failed on disbursement', { transactionId: input.transactionId, error: err.message })
+        );
+      }
+    }
 
     // Auto-complete: fire the TRANSACTION_COMPLETED event so the customer gets notified
     eventBus.publish(EventTypes.TRANSACTION_COMPLETED, {

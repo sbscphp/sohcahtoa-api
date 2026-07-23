@@ -6,7 +6,7 @@ import { createLogger } from '../utils/logger';
 const prisma = getDatabase();
 const logger = createLogger('receipt-service');
 
-// ── Brand tokens (mirrors email templates) ────────────────────────────────────
+// ── Brand tokens ──────────────────────────────────────────────────────────────
 const ORANGE     = '#F97316';
 const DARK       = '#1a1a1a';
 const GREY       = '#555555';
@@ -35,24 +35,29 @@ function fmtLabel(s: string): string {
   return s.replace(/_/g, ' ');
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
-}
-
-function fill(doc: PDFKit.PDFDocument, hex: string) {
-  doc.fillColor(hex as any);
-}
-
-function stroke(doc: PDFKit.PDFDocument, hex: string) {
-  doc.strokeColor(hex as any);
+/**
+ * Draw text at an absolute position and immediately reset PDFKit's internal
+ * cursor to 1 so it can never drift past the page height and trigger
+ * an automatic page addition.
+ */
+function txt(
+  doc: PDFKit.PDFDocument,
+  str: string,
+  x: number,
+  y: number,
+  opts: PDFKit.Mixins.TextOptions & { color?: string; font?: string; size?: number } = {}
+) {
+  const { color, font, size, ...rest } = opts;
+  if (font)  doc.font(font);
+  if (size)  doc.fontSize(size);
+  if (color) doc.fillColor(color as any);
+  doc.text(str, x, y, { lineBreak: false, ...rest });
+  // Reset cursor — PDFKit only auto-paginates when doc.y exceeds page height
+  (doc as any).y = 1;
 }
 
 /**
  * Generates an on-demand PDF receipt for a completed transaction.
- * Returns a Buffer — no storage required; generated fresh each time.
  */
 export async function generateTransactionReceipt(
   transactionId: string,
@@ -87,32 +92,32 @@ export async function generateTransactionReceipt(
   const personalInfoStep =
     transaction.steps.find((s: any) => s.step === 'PERSONAL_INFO') ??
     transaction.steps.find((s: any) => s.step === 'DOCUMENT_UPLOAD');
-  const stepData          = (personalInfoStep?.data as any) ?? {};
+  const stepData           = (personalInfoStep?.data as any) ?? {};
   const beneficiaryDetails = stepData.beneficiaryDetails ?? null;
   const refundBankDetails  = stepData.refundBankDetails  ?? null;
 
-  const firstName  = transaction.user?.profile?.firstName ?? '';
-  const lastName   = transaction.user?.profile?.lastName  ?? '';
-  const fullName   = [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
+  const firstName = transaction.user?.profile?.firstName ?? '';
+  const lastName  = transaction.user?.profile?.lastName  ?? '';
+  const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
   const receiptNum = `RCP-${transaction.referenceNumber}`;
 
   const pdf = await buildPdf({
-    receiptNumber:    receiptNum,
-    referenceNumber:  transaction.referenceNumber,
+    receiptNumber:      receiptNum,
+    referenceNumber:    transaction.referenceNumber,
     fullName,
-    email:            transaction.user?.email ?? '',
-    phoneNumber:      transaction.user?.phoneNumber ?? '',
-    type:             transaction.type,
-    purpose:          transaction.purpose,
-    currency:         transaction.currency,
-    foreignAmount:    transaction.foreignAmount,
-    nairaEquivalent:  transaction.nairaEquivalent,
-    exchangeRate:     transaction.exchangeRate,
+    email:              transaction.user?.email ?? '',
+    phoneNumber:        transaction.user?.phoneNumber ?? '',
+    type:               transaction.type,
+    purpose:            transaction.purpose,
+    currency:           transaction.currency,
+    foreignAmount:      transaction.foreignAmount,
+    nairaEquivalent:    transaction.nairaEquivalent,
+    exchangeRate:       transaction.exchangeRate,
     disbursementMethod: transaction.disbursementMethod,
-    completedAt:      transaction.updatedAt,
+    completedAt:        transaction.updatedAt,
     beneficiaryDetails,
     refundBankDetails,
-    cashPickup:       transaction.cashPickup ?? null,
+    cashPickup:         transaction.cashPickup ?? null,
   });
 
   const filename = `receipt-${transaction.referenceNumber}.pdf`;
@@ -149,33 +154,35 @@ interface ReceiptData {
 
 function buildPdf(data: ReceiptData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc    = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
+    // autoFirstPage:true — exactly one page created up front, no more
+    const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
     const chunks: Buffer[] = [];
 
-    doc.on('data', (c: Buffer) => chunks.push(c));
-    doc.on('end',  () => resolve(Buffer.concat(chunks)));
+    doc.on('data',  (c: Buffer) => chunks.push(c));
+    doc.on('end',   () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const PW   = doc.page.width;   // 595.28
-    const PH   = doc.page.height;  // 841.89
-    const PAD  = 48;               // horizontal padding
-    const CW   = PW - PAD * 2;    // content width
+    const PW = doc.page.width;   // 595.28
+    const PH = doc.page.height;  // 841.89
 
-    // ── Page background ───────────────────────────────────────────────────────
-    doc.rect(0, 0, PW, PH).fill(PAGE_BG as any);
-
-    // ── White card ────────────────────────────────────────────────────────────
+    // ── Page & card geometry ──────────────────────────────────────────────────
     const CARD_X  = 28;
     const CARD_Y  = 28;
     const CARD_W  = PW - 56;
     const CARD_H  = PH - 56;
     const RADIUS  = 12;
+    const PAD     = 24;           // inner horizontal padding
+    const INNER_X = CARD_X + PAD;
+    const INNER_W = CARD_W - PAD * 2;
 
+    // ── Page background ───────────────────────────────────────────────────────
+    doc.rect(0, 0, PW, PH).fill(PAGE_BG as any);
+
+    // ── White card ────────────────────────────────────────────────────────────
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, RADIUS).fill(WHITE as any);
 
-    // ── Orange header ─────────────────────────────────────────────────────────
-    const HEADER_H = 108;
-    // Clip to card corners for top-round only
+    // ── Orange header (top-rounded only) ─────────────────────────────────────
+    const HEADER_H = 96;
     doc.save();
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, HEADER_H + RADIUS, RADIUS).clip();
     doc.rect(CARD_X, CARD_Y + RADIUS, CARD_W, HEADER_H).fill(ORANGE as any);
@@ -183,93 +190,78 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     doc.restore();
 
     // Brand name
-    fill(doc, WHITE);
-    doc.font('Helvetica-Bold').fontSize(20).text('SOCHATOA', PAD + CARD_X, CARD_Y + 28);
-    (doc as any).y = 0;
+    txt(doc, 'SOCHATOA', INNER_X, CARD_Y + 22, { font: 'Helvetica-Bold', size: 18, color: WHITE });
 
     // "PAYMENT RECEIPT" label
-    doc.font('Helvetica').fontSize(9)
-      .fillOpacity(0.85)
-      .text('PAYMENT RECEIPT', PAD + CARD_X, CARD_Y + 56, { characterSpacing: 2 });
+    doc.fillOpacity(0.85);
+    txt(doc, 'PAYMENT RECEIPT', INNER_X, CARD_Y + 46, {
+      font: 'Helvetica', size: 8, color: WHITE, characterSpacing: 2,
+    });
     doc.fillOpacity(1);
-    (doc as any).y = 0;
 
-    // Receipt number + date (right-aligned)
-    fill(doc, WHITE);
-    doc.font('Helvetica').fontSize(8).fillOpacity(0.85);
-    doc.text(`No: ${data.receiptNumber}`, CARD_X, CARD_Y + 28, { width: CARD_W - PAD, align: 'right' });
-    doc.text(fmtDate(data.completedAt),   CARD_X, CARD_Y + 44, { width: CARD_W - PAD, align: 'right' });
+    // Receipt number + date — right-aligned, calculated manually
+    doc.fillOpacity(0.85);
+    const rCol = CARD_X + CARD_W - PAD;
+    txt(doc, `No: ${data.receiptNumber}`, rCol - 160, CARD_Y + 22, {
+      font: 'Helvetica', size: 7.5, color: WHITE, width: 160, align: 'right',
+    });
+    txt(doc, fmtDate(data.completedAt), rCol - 160, CARD_Y + 36, {
+      font: 'Helvetica', size: 7.5, color: WHITE, width: 160, align: 'right',
+    });
     doc.fillOpacity(1);
-    (doc as any).y = 0;
 
-    // ── Body start ────────────────────────────────────────────────────────────
-    let y = CARD_Y + HEADER_H + 32;
+    // ── Body ─────────────────────────────────────────────────────────────────
+    let y = CARD_Y + HEADER_H + 20;
 
-    // ── Green success banner ──────────────────────────────────────────────────
-    doc.rect(CARD_X + PAD, y, CW, 44).fill(GREEN_BG as any);
-    // Green left accent bar
-    doc.rect(CARD_X + PAD, y, 4, 44).fill(GREEN_BAR as any);
-    fill(doc, GREEN_TEXT);
-    doc.font('Helvetica-Bold').fontSize(11)
-      .text('\u2713  Transaction Completed Successfully', CARD_X + PAD + 16, y + 15);
-    (doc as any).y = 0;
+    // Green success banner
+    doc.rect(INNER_X, y, INNER_W, 36).fill(GREEN_BG as any);
+    doc.rect(INNER_X, y, 3, 36).fill(GREEN_BAR as any);
+    txt(doc, '\u2713  Transaction Completed Successfully', INNER_X + 12, y + 11, {
+      font: 'Helvetica-Bold', size: 10, color: GREEN_TEXT,
+    });
+    y += 46;
 
-    y += 60;
+    // Greeting
+    txt(doc, 'Payment Receipt', INNER_X, y, { font: 'Helvetica-Bold', size: 15, color: DARK });
+    y += 20;
+    txt(doc, `Hi ${data.fullName} — your transaction is complete. Keep this as your official receipt.`,
+      INNER_X, y, { font: 'Helvetica', size: 9, color: GREY, width: INNER_W });
+    y += 22;
 
-    // ── Greeting ──────────────────────────────────────────────────────────────
-    fill(doc, DARK);
-    doc.font('Helvetica-Bold').fontSize(18)
-      .text('Your Payment is Complete', CARD_X + PAD, y);
-    (doc as any).y = 0;
-    y += 26;
-    fill(doc, GREY);
-    doc.font('Helvetica').fontSize(10).lineGap(4)
-      .text(`Hi ${data.fullName},`, CARD_X + PAD, y);
-    (doc as any).y = 0;
-    y += 16;
-    doc.text('Your transaction has been completed successfully. Please keep this receipt.', CARD_X + PAD, y, { width: CW, lineBreak: false });
-    (doc as any).y = 0;
-    y += 40;
+    // Amount highlight card
+    doc.rect(INNER_X, y, INNER_W, 58).fill(CARD_BG as any);
+    doc.strokeColor(LINE_GREY as any).rect(INNER_X, y, INNER_W, 58).stroke();
 
-    // ── Amount highlight card ─────────────────────────────────────────────────
-    doc.rect(CARD_X + PAD, y, CW, 70).fill(CARD_BG as any);
-    stroke(doc, LINE_GREY);
-    doc.roundedRect(CARD_X + PAD, y, CW, 70, 8).stroke();
-
-    fill(doc, LABEL_GREY);
-    doc.font('Helvetica').fontSize(8)
-      .text('AMOUNT DISBURSED', CARD_X + PAD + 16, y + 12, { characterSpacing: 1.5 });
-    (doc as any).y = 0;
-
-    fill(doc, ORANGE);
-    doc.font('Helvetica-Bold').fontSize(24)
-      .text(fmt(data.foreignAmount, data.currency), CARD_X + PAD + 16, y + 26);
-    (doc as any).y = 0;
-
+    txt(doc, 'AMOUNT DISBURSED', INNER_X + 14, y + 9, {
+      font: 'Helvetica', size: 7.5, color: LABEL_GREY, characterSpacing: 1.2,
+    });
+    txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 14, y + 22, {
+      font: 'Helvetica-Bold', size: 20, color: ORANGE,
+    });
     if (data.nairaEquivalent) {
-      const rate = data.exchangeRate ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
-      fill(doc, LABEL_GREY);
-      doc.font('Helvetica').fontSize(8)
-        .text(`\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rate}`, CARD_X + PAD + 16, y + 54);
-      (doc as any).y = 0;
+      const rate = data.exchangeRate
+        ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}`
+        : '';
+      txt(doc, `\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rate}`, INNER_X + 14, y + 44, {
+        font: 'Helvetica', size: 7.5, color: LABEL_GREY,
+      });
     }
-
-    y += 86;
+    y += 68;
 
     // ── Transaction details table ─────────────────────────────────────────────
     const tableRows: [string, string][] = [
-      ['TRANSACTION REFERENCE', data.referenceNumber],
-      ['CUSTOMER NAME',         data.fullName],
-      ['TRANSACTION TYPE',      fmtLabel(data.type)],
-      ['PURPOSE',               data.purpose],
-      ['DISBURSEMENT METHOD',   data.disbursementMethod ? fmtLabel(data.disbursementMethod) : '—'],
-      ['DATE COMPLETED',        fmtDate(data.completedAt)],
+      ['REFERENCE',      data.referenceNumber],
+      ['CUSTOMER',       data.fullName],
+      ['TYPE',           fmtLabel(data.type)],
+      ['PURPOSE',        data.purpose],
+      ['METHOD',         data.disbursementMethod ? fmtLabel(data.disbursementMethod) : '—'],
+      ['DATE',           fmtDate(data.completedAt)],
     ];
     if (data.email)       tableRows.push(['EMAIL', data.email]);
     if (data.phoneNumber) tableRows.push(['PHONE', data.phoneNumber]);
 
-    y = drawTable(doc, CARD_X + PAD, y, CW, tableRows);
-    y += 20;
+    y = drawTable(doc, INNER_X, y, INNER_W, tableRows);
+    y += 12;
 
     // ── Beneficiary details ───────────────────────────────────────────────────
     if (data.beneficiaryDetails?.accountNumber) {
@@ -280,22 +272,20 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       ];
       if (data.beneficiaryDetails.swiftCode) bRows.push(['SWIFT CODE', data.beneficiaryDetails.swiftCode]);
       if (data.beneficiaryDetails.iban)      bRows.push(['IBAN',       data.beneficiaryDetails.iban]);
-
-      y = drawSection(doc, CARD_X + PAD, y, CW, 'BENEFICIARY DETAILS', bRows);
-      y += 20;
+      y = drawSection(doc, INNER_X, y, INNER_W, 'BENEFICIARY DETAILS', bRows);
+      y += 12;
     }
 
     // ── Cash pickup ───────────────────────────────────────────────────────────
     if (data.cashPickup?.pickupLocation) {
       const pRows: [string, string][] = [
-        ['LOCATION',    data.cashPickup.pickupLocation],
+        ['LOCATION',     data.cashPickup.pickupLocation],
         ['STATE / CITY', `${data.cashPickup.pickupState ?? ''} / ${data.cashPickup.pickupCity ?? ''}`],
-        ['PICKUP CODE', data.cashPickup.pickupCode ?? '—'],
+        ['PICKUP CODE',  data.cashPickup.pickupCode ?? '—'],
       ];
       if (data.cashPickup.recipientName) pRows.push(['RECIPIENT', data.cashPickup.recipientName]);
-
-      y = drawSection(doc, CARD_X + PAD, y, CW, 'CASH PICKUP DETAILS', pRows);
-      y += 20;
+      y = drawSection(doc, INNER_X, y, INNER_W, 'CASH PICKUP DETAILS', pRows);
+      y += 12;
     }
 
     // ── Refund bank details ───────────────────────────────────────────────────
@@ -305,34 +295,29 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
         ['ACCOUNT NUMBER', data.refundBankDetails.accountNumber],
         ['BANK',           data.refundBankDetails.bankName       ?? '—'],
       ];
-
-      y = drawSection(doc, CARD_X + PAD, y, CW, 'REFUND BANK DETAILS', rRows);
-      y += 20;
+      y = drawSection(doc, INNER_X, y, INNER_W, 'REFUND BANK DETAILS', rRows);
     }
 
-    // ── Footer ────────────────────────────────────────────────────────────────
-    const FOOTER_H = 52;
+    // ── Footer (always pinned to card bottom) ─────────────────────────────────
+    const FOOTER_H = 44;
     const FOOTER_Y = CARD_Y + CARD_H - FOOTER_H;
 
     doc.rect(CARD_X, FOOTER_Y, CARD_W, FOOTER_H).fill(PAGE_BG as any);
+    doc.strokeColor(LINE_GREY as any)
+      .moveTo(INNER_X, FOOTER_Y)
+      .lineTo(CARD_X + CARD_W - PAD, FOOTER_Y)
+      .stroke();
 
-    // Divider line
-    stroke(doc, LINE_GREY);
-    doc.moveTo(CARD_X + PAD, FOOTER_Y).lineTo(CARD_X + CARD_W - PAD, FOOTER_Y).stroke();
-
-    fill(doc, LABEL_GREY);
-    doc.font('Helvetica').fontSize(8)
-      .text('Sochatoa \u2014 Secure Foreign Exchange Platform', CARD_X, FOOTER_Y + 12, { width: CARD_W, align: 'center' });
-    (doc as any).y = 0;
-    doc.font('Helvetica').fontSize(8)
-      .text('Need help? Contact us at support@sochatoa.com', CARD_X, FOOTER_Y + 26, { width: CARD_W, align: 'center' });
-    (doc as any).y = 0;
+    txt(doc, 'SohCahToa \u2014 Licensed & Regulated by the Central Bank of Nigeria',
+      CARD_X, FOOTER_Y + 9, { font: 'Helvetica', size: 7.5, color: LABEL_GREY, width: CARD_W, align: 'center' });
+    txt(doc, 'support@sohcahtoabdc.com',
+      CARD_X, FOOTER_Y + 23, { font: 'Helvetica', size: 7.5, color: LABEL_GREY, width: CARD_W, align: 'center' });
 
     doc.end();
   });
 }
 
-// ── Draws a bordered table of [label, value] rows ────────────────────────────
+// ── Table ─────────────────────────────────────────────────────────────────────
 function drawTable(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -340,34 +325,33 @@ function drawTable(
   width: number,
   rows: [string, string][]
 ): number {
-  const ROW_H   = 30;
-  const COL_L   = 180; // label column width
-  const PADDING = 12;
+  const ROW_H  = 24;
+  const COL_L  = 140;
+  const PADH   = 10;
 
   for (let i = 0; i < rows.length; i++) {
     const [label, value] = rows[i];
     const bg = i % 2 === 0 ? CARD_BG : WHITE;
 
     doc.rect(x, y, width, ROW_H).fill(bg as any);
-    stroke(doc, LINE_GREY);
-    doc.rect(x, y, width, ROW_H).stroke();
+    doc.strokeColor(LINE_GREY as any).rect(x, y, width, ROW_H).stroke();
 
-    fill(doc, LABEL_GREY);
-    doc.font('Helvetica').fontSize(7.5)
-      .text(label, x + PADDING, y + ROW_H / 2 - 4, { width: COL_L, lineBreak: false, characterSpacing: 0.8 });
+    txt(doc, label, x + PADH, y + ROW_H / 2 - 4, {
+      font: 'Helvetica', size: 7, color: LABEL_GREY, characterSpacing: 0.6,
+      width: COL_L - PADH, lineBreak: false,
+    });
+    txt(doc, value, x + COL_L + PADH, y + ROW_H / 2 - 4.5, {
+      font: 'Helvetica-Bold', size: 8, color: DARK,
+      width: width - COL_L - PADH * 2, lineBreak: false,
+    });
 
-    fill(doc, DARK);
-    doc.font('Helvetica-Bold').fontSize(9)
-      .text(value, x + COL_L + PADDING, y + ROW_H / 2 - 4.5, { width: width - COL_L - PADDING * 2, lineBreak: false });
-
-    (doc as any).y = 0;
     y += ROW_H;
   }
 
   return y;
 }
 
-// ── Draws a titled section with its own table ─────────────────────────────────
+// ── Section (title + table) ───────────────────────────────────────────────────
 function drawSection(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -376,9 +360,7 @@ function drawSection(
   title: string,
   rows: [string, string][]
 ): number {
-  fill(doc, DARK);
-  doc.font('Helvetica-Bold').fontSize(9).text(title, x, y, { characterSpacing: 0.5, lineBreak: false });
-  (doc as any).y = 0;
-  y += 14;
+  txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 8, color: DARK, characterSpacing: 0.5 });
+  y += 12;
   return drawTable(doc, x, y, width, rows);
 }

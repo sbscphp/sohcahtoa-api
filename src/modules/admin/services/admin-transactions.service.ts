@@ -959,20 +959,22 @@ export class AdminTransactionsService {
           throw new Error("Transaction state changed during approval. Please refresh and try again.");
         }
 
-        // Reverse wallet debit (refund)
-        await walletService.reverseDebit({
+        // Reverse the wallet CREDIT (refund debit entry created, immediately MATCHED)
+        const refundResult = await walletService.reverseCredit({
           transactionId,
           reason: reason || "Transaction refund approved",
         });
 
-        await prisma.walletEntry.updateMany({
-          where: { transactionId, type: "DEBIT", status: "REVERSED" },
-          data: {
-            refundStatus: "COMPLETED",
-            refundedBy: adminId,
-            refundedAt: new Date(),
-          }
-        });
+        if (refundResult) {
+          await (prisma as any).walletEntry.updateMany({
+            where: { transactionId, type: "CREDIT", status: { not: "REVERSED" } },
+            data: {
+              refundStatus: "COMPLETED",
+              refundedBy: adminId,
+              refundedAt: new Date(),
+            },
+          });
+        }
 
         await prisma.transactionHistory.create({
           data: {
@@ -984,7 +986,7 @@ export class AdminTransactionsService {
         });
 
         const affectedEntries = await prisma.walletEntry.findMany({
-          where: { transactionId, type: "DEBIT" },
+          where: { transactionId, type: "CREDIT" },
           select: { id: true, walletId: true }
         });
         for (const entry of affectedEntries) {
@@ -1039,26 +1041,6 @@ export class AdminTransactionsService {
         userId: transaction.userId,
         transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
       });
-
-      // Wallet: debit the converted amount on final approval. The customer should
-      // pay a slightly higher total (including fees), but only the converted amount
-      // is held in wallet for settlement.
-      if (tx.nairaEquivalent && Number(tx.nairaEquivalent) > 0) {
-        const nairaAmount = Number(tx.nairaEquivalent);
-
-        const alreadyDebited = await walletService.hasDebitFor(transactionId);
-        if (!alreadyDebited) {
-          await walletService.debitWallet({
-            userId: transaction.userId,
-            amount: nairaAmount,
-            transactionId,
-            transactionRef: transaction.referenceNumber,
-            description: `Debit for approved transaction ${transaction.referenceNumber}`,
-          }).catch((err) =>
-            logger.error('Wallet debit failed on approval', { transactionId, error: err.message }),
-          );
-        }
-      }
 
       return { message: "Transaction approved successfully" };
     } else {
@@ -1349,7 +1331,7 @@ export class AdminTransactionsService {
 
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { userId: true, id: true, referenceNumber: true, createdByAgentId: true },
+      select: { userId: true, id: true, referenceNumber: true, createdByAgentId: true, status: true },
     });
     if (tx) {
       eventBus.publish(EventTypes.DOCUMENT_REJECTED, {
@@ -1362,6 +1344,35 @@ export class AdminTransactionsService {
         reason,
         transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
       });
+
+      // Auto-reject the transaction if it hasn't already been rejected/completed/cancelled
+      const terminalStatuses = ['REJECTED', 'COMPLETED', 'CANCELLED'];
+      if (!terminalStatuses.includes(tx.status)) {
+        await (prisma as any).transaction.update({
+          where: { id: transactionId },
+          data: {
+            status: TransactionStatus.REJECTED as any,
+            rejectionReason: `Document rejected: ${updated.documentType}. ${reason || ''}`.trim(),
+            rejectedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        await prisma.transactionHistory.create({
+          data: {
+            transactionId,
+            action: 'TRANSACTION_REJECTED',
+            performedBy: adminId,
+            notes: `Automatically rejected: document ${updated.documentType} was rejected. Reason: ${reason || 'No reason provided'}`,
+          },
+        });
+
+        eventBus.publish(EventTypes.TRANSACTION_REJECTED, {
+          userId: tx.userId,
+          transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+          reason: `Document rejected: ${updated.documentType}. ${reason || ''}`.trim(),
+        });
+      }
     }
 
     return updated;
@@ -1745,19 +1756,22 @@ export class AdminTransactionsService {
         }
       });
 
-      await walletService.reverseDebit({
+      // Reverse the wallet CREDIT (refund debit entry created, immediately MATCHED)
+      const autoRefundResult = await walletService.reverseCredit({
         transactionId,
         reason: reason || "Auto-approved transaction refund",
       });
 
-      await prisma.walletEntry.updateMany({
-        where: { transactionId, type: "DEBIT", status: "REVERSED" },
-        data: {
-          refundStatus: "COMPLETED",
-          refundedBy: adminId,
-          refundedAt: new Date(),
-        }
-      });
+      if (autoRefundResult) {
+        await (prisma as any).walletEntry.updateMany({
+          where: { transactionId, type: "CREDIT", status: { not: "REVERSED" } },
+          data: {
+            refundStatus: "COMPLETED",
+            refundedBy: adminId,
+            refundedAt: new Date(),
+          },
+        });
+      }
 
       await prisma.transactionHistory.create({
         data: {
@@ -1769,7 +1783,7 @@ export class AdminTransactionsService {
       });
 
       const affectedEntries = await prisma.walletEntry.findMany({
-        where: { transactionId, type: "DEBIT" },
+        where: { transactionId, type: "CREDIT" },
         select: { id: true, walletId: true }
       });
 
