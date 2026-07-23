@@ -986,4 +986,67 @@ router.post("/:transactionId/mark-paid", agentTransactionController.markTransact
  */
 router.get("/:transactionId/receipt", agentTransactionController.downloadReceipt);
 
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/bank-accounts:
+ *   post:
+ *     summary: Attach bank accounts to a transaction
+ *     description: |
+ *       Links one or more of the customer's saved bank accounts to a specific
+ *       transaction. The agent must be the creator of the transaction.
+ *       Duplicate entries are silently ignored.
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [bankAccountIds]
+ *             properties:
+ *               bankAccountIds:
+ *                 type: array
+ *                 items: { type: string }
+ *                 example: ["uuid-1", "uuid-2"]
+ *   get:
+ *     summary: Get bank accounts attached to a transaction
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema: { type: string }
+ */
+router.post("/:transactionId/bank-accounts", agentTransactionController.attachBankAccounts);
+router.get("/:transactionId/bank-accounts", agentTransactionController.getTransactionBankAccounts);
+
+/**
+ * @swagger
+ * /api/agent/transactions/{transactionId}/bank-accounts/{bankAccountId}:
+ *   delete:
+ *     summary: Detach a bank account from a transaction
+ *     tags: [Agent Transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: bankAccountId
+ *         required: true
+ *         schema: { type: string }
+ */
+router.delete("/:transactionId/bank-accounts/:bankAccountId", agentTransactionController.detachBankAccount);
+
 export default router;

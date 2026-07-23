@@ -1,7 +1,34 @@
 import { Request, Response } from 'express';
 import { agentBankAccountService } from '../services/agent-bank-account.service';
+import { customerBankAccountService } from '../../customer/services/customer-bank-account.service';
+import { successResponse } from '../../../shared/utils/response';
 
 export const agentBankAccountController = {
+  /**
+   * GET /api/agent/bank-accounts/banks?q=
+   */
+  async getBanks(req: Request, res: Response) {
+    try {
+      const q = req.query.q as string | undefined;
+      const banks = customerBankAccountService.getBanks(q);
+      res.json(successResponse(banks));
+    } catch (e: any) {
+      res.status(e.statusCode || 500).json({ success: false, message: e.message });
+    }
+  },
+
+  /**
+   * GET /api/agent/bank-accounts/lookup?bankName=&accountNumber=
+   */
+  async lookupAccountName(req: Request, res: Response) {
+    try {
+      const { bankName, accountNumber } = req.query as Record<string, string>;
+      const result = await customerBankAccountService.lookupAccountName(bankName, accountNumber);
+      res.json(successResponse(result, 'Account name retrieved'));
+    } catch (e: any) {
+      res.status(e.statusCode || 400).json({ success: false, message: e.message });
+    }
+  },
   async addBankAccount(req: Request, res: Response) {
     try {
       const agentUserId = (req as any).user.id;

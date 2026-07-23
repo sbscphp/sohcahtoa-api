@@ -506,6 +506,63 @@ class AgentTransactionController {
     }
   }
 
+  async attachBankAccounts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError('Authentication required');
+
+      const { transactionId } = req.params;
+      const { bankAccountIds } = req.body;
+
+      const result = await agentTransactionService.attachBankAccountsToTransaction(
+        authUser.userId,
+        transactionId,
+        bankAccountIds
+      );
+
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getTransactionBankAccounts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError('Authentication required');
+
+      const { transactionId } = req.params;
+
+      const result = await agentTransactionService.getTransactionBankAccounts(
+        authUser.userId,
+        transactionId
+      );
+
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async detachBankAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const authUser = req.user;
+      if (!authUser) throw new ValidationError('Authentication required');
+
+      const { transactionId, bankAccountId } = req.params;
+
+      await agentTransactionService.detachBankAccountFromTransaction(
+        authUser.userId,
+        transactionId,
+        bankAccountId
+      );
+
+      res.status(200).json({ success: true, message: 'Bank account detached from transaction' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async downloadReceipt(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const authUser = req.user;

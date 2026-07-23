@@ -2053,6 +2053,86 @@ class AgentTransactionService {
     return [headers.join(","), ...csvRows].join("\n");
   }
 
+  /**
+   * Attach one or more of the customer's saved bank accounts to a transaction.
+   * The agent must be the creator of the transaction; bank accounts must belong to the customer.
+   */
+  async attachBankAccountsToTransaction(
+    agentUserId: string,
+    transactionId: string,
+    bankAccountIds: string[]
+  ) {
+    if (!bankAccountIds?.length) throw new ValidationError('At least one bankAccountId is required');
+
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agent.id },
+      select: { id: true, userId: true },
+    });
+    if (!transaction) throw new NotFoundError('Transaction not found or not created by this agent');
+
+    // Verify all bank accounts belong to the customer
+    const accounts = await (prisma as any).customerBankAccount.findMany({
+      where: { id: { in: bankAccountIds }, userId: transaction.userId },
+    });
+    if (accounts.length !== bankAccountIds.length) {
+      throw new ValidationError('One or more bank accounts were not found or do not belong to the customer');
+    }
+
+    const rows = bankAccountIds.map((customerBankAccountId: string) => ({
+      id: require('crypto').randomUUID(),
+      transactionId,
+      customerBankAccountId,
+    }));
+
+    await (prisma as any).transactionBankAccount.createMany({ data: rows, skipDuplicates: true });
+
+    return this.getTransactionBankAccounts(agentUserId, transactionId);
+  }
+
+  /**
+   * Get bank accounts attached to a transaction created by this agent.
+   */
+  async getTransactionBankAccounts(agentUserId: string, transactionId: string) {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agent.id },
+      select: { id: true },
+    });
+    if (!transaction) throw new NotFoundError('Transaction not found or not created by this agent');
+
+    const rows = await (prisma as any).transactionBankAccount.findMany({
+      where: { transactionId },
+      include: { bankAccount: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((r: any) => r.bankAccount);
+  }
+
+  /**
+   * Detach a bank account from a transaction created by this agent.
+   */
+  async detachBankAccountFromTransaction(
+    agentUserId: string,
+    transactionId: string,
+    bankAccountId: string
+  ) {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, createdByAgentId: agent.id },
+      select: { id: true },
+    });
+    if (!transaction) throw new NotFoundError('Transaction not found or not created by this agent');
+
+    await (prisma as any).transactionBankAccount.deleteMany({
+      where: { transactionId, customerBankAccountId: bankAccountId },
+    });
+  }
+
   async markTransactionAsPaid(agentId: string, transactionId: string): Promise<object> {
     const tx = await prisma.transaction.findFirst({
       where: { id: transactionId },
