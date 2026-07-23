@@ -17,9 +17,11 @@ const logger = createLogger('customer-transaction-service');
 
 interface TransactionDocumentLink {
   documentType: string;
-  fileUrl: string;
-  fileName: string;
+  fileUrl?: string;
+  fileName?: string;
   fileSize?: number;
+  /** For DIGITAL_SIGNATURE: the signature text when no file is uploaded */
+  signatureText?: string;
 }
 
 interface CreateCustomerTransactionPayload {
@@ -126,6 +128,9 @@ interface CreateCustomerTransactionPayload {
   // Nigeria address — required for Tourist Sell FX transactions
   nigeriaAddress?: string;
 
+  /** Digital signature text submitted by the customer instead of uploading a DIGITAL_SIGNATURE file */
+  digitalSignature?: string;
+
   // Refund bank details — the customer's own account to refund to if the transaction is reversed
   refundBankDetails?: {
     bankName?: string;
@@ -185,6 +190,7 @@ export class CustomerTransactionService {
       studentPassportIssueDate,
       studentPassportExpiryDate,
       documents,
+      digitalSignature,
       disbursementOption,
       beneficiaryDetails,
       pickupLocation,
@@ -577,21 +583,43 @@ export class CustomerTransactionService {
       });
 
       await prisma.transactionDocument.createMany({
-        data: validDocs.map((doc) => ({
-          transactionId: transaction.id,
-          documentType: doc.documentType as any,
-          fileUrl: doc.fileUrl,
-          fileName: doc.fileName,
-          fileSize: doc.fileSize ?? 0,
-          verificationStatus: 'PENDING' as any,
-          metadata: { source: 'inline_upload', uploadedBy: userId },
-        })),
+        data: validDocs.map((doc) => {
+          const isDigitalSig = doc.documentType === 'DIGITAL_SIGNATURE' && doc.signatureText && !doc.fileUrl;
+          return {
+            transactionId: transaction.id,
+            documentType: doc.documentType as any,
+            fileUrl: isDigitalSig ? 'SIGNED' : (doc.fileUrl ?? ''),
+            fileName: isDigitalSig ? 'Digital Signature' : (doc.fileName ?? ''),
+            fileSize: doc.fileSize ?? 0,
+            verificationStatus: 'PENDING' as any,
+            metadata: isDigitalSig
+              ? { source: 'digital_signature', signed: true, signatureText: doc.signatureText, uploadedBy: userId }
+              : { source: 'inline_upload', uploadedBy: userId },
+          };
+        }),
       });
 
       logger.debug(`[createTransaction] Documents saved successfully`, {
         transactionId: transaction.id,
         documentCount: validDocs.length,
       });
+    }
+
+    // Save top-level digitalSignature field as a DIGITAL_SIGNATURE document record
+    if (digitalSignature) {
+      await prisma.transactionDocument.create({
+        data: {
+          transactionId: transaction.id,
+          documentType: 'DIGITAL_SIGNATURE' as any,
+          fileUrl: 'SIGNED',
+          fileName: 'Digital Signature',
+          fileSize: 0,
+          verificationStatus: 'PENDING' as any,
+          metadata: { source: 'digital_signature', signed: true, signatureText: digitalSignature, uploadedBy: userId },
+        },
+      });
+
+      logger.info(`[createTransaction] Digital signature saved`, { transactionId: transaction.id });
     }
 
     // Create cash pickup record if pickup location is provided
@@ -669,6 +697,7 @@ export class CustomerTransactionService {
         fileName: true,
         verificationStatus: true,
         uploadedAt: true,
+        metadata: true,
       },
       orderBy: { uploadedAt: 'desc' },
     });
@@ -747,6 +776,10 @@ export class CustomerTransactionService {
       },
     });
 
+    // Resolve digital signature — either top-level field or inline document
+    const sigText = digitalSignature
+      ?? documents?.find((d) => d.documentType === 'DIGITAL_SIGNATURE' && d.signatureText && !d.fileUrl)?.signatureText;
+
     const result = {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -760,6 +793,13 @@ export class CustomerTransactionService {
         numericAmount
       ),
       savedBankAccounts,
+      ...(sigText && {
+        digitalSignature: {
+          signed: true,
+          signatureText: sigText,
+          note: 'Customer has already signed digitally — no document upload required',
+        },
+      }),
       message: hasDocuments
         ? 'Transaction submitted successfully and is awaiting admin review.'
         : 'Transaction initiated successfully. Please upload required documents to proceed.',
@@ -1059,6 +1099,7 @@ export class CustomerTransactionService {
         fileName: true,
         verificationStatus: true,
         uploadedAt: true,
+        metadata: true,
       },
       orderBy: { uploadedAt: 'desc' },
     });
@@ -2141,6 +2182,7 @@ export class CustomerTransactionService {
       verificationNotes?: string | null;
       uploadedAt: Date;
       verifiedAt?: Date | null;
+      metadata?: any;
     }[],
     admissionType?: string | null,
     transactionMode?: string | null,
@@ -2153,15 +2195,24 @@ export class CustomerTransactionService {
       amount
     );
 
-    const toFileEntry = (doc: typeof uploadedDocuments[number]) => ({
-      id: doc.id,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      status: doc.verificationStatus,
-      rejectionNotes: doc.verificationStatus === 'FAILED' ? (doc.verificationNotes ?? null) : null,
-      uploadedAt: doc.uploadedAt,
-      verifiedAt: doc.verifiedAt ?? null,
-    });
+    const toFileEntry = (doc: typeof uploadedDocuments[number]) => {
+      const meta = (doc.metadata ?? {}) as Record<string, any>;
+      const isSigned = doc.documentType === 'DIGITAL_SIGNATURE' && meta.signed === true;
+      return {
+        id: doc.id,
+        fileName: doc.fileName,
+        fileUrl: isSigned ? null : doc.fileUrl,
+        status: doc.verificationStatus,
+        rejectionNotes: doc.verificationStatus === 'FAILED' ? (doc.verificationNotes ?? null) : null,
+        uploadedAt: doc.uploadedAt,
+        verifiedAt: doc.verifiedAt ?? null,
+        ...(isSigned && {
+          signed: true,
+          signatureText: meta.signatureText ?? null,
+          note: 'Customer has already signed digitally — no document upload required',
+        }),
+      };
+    };
 
     const toEntry = (docType: string, docs: typeof uploadedDocuments) => {
       const isMulti = CustomerTransactionService.MULTI_UPLOAD_TYPES.has(docType);

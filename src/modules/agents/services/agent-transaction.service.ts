@@ -212,6 +212,7 @@ export interface AgentCreateTransactionPayload {
     accountName?: string;
   };
   nigeriaAddress?: string;
+  digitalSignature?: string;
 }
 
 export interface AgentRecordDisbursementInput {
