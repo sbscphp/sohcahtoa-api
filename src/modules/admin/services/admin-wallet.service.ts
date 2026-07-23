@@ -854,7 +854,7 @@ export class AdminWalletService {
           walletId,
           transactionId: entry.transactionId,
           transactionRef: entry.transactionRef,
-          sessionId: entry.sessionId,
+          sessionId: `REFUND-${entry.transactionRef}`,
           type: isDebit ? "CREDIT" : "DEBIT",
           amount: refundAmount,
           balanceBefore,
@@ -862,7 +862,7 @@ export class AdminWalletService {
           description: `Refund for entry ${entry.id}`,
           status: "COMPLETED",
           matchStatus: "MATCHED",
-          metadata: { refundOf: entryId },
+          metadata: { isRefund: true, refundOf: entryId },
         },
       }),
       (prisma as any).customerWallet.update({
