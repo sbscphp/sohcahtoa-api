@@ -68,8 +68,9 @@ export async function generateTransactionReceipt(
 
   const client = prisma as any;
 
+  const accessWhere = await buildAccessWhere(transactionId, requesterId, requesterRole);
   const transaction = await client.transaction.findFirst({
-    where: buildAccessWhere(transactionId, requesterId, requesterRole),
+    where: accessWhere,
     include: {
       user: {
         select: {
@@ -126,10 +127,17 @@ export async function generateTransactionReceipt(
   return { pdf, filename, referenceNumber: transaction.referenceNumber };
 }
 
-function buildAccessWhere(transactionId: string, requesterId: string, role: string) {
+async function buildAccessWhere(transactionId: string, requesterId: string, role: string) {
   const idFilter = { OR: [{ id: transactionId }, { referenceNumber: transactionId }] };
   if (role === 'CUSTOMER') return { ...idFilter, userId: requesterId };
-  if (role === 'AGENT')    return { ...idFilter, createdByAgent: { userId: requesterId } };
+  if (role === 'AGENT') {
+    // Agent.id ≠ User.id — resolve Agent record from the authenticated user's email
+    const agentUser = await prisma.user.findUnique({ where: { id: requesterId }, select: { email: true } });
+    const agent = agentUser
+      ? await (prisma as any).agent.findUnique({ where: { email: agentUser.email }, select: { id: true } })
+      : null;
+    return { ...idFilter, createdByAgentId: agent?.id ?? '__not_found__' };
+  }
   return idFilter;
 }
 
