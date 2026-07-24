@@ -5,6 +5,7 @@ import { ServiceName, TransactionStep, TransactionStatus } from "../../../shared
 import { hashPassword } from "../../../shared/utils/password";
 import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "./workflow.service";
+import walletService from "../../wallet/services/wallet.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 export class AdminService {
@@ -433,6 +434,10 @@ export class AdminService {
   }
 
   async confirmDeposit(transactionId: string, adminId: string, paymentReference: string, proofOfPayment?: string) {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { userId: true, referenceNumber: true, nairaEquivalent: true },
+    });
 
     const settlement = await prisma.settlement.upsert({
       where: { transactionId },
@@ -465,6 +470,25 @@ export class AdminService {
         notes: paymentReference,
       },
     });
+
+    // Wallet: credit immediately as COMPLETED + MATCHED — admin-confirmed cash needs no bank delay
+    if (transaction?.userId && transaction.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
+      const alreadyCredited = await walletService.hasCreditFor(transactionId);
+      if (!alreadyCredited) {
+        await walletService.creditWallet({
+          userId:         transaction.userId,
+          amount:         Number(transaction.nairaEquivalent),
+          transactionId,
+          transactionRef: transaction.referenceNumber,
+          sessionId:      paymentReference,
+          description:    `Cash payment confirmed by admin | ref ${paymentReference}`,
+          status:         'COMPLETED',
+          matchStatus:    'MATCHED',
+        }).catch((err: any) =>
+          logger.error('Wallet credit failed on admin deposit confirmation', { transactionId, error: err.message })
+        );
+      }
+    }
 
     return { message: "Deposit confirmed successfully" };
   }

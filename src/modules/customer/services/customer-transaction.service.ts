@@ -385,8 +385,8 @@ export class CustomerTransactionService {
       referenceNumber,
     });
 
-    // Determine initial status — if documents are provided upfront, submit for admin review immediately
-    const hasDocuments = documents && documents.length > 0;
+    // Determine initial status — if documents or a digital signature are provided upfront, submit for admin review immediately
+    const hasDocuments = !!(( documents && documents.length > 0) || digitalSignature);
     const initialStatus = hasDocuments ? 'AWAITING_VERIFICATION' : 'DRAFT';
     const initialStep = hasDocuments ? 'DOCUMENT_UPLOAD' : 'PERSONAL_INFO';
 

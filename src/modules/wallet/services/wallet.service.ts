@@ -95,8 +95,9 @@ export class WalletService {
     sessionId?: string;
     description?: string;
     status?: 'PENDING' | 'COMPLETED';
+    matchStatus?: 'UNMATCHED' | 'MATCHED';
   }) {
-    const { userId, amount, transactionId, transactionRef, sessionId, description, status = 'COMPLETED' } = params;
+    const { userId, amount, transactionId, transactionRef, sessionId, description, status = 'COMPLETED', matchStatus = 'UNMATCHED' } = params;
 
     if (amount <= 0) {
       throw new ValidationError('Credit amount must be greater than zero');
@@ -124,7 +125,7 @@ export class WalletService {
           balanceAfter,
           description: description ?? `Credit for transaction ${transactionRef}`,
           status,
-          matchStatus: 'UNMATCHED',
+          matchStatus,
         },
       }),
     ]);

@@ -47,6 +47,7 @@ class AgentTransactionController {
         studentPassportIssueDate: (body as any).studentPassportIssueDate,
         studentPassportExpiryDate: (body as any).studentPassportExpiryDate,
         documents: body.documents,
+        digitalSignature: body.digitalSignature,
         disbursementOption: body.disbursementOption,
         refundBankDetails: body.refundBankDetails,
         beneficiaryDetails: body.beneficiaryDetails,

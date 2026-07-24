@@ -1362,7 +1362,7 @@ class AgentTransactionService {
 
     const transaction = await prisma.transaction.findFirst({
       where: { id: input.transactionId, createdByAgentId: agent.id },
-      select: { id: true, status: true, currentStep: true },
+      select: { id: true, status: true, currentStep: true, userId: true, referenceNumber: true, nairaEquivalent: true },
     });
 
     if (!transaction) {
@@ -1457,6 +1457,24 @@ class AgentTransactionService {
 
       return { settlement, transaction: updatedTx };
     });
+
+    // Wallet: credit immediately as COMPLETED + MATCHED — agent-confirmed cash needs no bank delay
+    const nairaAmount = transaction.nairaEquivalent ? Number(transaction.nairaEquivalent) : input.amount;
+    const alreadyCredited = await walletService.hasCreditFor(input.transactionId);
+    if (!alreadyCredited && nairaAmount > 0) {
+      await walletService.creditWallet({
+        userId:         transaction.userId,
+        amount:         nairaAmount,
+        transactionId:  input.transactionId,
+        transactionRef: transaction.referenceNumber,
+        sessionId:      paymentReference,
+        description:    `Cash payment confirmed by agent | ref ${paymentReference}`,
+        status:         'COMPLETED',
+        matchStatus:    'MATCHED',
+      }).catch((err: any) =>
+        logger.error('[recordInboundPayment] Wallet credit failed', { transactionId: input.transactionId, error: err.message })
+      );
+    }
 
     logger.info("[recordInboundPayment] Inbound payment recorded by agent", {
       transactionId: input.transactionId,
