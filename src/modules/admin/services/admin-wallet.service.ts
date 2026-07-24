@@ -2,6 +2,7 @@ import { getDatabase } from "../../../config/database";
 import { createLogger } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import { workflowService } from "./workflow.service";
+import walletService from "../../wallet/services/wallet.service";
 
 const prisma = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -881,7 +882,7 @@ export class AdminWalletService {
     };
   }
 
-  async approveRefund(walletId: string, entryId: string, adminId: string, reason?: string) {
+  async approveRefund(walletId: string, entryId: string, adminId: string, _reason?: string) {
     const client: any = prisma as any;
     const entry = await client.walletEntry.findFirst({
       where: { id: entryId, walletId },
@@ -935,7 +936,7 @@ export class AdminWalletService {
     return { message: "Refund approved and processed successfully" };
   }
 
-  async rejectRefund(walletId: string, entryId: string, adminId: string, reason: string) {
+  async rejectRefund(walletId: string, entryId: string, adminId: string, _reason: string) {
     const client: any = prisma as any;
     const entry = await client.walletEntry.findFirst({
       where: { id: entryId, walletId },
@@ -1005,6 +1006,11 @@ export class AdminWalletService {
 
     const targetTrxId = entry.linkedTransactionId || entry.transactionId;
     if (targetTrxId) {
+      const transaction = await (prisma as any).transaction.findUnique({
+        where: { id: targetTrxId },
+        select: { userId: true, referenceNumber: true, nairaEquivalent: true },
+      });
+
       await (prisma as any).transaction.update({
         where: { id: targetTrxId },
         data: {
@@ -1023,6 +1029,22 @@ export class AdminWalletService {
           notes: "Disbursement confirmed",
         },
       });
+
+      // Wallet: debit the naira equivalent now that disbursement is confirmed
+      if (transaction?.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
+        const alreadyDebited = await walletService.hasDebitFor(targetTrxId);
+        if (!alreadyDebited) {
+          await walletService.debitWallet({
+            userId:         transaction.userId,
+            amount:         Number(transaction.nairaEquivalent),
+            transactionId:  targetTrxId,
+            transactionRef: transaction.referenceNumber,
+            description:    `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
+          }).catch((err: any) =>
+            logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId: targetTrxId, error: err.message })
+          );
+        }
+      }
     }
 
     logger.info("Wallet entry disbursement confirmed", { walletId, entryId, adminId });
