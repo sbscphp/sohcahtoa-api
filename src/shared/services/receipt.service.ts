@@ -81,6 +81,7 @@ export async function generateTransactionReceipt(
       },
       steps: { orderBy: { createdAt: 'asc' } },
       cashPickup: true,
+      outboundSettlement: { select: { paymentMethod: true } },
     },
   });
 
@@ -102,6 +103,13 @@ export async function generateTransactionReceipt(
   const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
   const receiptNum = `RCP-${transaction.referenceNumber}`;
 
+  // Prefer the outbound settlement payment method (set at actual disbursement time)
+  // over transaction.disbursementMethod (set at approval time and may lag)
+  const disbursementMethod =
+    transaction.outboundSettlement?.paymentMethod
+    ?? transaction.disbursementMethod
+    ?? null;
+
   const pdf = await buildPdf({
     receiptNumber:      receiptNum,
     referenceNumber:    transaction.referenceNumber,
@@ -114,7 +122,7 @@ export async function generateTransactionReceipt(
     foreignAmount:      transaction.foreignAmount,
     nairaEquivalent:    transaction.nairaEquivalent,
     exchangeRate:       transaction.exchangeRate,
-    disbursementMethod: transaction.disbursementMethod,
+    disbursementMethod,
     completedAt:        transaction.updatedAt,
     beneficiaryDetails,
     refundBankDetails,
