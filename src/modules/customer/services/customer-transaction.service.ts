@@ -11,7 +11,8 @@ import { createLogger } from '../../../shared/utils/logger';
 import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
 import { eventBus, EventTypes } from '../../../events/event-bus';
-
+import { generateTransactionReceipt } from '../../../shared/services/receipt.service';
+import { CloudinaryService } from '../../../shared/utils/cloudinary';
 const prisma = getDatabase();
 const logger = createLogger('customer-transaction-service');
 
@@ -533,6 +534,24 @@ export class CustomerTransactionService {
         completedAt: new Date(),
       },
     });
+    // ----- New Receipt Generation -----
+    const existingReceipt = await prisma.receipt.findUnique({ where: { transactionId: transaction.id } });
+    if (!existingReceipt) {
+      const { pdf, filename, referenceNumber } = await generateTransactionReceipt(
+        transaction.id,
+        userId,
+        'CUSTOMER'
+      );
+      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
+      await prisma.receipt.create({
+        data: {
+          transactionId: transaction.id,
+          receiptNumber: referenceNumber,
+          qrCode: '', // placeholder for future QR code generation
+          pdfUrl: uploadResult.secureUrl,
+        },
+      });
+    }
 
     // Save any document links provided inline with the transaction
     if (documents && documents.length > 0) {

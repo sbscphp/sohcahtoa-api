@@ -1,4 +1,6 @@
 import { getDatabase } from "../../../config/database";
+import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
+import { CloudinaryService } from "../../../shared/utils/cloudinary";
 import { ValidationError, NotFoundError } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
 import {
@@ -1203,6 +1205,27 @@ class AgentTransactionService {
         },
         include: {
           history: false,
+        },
+      });
+
+      // ----- New Receipt Generation -----
+      // Generate the PDF receipt now that the transaction is completed
+      const { pdf, filename, referenceNumber } = await generateTransactionReceipt(
+        input.transactionId,
+        agentUserId,
+        'AGENT'
+      );
+
+      // Upload PDF to Cloudinary (store in 'receipts' folder)
+      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
+
+      // Persist receipt record linked to the transaction
+      await tx.receipt.create({
+        data: {
+          transactionId: input.transactionId,
+          receiptNumber: referenceNumber,
+          qrCode: '', // QR code generation can be added later
+          pdfUrl: uploadResult.secureUrl,
         },
       });
 
