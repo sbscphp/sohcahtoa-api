@@ -532,7 +532,10 @@ export class NIBSSClient {
   }> {
     try {
       const token = await this.getConsentToken();
-      const res = await this.consentHubClient.get('/api/Consent/Status', {
+      // Status endpoint lives on test-consenthub host (different from the initiation host).
+      // Base URL already contains /api so we use /Consent/Status (not /api/Consent/Status).
+      const statusBaseUrl = process.env.NIBSS_CONSENT_STATUS_BASE_URL || this.consentHubBaseUrl;
+      const res = await axios.get(`${statusBaseUrl}/Consent/Status`, {
         params: { consentSessionId },
         headers: { Authorization: `Bearer ${token}` },
       });
