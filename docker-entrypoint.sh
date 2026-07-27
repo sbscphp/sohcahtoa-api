@@ -90,17 +90,21 @@ echo ""
 # Run Prisma migrations
 echo "🚀 Running database migrations..."
 
-# Pre-flight: detect a failed init migration (DB was cleared but types/partial tables
-# survived). The safest recovery is a full schema wipe so migrations can run clean.
-# We only do this when the init migration is the one that failed — touching the schema
-# when later migrations fail would be destructive to real data.
-FAILED_INIT=$(psql "${DATABASE_URL%\?*}" -tAc \
-  "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND logs IS NOT NULL AND migration_name LIKE '%_init' LIMIT 1" \
+# Pre-flight schema integrity check.
+# Only wipes if the `users` table EXISTS but is missing the `role` column — the specific
+# corrupt state caused by partial migration runs or CASCADE type drops. A fresh empty DB
+# (no users table) and a healthy DB (users table with role) both pass through untouched.
+USERS_TABLE_EXISTS=$(psql "${DATABASE_URL%\?*}" -tAc \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='users'" \
   2>/dev/null | tr -d '[:space:]')
 
-if [ -n "$FAILED_INIT" ]; then
-  echo "🔧 Detected failed init migration '$FAILED_INIT'. Wiping schema for clean migration run..."
-  psql "${DATABASE_URL%\?*}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;" 2>/dev/null || true
+ROLE_COL_EXISTS=$(psql "${DATABASE_URL%\?*}" -tAc \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='role'" \
+  2>/dev/null | tr -d '[:space:]')
+
+if [ "$USERS_TABLE_EXISTS" = "1" ] && [ "$ROLE_COL_EXISTS" != "1" ]; then
+  echo "🔧 Corrupt schema detected (users table exists but role column is missing). Wiping for clean migration run..."
+  psql "${DATABASE_URL%\?*}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;" || true
   echo "✅ Schema wiped — full migration deploy will run from scratch"
 fi
 
