@@ -90,23 +90,6 @@ echo ""
 # Run Prisma migrations
 echo "🚀 Running database migrations..."
 
-# Pre-flight schema integrity check.
-# Only wipes if the `users` table EXISTS but is missing the `role` column — the specific
-# corrupt state caused by partial migration runs or CASCADE type drops. A fresh empty DB
-# (no users table) and a healthy DB (users table with role) both pass through untouched.
-USERS_TABLE_EXISTS=$(psql "${DATABASE_URL%\?*}" -tAc \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='users'" \
-  2>/dev/null | tr -d '[:space:]')
-
-ROLE_COL_EXISTS=$(psql "${DATABASE_URL%\?*}" -tAc \
-  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='role'" \
-  2>/dev/null | tr -d '[:space:]')
-
-if [ "$USERS_TABLE_EXISTS" = "1" ] && [ "$ROLE_COL_EXISTS" != "1" ]; then
-  echo "🔧 Corrupt schema detected (users table exists but role column is missing). Wiping for clean migration run..."
-  psql "${DATABASE_URL%\?*}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;" || true
-  echo "✅ Schema wiped — full migration deploy will run from scratch"
-fi
 
 # Function to check if migration is in failed state
 check_failed_migration() {
