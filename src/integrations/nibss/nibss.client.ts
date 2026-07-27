@@ -124,6 +124,7 @@ interface ConsentInitiateRequest {
   consentType: 'RedirectLink' | 'OfflineConsent';
   dataSubjectPresent: boolean;
   authenticationDate: string; // YYYY-MM-DD
+  callbackUrl?: string; // where NIBSS redirects after user authenticates (RedirectLink)
 }
 
 interface ConsentInitiateResponse {
@@ -452,6 +453,7 @@ export class NIBSSClient {
         consentType:        'RedirectLink',
         dataSubjectPresent,
         authenticationDate: today,
+        ...(this.callbackUrl && { callbackUrl: this.callbackUrl }),
       };
 
       logger.info('Initiating Consent Hub request', {
