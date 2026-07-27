@@ -837,6 +837,34 @@ export class AuthService {
       return { status: 'FAILED', message: session.errorMessage || 'BVN verification failed.' };
     }
 
+    // Callback never arrived — poll NIBSS directly to check if consent was granted
+    try {
+      const nibssStatus = await bvnService.checkConsentStatus(sessionId);
+
+      if (nibssStatus.granted && nibssStatus.retrievalToken) {
+        logger.info('NIBSS consent confirmed via polling — processing immediately', { sessionId });
+        await this.handleNibssConsentCallback(sessionId, nibssStatus.retrievalToken);
+
+        // Re-read Redis after processing
+        const updated = await redis.get(consentKey);
+        if (updated) {
+          const updatedSession = JSON.parse(updated);
+          if (updatedSession.status === 'COMPLETED') {
+            return {
+              status: 'COMPLETED',
+              verificationToken: updatedSession.verificationToken,
+              message: 'BVN verified successfully. Use the verification token to proceed.',
+            };
+          }
+          if (updatedSession.status === 'FAILED') {
+            return { status: 'FAILED', message: updatedSession.errorMessage || 'BVN verification failed.' };
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('NIBSS consent status poll failed, staying PENDING', { sessionId, err });
+    }
+
     return { status: 'PENDING', message: 'Awaiting user consent on NIBSS portal.' };
   }
 

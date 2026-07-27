@@ -213,6 +213,9 @@ export class BvnService {
       return { success: false, message: 'BVN boolean verification failed', error: error.message };
     }
   }
+  async checkConsentStatus(sessionId: string): Promise<{ granted: boolean; retrievalToken?: string; message: string }> {
+    return nibssClient.getConsentStatus(sessionId);
+  }
 }
 
 export default new BvnService();

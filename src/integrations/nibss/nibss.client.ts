@@ -519,6 +519,40 @@ export class NIBSSClient {
     }
   }
 
+  // ─── Consent Hub: Poll Consent Status ─────────────────────────────────────
+  /**
+   * Polls NIBSS Consent Hub for the current status of a consent session.
+   * Use this when the redirect callback never arrives — NIBSS may complete
+   * consent without redirecting (e.g. consentRedirectURL is empty).
+   */
+  async getConsentStatus(consentSessionId: string): Promise<{
+    granted: boolean;
+    retrievalToken?: string;
+    message: string;
+  }> {
+    try {
+      const token = await this.getConsentToken();
+      const res = await this.consentHubClient.get('/api/Consent/Status', {
+        params: { consentSessionId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = res.data?.data;
+      const granted = data?.authorizationStatus === 'Consent Granted';
+      // NIBSS spells it "consentRetrivalToken" (typo in their API)
+      const retrievalToken = data?.consentRetrivalToken || data?.consentRetrievalToken;
+
+      return {
+        granted,
+        retrievalToken: granted ? retrievalToken : undefined,
+        message: res.data?.responseMessage || data?.authorizationStatus || 'Unknown',
+      };
+    } catch (error: any) {
+      logger.error('Consent Hub status check error', { error: error.message, consentSessionId });
+      return { granted: false, message: `Status check failed: ${error.message}` };
+    }
+  }
+
   // ─── FAS helpers ───────────────────────────────────────────────────────────
 
   private get fasPath(): string {
