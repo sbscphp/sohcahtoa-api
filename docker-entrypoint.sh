@@ -90,28 +90,18 @@ echo ""
 # Run Prisma migrations
 echo "🚀 Running database migrations..."
 
-# Pre-flight: detect a failed migration caused by pre-existing enum types (e.g. DB was
-# cleared but enums survived). Prisma marks the migration as failed in _prisma_migrations
-# but can't retry until it's resolved. Drop all orphaned enum types and roll back the
-# failed migration so the deploy can start fresh.
-FAILED_MIGRATION=$(psql "${DATABASE_URL%\?*}" -tAc \
-  "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND logs IS NOT NULL LIMIT 1" \
+# Pre-flight: detect a failed init migration (DB was cleared but types/partial tables
+# survived). The safest recovery is a full schema wipe so migrations can run clean.
+# We only do this when the init migration is the one that failed — touching the schema
+# when later migrations fail would be destructive to real data.
+FAILED_INIT=$(psql "${DATABASE_URL%\?*}" -tAc \
+  "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND logs IS NOT NULL AND migration_name LIKE '%_init' LIMIT 1" \
   2>/dev/null | tr -d '[:space:]')
 
-if [ -n "$FAILED_MIGRATION" ]; then
-  echo "🔧 Detected failed migration '$FAILED_MIGRATION' (likely pre-existing enum types). Cleaning up..."
-  psql "${DATABASE_URL%\?*}" -c "
-    DO \$\$ DECLARE r RECORD; BEGIN
-      FOR r IN SELECT typname FROM pg_type
-               WHERE typtype = 'e'
-               AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
-      LOOP
-        EXECUTE 'DROP TYPE IF EXISTS \"' || r.typname || '\" CASCADE';
-      END LOOP;
-    END \$\$;
-  " 2>/dev/null || true
-  npx prisma migrate resolve --rolled-back "$FAILED_MIGRATION" 2>/dev/null || true
-  echo "✅ Resolved — will retry full migration deploy"
+if [ -n "$FAILED_INIT" ]; then
+  echo "🔧 Detected failed init migration '$FAILED_INIT'. Wiping schema for clean migration run..."
+  psql "${DATABASE_URL%\?*}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;" 2>/dev/null || true
+  echo "✅ Schema wiped — full migration deploy will run from scratch"
 fi
 
 # Function to check if migration is in failed state
