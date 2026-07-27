@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { createLogger } from "../../../shared/utils";
+import { CloudinaryService, createLogger } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod, TransactionType } from "../../../shared/types";
 import { ActionType } from "../../../shared/types/action-type";
 import { auditTrailService } from "../services/audit-trail.service";
@@ -9,6 +9,7 @@ import { eventBus, EventTypes } from "../../../events/event-bus";
 import walletService from "../../wallet/services/wallet.service";
 import { emailService } from "../../../shared/utils/email";
 import path from "path";
+import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -1822,24 +1823,84 @@ export class AdminTransactionsService {
     }
   }
 
-  async getReceiptDownload(transactionId: string, adminId: string): Promise<{url: string; filename: string}> {
+  async getReceiptDownload(transactionId: string, adminId: string) {
     const transaction = await prisma.transaction.findUnique({
       where: { id: transactionId },
     });
     if (!transaction) throw new Error("Transaction not found");
 
-    const receipt = await prisma.receipt.findFirst({
-      where: { transactionId },
-    });
-    if (!receipt) throw new Error("Receipt not found");
-    if (!receipt.pdfUrl) throw new Error("Receipt URL not available");
+    let existingReceipt = await prisma.receipt.findUnique({ where: { transactionId: transaction.id } });
+    if (!existingReceipt) {
+        const { pdf, filename, referenceNumber } = await generateTransactionReceipt(
+            transaction.id,
+            transaction.userId,
+            'CUSTOMER'
+        );
+        const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
+        existingReceipt = await prisma.receipt.create({
+              data: {
+                transactionId: transaction.id,
+                receiptNumber: referenceNumber,
+                qrCode: '',
+                pdfUrl: uploadResult.secureUrl,
+              },
+            });
+    }
 
-    const url = receipt.pdfUrl!; // non-null after check above
+    const url = existingReceipt.pdfUrl!;
     return {
         url,
         filename: `receipt-${transactionId}.pdf`,
     };
     
+  }
+  async confirmDisbursement(transactionId: string, adminId: string, notes?: string) {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { id: true, status: true, userId: true, referenceNumber: true, nairaEquivalent: true },
+    });
+
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+
+    const allowedStatuses: string[] = [
+      TransactionStatus.DISBURSEMENT_IN_PROGRESS as string,
+      TransactionStatus.AWAITING_DISBURSEMENT as string,
+    ];
+    if (!allowedStatuses.includes(transaction.status as string)) {
+      throw new Error(
+        `Cannot confirm disbursement: transaction is currently in status "${transaction.status}"`
+      );
+    }
+
+    await prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: TransactionStatus.COMPLETED as any,
+        currentStep: TransactionStep.COMPLETED as any,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DISBURSEMENT_CONFIRMED",
+        performedBy: adminId,
+        notes: notes ?? "Disbursement confirmed by admin",
+      },
+    });
+
+    eventBus.publish(EventTypes.TRANSACTION_COMPLETED, {
+      userId: transaction.userId,
+      transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
+    });
+
+    logger.info("Disbursement confirmed", { transactionId, adminId });
+
+    return { message: "Disbursement confirmed successfully", transactionId };
   }
 }
 

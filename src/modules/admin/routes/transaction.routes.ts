@@ -801,20 +801,12 @@ TransactionRouter.post(
 );
 /**
  * @swagger
- * /api/admin/transactions/download/{transactionId}/reseipt:
+ * /api/admin/transactions/download/{transactionId}/receipt:
  *   post:
  *     summary: Download a PDF receipt for a completed transaction (admin)
- *     description: |
- *       Returns the receipt PDF for a transaction. The endpoint streams the file
- *       (`application/pdf`) using the `adminTransactionsController.downloadTransactionReceipt`
- *       handler. Only users with view permission on the TRANSACTIONS module can access it.
- *
- *     tags:
- *       - Admin Transactions
- *
+ *     tags: [admin-transactions]
  *     security:
  *       - bearerAuth: []
- *
  *     parameters:
  *       - name: transactionId
  *         in: path
@@ -822,7 +814,6 @@ TransactionRouter.post(
  *         required: true
  *         schema:
  *           type: string
- *
  *     responses:
  *       200:
  *         description: Receipt PDF streamed successfully.
@@ -844,12 +835,66 @@ TransactionRouter.post(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-
-
 TransactionRouter.post(
-  "/download/:transactionId/reseipt",
+  "/download/:transactionId/receipt",
   authenticate,
   requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
   adminTransactionsController.downloadTransactionReceipt
 );
 
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/confirm-disbursement:
+ *   post:
+ *     summary: Confirm disbursement for a transaction
+ *     description: >
+ *       Marks a transaction that is in DISBURSEMENT_IN_PROGRESS or AWAITING_DISBURSEMENT
+ *       status as COMPLETED, records a disbursement-confirmed history entry, and fires the
+ *       transaction.completed event. Returns an error if the transaction is not in a
+ *       disbursable state.
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: The transaction ID
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: Optional notes about the disbursement confirmation
+ *     responses:
+ *       200:
+ *         description: Disbursement confirmed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 transactionId:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction not found
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+TransactionRouter.post(
+  "/:id/confirm-disbursement",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.confirmDisbursement
+);

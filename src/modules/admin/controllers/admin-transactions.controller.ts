@@ -236,12 +236,33 @@ class AdminTransactionsController {
     res.json(successResponse(result));
   });
 
+  confirmDisbursement = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const result = await adminTransactionsService.confirmDisbursement(
+      req.params.id,
+      adminId,
+      req.body?.notes
+    );
+    await auditTrailService.logAction({
+      adminId,
+      actionType: "DISBURSEMENT_CONFIRMED",
+      actionLabel: "Confirm disbursement",
+      resourceType: "TRANSACTION",
+      resourceId: req.params.id,
+      metadata: { notes: req.body?.notes },
+    });
+    res.json(successResponse(result));
+  });
+
   downloadTransactionReceipt = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const { url, filename } = await adminTransactionsService.getReceiptDownload(adminId, req.params.transactionId);
-     try {
-          await this.pipeRemoteFile(res, url, filename);
-        } catch (err: any) {
+    const { url, filename } = await adminTransactionsService.getReceiptDownload(req.params.transactionId, adminId);
+    if (!url) {
+        throw new ValidationError('Receipt URL not available');
+    }
+    try {
+        await this.pipeRemoteFile(res, url, filename);
+    } catch (err: any) {
           throw new ValidationError(err?.message || "Unable to download receipt");
         }
   });

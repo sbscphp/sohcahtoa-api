@@ -36,55 +36,77 @@ class RegulatoryService {
     ]);
 
     // SLA tracker
-    const [reviewsCompleted, reviewsPendingOld, onTimeThisWeek, totalThisWeek, onTimePrevWeek, totalPrevWeek] =
-      await Promise.all([
-      prisma.complianceReview.count({
-        where: { reviewedAt: { not: null } },
-      }),
-      prisma.complianceReview.count({
-        where: { status: { in: ["PENDING", "UNDER_REVIEW"] }, createdAt: { lt: new Date(now.getTime() - slaMs) } },
-      }),
+    // Fetch reviews by creation-week cohorts so that numerator and denominator
+    // always refer to the same set of records (reviews *created* in the window).
+    // On-time = completed within slaMs (24 h) of creation.
+
+    const [
+      reviewsPendingOld,
+      thisWeekCohort,
+      prevWeekCohort,
+      allReviewedSample,
+    ] = await Promise.all([
+      // Missed: still open and already past the SLA deadline
       prisma.complianceReview.count({
         where: {
-          reviewedAt: { gte: weekAgo, lte: now },
+          status: { in: ["PENDING", "UNDER_REVIEW"] },
+          createdAt: { lt: new Date(now.getTime() - slaMs) },
         },
       }),
-      prisma.complianceReview.count({
+      // This-week cohort: all reviews created in the last 7 days
+      prisma.complianceReview.findMany({
         where: { createdAt: { gte: weekAgo, lte: now } },
+        select: { createdAt: true, reviewedAt: true },
       }),
-      prisma.complianceReview.count({
-        where: { reviewedAt: { gte: prevWeekStart, lt: prevWeekEnd } },
-      }),
-      prisma.complianceReview.count({
+      // Prev-week cohort: all reviews created in the 7 days before that
+      prisma.complianceReview.findMany({
         where: { createdAt: { gte: prevWeekStart, lt: prevWeekEnd } },
+        select: { createdAt: true, reviewedAt: true },
       }),
-      ]);
+      // All-time sample for overall compliance rate & avg resolution time
+      prisma.complianceReview.findMany({
+        where: { reviewedAt: { not: null } },
+        select: { createdAt: true, reviewedAt: true },
+        take: 5000,
+        orderBy: { reviewedAt: "desc" },
+      }),
+    ]);
 
-    // Determine late vs on-time by sampling reviewed records and computing duration client-side
-    const reviewedForLatency = await prisma.complianceReview.findMany({
-      where: { reviewedAt: { not: null } },
-      select: { createdAt: true, reviewedAt: true },
-      take: 5000,
-      orderBy: { reviewedAt: "desc" },
+    // Compute this-week SLA rate from the cohort (same set for numerator & denominator)
+    let onTimeThisWeek = 0;
+    const totalThisWeek = thisWeekCohort.length;
+    thisWeekCohort.forEach((r: { createdAt: Date; reviewedAt: Date | null }) => {
+      if (r.reviewedAt) {
+        const diff = new Date(r.reviewedAt).getTime() - new Date(r.createdAt).getTime();
+        if (diff <= slaMs) onTimeThisWeek += 1;
+      }
     });
+
+    // Compute prev-week SLA rate from its cohort
+    let onTimePrevWeek = 0;
+    const totalPrevWeek = prevWeekCohort.length;
+    prevWeekCohort.forEach((r: { createdAt: Date; reviewedAt: Date | null }) => {
+      if (r.reviewedAt) {
+        const diff = new Date(r.reviewedAt).getTime() - new Date(r.createdAt).getTime();
+        if (diff <= slaMs) onTimePrevWeek += 1;
+      }
+    });
+
+    // Compute overall on-time/late and avg resolution from the all-time sample
     let onTimeSubmissions = 0;
     let lateSubmissions = 0;
     let totalResolutionTimeMs = 0;
-    reviewedForLatency.forEach((r: any) => {
-      const diff = new Date(r.reviewedAt).getTime() - new Date(r.createdAt).getTime();
+    allReviewedSample.forEach((r: { createdAt: Date; reviewedAt: Date | null }) => {
+      const diff = new Date(r.reviewedAt!).getTime() - new Date(r.createdAt).getTime();
       totalResolutionTimeMs += diff;
       if (diff <= slaMs) onTimeSubmissions += 1;
       else lateSubmissions += 1;
     });
-    const avgResolutionHours = reviewedForLatency.length > 0 
-      ? Math.round((totalResolutionTimeMs / reviewedForLatency.length) / (1000 * 60 * 60) * 10) / 10 
-      : 0;
-    // Fallback if we sampled subset smaller than total reviewed
-    if (onTimeSubmissions + lateSubmissions < reviewsCompleted) {
-      const remaining = reviewsCompleted - (onTimeSubmissions + lateSubmissions);
-      onTimeSubmissions += Math.floor(remaining * 0.9);
-      lateSubmissions += remaining - Math.floor(remaining * 0.9);
-    }
+    const avgResolutionHours =
+      allReviewedSample.length > 0
+        ? Math.round(((totalResolutionTimeMs / allReviewedSample.length) / (1000 * 60 * 60)) * 10) / 10
+        : 0;
+
     const missed = reviewsPendingOld;
     const denom = onTimeSubmissions + lateSubmissions + missed || 1;
     const slaComplianceRate = Math.round(((onTimeSubmissions / denom) * 100) * 10) / 10;
