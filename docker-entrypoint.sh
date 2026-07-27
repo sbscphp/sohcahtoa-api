@@ -90,6 +90,30 @@ echo ""
 # Run Prisma migrations
 echo "🚀 Running database migrations..."
 
+# Pre-flight: detect a failed migration caused by pre-existing enum types (e.g. DB was
+# cleared but enums survived). Prisma marks the migration as failed in _prisma_migrations
+# but can't retry until it's resolved. Drop all orphaned enum types and roll back the
+# failed migration so the deploy can start fresh.
+FAILED_MIGRATION=$(psql "${DATABASE_URL%\?*}" -tAc \
+  "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND logs IS NOT NULL LIMIT 1" \
+  2>/dev/null | tr -d '[:space:]')
+
+if [ -n "$FAILED_MIGRATION" ]; then
+  echo "🔧 Detected failed migration '$FAILED_MIGRATION' (likely pre-existing enum types). Cleaning up..."
+  psql "${DATABASE_URL%\?*}" -c "
+    DO \$\$ DECLARE r RECORD; BEGIN
+      FOR r IN SELECT typname FROM pg_type
+               WHERE typtype = 'e'
+               AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+      LOOP
+        EXECUTE 'DROP TYPE IF EXISTS \"' || r.typname || '\" CASCADE';
+      END LOOP;
+    END \$\$;
+  " 2>/dev/null || true
+  npx prisma migrate resolve --rolled-back "$FAILED_MIGRATION" 2>/dev/null || true
+  echo "✅ Resolved — will retry full migration deploy"
+fi
+
 # Function to check if migration is in failed state
 check_failed_migration() {
   npx prisma migrate status 2>&1 | grep -q "failed" && return 0 || return 1
