@@ -9,6 +9,10 @@ import {
   AgentPaymentMovementType,
   AgentTransactionExportFilters,
 } from "../services/agent-transaction.service";
+import { CloudinaryService } from "../../../shared/utils/cloudinary";
+import { getDatabase } from "../../../config/database";
+
+const prisma = getDatabase();
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
 
 class AgentTransactionController {
@@ -575,8 +579,33 @@ class AgentTransactionController {
         return;
       }
 
-      const { pdf, filename } = await generateTransactionReceipt(transactionId, authUser.userId, 'AGENT');
+      // Check if receipt already exists
+      const existingReceipt = await prisma.receipt.findUnique({
+        where: { transactionId },
+        select: { pdfUrl: true },
+      });
+      if (existingReceipt && existingReceipt.pdfUrl) {
+        // Redirect to stored receipt URL
+        return res.redirect(existingReceipt.pdfUrl);
+      }
 
+      // Generate receipt PDF
+      const { pdf, filename, referenceNumber } = await generateTransactionReceipt(transactionId, authUser.userId, 'AGENT');
+
+      // Upload to Cloudinary
+      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts', });
+
+      // Save receipt record
+      await prisma.receipt.create({
+        data: {
+          transactionId,
+          receiptNumber: referenceNumber,
+          qrCode: '',
+          pdfUrl: uploadResult.secureUrl,
+        },
+      });
+
+      // Stream PDF to client
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', pdf.length);

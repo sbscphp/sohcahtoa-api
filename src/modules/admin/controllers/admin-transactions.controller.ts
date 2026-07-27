@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { successResponse } from "../../../shared/utils";
+import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
 import { adminTransactionsService } from "../services/admin-transactions.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { ActionType } from "../../../shared/types/action-type";
+import axios from "axios";
 
 class AdminTransactionsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -234,6 +235,35 @@ class AdminTransactionsController {
 
     res.json(successResponse(result));
   });
+
+  downloadTransactionReceipt = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const { url, filename } = await adminTransactionsService.getReceiptDownload(adminId, req.params.transactionId);
+     try {
+          await this.pipeRemoteFile(res, url, filename);
+        } catch (err: any) {
+          throw new ValidationError(err?.message || "Unable to download receipt");
+        }
+  });
+
+  private async pipeRemoteFile(res: Response, url: string, filename: string) {
+    const upstream = await axios.get(url, { responseType: "stream" });
+    const contentType = upstream.headers?.["content-type"] || "application/octet-stream";
+    const contentLength = upstream.headers?.["content-length"];
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${this.safeFilename(filename)}"`);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    upstream.data.pipe(res);
+  }
+
+  private safeFilename(name: string) {
+    return String(name || "download")
+      .replace(/[\r\n"]/g, "")
+      .replace(/[\/\\?%*:|<>]/g, "-")
+      .trim();
+  }
 }
 
 export const adminTransactionsController = new AdminTransactionsController();

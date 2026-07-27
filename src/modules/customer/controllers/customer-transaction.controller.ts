@@ -4,6 +4,10 @@ import { successResponse, paginatedResponse } from "../../../shared/utils";
 import { AuthRequest } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
+import { CloudinaryService } from "../../../shared/utils/cloudinary";
+import { getDatabase } from "../../../config/database";
+
+const prisma = getDatabase();
 
 class CustomerTransactionController {
   /**
@@ -474,8 +478,32 @@ class CustomerTransactionController {
         return;
       }
 
-      const { pdf, filename } = await generateTransactionReceipt(transactionId, userId, 'CUSTOMER');
+      // Check if receipt already exists
+      const existingReceipt = await prisma.receipt.findUnique({
+        where: { transactionId },
+        select: { pdfUrl: true },
+      });
+      if (existingReceipt && existingReceipt.pdfUrl) {
+        return res.redirect(existingReceipt.pdfUrl);
+      }
 
+      // Generate receipt PDF
+      const { pdf, filename, referenceNumber } = await generateTransactionReceipt(transactionId, userId, 'CUSTOMER');
+
+      // Upload to Cloudinary
+      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts', });
+
+      // Save receipt record
+      await prisma.receipt.create({
+        data: {
+          transactionId,
+          receiptNumber: referenceNumber,
+          qrCode: '',
+          pdfUrl: uploadResult.secureUrl,
+        },
+      });
+
+      // Stream PDF to client
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', pdf.length);

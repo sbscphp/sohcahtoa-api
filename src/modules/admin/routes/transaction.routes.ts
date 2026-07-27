@@ -799,4 +799,57 @@ TransactionRouter.post(
   requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
   adminTransactionsController.refund
 );
+/**
+ * @swagger
+ * /api/admin/transactions/download/{transactionId}/reseipt:
+ *   post:
+ *     summary: Download a PDF receipt for a completed transaction (admin)
+ *     description: |
+ *       Returns the receipt PDF for a transaction. The endpoint streams the file
+ *       (`application/pdf`) using the `adminTransactionsController.downloadTransactionReceipt`
+ *       handler. Only users with view permission on the TRANSACTIONS module can access it.
+ *
+ *     tags:
+ *       - Admin Transactions
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - name: transactionId
+ *         in: path
+ *         description: The unique identifier of the transaction whose receipt is requested.
+ *         required: true
+ *         schema:
+ *           type: string
+ *
+ *     responses:
+ *       200:
+ *         description: Receipt PDF streamed successfully.
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         description: Transaction or receipt not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+
+
+TransactionRouter.post(
+  "/download/:transactionId/reseipt",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "view" }),
+  adminTransactionsController.downloadTransactionReceipt
+);
 

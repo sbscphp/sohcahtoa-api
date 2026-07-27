@@ -8,6 +8,7 @@ import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import walletService from "../../wallet/services/wallet.service";
 import { emailService } from "../../../shared/utils/email";
+import path from "path";
 
 const logger = createLogger(ServiceName.ADMIN);
 
@@ -1819,6 +1820,26 @@ export class AdminTransactionsService {
         entryIds: affectedEntries.map(e => e.id)
       };
     }
+  }
+
+  async getReceiptDownload(transactionId: string, adminId: string): Promise<{url: string; filename: string}> {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+    });
+    if (!transaction) throw new Error("Transaction not found");
+
+    const receipt = await prisma.receipt.findFirst({
+      where: { transactionId },
+    });
+    if (!receipt) throw new Error("Receipt not found");
+    if (!receipt.pdfUrl) throw new Error("Receipt URL not available");
+
+    const url = receipt.pdfUrl!; // non-null after check above
+    return {
+        url,
+        filename: `receipt-${transactionId}.pdf`,
+    };
+    
   }
 }
 
