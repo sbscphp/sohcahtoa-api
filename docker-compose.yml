@@ -49,13 +49,9 @@ services:
     env_file:
       - .env
     environment:
-      # Database Configuration - using Docker service names
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/sochatoa_db?schema=public
-      # Redis Configuration - using Docker service name
+      DATABASE_URL: postgresql://postgres:password@104.45.229.69:5432/sochatoa_db?schema=public
       REDIS_URL: redis://redis:6379
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
