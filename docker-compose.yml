@@ -1,25 +1,4 @@
 services:
-  # PostgreSQL - Single unified database
-  postgres:
-    image: postgres:15-alpine
-    container_name: sochatoa-postgres
-    environment:
-      POSTGRES_DB: sochatoa_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - sochatoa-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sochatoa_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # Redis - Caching and session storage
   redis:
     image: redis:7-alpine
@@ -38,7 +17,7 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
 
-  # Sochatoa API Monolith
+  # Sochatoa API
   api:
     build:
       context: .
@@ -49,7 +28,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://postgres:password@104.45.229.69:5432/sochatoa_db?schema=public
+      # REDIS_URL points to the local redis container.
+      # DATABASE_URL comes from .env — do NOT override it here.
       REDIS_URL: redis://redis:6379
     depends_on:
       redis:
@@ -65,8 +45,6 @@ services:
       start_period: 40s
 
 volumes:
-  postgres-data:
-    driver: local
   redis-data:
     driver: local
 
