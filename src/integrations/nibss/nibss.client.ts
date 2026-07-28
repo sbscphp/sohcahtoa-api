@@ -590,7 +590,7 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getBivsToken();
+      const token = await this.getConsentToken();
       const body: FASBvnCoreRequest = { number: bvn, type: 'bvn', retrievalToken };
 
       logger.info('FAS BVN Core validation', { bvn: `***${bvn.slice(-4)}` });
@@ -662,7 +662,7 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getBivsToken();
+      const token = await this.getConsentToken();
       const body: FASBvnBooleanRequest = { number: bvn, type: 'bvn', ...fields };
 
       logger.info('FAS BVN Boolean validation', { bvn: `***${bvn.slice(-4)}` });
