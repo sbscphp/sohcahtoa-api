@@ -235,6 +235,11 @@ export class NIBSSClient {
   private consentClientSecret: string;
   private consentResetUrl: string;
 
+  // ── FAS-specific credentials (optional; falls back to consent credentials) ──
+  private fasClientId: string;
+  private fasClientSecret: string;
+  private fasResetUrl: string;
+
   // ── FAS path params ──
   private fasBaseUrl: string;
   private fasSubclass: string;
@@ -261,6 +266,8 @@ export class NIBSSClient {
   private bivsTokenExpiry: number = 0;
   private consentToken: string | null = null;
   private consentTokenExpiry: number = 0;
+  private fasToken: string | null = null;
+  private fasTokenExpiry: number = 0;
 
   constructor() {
     // BIVS
@@ -275,6 +282,11 @@ export class NIBSSClient {
     this.consentClientId     = process.env.NIBSS_CONSENT_CLIENT_ID     || '';
     this.consentClientSecret = process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
     this.consentResetUrl     = process.env.NIBSS_CONSENT_RESET_URL     || 'https://apitest.nibss-plc.com.ng:1443/reset';
+
+    // FAS-specific credentials — fall back to consent credentials if not set
+    this.fasClientId     = process.env.NIBSS_FAS_CLIENT_ID     || this.consentClientId;
+    this.fasClientSecret = process.env.NIBSS_FAS_CLIENT_SECRET || this.consentClientSecret;
+    this.fasResetUrl     = process.env.NIBSS_FAS_RESET_URL     || this.consentResetUrl;
 
     // FAS
     this.fasBaseUrl      = process.env.NIBSS_FAS_BASE_URL  || 'https://apitest.nibss-plc.com.ng/cvs/v2';
@@ -354,6 +366,8 @@ export class NIBSSClient {
             status: error.response?.status,
             message: error.message,
             data: error.response?.data,
+            wwwAuthenticate: error.response?.headers?.['www-authenticate'],
+            responseHeaders: error.response?.status === 401 ? error.response?.headers : undefined,
           });
           return Promise.reject(error);
         }
@@ -416,6 +430,38 @@ export class NIBSSClient {
     } catch (error: any) {
       logger.error('Failed to obtain Consent token', { error: error.message, data: error.response?.data });
       throw new Error(`Consent authentication failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtain a token for FAS (Credit Verification Service).
+   * Uses NIBSS_FAS_CLIENT_ID/SECRET/RESET_URL if set; falls back to consent credentials.
+   * Having separate env vars allows NIBSS to provide FAS-specific credentials without code changes.
+   */
+  private async getFasToken(): Promise<string> {
+    if (this.fasToken && Date.now() < this.fasTokenExpiry) return this.fasToken;
+
+    const usingFasSpecific = !!(process.env.NIBSS_FAS_CLIENT_ID);
+    logger.info('Requesting FAS access token', { usingFasSpecificCredentials: usingFasSpecific });
+
+    const params = new URLSearchParams();
+    params.append('client_id',     this.fasClientId);
+    params.append('client_secret', this.fasClientSecret);
+    params.append('scope',         `${this.fasClientId}/.default`);
+    params.append('grant_type',    'client_credentials');
+
+    try {
+      const res = await axios.post<NIBSSTokenResponse>(this.fasResetUrl, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 10000,
+      });
+      this.fasToken       = res.data.access_token;
+      this.fasTokenExpiry = Date.now() + (res.data.expires_in - 300) * 1000;
+      logger.info('FAS token obtained', { expiresIn: res.data.expires_in });
+      return this.fasToken;
+    } catch (error: any) {
+      logger.error('Failed to obtain FAS token', { error: error.message, data: error.response?.data });
+      throw new Error(`FAS authentication failed: ${error.message}`);
     }
   }
 
@@ -590,10 +636,14 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getConsentToken();
+      const token = await this.getFasToken();
       const body: FASBvnCoreRequest = { number: bvn, type: 'bvn', retrievalToken };
 
-      logger.info('FAS BVN Core validation', { bvn: `***${bvn.slice(-4)}` });
+      logger.info('FAS BVN Core validation', {
+        bvn: `***${bvn.slice(-4)}`,
+        tokenPrefix: token.substring(0, 20) + '...',
+        fasUrl: this.fasBaseUrl + this.fasPath,
+      });
 
       const res = await this.fasClient.post<FASCoreResponse[]>(
         this.fasPath,
@@ -662,7 +712,7 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getConsentToken();
+      const token = await this.getFasToken();
       const body: FASBvnBooleanRequest = { number: bvn, type: 'bvn', ...fields };
 
       logger.info('FAS BVN Boolean validation', { bvn: `***${bvn.slice(-4)}` });
@@ -707,7 +757,7 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getConsentToken();
+      const token = await this.getFasToken();
       const body: FASNinSharecodeRequest = { number: shareCode, type: 'ninauth_sharecode', requestReason };
 
       logger.info('FAS NIN ShareCode validation', { shareCode: `***${shareCode.slice(-3)}` });
@@ -767,7 +817,7 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getConsentToken();
+      const token = await this.getFasToken();
       const body: FASNinInPersonRequest = {
         number: nin,
         type: 'ninauth_inperson',
