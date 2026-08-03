@@ -759,7 +759,16 @@ export class AuthService {
   }
 
   // NIBSS Callback (legacy Consent Hub): called when NIBSS POSTs the retrievalToken after user authenticates
-  async handleNibssConsentCallback(sessionId: string, retrievalToken: string): Promise<void> {
+  async handleNibssConsentCallback(
+    sessionId: string,
+    retrievalToken: string,
+    meta?: {
+      dataOwnerId?: string;
+      consentExpiryTime?: string;
+      tokenIssuedDate?: string;
+      requestCategory?: string;
+    },
+  ): Promise<void> {
     const consentKey = `bvn:consent:${sessionId}`;
     const cached = await redis.get(consentKey);
 
@@ -775,7 +784,13 @@ export class AuthService {
       return;
     }
 
-    logger.info('Processing NIBSS consent callback', { sessionId });
+    logger.info('Processing NIBSS consent callback', {
+      sessionId,
+      dataOwnerId:      meta?.dataOwnerId,
+      requestCategory:  meta?.requestCategory,
+      consentExpiryTime: meta?.consentExpiryTime,
+      tokenIssuedDate:  meta?.tokenIssuedDate,
+    });
 
     const bvnResult = await bvnService.verifyBvnWithRetrievalToken(session.bvn, retrievalToken);
 
@@ -800,11 +815,17 @@ export class AuthService {
       address: bvnResult.data.residentialAddress || null,
     }));
 
-    // Update consent session to COMPLETED with the verificationToken
+    // Update consent session to COMPLETED with the verificationToken and consent metadata
     await redis.setex(consentKey, 30 * 60, JSON.stringify({
       ...session,
       status: 'COMPLETED',
       verificationToken,
+      consentMeta: {
+        dataOwnerId:      meta?.dataOwnerId      ?? null,
+        consentExpiryTime: meta?.consentExpiryTime ?? null,
+        tokenIssuedDate:  meta?.tokenIssuedDate  ?? null,
+        requestCategory:  meta?.requestCategory  ?? null,
+      },
     }));
 
     logger.info('NIBSS consent callback processed successfully', { sessionId, verificationToken });

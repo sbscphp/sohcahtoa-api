@@ -221,9 +221,7 @@ router.post('/signup', authController.signup);
 router.get('/nibss/igree/callback', authController.iGreeCallback);
 router.post('/nibss/igree/callback', authController.iGreeCallback);
 
-// NIBSS Consent Hub callback — POST for OfflineConsent (server-to-server), GET for RedirectLink (browser redirect)
-router.get('/nibss/callback', authController.nibssConsentCallback);
-router.post('/nibss/callback', authController.nibssConsentCallback);
+// NIBSS Consent Hub callback is mounted at /callback (top-level) in app.ts
 
 // Nigerian signup flow (4 steps)
 router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1a: initiates consent, returns sessionId + consentUrl
@@ -1975,7 +1973,7 @@ router.post('/forgot-password', authController.forgotPassword);
  * /api/auth/verify-reset-otp:
  *   post:
  *     summary: Step 2 - Verify password reset OTP
- *     description: Validates the OTP received by email. On success returns a short-lived reset token (10 min) to be used in the next step.
+ *     description: Validates the OTP received by email. On success returns a short-lived reset token (5 min) to be used in the next step.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -2011,7 +2009,7 @@ router.post('/forgot-password', authController.forgotPassword);
  *                   properties:
  *                     resetToken:
  *                       type: string
- *                       description: Short-lived token (10 min) to authorise the password reset
+ *                       description: Short-lived token (5 min) to authorise the password reset
  *                     message:
  *                       type: string
  *                       example: OTP verified successfully. Use the reset token to set your new password.
@@ -2132,7 +2130,7 @@ router.post('/otp/change-password', authController.initiateChangePassword);
  *                   properties:
  *                     resetToken:
  *                       type: string
- *                       description: Short-lived token (10 min) to set the new password
+ *                       description: Short-lived token (5 min) to set the new password
  *                     message:
  *                       type: string
  *       400:

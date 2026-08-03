@@ -31,40 +31,42 @@ const TEMPLATES = {
   verifyEmailOtp:            process.env.TERMII_TEMPLATE_ID_VERIFY_EMAIL_OTP            || '',
   resetPasswordOtp:          process.env.TERMII_TEMPLATE_ID_RESET_PASSWORD_OTP          || '',
 
-  // Agent / Admin onboarding — kept for onboarding flows (no new template yet)
-  // Variables: {{full_name}}, {{otp}}, {{set_password_url}}
+  // Agent / Admin onboarding
+  // Variables: shared + full_name, otp, set_password_url
   agentWelcome:              process.env.TERMII_TEMPLATE_ID_AGENT_WELCOME               || '',
-  // Variables: {{full_name}}, {{reset_password_url}}
+  // Variables: shared + full_name, reset_password_url
   adminWelcome:              process.env.TERMII_TEMPLATE_ID_ADMIN_WELCOME               || '',
-  // Variables: {{first_name}}
+  // Variables: shared
   passwordResetConfirm:      process.env.TERMII_TEMPLATE_ID_PASSWORD_RESET_CONFIRM      || '',
-  // Variables: {{first_name}}, {{temporary_password}}
+  // Variables: shared + temporary_password
   passwordCreation:          process.env.TERMII_TEMPLATE_ID_PASSWORD_CREATION           || '',
-  // Variables: {{first_name}}
+  // Variables: shared
   welcome:                   process.env.TERMII_TEMPLATE_ID_WELCOME                     || '',
 
-  // KYC / account state — no new template yet
-  // Variables: {{first_name}}
+  // KYC / account state
+  // Variables: shared
   kycApproved:               process.env.TERMII_TEMPLATE_ID_KYC_APPROVED                || '',
-  // Variables: {{first_name}}, {{reason}}
+  // Variables: shared + reason
   kycRejected:               process.env.TERMII_TEMPLATE_ID_KYC_REJECTED                || '',
-  // Variables: {{first_name}}, {{reason}}
+  // Variables: shared + reason
   accountSuspended:          process.env.TERMII_TEMPLATE_ID_ACCOUNT_SUSPENDED           || '',
-  // Variables: {{first_name}}
+  // Variables: shared
   accountActivated:          process.env.TERMII_TEMPLATE_ID_ACCOUNT_ACTIVATED           || '',
 
-  // Document review — no new template yet
-  // Variables: {{first_name}}, {{transaction_ref}}, {{info}}
+  // Document review
+  // Variables: shared + transaction_ref, info
   additionalInfoRequired:    process.env.TERMII_TEMPLATE_ID_ADDITIONAL_INFO_REQUIRED    || '',
+  // Variables: shared + transaction_ref, document_type
   documentApproved:          process.env.TERMII_TEMPLATE_ID_DOCUMENT_APPROVED           || '',
+  // Variables: shared + transaction_ref, document_type, reason
   documentRejected:          process.env.TERMII_TEMPLATE_ID_DOCUMENT_REJECTED           || '',
 
-  // Transaction state — approved/rejected/deposit-confirmed have no new template yet
-  // Variables: {{first_name}}, {{transaction_ref}}, {{amount}}
+  // Transaction state
+  // Variables: shared + transaction_ref, amount, transaction_url
   transactionApproved:       process.env.TERMII_TEMPLATE_ID_TRANSACTION_APPROVED        || '',
-  // Variables: {{first_name}}, {{transaction_ref}}, {{reason}}
+  // Variables: shared + transaction_ref, reason
   transactionRejected:       process.env.TERMII_TEMPLATE_ID_TRANSACTION_REJECTED        || '',
-  // Variables: {{first_name}}, {{transaction_ref}}, {{amount}}
+  // Variables: shared + transaction_ref, amount, transaction_url
   depositConfirmed:          process.env.TERMII_TEMPLATE_ID_DEPOSIT_CONFIRMED           || '',
 
   // Settled / completed — one template per transaction type
@@ -108,24 +110,30 @@ function splitOtpDigits(otp: string): Record<string, string> {
   };
 }
 
-/** Variables required by every template. */
+/**
+ * Variables injected into every template.
+ * All templates must have these placeholders so they render correctly.
+ */
 function sharedVars(email: string, firstName: string): Record<string, string> {
   const appUrl = process.env.APP_URL || '';
   return {
-    first_name:        firstName,
-    recipient_email:   email,
-    company_name:      'SohCahToa Holdings',
-    company_address:   'Lagos State, Nigeria',
-    current_year:      new Date().getFullYear().toString(),
-    app_url:           appUrl,
-    support_email:     'support@sohcahtoabdc.com',
-    support_phone:     process.env.SUPPORT_PHONE      || '+234XXXXXXXXXX',
-    support_agent_name: process.env.SUPPORT_AGENT_NAME || 'Support Team',
-    unsubscribe_url:   `${appUrl}/unsubscribe`,
-    preferences_url:   `${appUrl}/settings/notifications`,
-    x_url:             'https://x.com/sohcahtoa',
-    facebook_url:      'https://facebook.com/sohcahtoa',
-    instagram_url:     'https://instagram.com/sohcahtoa',
+    first_name:         firstName,
+    recipient_email:    email,
+    company_name:       'SohCahToa Holdings',
+    company_address:    'Lagos State, Nigeria',
+    current_year:       new Date().getFullYear().toString(),
+    app_url:            appUrl,
+    support_email:      process.env.SUPPORT_EMAIL        || 'support@sohcahtoabdc.com',
+    support_phone:      process.env.SUPPORT_PHONE        || '+234XXXXXXXXXX',
+    support_agent_name: process.env.SUPPORT_AGENT_NAME   || 'Support Team',
+    unsubscribe_url:    `${appUrl}/unsubscribe`,
+    preferences_url:    `${appUrl}/settings/notifications`,
+    login_url:          `${appUrl}/login`,
+    dashboard_url:      `${appUrl}/dashboard`,
+    kyc_url:            `${appUrl}/kyc`,
+    x_url:              process.env.SOCIAL_X_URL         || 'https://x.com/sohcahtoa',
+    facebook_url:       process.env.SOCIAL_FACEBOOK_URL  || 'https://facebook.com/sohcahtoa',
+    instagram_url:      process.env.SOCIAL_INSTAGRAM_URL || 'https://instagram.com/sohcahtoa',
   };
 }
 
@@ -156,7 +164,6 @@ class EmailService {
 
   async sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
     if (this.useTermii) {
-      // No plain-email endpoint in Termii — callers should use sendTemplate methods instead.
       console.warn('Plain email called with Termii provider — use template methods. Email not sent.');
       return { success: false, error: 'Use sendTemplate methods for Termii email delivery' };
     }
@@ -217,15 +224,19 @@ class EmailService {
 
     if (this.useTermii) {
       try {
-        const isPasswordReset = purpose === 'PASSWORD_RESET';
-        const templateKey: keyof typeof TEMPLATES = isPasswordReset ? 'resetPasswordOtp' : 'verifyEmailOtp';
+        const isPasswordReset  = purpose === 'PASSWORD_RESET';
+        const isChangePassword = purpose === 'CHANGE_PASSWORD';
+        const templateKey: keyof typeof TEMPLATES =
+          isPasswordReset  ? 'resetPasswordOtp' :
+          isChangePassword ? 'verifyEmailOtp'   :   // change-password-otp shares verifyEmailOtp key
+                             'verifyEmailOtp';
         const templateId = TEMPLATES[templateKey];
 
         if (templateId) {
           const result = await emailClient.sendTemplateEmail(
             email,
             templateId,
-            { ...shared, ...digits, expiry_minutes: '10' },
+            { ...shared, ...digits, expiry_minutes: '5' },
             subject,
           );
           return result.success;
@@ -242,7 +253,7 @@ class EmailService {
 
     return this.sendTemplate(email, 'verifyEmailOtp', { ...shared, ...digits, expiry_minutes: 10 }, {
       subject,
-      text: `Your verification code is: ${otp}. It will expire in 10 minutes.`,
+      text: `Your verification code is: ${otp}. It will expire in 5 minutes.`,
     });
   }
 
@@ -258,7 +269,13 @@ class EmailService {
   // ── Agent welcome email ──────────────────────────────────────────────────
 
   async sendAgentWelcomeEmail(email: string, fullName: string, otp: string, setPasswordUrl: string): Promise<boolean> {
-    return this.sendTemplate(email, 'agentWelcome', { full_name: fullName, otp, set_password_url: setPasswordUrl }, {
+    const shared = sharedVars(email, fullName.split(' ')[0]);
+    return this.sendTemplate(email, 'agentWelcome', {
+      ...shared,
+      full_name:        fullName,
+      otp,
+      set_password_url: setPasswordUrl,
+    }, {
       subject: 'Welcome to SohCahToa - Complete Your Agent Setup',
       text: `Welcome to SohCahToa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. Set your password here: ${setPasswordUrl}. This code expires in 5 minutes.`,
     });
@@ -267,7 +284,12 @@ class EmailService {
   // ── Admin welcome email ──────────────────────────────────────────────────
 
   async sendAdminWelcomeEmail(email: string, fullName: string, resetPasswordUrl: string): Promise<boolean> {
-    return this.sendTemplate(email, 'adminWelcome', { full_name: fullName, reset_password_url: resetPasswordUrl }, {
+    const shared = sharedVars(email, fullName.split(' ')[0]);
+    return this.sendTemplate(email, 'adminWelcome', {
+      ...shared,
+      full_name:          fullName,
+      reset_password_url: resetPasswordUrl,
+    }, {
       subject: 'Welcome to SohCahToa Admin Portal',
       text: `Welcome to SohCahToa, ${fullName}! Your admin account has been created. Set your password here: ${resetPasswordUrl}`,
     });
@@ -276,16 +298,20 @@ class EmailService {
   // ── Password reset confirmation ──────────────────────────────────────────
 
   async sendPasswordResetConfirmationEmail(email: string, firstName?: string): Promise<boolean> {
-    return this.sendTemplate(email, 'passwordResetConfirm', { first_name: firstName || 'User' }, {
+    const name = firstName || 'User';
+    return this.sendTemplate(email, 'passwordResetConfirm', { ...sharedVars(email, name) }, {
       subject: 'Password Reset Successful - SohCahToa',
-      text: `Hi ${firstName || 'User'}, your password has been successfully reset. If you did not perform this action, please contact support immediately.`,
+      text: `Hi ${name}, your password has been successfully reset. If you did not perform this action, please contact support immediately.`,
     });
   }
 
   // ── Password creation (temp password) ───────────────────────────────────
 
   async sendPasswordCreationEmail(email: string, firstName: string, temporaryPassword: string): Promise<boolean> {
-    return this.sendTemplate(email, 'passwordCreation', { first_name: firstName, temporary_password: temporaryPassword }, {
+    return this.sendTemplate(email, 'passwordCreation', {
+      ...sharedVars(email, firstName),
+      temporary_password: temporaryPassword,
+    }, {
       subject: 'Complete Your Registration - Create Your Password',
       text: `Welcome ${firstName}! Your temporary password is: ${temporaryPassword}. Please login and change it immediately.`,
     });
@@ -294,7 +320,13 @@ class EmailService {
   // ── Transaction approved ─────────────────────────────────────────────────
 
   async sendTransactionApprovedEmail(email: string, firstName: string, transactionRef: string, amount: string): Promise<boolean> {
-    return this.sendTemplate(email, 'transactionApproved', { first_name: firstName, transaction_ref: transactionRef, amount }, {
+    const shared = sharedVars(email, firstName);
+    return this.sendTemplate(email, 'transactionApproved', {
+      ...shared,
+      transaction_ref: transactionRef,
+      amount,
+      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
+    }, {
       subject: `Transaction Approved - ${transactionRef}`,
       text: `Hi ${firstName}, your transaction ${transactionRef} for ${amount} has been approved and is being processed.`,
     });
@@ -303,7 +335,11 @@ class EmailService {
   // ── Transaction rejected ─────────────────────────────────────────────────
 
   async sendTransactionRejectedEmail(email: string, firstName: string, transactionRef: string, reason: string): Promise<boolean> {
-    return this.sendTemplate(email, 'transactionRejected', { first_name: firstName, transaction_ref: transactionRef, reason }, {
+    return this.sendTemplate(email, 'transactionRejected', {
+      ...sharedVars(email, firstName),
+      transaction_ref: transactionRef,
+      reason,
+    }, {
       subject: `Transaction Update - ${transactionRef}`,
       text: `Hi ${firstName}, your transaction ${transactionRef} could not be approved. Reason: ${reason}. Please contact support if you need assistance.`,
     });
@@ -312,7 +348,13 @@ class EmailService {
   // ── Deposit confirmed ─────────────────────────────────────────────────────
 
   async sendDepositConfirmedEmail(email: string, firstName: string, transactionRef: string, amount: string): Promise<boolean> {
-    return this.sendTemplate(email, 'depositConfirmed', { first_name: firstName, transaction_ref: transactionRef, amount }, {
+    const shared = sharedVars(email, firstName);
+    return this.sendTemplate(email, 'depositConfirmed', {
+      ...shared,
+      transaction_ref: transactionRef,
+      amount,
+      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
+    }, {
       subject: `Deposit Confirmed - ${transactionRef}`,
       text: `Hi ${firstName}, we've confirmed your deposit of ${amount} for transaction ${transactionRef}. Your transaction is now being processed.`,
     });
@@ -362,15 +404,15 @@ class EmailService {
       return false;
     }
 
-    const isPtaBta     = type === 'PTA' || type === 'BTA';
+    const isPtaBta      = type === 'PTA' || type === 'BTA';
     const isBeneficiary = ['SCHOOL_FEES', 'MEDICAL', 'PROFESSIONAL_BODY'].includes(type);
-    const isTourist    = type === 'TOURIST_FX';
+    const isTourist     = type === 'TOURIST_FX';
 
     let vars: Record<string, string> = {
       ...shared,
-      transaction_id:  data.transactionId,
-      amount_display:  data.amountDisplay,
-      receipt_url:     data.receiptUrl,
+      transaction_id: data.transactionId,
+      amount_display: data.amountDisplay,
+      receipt_url:    data.receiptUrl,
     };
 
     if (isPtaBta) {
@@ -429,13 +471,11 @@ class EmailService {
       provideBankDetailsUrl: string;
     }
   ): Promise<boolean> {
-    const shared = sharedVars(email, firstName);
-
     return this.sendTemplate(email, 'refundBankDetailsRequest', {
-      ...shared,
-      transaction_id:          data.transactionId,
-      transaction_type_label:  data.transactionTypeLabel,
-      refund_amount_display:   data.refundAmountDisplay,
+      ...sharedVars(email, firstName),
+      transaction_id:           data.transactionId,
+      transaction_type_label:   data.transactionTypeLabel,
+      refund_amount_display:    data.refundAmountDisplay,
       provide_bank_details_url: data.provideBankDetailsUrl,
     }, {
       subject: `Complete your refund request - ${data.transactionId}`,
@@ -446,7 +486,7 @@ class EmailService {
   // ── KYC approved ─────────────────────────────────────────────────────────
 
   async sendKycApprovedEmail(email: string, firstName: string): Promise<boolean> {
-    return this.sendTemplate(email, 'kycApproved', { first_name: firstName }, {
+    return this.sendTemplate(email, 'kycApproved', { ...sharedVars(email, firstName) }, {
       subject: 'Identity Verified - SohCahToa',
       text: `Hi ${firstName}, congratulations! Your identity has been verified and your SohCahToa account is now fully active.`,
     });
@@ -455,7 +495,10 @@ class EmailService {
   // ── KYC rejected ─────────────────────────────────────────────────────────
 
   async sendKycRejectedEmail(email: string, firstName: string, reason: string): Promise<boolean> {
-    return this.sendTemplate(email, 'kycRejected', { first_name: firstName, reason }, {
+    return this.sendTemplate(email, 'kycRejected', {
+      ...sharedVars(email, firstName),
+      reason,
+    }, {
       subject: 'Verification Unsuccessful - SohCahToa',
       text: `Hi ${firstName}, we were unable to verify your identity. Reason: ${reason}. Please resubmit your documents or contact support.`,
     });
@@ -464,7 +507,10 @@ class EmailService {
   // ── Account suspended ─────────────────────────────────────────────────────
 
   async sendAccountSuspendedEmail(email: string, firstName: string, reason: string): Promise<boolean> {
-    return this.sendTemplate(email, 'accountSuspended', { first_name: firstName, reason }, {
+    return this.sendTemplate(email, 'accountSuspended', {
+      ...sharedVars(email, firstName),
+      reason,
+    }, {
       subject: 'Account Suspended - SohCahToa',
       text: `Hi ${firstName}, your SohCahToa account has been temporarily suspended. Reason: ${reason}. Contact support if you believe this is an error.`,
     });
@@ -473,7 +519,7 @@ class EmailService {
   // ── Account activated ─────────────────────────────────────────────────────
 
   async sendAccountActivatedEmail(email: string, firstName: string): Promise<boolean> {
-    return this.sendTemplate(email, 'accountActivated', { first_name: firstName }, {
+    return this.sendTemplate(email, 'accountActivated', { ...sharedVars(email, firstName) }, {
       subject: 'Account Reactivated - SohCahToa',
       text: `Hi ${firstName}, your SohCahToa account has been reactivated. You now have full access to all features.`,
     });
@@ -482,7 +528,11 @@ class EmailService {
   // ── Document approved ─────────────────────────────────────────────────────
 
   async sendDocumentApprovedEmail(email: string, firstName: string, transactionRef: string, documentType: string): Promise<boolean> {
-    return this.sendTemplate(email, 'documentApproved', { first_name: firstName, transaction_ref: transactionRef, document_type: documentType }, {
+    return this.sendTemplate(email, 'documentApproved', {
+      ...sharedVars(email, firstName),
+      transaction_ref: transactionRef,
+      document_type:   documentType,
+    }, {
       subject: `Document Approved - ${transactionRef}`,
       text: `Hi ${firstName}, your ${documentType} document for transaction ${transactionRef} has been approved. You will be notified once all documents are verified.`,
     });
@@ -491,7 +541,12 @@ class EmailService {
   // ── Document rejected ─────────────────────────────────────────────────────
 
   async sendDocumentRejectedEmail(email: string, firstName: string, transactionRef: string, documentType: string, reason: string): Promise<boolean> {
-    return this.sendTemplate(email, 'documentRejected', { first_name: firstName, transaction_ref: transactionRef, document_type: documentType, reason }, {
+    return this.sendTemplate(email, 'documentRejected', {
+      ...sharedVars(email, firstName),
+      transaction_ref: transactionRef,
+      document_type:   documentType,
+      reason,
+    }, {
       subject: `Document Rejected - ${transactionRef}`,
       text: `Hi ${firstName}, your ${documentType} document for transaction ${transactionRef} was rejected. Reason: ${reason}. Please resubmit a valid document.`,
     });
@@ -500,7 +555,11 @@ class EmailService {
   // ── Document resubmission requested ──────────────────────────────────────
 
   async sendDocumentResubmissionEmail(email: string, firstName: string, transactionRef: string, documentType: string, comment: string): Promise<boolean> {
-    return this.sendTemplate(email, 'additionalInfoRequired', { first_name: firstName, transaction_ref: transactionRef, info: comment }, {
+    return this.sendTemplate(email, 'additionalInfoRequired', {
+      ...sharedVars(email, firstName),
+      transaction_ref: transactionRef,
+      info:            comment,
+    }, {
       subject: `Action Required: Document Resubmission - ${transactionRef}`,
       text: `Hi ${firstName}, additional information is required for your ${documentType} document on transaction ${transactionRef}: ${comment}. Please resubmit with corrections.`,
     });
@@ -516,10 +575,12 @@ class EmailService {
     currency: string,
     virtualAccount: { accountNumber: string; accountName: string; bankName: string }
   ): Promise<boolean> {
+    const shared = sharedVars(email, firstName);
     return this.sendTemplate(email, 'transactionApproved', {
-      first_name: firstName,
+      ...shared,
       transaction_ref: transactionRef,
-      amount: `${currency} ${amount}`,
+      amount:          `${currency} ${amount}`,
+      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
     }, {
       subject: `Payment Details - ${transactionRef}`,
       text: `Hi ${firstName}, your documents for transaction ${transactionRef} have been approved. Please make payment of ${currency} ${amount} to:\n\nBank: ${virtualAccount.bankName}\nAccount Name: ${virtualAccount.accountName}\nAccount Number: ${virtualAccount.accountNumber}\n\nThis virtual account is unique to your transaction. Payment is automatically confirmed when funds arrive.`,
@@ -529,7 +590,11 @@ class EmailService {
   // ── Additional Information Required ───────────────────────────────────────
 
   async sendAdditionalInfoRequiredEmail(email: string, firstName: string, transactionRef: string, info: string): Promise<boolean> {
-    return this.sendTemplate(email, 'additionalInfoRequired', { first_name: firstName, transaction_ref: transactionRef, info }, {
+    return this.sendTemplate(email, 'additionalInfoRequired', {
+      ...sharedVars(email, firstName),
+      transaction_ref: transactionRef,
+      info,
+    }, {
       subject: `Additional Information Required - ${transactionRef}`,
       text: `Hi ${firstName}, your transaction ${transactionRef} requires additional information: ${info}. Please provide it to complete the transaction review.`,
     });

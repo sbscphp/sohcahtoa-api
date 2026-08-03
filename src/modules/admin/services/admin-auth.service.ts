@@ -64,7 +64,7 @@ class AdminAuthService {
 
     logger.info("Old password verified for password change", { userId, email: user.email });
 
-    return { changeToken, message: "Old password verified. Use changeToken within 10 minutes." };
+    return { changeToken, message: "Old password verified. Use changeToken within 5 minutes." };
   }
 
   async submitPasswordChange(userId: string, changeToken: string, newPassword: string) {

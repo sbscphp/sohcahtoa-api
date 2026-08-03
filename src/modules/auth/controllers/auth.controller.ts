@@ -74,32 +74,40 @@ export class AuthController {
     }
   }
 
-  // NIBSS Callback: NIBSS redirects (GET) or POSTs retrievalToken here after user authenticates
+  // NIBSS Consent Hub Callback — server-to-server POST (OfflineConsent) or browser GET redirect (RedirectLink)
   async nibssConsentCallback(req: Request, res: Response, next: NextFunction) {
     try {
-      // NIBSS may send sessionId/retrievalToken in body (POST/OfflineConsent) or
-      // query params (GET/RedirectLink browser redirect) — handle both
-      const sessionId =
-        (req.query.sessionId as string) ||
-        (req.query.session_id as string) ||
-        req.body.sessionId ||
-        req.body.session_id;
+      // All fields may arrive in body (POST) or query params (GET browser redirect)
+      const body = req.body;
+      const q    = req.query;
 
-      const retrievalToken =
-        (req.query.retrievalToken as string) ||
-        (req.query.retrieval_token as string) ||
-        (req.query.token as string) ||
-        req.body.retrievalToken ||
-        req.body.retrieval_token ||
-        req.body.token;
+      const retrievalToken: string =
+        (q.retrievalToken as string) || (q.retrieval_token as string) || (q.token as string) ||
+        body.retrievalToken || body.retrieval_token || body.token;
 
+      const sessionId: string =
+        (q.sessionId as string) || (q.session_id as string) ||
+        body.sessionId || body.session_id;
+
+      const dataOwnerId: string     = (q.dataOwnerId as string)     || body.dataOwnerId;
+      const consentExpiryTime: string = (q.consentExpiryTime as string) || body.consentExpiryTime;
+      const tokenIssuedDate: string = (q.tokenIssuedDate as string) || body.tokenIssuedDate;
+      const requestCategory: string = (q.requestCategory as string) || body.requestCategory;
+
+      // retrievalToken and sessionId are the minimum needed to proceed
       if (!sessionId || !retrievalToken) {
         res.status(400).json({ success: false, message: 'sessionId and retrievalToken are required' });
         return;
       }
 
-      // For GET redirects (browser), respond with a page the user can close.
-      // For POST callbacks (server-to-server), respond 200 JSON so NIBSS doesn't retry.
+      // requestCategory NNNN means no data was requested — reject per NIBSS spec
+      if (requestCategory && requestCategory === 'NNNN') {
+        res.status(400).json({ success: false, message: 'Invalid requestCategory: NNNN is not permitted' });
+        return;
+      }
+
+      // Respond immediately so NIBSS doesn't retry the callback.
+      // GET = browser redirect, serve a close-tab page; POST = server-to-server, return JSON.
       if (req.method === 'GET') {
         res.status(200).send(
           '<!DOCTYPE html><html><body><p>BVN consent received. You may close this tab and return to the app.</p></body></html>'
@@ -108,7 +116,12 @@ export class AuthController {
         res.status(200).json({ success: true, message: 'Callback received' });
       }
 
-      await authService.handleNibssConsentCallback(sessionId, retrievalToken).catch((err) => {
+      await authService.handleNibssConsentCallback(sessionId, retrievalToken, {
+        dataOwnerId,
+        consentExpiryTime,
+        tokenIssuedDate,
+        requestCategory,
+      }).catch((err) => {
         console.error('NIBSS callback processing error', err);
       });
     } catch (error) {
