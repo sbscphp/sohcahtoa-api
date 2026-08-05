@@ -319,13 +319,15 @@ class EmailService {
 
   // ── Transaction approved ─────────────────────────────────────────────────
 
-  async sendTransactionApprovedEmail(email: string, firstName: string, transactionRef: string, amount: string): Promise<boolean> {
+  async sendTransactionApprovedEmail(email: string, firstName: string, transactionRef: string, amount: string, userId?: string): Promise<boolean> {
     const shared = sharedVars(email, firstName);
+    const baseUrl = `${shared.app_url}/transactions/${transactionRef}`;
+    const transaction_url = userId ? `${baseUrl}?userId=${userId}` : baseUrl;
     return this.sendTemplate(email, 'transactionApproved', {
       ...shared,
       transaction_ref: transactionRef,
       amount,
-      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
+      transaction_url,
     }, {
       subject: `Transaction Approved - ${transactionRef}`,
       text: `Hi ${firstName}, your transaction ${transactionRef} for ${amount} has been approved and is being processed.`,
@@ -347,13 +349,15 @@ class EmailService {
 
   // ── Deposit confirmed ─────────────────────────────────────────────────────
 
-  async sendDepositConfirmedEmail(email: string, firstName: string, transactionRef: string, amount: string): Promise<boolean> {
+  async sendDepositConfirmedEmail(email: string, firstName: string, transactionRef: string, amount: string, userId?: string): Promise<boolean> {
     const shared = sharedVars(email, firstName);
+    const baseUrl = `${shared.app_url}/transactions/${transactionRef}`;
+    const transaction_url = userId ? `${baseUrl}?userId=${userId}` : baseUrl;
     return this.sendTemplate(email, 'depositConfirmed', {
       ...shared,
       transaction_ref: transactionRef,
       amount,
-      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
+      transaction_url,
     }, {
       subject: `Deposit Confirmed - ${transactionRef}`,
       text: `Hi ${firstName}, we've confirmed your deposit of ${amount} for transaction ${transactionRef}. Your transaction is now being processed.`,
@@ -573,14 +577,17 @@ class EmailService {
     transactionRef: string,
     amount: string,
     currency: string,
-    virtualAccount: { accountNumber: string; accountName: string; bankName: string }
+    virtualAccount: { accountNumber: string; accountName: string; bankName: string },
+    userId?: string,
   ): Promise<boolean> {
     const shared = sharedVars(email, firstName);
+    const baseUrl = `${shared.app_url}/transactions/${transactionRef}`;
+    const transaction_url = userId ? `${baseUrl}?userId=${userId}` : baseUrl;
     return this.sendTemplate(email, 'transactionApproved', {
       ...shared,
       transaction_ref: transactionRef,
       amount:          `${currency} ${amount}`,
-      transaction_url: `${shared.app_url}/transactions/${transactionRef}`,
+      transaction_url,
     }, {
       subject: `Payment Details - ${transactionRef}`,
       text: `Hi ${firstName}, your documents for transaction ${transactionRef} have been approved. Please make payment of ${currency} ${amount} to:\n\nBank: ${virtualAccount.bankName}\nAccount Name: ${virtualAccount.accountName}\nAccount Number: ${virtualAccount.accountNumber}\n\nThis virtual account is unique to your transaction. Payment is automatically confirmed when funds arrive.`,

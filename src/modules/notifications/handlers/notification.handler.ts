@@ -437,7 +437,7 @@ export class NotificationHandler {
             : transaction.nairaEquivalent
             ? `NGN ${transaction.nairaEquivalent}`
             : '';
-          await emailService.sendTransactionApprovedEmail(agent.email, agent.firstName, transaction.referenceNumber, amount).catch((e) =>
+          await emailService.sendTransactionApprovedEmail(agent.email, agent.firstName, transaction.referenceNumber, amount, userId).catch((e) =>
             logger.error('Error sending transaction approved email to agent:', e)
           );
         }
@@ -538,7 +538,7 @@ export class NotificationHandler {
           const nairaStr   = transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : null;
           const amountDisplay = fxAmount && nairaStr ? `${fxAmount} (${nairaStr})` : fxAmount || nairaStr || '0';
           const appUrl   = process.env.APP_URL || '';
-          const receiptUrl = `${appUrl}/transactions/${transaction.referenceNumber}`;
+          const receiptUrl = `${appUrl}/transactions/${transaction.referenceNumber}?userId=${userId}`;
           await emailService.sendSettledTransactionEmail(
             transaction.type,
             agentInfo.email,
@@ -664,7 +664,7 @@ export class NotificationHandler {
         const agent = await getAgentEmailInfo(transaction.id);
         if (agent) {
           const amountStr = amount ? `NGN ${amount}` : transaction.nairaEquivalent ? `NGN ${transaction.nairaEquivalent}` : '';
-          await emailService.sendDepositConfirmedEmail(agent.email, agent.firstName, transaction.referenceNumber, amountStr).catch((e) =>
+          await emailService.sendDepositConfirmedEmail(agent.email, agent.firstName, transaction.referenceNumber, amountStr, userId).catch((e) =>
             logger.error('Error sending deposit confirmed email to agent:', e)
           );
         }
