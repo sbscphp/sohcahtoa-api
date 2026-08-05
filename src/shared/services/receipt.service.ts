@@ -81,7 +81,6 @@ export async function generateTransactionReceipt(
       },
       steps: { orderBy: { createdAt: 'asc' } },
       cashPickup: true,
-      outboundSettlement: { select: { paymentMethod: true } },
     },
   });
 
@@ -90,6 +89,12 @@ export async function generateTransactionReceipt(
   if (transaction.status !== 'COMPLETED') {
     throw new ValidationError('Receipt is only available for completed transactions');
   }
+
+  // OutboundSettlement is not a Prisma relation on Transaction — fetch separately
+  const outboundSettlement = await client.outboundSettlement.findFirst({
+    where: { transactionId: transaction.id },
+    select: { paymentMethod: true },
+  }).catch(() => null);
 
   const personalInfoStep =
     transaction.steps.find((s: any) => s.step === 'PERSONAL_INFO') ??
@@ -106,7 +111,7 @@ export async function generateTransactionReceipt(
   // Prefer the outbound settlement payment method (set at actual disbursement time)
   // over transaction.disbursementMethod (set at approval time and may lag)
   const disbursementMethod =
-    transaction.outboundSettlement?.paymentMethod
+    outboundSettlement?.paymentMethod
     ?? transaction.disbursementMethod
     ?? null;
 
