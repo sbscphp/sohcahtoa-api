@@ -534,24 +534,7 @@ export class CustomerTransactionService {
         completedAt: new Date(),
       },
     });
-    // ----- New Receipt Generation -----
-    const existingReceipt = await prisma.receipt.findUnique({ where: { transactionId: transaction.id } });
-    if (!existingReceipt) {
-      const { pdf, filename, referenceNumber } = await generateTransactionReceipt(
-        transaction.id,
-        userId,
-        'CUSTOMER'
-      );
-      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
-      await prisma.receipt.create({
-        data: {
-          transactionId: transaction.id,
-          receiptNumber: referenceNumber,
-          qrCode: '', // placeholder for future QR code generation
-          pdfUrl: uploadResult.secureUrl,
-        },
-      });
-    }
+    // Receipt is generated when the transaction reaches COMPLETED status, not at creation time.
 
     // Save any document links provided inline with the transaction
     if (documents && documents.length > 0) {
