@@ -94,7 +94,7 @@ export class CustomerService {
       prisma.user,
       {
         where,
-        include: { profile: true, kyc: true },
+        include: { profile: true, kyc: true, credentials: true },
         orderBy,
       },
       { page, limit },
@@ -147,6 +147,7 @@ export class CustomerService {
             lastActiveByUser[row.userId] = sessMax;
           }
         }
+        const now = new Date();
         return users.map((u: any) => {
           const name =
             u.profile && (u.profile.firstName || u.profile.lastName)
@@ -159,6 +160,8 @@ export class CustomerService {
           const lastActive = lastActiveByUser[u.id]
             ? lastActiveByUser[u.id]?.toISOString?.() || lastActiveByUser[u.id]
             : null;
+          const lockedUntil = u.credentials?.lockedUntil ? new Date(u.credentials.lockedUntil) : null;
+          const isLocked = lockedUntil !== null && lockedUntil > now;
           return {
             id: u.id,
             name,
@@ -168,6 +171,8 @@ export class CustomerService {
             totalTransactions: agg.totalTransactions,
             transactionVolume: agg.transactionVolume,
             status: u.isActive ? "ACTIVE" : "DEACTIVATED",
+            loginStatus: isLocked ? "LOCKED" : "ACTIVE",
+            lockedUntil: isLocked ? lockedUntil!.toISOString() : null,
             lastActive,
           };
         });
