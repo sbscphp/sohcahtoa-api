@@ -136,6 +136,7 @@ enum TransactionStatus {
   REJECTED
   CANCELLED
   AWAITING_REFUND_VERIFICATION
+  REFUNDED
 }
 
 enum TransactionStep {

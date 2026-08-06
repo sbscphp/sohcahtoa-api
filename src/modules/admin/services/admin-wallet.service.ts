@@ -836,8 +836,8 @@ export class AdminWalletService {
 
     const balanceBefore = Number(wallet.balance);
     const refundAmount = Number(entry.amount);
-    const isDebit = entry.type === "DEBIT";
-    const balanceAfter = isDebit ? balanceBefore + refundAmount : balanceBefore - refundAmount;
+    // Refunds/reversals always debit the wallet — money leaves the system to the customer's bank
+    const balanceAfter = balanceBefore - refundAmount;
 
     // Create reversal entry and update wallet balance in a transaction
     const [updatedEntry, _reversalEntry, _updatedWallet] = await (prisma as any).$transaction([
@@ -856,11 +856,11 @@ export class AdminWalletService {
           transactionId: entry.transactionId,
           transactionRef: entry.transactionRef,
           sessionId: `REFUND-${entry.transactionRef}`,
-          type: isDebit ? "CREDIT" : "DEBIT",
+          type: "DEBIT",
           amount: refundAmount,
           balanceBefore,
           balanceAfter,
-          description: `Refund for entry ${entry.id}`,
+          description: `Reversal for entry ${entry.id}`,
           status: "COMPLETED",
           matchStatus: "MATCHED",
           metadata: { isRefund: true, refundOf: entryId },

@@ -36,6 +36,7 @@ export enum TransactionStatus {
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
   AWAITING_REFUND_VERIFICATION = 'AWAITING_REFUND_VERIFICATION',
+  REFUNDED = 'REFUNDED',
 }
 
 export enum TransactionStep {

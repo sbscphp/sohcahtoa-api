@@ -247,7 +247,8 @@ export class WalletService {
 
     const wallet = debitEntry.wallet;
     const balanceBefore = Number(wallet.balance);
-    const balanceAfter = balanceBefore + Number(debitEntry.amount);
+    // Reversals always debit the wallet — money leaves the system to the customer's bank
+    const balanceAfter = balanceBefore - Number(debitEntry.amount);
 
     const [updatedWallet, reversalEntry] = await (prisma as any).$transaction([
       (prisma as any).customerWallet.update({
@@ -259,13 +260,13 @@ export class WalletService {
           walletId: wallet.id,
           transactionId,
           transactionRef: debitEntry.transactionRef,
-          type: 'CREDIT',
+          type: 'DEBIT',
           amount: debitEntry.amount,
           balanceBefore,
           balanceAfter,
-          description: reason ?? `Reversal of debit for transaction ${debitEntry.transactionRef}`,
+          description: reason ?? `Reversal for transaction ${debitEntry.transactionRef}`,
           status: 'COMPLETED',
-          matchStatus: 'UNMATCHED',
+          matchStatus: 'MATCHED',
           metadata: { reversalOf: debitEntry.id },
         },
       }),

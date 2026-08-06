@@ -945,12 +945,12 @@ export class AdminTransactionsService {
     if (isFinalApproval) {
       if (isRefundWorkflow) {
         const updateResult = await prisma.transaction.updateMany({
-          where: { 
+          where: {
             id: transactionId,
             currentWorkflowStageId: tx.currentWorkflowStageId
           },
           data: {
-            status: TransactionStatus.CANCELLED as any,
+            status: TransactionStatus.REFUNDED as any,
             currentStep: TransactionStep.REFUNDED as any,
             currentWorkflowStageId: null,
             updatedAt: new Date(),
@@ -1002,9 +1002,10 @@ export class AdminTransactionsService {
           }).catch((err) => logger.error("Audit log failed for wallet entry refund approval", { error: err.message }));
         }
 
-        eventBus.publish(EventTypes.TRANSACTION_CANCELLED, {
+        eventBus.publish(EventTypes.TRANSACTION_REJECTED, {
           userId: tx.userId,
           transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
+          reason: reason || "Transaction has been refunded",
         });
 
         return { message: "Transaction refund approved and processed successfully" };
@@ -1751,7 +1752,8 @@ export class AdminTransactionsService {
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
-          status: TransactionStatus.CANCELLED as any,
+          status: TransactionStatus.REFUNDED as any,
+          currentStep: TransactionStep.REFUNDED as any,
           workflowTemplateId: null,
           currentWorkflowStageId: null,
           updatedAt: new Date(),
