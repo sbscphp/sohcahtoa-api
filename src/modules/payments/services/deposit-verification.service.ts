@@ -5,6 +5,7 @@ import { ErrorCode } from '../../../shared/types/common';
 import notificationService from '../../notifications/services/notification.service';
 import { NotificationType, NotificationChannel } from '@prisma/client';
 import walletService from '../../wallet/services/wallet.service';
+import { eventBus, EventTypes } from '../../../events/event-bus';
 
 const prisma = new PrismaClient();
 const logger = createLogger('DepositVerificationService');
@@ -193,6 +194,12 @@ export class DepositVerificationService {
         logger.error('Underpayment reversal notification failed', { transactionId, error: err.message })
       );
 
+      eventBus.publish(EventTypes.TRANSACTION_REVERSED, {
+        userId: transaction.userId,
+        transaction: { id: transactionId, referenceNumber: transaction.referenceNumber },
+        reason: `Deposit of ₦${receivedAmount.toLocaleString()} did not match the required amount of ₦${expectedAmount.toLocaleString()}.`,
+      });
+
       logger.info('Underpayment reversed', { transactionId, depositId, expectedAmount, receivedAmount });
       return;
     }
@@ -277,6 +284,12 @@ export class DepositVerificationService {
       }).catch((err: Error) =>
         logger.error('Overpayment reversal notification failed', { transactionId, error: err.message })
       );
+
+      eventBus.publish(EventTypes.TRANSACTION_REVERSED, {
+        userId: transaction.userId,
+        transaction: { id: transactionId, referenceNumber: transaction.referenceNumber },
+        reason: `Excess deposit of ₦${excessAmount.toLocaleString()} will be reversed to your source account.`,
+      });
 
       logger.info('Overpayment processed — excess reversed', { transactionId, depositId, expectedAmount, excessAmount });
       return;

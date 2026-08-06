@@ -455,6 +455,7 @@ export class NotificationHandler {
           reason,
         });
 
+        // Push to customer
         await notificationService.sendNotification({
           userId,
           type: NotificationType.PUSH,
@@ -466,20 +467,80 @@ export class NotificationHandler {
           transactionId: transaction.id,
         });
 
+        // Push to agent
+        const agentInfo = await (async () => {
+          const tx = await prisma.transaction.findUnique({ where: { id: transaction.id }, select: { createdByAgentId: true } });
+          return tx?.createdByAgentId ? resolveAgentNotifyInfo(tx.createdByAgentId) : null;
+        })();
+        if (agentInfo) {
+          await notificationService.sendNotification({
+            userId: agentInfo.userId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl },
+            transactionId: transaction.id,
+          });
+        }
+
         const user = await getUserEmailInfo(userId);
         if (user) {
           await emailService.sendTransactionRejectedEmail(user.email, user.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
             logger.error('Error sending transaction rejected email:', e)
           );
         }
-        const agent = await getAgentEmailInfo(transaction.id);
-        if (agent) {
-          await emailService.sendTransactionRejectedEmail(agent.email, agent.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
+        if (agentInfo) {
+          await emailService.sendTransactionRejectedEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
             logger.error('Error sending transaction rejected email to agent:', e)
           );
         }
       } catch (error) {
         logger.error('Error sending transaction rejected notification:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.TRANSACTION_REVERSED, async (event: any) => {
+      try {
+        const { userId, transaction, reason } = event;
+
+        const template = NotificationTemplates.TRANSACTION_REVERSED({
+          referenceNumber: transaction.referenceNumber,
+          reason,
+        });
+
+        // Push to customer
+        await notificationService.sendNotification({
+          userId,
+          type: NotificationType.PUSH,
+          channel: NotificationChannel.ALL,
+          priority: template.priority,
+          title: template.title,
+          body: template.body,
+          data: { actionUrl: template.actionUrl },
+          transactionId: transaction.id,
+        });
+
+        // Push + email to agent
+        const agentInfo = await (async () => {
+          const tx = await prisma.transaction.findUnique({ where: { id: transaction.id }, select: { createdByAgentId: true } });
+          return tx?.createdByAgentId ? resolveAgentNotifyInfo(tx.createdByAgentId) : null;
+        })();
+        if (agentInfo) {
+          await notificationService.sendNotification({
+            userId: agentInfo.userId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl },
+            transactionId: transaction.id,
+          });
+        }
+      } catch (error) {
+        logger.error('Error sending transaction reversed notification:', error);
       }
     });
 

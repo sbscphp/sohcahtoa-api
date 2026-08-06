@@ -100,6 +100,7 @@ export const EventTypes = {
   TRANSACTION_SUBMITTED: 'transaction.submitted',
   TRANSACTION_APPROVED: 'transaction.approved',
   TRANSACTION_REJECTED: 'transaction.rejected',
+  TRANSACTION_REVERSED: 'transaction.reversed',
   TRANSACTION_COMPLETED: 'transaction.completed',
   TRANSACTION_CANCELLED: 'transaction.cancelled',
   TRANSACTION_INFO_REQUESTED: 'transaction.info.requested',

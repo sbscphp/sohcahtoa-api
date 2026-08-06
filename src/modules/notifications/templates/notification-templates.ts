@@ -183,6 +183,14 @@ export const NotificationTemplates = {
     actionUrl: `transactions/detail/${data.referenceNumber}`,
   }),
 
+  TRANSACTION_REVERSED: (data: { referenceNumber: string; reason?: string }): NotificationTemplate => ({
+    title: 'Deposit Reversed',
+    body: `The deposit for transaction ${data.referenceNumber} has been reversed. ${data.reason ? `Reason: ${data.reason}` : 'Please contact support if you have questions.'}`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.URGENT,
+    actionUrl: `transactions/detail/${data.referenceNumber}`,
+  }),
+
   DISBURSEMENT_IN_PROGRESS: (data: {
     referenceNumber: string;
     method: string;
