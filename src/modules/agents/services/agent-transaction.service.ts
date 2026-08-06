@@ -2118,6 +2118,16 @@ class AgentTransactionService {
       where: { id: { in: bankAccountIds }, userId: transaction.userId },
     });
     if (accounts.length !== bankAccountIds.length) {
+      // Debug: fetch without userId filter to see what userId is actually on those accounts
+      const anyAccounts = await (prisma as any).customerBankAccount.findMany({
+        where: { id: { in: bankAccountIds } },
+        select: { id: true, userId: true, accountName: true },
+      });
+      logger.warn('Bank account userId mismatch', {
+        transactionUserId: transaction.userId,
+        requestedIds: bankAccountIds,
+        foundAccounts: anyAccounts,
+      });
       throw new ValidationError('One or more bank accounts were not found or do not belong to the customer');
     }
 
