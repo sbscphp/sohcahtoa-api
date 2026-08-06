@@ -4,6 +4,9 @@ import { ValidationError, NotFoundError } from "../../../shared/utils/errors";
 import authService from "../../auth/services/auth.service";
 import { OtpPurpose } from "../../../shared/types";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
+import { createLogger } from "../../../shared/utils/logger";
+
+const logger = createLogger("AgentService");
 
 const prisma: PrismaClient = getDatabase();
 
@@ -482,11 +485,12 @@ class AgentService {
     // Send welcome email to the agent
     authService.sendOtp({
       email: created.email,
-      phoneNumber: created.phoneNumber,
+      phoneNumber: created.phoneNumber || '',
       purpose: OtpPurpose.AGENT_SET_PASSWORD
+    }).then(() => {
+      logger.info('Agent welcome email sent', { email: created.email });
     }).catch(err => {
-      // Log error but don't fail the agent creation
-      console.error(`Failed to send welcome email to agent ${created.email}:`, err);
+      logger.error('Failed to send agent welcome email', { email: created.email, error: err?.message || err });
     });
 
     return created;

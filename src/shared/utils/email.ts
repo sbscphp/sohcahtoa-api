@@ -204,9 +204,12 @@ class EmailService {
       }
       try {
         const result = await emailClient.sendTemplateEmail(to, templateId, data, fallback.subject);
+        if (!result.success) {
+          console.error(`Termii template email returned non-success (${templateKey}) for ${to}`);
+        }
         return result.success;
       } catch (error: any) {
-        console.error(`Termii template email failed (${templateKey}):`, error);
+        console.error(`Termii template email failed (${templateKey}) for ${to}:`, error?.response?.data || error?.message || error);
         return false;
       }
     }
@@ -270,15 +273,19 @@ class EmailService {
 
   async sendAgentWelcomeEmail(email: string, fullName: string, otp: string, setPasswordUrl: string): Promise<boolean> {
     const shared = sharedVars(email, fullName.split(' ')[0]);
-    return this.sendTemplate(email, 'agentWelcome', {
+    const result = await this.sendTemplate(email, 'agentWelcome', {
       ...shared,
       full_name:        fullName,
       otp,
       set_password_url: setPasswordUrl,
     }, {
       subject: 'Welcome to SohCahToa - Complete Your Agent Setup',
-      text: `Welcome to SohCahToa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. Set your password here: ${setPasswordUrl}. This code expires in 5 minutes.`,
+      text: `Welcome to SohCahToa, ${fullName}! Your agent account has been created. Your verification code to set your password is: ${otp}. Set your password here: ${setPasswordUrl}. This code expires in 24 hours.`,
     });
+    if (!result) {
+      console.error(`[EmailService] sendAgentWelcomeEmail failed for ${email} — template send returned false`);
+    }
+    return result;
   }
 
   // ── Admin welcome email ──────────────────────────────────────────────────
