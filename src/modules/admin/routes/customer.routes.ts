@@ -271,6 +271,44 @@ router.get(
  *       404:
  *         $ref: '#/components/responses/NotFoundError'
  */
+/**
+ * @swagger
+ * /api/admin/customers/{userId}/unlock:
+ *   patch:
+ *     summary: Unlock a customer's locked account
+ *     description: Clears the account lock caused by too many failed login attempts, resetting `lockedUntil` and `failedAttempts` to zero.
+ *     tags: [admin-customers]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the customer whose account should be unlocked.
+ *     responses:
+ *       200:
+ *         description: Account unlocked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: Account unlocked successfully
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ */
 router.patch(
   "/:userId/unlock",
   authenticate,
