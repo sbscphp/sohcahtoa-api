@@ -31,7 +31,7 @@ export const agentBankAccountController = {
   },
   async addBankAccount(req: Request, res: Response) {
     try {
-      const agentUserId = (req as any).user.id;
+      const agentUserId = (req as any).user.userId;
       const { customerId } = req.params;
       const account = await agentBankAccountService.addBankAccount(agentUserId, customerId, req.body);
       res.status(201).json({ success: true, data: account });
@@ -42,7 +42,7 @@ export const agentBankAccountController = {
 
   async listBankAccounts(req: Request, res: Response) {
     try {
-      const agentUserId = (req as any).user.id;
+      const agentUserId = (req as any).user.userId;
       const { customerId } = req.params;
       const { currency } = req.query as any;
       const accounts = await agentBankAccountService.listBankAccounts(agentUserId, customerId, currency);
@@ -54,7 +54,7 @@ export const agentBankAccountController = {
 
   async deleteBankAccount(req: Request, res: Response) {
     try {
-      const agentUserId = (req as any).user.id;
+      const agentUserId = (req as any).user.userId;
       const { customerId, accountId } = req.params;
       const result = await agentBankAccountService.deleteBankAccount(agentUserId, customerId, accountId);
       res.json({ success: true, ...result });
@@ -65,7 +65,7 @@ export const agentBankAccountController = {
 
   async setDefault(req: Request, res: Response) {
     try {
-      const agentUserId = (req as any).user.id;
+      const agentUserId = (req as any).user.userId;
       const { customerId, accountId } = req.params;
       const account = await agentBankAccountService.setDefault(agentUserId, customerId, accountId);
       res.json({ success: true, data: account });
