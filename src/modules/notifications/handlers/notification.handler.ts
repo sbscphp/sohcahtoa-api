@@ -51,6 +51,18 @@ async function resolveAgentNotifyInfo(
   }
 }
 
+/**
+ * Convert a customer-facing actionUrl to an agent-facing one.
+ * e.g. "transactions/detail/REF" → "agent/transactions/detail/REF"
+ *      "/transactions/ID"        → "/agent/transactions/ID"
+ */
+function toAgentActionUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  if (url.startsWith('/transactions/')) return '/agent' + url;
+  if (url.startsWith('transactions/')) return 'agent/' + url;
+  return url;
+}
+
 async function getAgentEmailInfo(transactionId: string): Promise<{ email: string; firstName: string } | null> {
   try {
     const tx = await prisma.transaction.findUnique({
@@ -480,7 +492,7 @@ export class NotificationHandler {
             priority: template.priority,
             title: template.title,
             body: template.body,
-            data: { actionUrl: template.actionUrl },
+            data: { actionUrl: toAgentActionUrl(template.actionUrl) },
             transactionId: transaction.id,
           });
         }
@@ -535,7 +547,7 @@ export class NotificationHandler {
             priority: template.priority,
             title: template.title,
             body: template.body,
-            data: { actionUrl: template.actionUrl },
+            data: { actionUrl: toAgentActionUrl(template.actionUrl) },
             transactionId: transaction.id,
           });
         }
@@ -878,7 +890,7 @@ export class NotificationHandler {
               priority: template.priority,
               title: template.title,
               body: template.body,
-              data: { actionUrl: template.actionUrl },
+              data: { actionUrl: toAgentActionUrl(template.actionUrl) },
               transactionId: transaction.id,
             });
             await emailService
@@ -928,7 +940,7 @@ export class NotificationHandler {
               priority: template.priority,
               title: template.title,
               body: template.body,
-              data: { actionUrl: template.actionUrl },
+              data: { actionUrl: toAgentActionUrl(template.actionUrl) },
               transactionId: transaction.id,
             });
             await emailService
@@ -975,7 +987,7 @@ export class NotificationHandler {
               priority: NotificationPriority.HIGH,
               title: "Additional Information Required",
               body: notifBody,
-              data: { actionUrl: "/transactions/" + transaction.id },
+              data: { actionUrl: "/agent/transactions/" + transaction.id },
               transactionId: transaction.id,
             });
             await emailService
@@ -1030,7 +1042,7 @@ export class NotificationHandler {
               priority: NotificationPriority.HIGH,
               title: "Documents Verified - Payment Required",
               body: paymentBody,
-              data: { actionUrl: "/transactions/" + transaction.id },
+              data: { actionUrl: "/agent/transactions/" + transaction.id },
               transactionId: transaction.id,
             });
           }
