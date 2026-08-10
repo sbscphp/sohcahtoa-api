@@ -1141,14 +1141,14 @@ export class AdminTransactionsService {
       });
 
       await prisma.walletEntry.updateMany({
-        where: { transactionId, type: "DEBIT", status: "COMPLETED" },
+        where: { transactionId, type: "CREDIT", status: { not: "REVERSED" } },
         data: {
           refundStatus: "FAILED",
         }
       });
 
       const affectedEntries = await prisma.walletEntry.findMany({
-        where: { transactionId, type: "DEBIT" },
+        where: { transactionId, type: "CREDIT" },
         select: { id: true, walletId: true }
       });
       for (const entry of affectedEntries) {
@@ -1675,7 +1675,7 @@ export class AdminTransactionsService {
       });
 
       await prisma.walletEntry.updateMany({
-        where: { transactionId, type: "DEBIT", status: "COMPLETED" },
+        where: { transactionId, type: "CREDIT", status: { not: "REVERSED" } },
         data: {
           refundStatus: "PENDING_APPROVAL",
           refundedBy: adminId,
