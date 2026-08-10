@@ -442,14 +442,25 @@ export class NotificationHandler {
             logger.error('Error sending transaction approved email:', e)
           );
         }
-        const agent = await getAgentEmailInfo(transaction.id);
-        if (agent) {
+        const agentTx = await prisma.transaction.findUnique({ where: { id: transaction.id }, select: { createdByAgentId: true } });
+        const agentInfo = agentTx?.createdByAgentId ? await resolveAgentNotifyInfo(agentTx.createdByAgentId) : null;
+        if (agentInfo) {
+          await notificationService.sendNotification({
+            userId: agentInfo.userId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.ALL,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: toAgentActionUrl(template.actionUrl) },
+            transactionId: transaction.id,
+          });
           const amount = transaction.foreignAmount
             ? `${transaction.foreignAmount} ${transaction.currency || ''}`.trim()
             : transaction.nairaEquivalent
             ? `NGN ${transaction.nairaEquivalent}`
             : '';
-          await emailService.sendTransactionApprovedEmail(agent.email, agent.firstName, transaction.referenceNumber, amount, userId).catch((e) =>
+          await emailService.sendTransactionApprovedEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, amount, userId).catch((e) =>
             logger.error('Error sending transaction approved email to agent:', e)
           );
         }
