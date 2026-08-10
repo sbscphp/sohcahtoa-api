@@ -1700,6 +1700,7 @@ export class CustomerTransactionService {
             documentType: true,
             fileUrl: true,
             fileName: true,
+            metadata: true,
             verificationStatus: true,
             verificationNotes: true,
             uploadedAt: true,
@@ -1931,6 +1932,14 @@ export class CustomerTransactionService {
           .catch(() => []),
       ]);
 
+    // Extract digital signature text from documents (stored in metadata.signatureText)
+    const digitalSignatureDoc = (transaction.documents as any[]).find(
+      (d) => d.documentType === 'DIGITAL_SIGNATURE' && (d.metadata as any)?.signatureText
+    );
+    const digitalSignature: string | null = digitalSignatureDoc
+      ? ((digitalSignatureDoc.metadata as any).signatureText as string)
+      : null;
+
     return {
       transactionId: transaction.id,
       referenceNumber: transaction.referenceNumber,
@@ -2124,6 +2133,7 @@ export class CustomerTransactionService {
         generatedAt: r.generatedAt,
       })),
 
+      digitalSignature,
       steps: this.sanitizeStepsForResponse(transaction.steps),
       comments,
       createdAt: transaction.createdAt,
