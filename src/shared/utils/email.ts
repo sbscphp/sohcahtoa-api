@@ -440,7 +440,7 @@ class EmailService {
         ...vars,
         beneficiary_name:    data.beneficiaryName    || '',
         beneficiary_account: data.beneficiaryAccount || '',
-        disbursement_date:   data.disbursementDate   || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+        disbursement_date:   data.disbursementDate   || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lagos' }),
       };
     } else if (isTourist) {
       vars = {

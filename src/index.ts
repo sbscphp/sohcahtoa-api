@@ -1,3 +1,6 @@
+// Set timezone to WAT (West Africa Time, UTC+1) before anything else loads
+process.env.TZ = 'Africa/Lagos';
+
 import 'dotenv/config';
 import { createApp } from './app';
 import { initializeDatabase, disconnectDatabase, getDatabase } from './config/database';

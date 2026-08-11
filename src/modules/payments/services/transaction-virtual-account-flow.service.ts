@@ -180,7 +180,7 @@ export class TransactionVirtualAccountFlowService {
           'Use your registered name as the sender name',
           'The account is valid for single use only',
           virtualAccount.expiresAt
-            ? `Complete the transfer before ${new Date(virtualAccount.expiresAt).toLocaleString()}`
+            ? `Complete the transfer before ${new Date(virtualAccount.expiresAt).toLocaleString('en-GB', { timeZone: 'Africa/Lagos', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WAT`
             : 'Complete the transfer within 48 hours',
           'Your transaction will be automatically confirmed once the deposit is received',
           'Do not share this account number with anyone',
@@ -309,7 +309,7 @@ export class TransactionVirtualAccountFlowService {
         'Use your registered name as the sender name',
         'The account is valid for single use only',
         virtualAccount.expiresAt
-          ? `Complete the transfer before ${new Date(virtualAccount.expiresAt).toLocaleString()}`
+          ? `Complete the transfer before ${new Date(virtualAccount.expiresAt).toLocaleString('en-GB', { timeZone: 'Africa/Lagos', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WAT`
           : 'Complete the transfer within the specified timeframe',
         'Your transaction will be automatically confirmed once the deposit is received',
         'Do not share this account number with anyone',

@@ -28,7 +28,7 @@ function fmt(amount: any, currency: string): string {
 function fmtDate(date: Date | string | null | undefined): string {
   if (!date) return '—';
   const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Lagos' });
 }
 
 function fmtLabel(s: string): string {
