@@ -711,7 +711,7 @@ export class NotificationHandler {
           priority: template.priority,
           title: template.title,
           body: template.body,
-          data: { actionUrl: template.actionUrl },
+          data: { actionUrl: template.actionUrl, transactionId: transaction.id, referenceNumber: transaction.referenceNumber },
           transactionId: transaction.id,
         });
       } catch (error) {
@@ -734,7 +734,7 @@ export class NotificationHandler {
           priority: template.priority,
           title: template.title,
           body: template.body,
-          data: { actionUrl: template.actionUrl },
+          data: { actionUrl: template.actionUrl, transactionId: transaction.id, referenceNumber: transaction.referenceNumber },
           transactionId: transaction.id,
         });
 
@@ -984,7 +984,7 @@ export class NotificationHandler {
           priority: NotificationPriority.HIGH,
           title: "Additional Information Required",
           body: notifBody,
-          data: { actionUrl: "/transactions/" + transaction.id },
+          data: { actionUrl: `transactions/detail/${transaction.referenceNumber}`, transactionId: transaction.id, referenceNumber: transaction.referenceNumber },
           transactionId: transaction.id,
         });
 
@@ -998,7 +998,7 @@ export class NotificationHandler {
               priority: NotificationPriority.HIGH,
               title: "Additional Information Required",
               body: notifBody,
-              data: { actionUrl: "/agent/transactions/" + transaction.id },
+              data: { actionUrl: `agent/transactions/detail/${transaction.referenceNumber}`, transactionId: transaction.id, referenceNumber: transaction.referenceNumber },
               transactionId: transaction.id,
             });
             await emailService

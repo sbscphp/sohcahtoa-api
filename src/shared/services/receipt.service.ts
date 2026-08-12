@@ -93,7 +93,17 @@ export async function generateTransactionReceipt(
   // OutboundSettlement is not a Prisma relation on Transaction — fetch separately
   const outboundSettlement = await client.outboundSettlement.findFirst({
     where: { transactionId: transaction.id },
-    select: { paymentMethod: true },
+    select: {
+      paymentMethod: true,
+      beneficiaryName: true,
+      beneficiaryBank: true,
+      beneficiaryAccount: true,
+      beneficiarySwift: true,
+      beneficiaryIban: true,
+      paymentReference: true,
+      amount: true,
+      currency: true,
+    },
   }).catch(() => null);
 
   const personalInfoStep =
@@ -132,6 +142,7 @@ export async function generateTransactionReceipt(
     beneficiaryDetails,
     refundBankDetails,
     cashPickup:         transaction.cashPickup ?? null,
+    outboundSettlement: outboundSettlement ?? null,
   });
 
   const filename = `receipt-${transaction.referenceNumber}.pdf`;
@@ -171,6 +182,7 @@ interface ReceiptData {
   beneficiaryDetails: any;
   refundBankDetails:  any;
   cashPickup:         any;
+  outboundSettlement: any;
 }
 
 function buildPdf(data: ReceiptData): Promise<Buffer> {
@@ -317,6 +329,59 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
         ['BANK',           data.refundBankDetails.bankName       ?? '—'],
       ];
       y = drawSection(doc, INNER_X, y, INNER_W, 'REFUND BANK DETAILS', rRows);
+      y += 12;
+    }
+
+    // ── Outbound payment details (actual settlement record) ───────────────────
+    if (data.outboundSettlement) {
+      const os = data.outboundSettlement;
+      const osRows: [string, string][] = [];
+      if (os.paymentMethod) osRows.push(['PAYOUT METHOD', fmtLabel(os.paymentMethod)]);
+      if (os.beneficiaryName) osRows.push(['PAYEE NAME', os.beneficiaryName]);
+      if (os.beneficiaryBank) osRows.push(['PAYEE BANK', os.beneficiaryBank]);
+      if (os.beneficiaryAccount) osRows.push(['ACCOUNT / IBAN', os.beneficiaryAccount]);
+      if (os.beneficiarySwift) osRows.push(['SWIFT / BIC', os.beneficiarySwift]);
+      if (os.beneficiaryIban && os.beneficiaryIban !== os.beneficiaryAccount) osRows.push(['IBAN', os.beneficiaryIban]);
+      if (os.paymentReference) osRows.push(['PAYMENT REF', os.paymentReference]);
+      if (osRows.length > 0) {
+        y = drawSection(doc, INNER_X, y, INNER_W, 'OUTBOUND PAYMENT DETAILS', osRows);
+        y += 12;
+      }
+    }
+
+    // ── Digital certification stamp ───────────────────────────────────────────
+    {
+      const STAMP_R   = 38;
+      const STAMP_CX  = CARD_X + CARD_W - PAD - STAMP_R - 2;
+      const STAMP_CY  = y + STAMP_R + 4;
+      const now       = fmtDate(data.completedAt);
+
+      // Outer circle (orange border)
+      doc.save();
+      doc.circle(STAMP_CX, STAMP_CY, STAMP_R).stroke(ORANGE as any);
+      doc.circle(STAMP_CX, STAMP_CY, STAMP_R - 4).stroke(ORANGE as any);
+
+      // "VERIFIED" text
+      doc.fillColor(ORANGE as any).font('Helvetica-Bold').fontSize(8);
+      doc.text('VERIFIED', STAMP_CX - STAMP_R + 6, STAMP_CY - 10, {
+        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
+      });
+      (doc as any).y = 1;
+
+      // Date text
+      doc.font('Helvetica').fontSize(5.5).fillColor(ORANGE as any);
+      doc.text(now, STAMP_CX - STAMP_R + 6, STAMP_CY + 2, {
+        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
+      });
+      (doc as any).y = 1;
+
+      // "SOHCAHTOA" at bottom of circle
+      doc.font('Helvetica-Bold').fontSize(5).fillColor(ORANGE as any);
+      doc.text('SOHCAHTOA', STAMP_CX - STAMP_R + 6, STAMP_CY + 10, {
+        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
+      });
+      (doc as any).y = 1;
+      doc.restore();
     }
 
     // ── Footer (always pinned to card bottom) ─────────────────────────────────
