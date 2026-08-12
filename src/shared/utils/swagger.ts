@@ -12,8 +12,6 @@ export interface SwaggerConfig {
 }
 
 function buildCustomHtml(config: SwaggerConfig, swaggerSpec: any): string {
-  // Pass spec as a JSON string inside spec.content — Scalar parses it from textContent
-  // of the script tag. Embedding avoids any fetch/TLS issue.
   const specString = JSON.stringify(swaggerSpec).replace(/<\//g, '<\\/');
 
   return `<!DOCTYPE html>
@@ -27,29 +25,81 @@ function buildCustomHtml(config: SwaggerConfig, swaggerSpec: any): string {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+
+    /* ── Shared ──────────────────────────────────────── */
     :root {
       --scalar-color-accent: #DD4F05;
-      --scalar-background-accent: rgba(221,79,5,0.08);
+      --scalar-background-accent: rgba(221,79,5,0.1);
       --scalar-font: 'Inter', system-ui, sans-serif;
       --scalar-font-code: 'Menlo', 'Consolas', monospace;
     }
-    .sidebar, [class*="sidebar"] {
-      --scalar-sidebar-background-1: #0D1117;
-      --scalar-sidebar-color-1: #C9D1D9;
-      --scalar-sidebar-color-2: #6E7681;
-      --scalar-sidebar-color-active-1: #FFFFFF;
-      --scalar-sidebar-item-active-background: #161B22;
-      --scalar-sidebar-item-hover-background: rgba(255,255,255,0.04);
-      --scalar-sidebar-border-color: #21262D;
+
+    /* ── Hide Scalar branding ────────────────────────── */
+    [href*="scalar.com"],
+    a[href*="scalar.com"],
+    [class*="powered-by"],
+    [class*="poweredBy"],
+    [class*="mcp-button"],
+    [class*="mcpButton"],
+    [class*="mcp_button"],
+    [class*="generate-mcp"],
+    [class*="generateMcp"],
+    button[title*="MCP"],
+    button[aria-label*="MCP"],
+    button[aria-label*="mcp"],
+    a[title*="MCP"],
+    [class*="scalar-footer"],
+    [class*="footer"] a[href*="scalar"] {
+      display: none !important;
+    }
+
+    /* ── Light mode: white content, white sidebar, orange border ── */
+    .light-mode {
+      --scalar-color-1: #111111;
+      --scalar-color-2: #444444;
+      --scalar-color-3: #666666;
+      --scalar-background-1: #FFFFFF;
+      --scalar-background-2: #F5F5F5;
+      --scalar-background-3: #EBEBEB;
+      --scalar-border-color: #E0E0E0;
+
+      --scalar-sidebar-background-1: #FFFFFF;
+      --scalar-sidebar-color-1: #111111;
+      --scalar-sidebar-color-2: #666666;
+      --scalar-sidebar-color-active-1: #DD4F05;
+      --scalar-sidebar-item-active-background: rgba(221,79,5,0.08);
+      --scalar-sidebar-item-hover-background: rgba(221,79,5,0.05);
+      --scalar-sidebar-border-color: #DD4F05;
+      --scalar-sidebar-search-background: #F5F5F5;
+      --scalar-sidebar-search-border-color: #DD4F05;
+    }
+
+    /* ── Dark mode: black content, black sidebar, orange border ── */
+    .dark-mode {
+      --scalar-color-1: #FFFFFF;
+      --scalar-color-2: #C0C0C0;
+      --scalar-color-3: #888888;
+      --scalar-background-1: #000000;
+      --scalar-background-2: #0D0D0D;
+      --scalar-background-3: #1A1A1A;
+      --scalar-border-color: #2A2A2A;
+
+      --scalar-sidebar-background-1: #000000;
+      --scalar-sidebar-color-1: #FFFFFF;
+      --scalar-sidebar-color-2: #888888;
+      --scalar-sidebar-color-active-1: #DD4F05;
+      --scalar-sidebar-item-active-background: rgba(221,79,5,0.12);
+      --scalar-sidebar-item-hover-background: rgba(221,79,5,0.08);
+      --scalar-sidebar-border-color: #DD4F05;
+      --scalar-sidebar-search-background: #0D0D0D;
+      --scalar-sidebar-search-border-color: #DD4F05;
     }
   </style>
 </head>
 <body>
   <script>
-    // Initialise Scalar with the spec embedded as a parsed object.
-    // Runs after the Scalar script below loads.
     window.__SCALAR_CONFIG__ = {
-      theme: 'alternate',
+      theme: 'default',
       darkMode: false,
       hideDownloadButton: false,
       persistAuth: true,
@@ -59,7 +109,6 @@ function buildCustomHtml(config: SwaggerConfig, swaggerSpec: any): string {
   <\/script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"><\/script>
   <script>
-    // Use the imperative API once Scalar has loaded.
     document.addEventListener('DOMContentLoaded', function () {
       if (window.Scalar && window.Scalar.createApiReference) {
         window.Scalar.createApiReference('#scalar-root', window.__SCALAR_CONFIG__);
@@ -67,6 +116,53 @@ function buildCustomHtml(config: SwaggerConfig, swaggerSpec: any): string {
     });
   <\/script>
   <div id="scalar-root"></div>
+
+  <!-- Logo pinned to bottom of sidebar -->
+  <div style="
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 250px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 9999;
+    pointer-events: none;
+  ">
+    <img
+      src="${process.env.APP_URL ? `${process.env.APP_URL}email/logo.png` : ''}"
+      alt="SohCahToa"
+      style="height: 28px; width: auto; display: block;"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    />
+    <span style="
+      display: none;
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #DD4F05;
+      letter-spacing: -0.3px;
+    ">SohCahToa</span>
+  </div>
+
+  <script>
+    (function() {
+      function hideScalarBranding() {
+        var patterns = [/^powered by scalar$/i, /^generate mcp$/i];
+        document.querySelectorAll('a, button, li').forEach(function(el) {
+          var text = (el.textContent || '').trim();
+          if (patterns.some(function(r) { return r.test(text); })) {
+            var target = (el.tagName === 'LI' ? el : el.closest('li')) || el;
+            (target as HTMLElement).style.setProperty('display', 'none', 'important');
+          }
+        });
+      }
+      var observer = new MutationObserver(hideScalarBranding);
+      observer.observe(document.body, { childList: true, subtree: true });
+      [500, 1500, 3000].forEach(function(t) { setTimeout(hideScalarBranding, t); });
+    })();
+  <\/script>
 </body>
 </html>`;
 }
