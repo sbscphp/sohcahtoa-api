@@ -56,7 +56,7 @@ export const createApp = async (): Promise<Application> => {
           scriptSrcAttr: ["'unsafe-inline'"],
           fontSrc: ["'self'", "https://fonts.gstatic.com", "https://fonts.scalar.com", "https://cdn.jsdelivr.net"],
           imgSrc: ["'self'", "data:", "https://validator.swagger.io", "https:"],
-          connectSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net", "https://api.scalar.com"],
+          connectSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net", "https://api.scalar.com", "https://sohcahtoa-dev.clocksurewise.com", "http://localhost:3000", "http://localhost:*"],
           workerSrc: ["'self'", "blob:"],
         },
       },

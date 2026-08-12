@@ -219,8 +219,8 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
         contact: { name: 'SohCahToa API Support', email: 'support@sohcahtoa.com' },
       },
       servers: [
-        { url: `https://sohcahtoa-dev.clocksurewise.com${config.apiBasePath || ''}`, description: 'Production' },
         { url: `http://localhost:${config.port}${config.apiBasePath || ''}`, description: 'Local development' },
+        { url: `https://sohcahtoa-dev.clocksurewise.com${config.apiBasePath || ''}`, description: 'Production' },
         { url: `http://${config.serviceName}:${config.port}${config.apiBasePath || ''}`, description: 'Docker network' },
       ],
       components: {
