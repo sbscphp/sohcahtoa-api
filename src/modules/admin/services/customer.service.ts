@@ -458,6 +458,13 @@ export class CustomerService {
       },
     });
 
+    eventBus.publish(EventTypes.AML_FLAG_RAISED, {
+      userId,
+      severity: payload.severity || 'HIGH',
+      reason: payload.description || payload.title || payload.type,
+      flaggedBy: adminId,
+    });
+
     return flag;
   }
 

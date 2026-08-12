@@ -23,6 +23,7 @@ export enum ApprovalType {
   TRANSACTION = "TRANSACTION",
   REFUND = "REFUND",
   RATE = "RATE",
+  DISBURSEMENT = "DISBURSEMENT",
 }
 
 export interface CreateWorkflowDto {

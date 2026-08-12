@@ -117,6 +117,7 @@ export const EventTypes = {
   AML_CHECK_STARTED: 'compliance.aml.started',
   AML_CHECK_COMPLETED: 'compliance.aml.completed',
   AML_FLAG_RAISED: 'compliance.aml.flag.raised',
+  COMPLIANCE_REVIEW_REQUIRED: 'compliance.review.required',
   COMPLIANCE_REVIEW_ASSIGNED: 'compliance.review.assigned',
   COMPLIANCE_REVIEW_COMPLETED: 'compliance.review.completed',
 
@@ -136,6 +137,13 @@ export const EventTypes = {
   ADMIN_ACTION_PERFORMED: 'admin.action.performed',
   USER_SUSPENDED: 'admin.user.suspended',
   USER_ACTIVATED: 'admin.user.activated',
+
+  // Management Creation events
+  USER_CREATED: 'management.user.created',
+  BRANCH_CREATED: 'management.branch.created',
+  AGENT_CREATED: 'management.agent.created',
+  ROLE_CREATED: 'management.role.created',
+  DEPARTMENT_CREATED: 'management.department.created',
 
   // Audit events
   AUDIT_LOG_CREATED: 'audit.log.created',

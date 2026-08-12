@@ -313,11 +313,34 @@ class AgentTransactionService {
 
     if (status) where.status = status.toUpperCase();
 
-    if (filters.type) {
-      where.type = filters.type.toUpperCase();
-    } else if (filters.group) {
-      const groupTypes = AgentTransactionService.TRANSACTION_GROUPS[filters.group.toUpperCase()];
-      if (groupTypes) where.type = { in: groupTypes };
+    const rawType = (filters.type || (filters as any).fxType || (filters as any).category || filters.group || '').trim();
+    if (rawType) {
+      const norm = rawType.toLowerCase().replace(/[-_ ]/g, '');
+      if (norm === 'buyfx' || norm === 'buy') {
+        where.OR = [
+          { type: { in: ['PTA', 'BTA', 'SCHOOL_FEES', 'MEDICAL', 'PROFESSIONAL_BODY'] } },
+          { AND: [{ type: 'TOURIST_FX' }, { transactionMode: 'BUY' }] },
+          { transactionMode: 'BUY' },
+        ];
+      } else if (norm === 'sellfx' || norm === 'sell') {
+        where.OR = [
+          { type: { in: ['RESIDENT_FX', 'EXPATRIATE_FX'] } },
+          { AND: [{ type: 'TOURIST_FX' }, { transactionMode: 'SELL' }] },
+          { transactionMode: 'SELL' },
+        ];
+      } else if (norm === 'receivefx' || norm === 'receive' || norm === 'remittance') {
+        where.OR = [
+          { type: { in: ['IMTO_REMITTANCE', 'CASH_REMITTANCE'] } },
+          { disbursementMethod: 'IMTO' },
+        ];
+      } else {
+        const groupTypes = AgentTransactionService.TRANSACTION_GROUPS[rawType.toUpperCase()];
+        if (groupTypes) {
+          where.type = { in: groupTypes };
+        } else {
+          where.type = rawType.toUpperCase();
+        }
+      }
     }
 
     if (stage)          where.currentStep = stage.toUpperCase();

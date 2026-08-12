@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
-import { createLogger, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
+import { createLogger, emailService, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
 import { ServiceName, TransactionStatus, TransactionType } from "../../../shared/types";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 import {
   CreateFranchiseDto,
   FranchiseQueryDto,
@@ -1007,6 +1008,46 @@ class OutletService {
         agentPhoneNumber,
       });
     }
+
+    try {
+      const recipients = new Set<string>();
+      if (created.email) recipients.add(created.email.trim());
+      if (created.branchEmail) recipients.add(created.branchEmail.trim());
+
+      if (emailService.isReady()) {
+        for (const recipientEmail of recipients) {
+          emailService
+            .sendBranchCreatedEmail(recipientEmail, {
+              branchName: created.name,
+              branchManager: created.branchManager,
+              state: created.state,
+              address: created.address,
+              phoneNumber: created.phoneNumber,
+              branchEmail: created.branchEmail,
+            })
+            .catch((err) =>
+              logger.warn("Branch creation email failed", {
+                branchId: created.id,
+                recipient: recipientEmail,
+                message: err.message,
+              })
+            );
+        }
+      }
+    } catch (_e) {
+      logger.warn("Failed to trigger branch creation emails", {
+        branchId: created.id,
+      });
+    }
+
+    eventBus.publish(EventTypes.BRANCH_CREATED, {
+      branchId: created.id,
+      branchName: created.name,
+      state: created.state,
+      branchEmail: created.branchEmail,
+      managerEmail: created.email,
+    });
+
     return created;
   }
 

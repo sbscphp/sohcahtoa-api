@@ -6,6 +6,7 @@ import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
 import { generateId, DuplicateError, NotFoundError, BadRequestError, paginate, hashPassword, generateSecureOtp } from '../../../shared/utils';
 import { emailService } from '../../../shared/utils';
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 
 const logger = createLogger(ServiceName.ADMIN);
@@ -132,6 +133,14 @@ class UserManagementService {
         const { password: _password, role: _role, department: _department, ...userWithoutPassword } = result as any;
         const roleName = (result as any).role?.name || null;
         const departmentName = (result as any).department?.name || null;
+
+        eventBus.publish(EventTypes.USER_CREATED, {
+            userId: result.id,
+            name: result.fullName,
+            email: result.email,
+            role: roleName,
+            department: departmentName,
+        });
         return {
             user: {
                 ...userWithoutPassword,
@@ -785,6 +794,12 @@ class UserManagementService {
                 return created;
             });
 
+            eventBus.publish(EventTypes.ROLE_CREATED, {
+                roleId: role.id,
+                name: role.name,
+                createdById: adminId,
+            });
+
             return role;
         } catch (error) {
             logger.error("Failed to create role", { error });
@@ -1266,7 +1281,7 @@ class UserManagementService {
             const adminUser = await this.prisma.adminUser.findUnique({ where: { id: adminId } });
             const createdBy = adminUser?.fullName || "System";
 
-            return await this.prisma.department.create({
+            const created = await this.prisma.department.create({
                 data: {
                     name: data.name,
                     departmentEmail,
@@ -1277,6 +1292,16 @@ class UserManagementService {
                     createdById: adminId,
                 },
             });
+
+            eventBus.publish(EventTypes.DEPARTMENT_CREATED, {
+                departmentId: created.id,
+                name: created.name,
+                departmentEmail: created.departmentEmail,
+                branch: created.branch,
+                createdById: adminId,
+            });
+
+            return created;
         } catch (error) {
             logger.error("Failed to create department", { error });
             throw error;

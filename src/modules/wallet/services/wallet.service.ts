@@ -182,6 +182,10 @@ export class WalletService {
       return null;
     }
 
+    if (creditEntry.disbursementStatus === 'COMPLETED') {
+      throw new Error('Refund action is not allowed for transactions that have already been disbursed');
+    }
+
     const wallet = creditEntry.wallet;
     const refundAmount = Number(creditEntry.amount);
     const balanceBefore = Number(wallet.balance);

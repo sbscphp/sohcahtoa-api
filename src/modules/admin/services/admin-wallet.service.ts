@@ -1,6 +1,7 @@
 import { getDatabase } from "../../../config/database";
 import { createLogger } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 import { workflowService } from "./workflow.service";
 import walletService from "../../wallet/services/wallet.service";
 
@@ -765,6 +766,15 @@ export class AdminWalletService {
 
     logger.info("Wallet entry flagged", { walletId, entryId, adminId, reason });
 
+    eventBus.publish(EventTypes.AML_FLAG_RAISED, {
+      userId: entry.wallet?.userId || '',
+      transactionId: entry.transactionId || entryId,
+      transaction: { id: entry.transactionId || entryId, referenceNumber: entry.transactionId || entryId },
+      severity: 'HIGH',
+      reason,
+      flaggedBy: adminId,
+    });
+
     return {
       id: updated.id,
       isFlagged: true,
@@ -784,6 +794,17 @@ export class AdminWalletService {
 
     if (!entry) {
       return null;
+    }
+
+    if (entry.disbursementStatus === "COMPLETED") {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
+
+    if (entry.transactionId) {
+      const tx = await prisma.transaction.findUnique({ where: { id: entry.transactionId } });
+      if (tx && (tx.status === "COMPLETED" || tx.status === "DISBURSEMENT_IN_PROGRESS" || (tx as any).disbursementApprovalStatus === "APPROVED" || (tx as any).disbursementApprovalStatus === "COMPLETED")) {
+        throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+      }
     }
 
     if (entry.refundStatus === "COMPLETED") {
@@ -828,6 +849,9 @@ export class AdminWalletService {
       where: { id: entryId, walletId },
     });
     if (!entry) throw new Error("Entry not found");
+    if (entry.disbursementStatus === "COMPLETED") {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
     if (entry.refundStatus === "COMPLETED") throw new Error("Entry has already been refunded");
 
     const wallet = await (prisma as any).customerWallet.findUnique({
@@ -895,6 +919,9 @@ export class AdminWalletService {
     });
 
     if (!entry) throw new Error("Entry not found");
+    if ((entry as any).disbursementStatus === "COMPLETED") {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
     if (entry.refundStatus === "COMPLETED") throw new Error("Refund is already completed");
 
     if (entry.workflowTemplateId && entry.currentWorkflowStageId) {

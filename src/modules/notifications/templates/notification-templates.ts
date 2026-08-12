@@ -385,6 +385,42 @@ export const NotificationTemplates = {
     channel: NotificationChannel.PUSH,
     priority: NotificationPriority.LOW,
   }),
+
+  // Management & Entity Creation Notifications
+  USER_CREATED: (data: { name: string; email: string; role?: string }): NotificationTemplate => ({
+    title: 'New User Account Created',
+    body: `User account for ${data.name} (${data.email}) ${data.role ? `with role ${data.role} ` : ''}has been created successfully.`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.NORMAL,
+  }),
+
+  BRANCH_CREATED: (data: { branchName: string; state: string }): NotificationTemplate => ({
+    title: 'New Branch Created',
+    body: `Branch "${data.branchName}" (${data.state}) has been created successfully.`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.NORMAL,
+  }),
+
+  AGENT_CREATED: (data: { name: string; email: string }): NotificationTemplate => ({
+    title: 'New Agent Account Created',
+    body: `Agent account for ${data.name} (${data.email}) has been created successfully.`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.NORMAL,
+  }),
+
+  ROLE_CREATED: (data: { name: string }): NotificationTemplate => ({
+    title: 'New Role Created',
+    body: `Role "${data.name}" has been created successfully.`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.NORMAL,
+  }),
+
+  DEPARTMENT_CREATED: (data: { name: string }): NotificationTemplate => ({
+    title: 'New Department Created',
+    body: `Department "${data.name}" has been created successfully.`,
+    channel: NotificationChannel.ALL,
+    priority: NotificationPriority.NORMAL,
+  }),
 };
 
 export default NotificationTemplates;

@@ -844,6 +844,123 @@ TransactionRouter.post(
 
 /**
  * @swagger
+ * /api/admin/transactions/{id}/initiate-disbursement:
+ *   post:
+ *     summary: Initiate transaction disbursement approval workflow
+ *     description: >
+ *       Triggers the dedicated disbursement approval workflow for a transaction.
+ *       Attaches a DISBURSEMENT workflow template if configured and notifies assigned officers.
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Transaction ID
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Disbursement approval workflow initiated successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/initiate-disbursement",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.initiateDisbursement
+);
+
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/approve-disbursement:
+ *   post:
+ *     summary: Approve transaction disbursement stage
+ *     description: Allows an assigned officer to approve the current stage of a disbursement approval workflow.
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Disbursement stage approved successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/approve-disbursement",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.approveDisbursement
+);
+
+/**
+ * @swagger
+ * /api/admin/transactions/{id}/reject-disbursement:
+ *   post:
+ *     summary: Reject transaction disbursement workflow
+ *     description: Allows an assigned officer to reject a disbursement approval workflow.
+ *     tags: [admin-transactions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Disbursement workflow rejected successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequestError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+TransactionRouter.post(
+  "/:id/reject-disbursement",
+  authenticate,
+  requirePermission({ module: "TRANSACTIONS", feature: "MODULE", action: "edit" }),
+  adminTransactionsController.rejectDisbursement
+);
+
+/**
+ * @swagger
  * /api/admin/transactions/{id}/confirm-disbursement:
  *   post:
  *     summary: Confirm disbursement for a transaction

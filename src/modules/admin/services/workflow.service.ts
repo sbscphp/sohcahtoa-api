@@ -36,8 +36,8 @@ export class WorkflowService {
       agentsPending,
       agentsCompleted,
     ] = await Promise.all([
-      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED", "VERIFICATION_COMPLETED"] } } }),
-      client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }, { status: "VERIFICATION_COMPLETED" }] } }),
+      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED"] } } }),
+      client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }] } }),
       client.transaction.count({ where: { status: "REJECTED" } }),
 
       client.franchise.count({ where: { status: { notIn: ["APPROVED", "ACTIVE", "REJECTED"] } } }),
@@ -73,12 +73,12 @@ export class WorkflowService {
 
     if (status !== "ALL") {
       if (status === "PENDING") {
-        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED", "VERIFICATION_COMPLETED"] };
+        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED"] };
         frWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         brWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         agWhere.isApproved = false;
       } else if (status === "COMPLETED") {
-        txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }, { status: "VERIFICATION_COMPLETED" }];
+        txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }];
         frWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         brWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         agWhere.isApproved = true;
@@ -136,7 +136,6 @@ export class WorkflowService {
           displayStatus = "Pending";
           actionNeeded = "Approve";
         } else if (
-          t.status === "VERIFICATION_COMPLETED" ||
           t.status === "APPROVED" ||
           t.status === "COMPLETED"
         ) {
@@ -209,8 +208,52 @@ export class WorkflowService {
     return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
+  private async deactivateExistingActiveTemplates(client: any, params: {
+    name?: string;
+    approvalType?: string;
+    branchId?: string | null;
+    departmentId?: string | null;
+    excludeId?: string;
+  }) {
+    const where: any = {
+      status: "ACTIVE",
+      ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
+      OR: [
+        { name: { equals: (params.name || "").trim(), mode: "insensitive" } },
+        {
+          approvalType: (params.approvalType || "TRANSACTION") as any,
+          branchId: params.branchId || null,
+          departmentId: params.departmentId || null,
+        },
+      ],
+    };
+
+    await client.workflowTemplate.updateMany({
+      where,
+      data: { status: "ARCHIVED" },
+    });
+  }
+
   async createTemplate(payload: CreateWorkflowDto, adminId: string) {
     const client: any = prisma as any;
+
+    const existingActive = await client.workflowTemplate.findFirst({
+      where: {
+        name: { equals: (payload.name || "").trim(), mode: "insensitive" },
+        status: "ACTIVE",
+      },
+    });
+    if (existingActive) {
+      throw new Error(`An active workflow template with the name "${payload.name}" already exists.`);
+    }
+
+    await this.deactivateExistingActiveTemplates(client, {
+      name: payload.name,
+      approvalType: payload.approvalType,
+      branchId: payload.branchId,
+      departmentId: payload.departmentId,
+    });
+
     const template = await client.workflowTemplate.create({
       data: {
         name: payload.name,
@@ -256,7 +299,16 @@ export class WorkflowService {
         }
       }
     }
-    return { id: template.id, message: "Workflow created" };
+    const redirectUrl = `/admin/workflow/templates/${template.id}/config`;
+    return {
+      id: template.id,
+      templateId: template.id,
+      name: template.name,
+      status: template.status,
+      redirectUrl,
+      configUrl: redirectUrl,
+      message: "Workflow created successfully",
+    };
   }
 
   async saveDraft(payload: CreateWorkflowDto, adminId: string) {
@@ -306,7 +358,16 @@ export class WorkflowService {
         }
       }
     }
-    return { id: template.id, message: "Draft saved" };
+    const redirectUrl = `/admin/workflow/templates/${template.id}/config`;
+    return {
+      id: template.id,
+      templateId: template.id,
+      name: template.name,
+      status: template.status,
+      redirectUrl,
+      configUrl: redirectUrl,
+      message: "Draft saved successfully",
+    };
   }
 
   async listTemplates(status: string | undefined, page = 1, limit = 20) {
@@ -497,6 +558,16 @@ export class WorkflowService {
 
   async publishTemplate(id: string) {
     const client: any = prisma as any;
+    const target = await client.workflowTemplate.findUnique({ where: { id } });
+    if (target) {
+      await this.deactivateExistingActiveTemplates(client, {
+        name: target.name,
+        approvalType: target.approvalType,
+        branchId: target.branchId,
+        departmentId: target.departmentId,
+        excludeId: id,
+      });
+    }
     await client.workflowTemplate.update({
       where: { id },
       data: { status: "ACTIVE" },
@@ -543,7 +614,7 @@ export class WorkflowService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: "desc" },
-        select: { id: true, name: true, type: true, status: true, createdAt: true, approvalType: true },
+        select: { id: true, name: true, type: true, processType: true, status: true, createdAt: true, approvalType: true },
       }),
       client.workflowTemplate.count({ where }),
     ]);
@@ -559,7 +630,8 @@ export class WorkflowService {
       stageCount[s.templateId] = (stageCount[s.templateId] || 0) + 1;
     });
     const data = templates.map((t: any) => {
-      const workflowType = t.processType === "FLEXIBLE" ? "Flexible Workflow" : "Rigid Linear";
+      const isFlexible = t.processType === "FLEXIBLE" || (t.type || "").toUpperCase() === "FLEXIBLE";
+      const workflowType = isFlexible ? "Flexible Workflow" : "Rigid Linear";
       const statusLabel =
         t.status === "ACTIVE" ? "Active" : t.status === "ARCHIVED" ? "Deactivated" : "Draft";
       return {
@@ -579,6 +651,18 @@ export class WorkflowService {
   async setTemplateStatus(id: string, action: "ACTIVATE" | "DEACTIVATE") {
     const client: any = prisma as any;
     const status = action === "ACTIVATE" ? "ACTIVE" : "ARCHIVED";
+    if (action === "ACTIVATE") {
+      const target = await client.workflowTemplate.findUnique({ where: { id } });
+      if (target) {
+        await this.deactivateExistingActiveTemplates(client, {
+          name: target.name,
+          approvalType: target.approvalType,
+          branchId: target.branchId,
+          departmentId: target.departmentId,
+          excludeId: id,
+        });
+      }
+    }
     await client.workflowTemplate.update({ where: { id }, data: { status } });
     return { id, status };
   }
@@ -757,6 +841,10 @@ export class WorkflowService {
 
     if (!tx) return null;
 
+    if (tx.status === "COMPLETED" || tx.status === "DISBURSEMENT_IN_PROGRESS" || (tx as any).disbursementApprovalStatus === "APPROVED" || (tx as any).disbursementApprovalStatus === "COMPLETED") {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
+
     const template = await this.findApplicableWorkflow({
       branchId: tx.createdByAgent?.branchId || undefined,
       approvalType: "REFUND",
@@ -781,6 +869,47 @@ export class WorkflowService {
   }
 
   /**
+   * Attaches an applicable DISBURSEMENT workflow template to a transaction.
+   */
+  async attachDisbursementWorkflowToTransaction(transactionId: string) {
+    const client: any = prisma as any;
+
+    const tx = await client.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      }
+    });
+
+    if (!tx) return null;
+
+    const template = await this.findApplicableWorkflow({
+      branchId: tx.createdByAgent?.branchId || undefined,
+      approvalType: "DISBURSEMENT",
+      amount: Number(tx.nairaEquivalent || tx.foreignAmount || 0),
+    });
+
+    if (!template || !template.stages || template.stages.length === 0) {
+      return null;
+    }
+
+    const firstStage = template.stages[0];
+
+    await client.transaction.update({
+      where: { id: transactionId },
+      data: {
+        disbursementWorkflowTemplateId: template.id,
+        disbursementWorkflowStageId: firstStage.id,
+        disbursementApprovalStatus: "PENDING_APPROVAL",
+      }
+    });
+
+    return template;
+  }
+
+  /**
    * Attaches an applicable workflow template to a wallet entry refund if not already attached.
    */
   async attachWorkflowToRefund(entryId: string) {
@@ -791,6 +920,10 @@ export class WorkflowService {
     });
     
     if (!entry || entry.workflowTemplateId) return null; // Already attached or not found
+
+    if (entry.disbursementStatus === "COMPLETED") {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
 
     const template = await this.findApplicableWorkflow({
       approvalType: "REFUND",

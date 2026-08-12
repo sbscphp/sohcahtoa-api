@@ -38,18 +38,31 @@ function appendOrFilter(where: any, orClauses: any[]) {
   where.OR = orClauses;
 }
 
+const RECEIVE_GROUP_TYPES = ["IMTO_REMITTANCE", "CASH_REMITTANCE"];
+
 function applyBuySellFxFilter(where: any, rawType: string) {
-  if (rawType === "buyfx" || rawType === "sellfx") {
-    const mode = rawType === "buyfx" ? TransactionMode.BUY : TransactionMode.SELL;
-    const group = rawType === "buyfx" ? BUY_GROUP_TYPES : SELL_GROUP_TYPES;
+  const norm = (rawType || "").toLowerCase().replace(/[-_ ]/g, "");
+  if (norm === "buyfx" || norm === "buy") {
     appendOrFilter(where, [
-      { AND: [{ type: "TOURIST_FX" }, { transactionMode: mode as any }] },
-      { type: { in: group as any } },
+      { AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.BUY as any }] },
+      { type: { in: BUY_GROUP_TYPES as any } },
+      { transactionMode: TransactionMode.BUY as any },
     ]);
     return true;
   }
-  if (rawType === "receivefx") {
-    where.disbursementMethod = DisbursementMethod.IMTO;
+  if (norm === "sellfx" || norm === "sell") {
+    appendOrFilter(where, [
+      { AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.SELL as any }] },
+      { type: { in: SELL_GROUP_TYPES as any } },
+      { transactionMode: TransactionMode.SELL as any },
+    ]);
+    return true;
+  }
+  if (norm === "receivefx" || norm === "receive" || norm === "remittance") {
+    appendOrFilter(where, [
+      { type: { in: RECEIVE_GROUP_TYPES as any } },
+      { disbursementMethod: DisbursementMethod.IMTO as any },
+    ]);
     return true;
   }
   return false;
@@ -140,31 +153,38 @@ export class AdminTransactionsService {
     if (stepValues.length === 1) where.currentStep = stepValues[0];
     else if (stepValues.length > 1) where.currentStep = { in: stepValues as any };
 
-    const typeValues = parseFilterValues(normalizedFilters.type);
+    const typeValues = parseFilterValues(normalizedFilters.type || normalizedFilters.fxType || normalizedFilters.category || normalizedFilters.group);
     if (typeValues.length === 1) {
-      const rawType = typeValues[0].toLowerCase();
+      const rawType = typeValues[0];
       if (!applyBuySellFxFilter(where, rawType) && rawType) {
         where.type = typeValues[0].toUpperCase();
       }
     } else if (typeValues.length > 1) {
       const typeClauses: any[] = [];
-      const normalTypes = typeValues
-        .filter((type) => !["buyfx", "sellfx", "receivefx"].includes(type.toLowerCase()))
-        .map((type) => type.toUpperCase());
+      const normalTypes: string[] = [];
+
+      for (const val of typeValues) {
+        const norm = val.toLowerCase().replace(/[-_ ]/g, "");
+        if (norm === "buyfx" || norm === "buy") {
+          typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.BUY as any }] });
+          typeClauses.push({ type: { in: BUY_GROUP_TYPES as any } });
+          typeClauses.push({ transactionMode: TransactionMode.BUY as any });
+        } else if (norm === "sellfx" || norm === "sell") {
+          typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.SELL as any }] });
+          typeClauses.push({ type: { in: SELL_GROUP_TYPES as any } });
+          typeClauses.push({ transactionMode: TransactionMode.SELL as any });
+        } else if (norm === "receivefx" || norm === "receive" || norm === "remittance") {
+          typeClauses.push({ type: { in: RECEIVE_GROUP_TYPES as any } });
+          typeClauses.push({ disbursementMethod: DisbursementMethod.IMTO as any });
+        } else {
+          normalTypes.push(val.toUpperCase());
+        }
+      }
+
       if (normalTypes.length) {
         typeClauses.push({ type: { in: normalTypes as any } });
       }
-      if (typeValues.some((type) => type.toLowerCase() === "buyfx")) {
-        typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.BUY as any }] });
-        typeClauses.push({ type: { in: BUY_GROUP_TYPES as any } });
-      }
-      if (typeValues.some((type) => type.toLowerCase() === "sellfx")) {
-        typeClauses.push({ AND: [{ type: "TOURIST_FX" }, { transactionMode: TransactionMode.SELL as any }] });
-        typeClauses.push({ type: { in: SELL_GROUP_TYPES as any } });
-      }
-      if (typeValues.some((type) => type.toLowerCase() === "receivefx")) {
-        typeClauses.push({ disbursementMethod: DisbursementMethod.IMTO });
-      }
+
       if (typeClauses.length) {
         appendOrFilter(where, typeClauses);
       }
@@ -242,6 +262,12 @@ export class AdminTransactionsService {
       const u: any = userMap.get(t.userId);
       const name = u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
+      let workflowStage = t.status;
+      if (t.status === "AWAITING_REFUND_VERIFICATION") {
+        workflowStage = "PENDING_REFUND_APPROVAL";
+      } else if (t.status === "REFUNDED") {
+        workflowStage = "REFUNDED";
+      }
       return {
         id: t.id,
         customerName: name,
@@ -249,7 +275,7 @@ export class AdminTransactionsService {
         transactionType: t.type,
         transactionMode: t.transactionMode,
         transactionStage: t.currentStep,
-        workflowStage: t.status,
+        workflowStage,
         transactionValue: value,
         currency: t.currency,
         status: t.status,
@@ -349,13 +375,23 @@ export class AdminTransactionsService {
     const pickup = (trx as any).cashPickup || null;
     const valueFx = Number(trx.foreignAmount || 0);
     const valueNgn = Number(trx.nairaEquivalent || 0);
-    const statusLabel = trx.status;
+    let statusLabel = trx.status as string;
+    if (trx.status === (TransactionStatus as any).AWAITING_REFUND_VERIFICATION) {
+      statusLabel = "PENDING_REFUND_APPROVAL";
+    } else if (trx.status === (TransactionStatus as any).REFUNDED) {
+      statusLabel = "REFUNDED";
+    }
+
     const stageLabel = trx.currentStep;
     const requestStatus =
       trx.status === TransactionStatus.VERIFICATION_IN_PROGRESS || trx.status === TransactionStatus.ADMIN_APPROVAL_PENDING
         ? "Under Review"
         : trx.status === TransactionStatus.REJECTED
         ? "Rejected"
+        : trx.status === (TransactionStatus as any).AWAITING_REFUND_VERIFICATION
+        ? "Pending Refund Approval"
+        : trx.status === (TransactionStatus as any).REFUNDED
+        ? "Completed"
         : trx.status === TransactionStatus.APPROVED || trx.status === TransactionStatus.AWAITING_DEPOSIT || trx.status === TransactionStatus.AWAITING_DISBURSEMENT
         ? "Approved"
         : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
@@ -442,6 +478,7 @@ export class AdminTransactionsService {
     let approvalState: string | null = null;
     let currentOrder: number | null = null;
     let pendingAssignees: any[] = [];
+    let workflowStages: any[] = [];
 
     // Find workflow template
     let workflow = null;
@@ -465,12 +502,9 @@ export class AdminTransactionsService {
       });
     }
 
-    // Statuses that indicate the workflow has already been completed (approved or beyond)
+    // Statuses that indicate the entire transaction workflow has completed
     const workflowCompletedStatuses = [
-      "APPROVED", "REJECTED", "CANCELLED",
-      "DEPOSIT_CONFIRMED", "AWAITING_DEPOSIT", "DEPOSIT_PENDING",
-      "DISBURSEMENT_IN_PROGRESS", "COMPLETED", "AWAITING_DISBURSEMENT",
-      "PENDING_RECORD_VALIDATION",
+      "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "REFUNDED",
     ];
     const isWorkflowCompleted = workflowCompletedStatuses.includes(trx.status);
 
@@ -515,45 +549,137 @@ export class AdminTransactionsService {
         );
       }
 
+      const rawStages = workflow.stages || [];
+      const sortedStages = [...rawStages].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
       if (trx.currentWorkflowStageId) {
-        activeStage = workflow.stages.find((s: any) => s.id === trx.currentWorkflowStageId);
+        activeStage = sortedStages.find((s: any) => s.id === trx.currentWorkflowStageId);
       } 
       
       // Fallback to first stage if not officially started but still pending
-      // Do NOT fall back if the workflow has already been completed (post-approval statuses)
-      if (!activeStage && workflow.stages.length > 0 && !isWorkflowCompleted) {
-        activeStage = workflow.stages[0];
+      if (!activeStage && sortedStages.length > 0 && !isWorkflowCompleted) {
+        activeStage = sortedStages[0];
       }
 
+      const totalStages = sortedStages.length;
+
       if (activeStage) {
-        const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === activeStage.id);
+        const currentStageIndex = sortedStages.findIndex((s: any) => s.id === activeStage.id);
         if (currentStageIndex !== -1) {
-          const totalStages = workflow.stages.length;
-          approvalState = `Stage ${currentStageIndex + 1} of ${totalStages} (${activeStage.name})`;
+          approvalState = `Step ${currentStageIndex + 1} of ${totalStages} (${activeStage.name})`;
           currentOrder = currentStageIndex + 1;
 
-          pendingAssignees = activeStage.assignees.map((a: any) => ({
+          pendingAssignees = (activeStage.assignees || []).map((a: any) => ({
             adminId: a.adminId,
             adminName: a.admin?.fullName || "Unknown Admin",
             roleName: a.admin?.role?.name || "No Role",
           }));
         }
       } else if (isWorkflowCompleted) {
-        approvalState = trx.status === "REJECTED" ? "Rejected (Workflow Completed)" : "Approved (Workflow Completed)";
+        if ((trx.status as string) === TransactionStatus.REFUNDED) {
+          approvalState = "Refunded (Workflow Completed)";
+        } else if ((trx.status as string) === TransactionStatus.REJECTED) {
+          approvalState = "Rejected (Workflow Completed)";
+        } else {
+          approvalState = "Approved (Workflow Completed)";
+        }
+      }
+
+      workflowStages = sortedStages.map((s: any, idx: number) => ({
+        stageId: s.id,
+        name: s.name,
+        order: idx + 1,
+        isCurrent: activeStage ? s.id === activeStage.id : false,
+        assignees: (s.assignees || []).map((a: any) => ({
+          adminId: a.adminId,
+          adminName: a.admin?.fullName || "Unknown Admin",
+          roleName: a.admin?.role?.name || "No Role",
+        })),
+      }));
+    }
+
+    // Process disbursement workflow if attached
+    let dbWorkflow = null;
+    let isDisbursementOfficer = false;
+    let dbApprovalState: string | null = null;
+    let dbCurrentOrder: number | null = null;
+    let dbPendingAssignees: any[] = [];
+
+    if ((trx as any).disbursementWorkflowTemplateId) {
+      dbWorkflow = await prisma.workflowTemplate.findUnique({
+        where: { id: (trx as any).disbursementWorkflowTemplateId },
+        include: {
+          stages: {
+            orderBy: { order: "asc" },
+            include: {
+              assignees: {
+                include: {
+                  admin: {
+                    select: { id: true, fullName: true, role: { select: { name: true } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    if (dbWorkflow) {
+      if (adminId) {
+        isDisbursementOfficer = dbWorkflow.stages.some((s: any) =>
+          s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+        );
+      }
+
+      let activeDbStage: any = null;
+      if ((trx as any).disbursementWorkflowStageId) {
+        activeDbStage = dbWorkflow.stages.find((s: any) => s.id === (trx as any).disbursementWorkflowStageId);
+      }
+      if (!activeDbStage && dbWorkflow.stages.length > 0 && (trx as any).disbursementApprovalStatus === "PENDING_APPROVAL") {
+        activeDbStage = dbWorkflow.stages[0];
+      }
+
+      if (activeDbStage) {
+        const stageIdx = dbWorkflow.stages.findIndex((s: any) => s.id === activeDbStage.id);
+        if (stageIdx !== -1) {
+          const totalStages = dbWorkflow.stages.length;
+          dbApprovalState = `Stage ${stageIdx + 1} of ${totalStages} (${activeDbStage.name})`;
+          dbCurrentOrder = stageIdx + 1;
+          dbPendingAssignees = activeDbStage.assignees.map((a: any) => ({
+            adminId: a.adminId,
+            adminName: a.admin?.fullName || "Unknown Admin",
+            roleName: a.admin?.role?.name || "No Role",
+          }));
+        }
+      } else if ((trx as any).disbursementApprovalStatus === "APPROVED") {
+        dbApprovalState = "Approved (Disbursement Workflow Completed)";
+      } else if ((trx as any).disbursementApprovalStatus === "REJECTED") {
+        dbApprovalState = "Rejected (Disbursement Workflow Completed)";
       }
     }
 
-    const workflowStages = workflow?.stages.map((s: any) => ({
+    const dbWorkflowStages = dbWorkflow?.stages.map((s: any) => ({
       stageId: s.id,
       name: s.name,
       order: s.order,
-      isCurrent: activeStage ? s.id === activeStage.id : false,
+      isCurrent: (trx as any).disbursementWorkflowStageId ? s.id === (trx as any).disbursementWorkflowStageId : false,
       assignees: s.assignees.map((a: any) => ({
         adminId: a.adminId,
         adminName: a.admin?.fullName || "Unknown Admin",
         roleName: a.admin?.role?.name || "No Role",
       })),
     })) || [];
+
+    const disbursementApprovalProcess = {
+      name: dbWorkflow?.name || null,
+      status: (trx as any).disbursementApprovalStatus || null,
+      isApprovalOfficer: isDisbursementOfficer,
+      approvalState: dbApprovalState,
+      currentOrder: dbCurrentOrder,
+      pendingAssignees: dbPendingAssignees,
+      workflowStages: dbWorkflowStages,
+    };
 
     const paymentDetails = {
       transactionId: trx.id,
@@ -564,15 +690,64 @@ export class AdminTransactionsService {
       bankName: settlement?.bankDetails?.bankName || "—",
     };
 
+    const isSettled =
+      trx.status === TransactionStatus.COMPLETED ||
+      trx.status === TransactionStatus.APPROVED ||
+      (settlement?.status as string) === "COMPLETED" ||
+      (settlement?.status as string) === "SUCCESS" ||
+      !!settlement?.confirmedAt ||
+      !!settlement?.depositedAt;
+
+    const foreignAmt = Number(trx.foreignAmount || 0);
+    const curr = (trx.currency || "USD").toUpperCase();
+    const opt = ((trx as any).disbursementOption || "").toString().toUpperCase();
+    const mthd = ((trx as any).disbursementMethod || "").toString().toUpperCase();
+
+    let cashStructure = "—";
+    let cardStructure = "—";
+    let paidIntoStructure = "—";
+
+    if (opt === "CARD_AND_CASH" || opt === "CASH_AND_CARD") {
+      const cashPortion = Math.min(foreignAmt * 0.25, 500);
+      const cardPortion = foreignAmt - cashPortion;
+      cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+      cardStructure = `75% Prepaid Card (${curr} ${cardPortion.toLocaleString()})`;
+      paidIntoStructure = "75% Prepaid Card / 25% Cash Pickup";
+    } else if (opt === "CASH_AND_TRANSFER") {
+      const cashPortion = foreignAmt * 0.25;
+      const transferPortion = foreignAmt * 0.75;
+      cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+      cardStructure = "—";
+      paidIntoStructure = `75% Electronic Transfer (${curr} ${transferPortion.toLocaleString()}) / 25% Cash`;
+    } else if (opt === "CARD" || mthd === "PREPAID_CARD") {
+      cashStructure = "0% Cash";
+      cardStructure = `100% Prepaid Card (${curr} ${foreignAmt.toLocaleString()})`;
+      paidIntoStructure = "100% Prepaid Card";
+    } else if (opt === "ELECTRONIC_TRANSFER" || mthd === "BANK_TRANSFER") {
+      cashStructure = "0% Cash";
+      cardStructure = "0% Prepaid Card";
+      paidIntoStructure = "100% Bank Account";
+    } else if (mthd === "CASH_PICKUP") {
+      cashStructure = `100% Cash (${curr} ${foreignAmt.toLocaleString()})`;
+      cardStructure = "0% Prepaid Card";
+      paidIntoStructure = "100% Cash Pickup";
+    } else if (foreignAmt > 0) {
+      const cashPortion = Math.min(foreignAmt * 0.25, 500);
+      const cardPortion = foreignAmt - cashPortion;
+      cashStructure = `Cash: ${curr} ${cashPortion.toLocaleString()}`;
+      cardStructure = `Card: ${curr} ${cardPortion.toLocaleString()}`;
+      paidIntoStructure = "Prepaid Card & Cash";
+    }
+
     const transactionSettlement = {
       settlementId: settlement?.id || "—",
-      settlementDate: settlement?.depositedAt || settlement?.createdAt || "—",
-      settlementTime: settlement?.depositedAt || settlement?.createdAt || "—",
-      settlementReceipt: settlement?.proofOfPayment || "—",
-      settlementStructureCash: "—",
-      settlementStructurePrepaidCard: "—",
-      seventyFivePercentPaidInto: "—",
-      settlementStatus: trx.currentStep || trx.status,
+      settlementDate: isSettled ? (settlement?.depositedAt || settlement?.confirmedAt || settlement?.updatedAt || "—") : "—",
+      settlementTime: isSettled ? (settlement?.depositedAt || settlement?.confirmedAt || settlement?.updatedAt || "—") : "—",
+      settlementReceipt: isSettled ? (settlement?.proofOfPayment || "—") : "—",
+      settlementStructureCash: cashStructure,
+      settlementStructurePrepaidCard: cardStructure,
+      seventyFivePercentPaidInto: paidIntoStructure,
+      settlementStatus: isSettled ? "SETTLED" : (trx.currentStep || trx.status),
     };
 
     return {
@@ -599,6 +774,7 @@ export class AdminTransactionsService {
         pendingAssignees,
         workflowStages,
       },
+      disbursementApprovalProcess,
       paymentDetails,
       transactionSettlement,
       details: {
@@ -720,11 +896,12 @@ export class AdminTransactionsService {
       }
     }
 
+    // First level review (Compliance Review) complete: trigger customer deposit/payment
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
-        currentStep: TransactionStep.ADMIN_REVIEW as any,
-        status: TransactionStatus.ADMIN_APPROVAL_PENDING as any,
+        currentStep: TransactionStep.DEPOSIT_INFO as any,
+        status: TransactionStatus.AWAITING_DEPOSIT as any,
         updatedAt: new Date(),
       },
     });
@@ -744,9 +921,16 @@ export class AdminTransactionsService {
         transactionId,
         action: "ADMIN_REVIEW_COMPLETED",
         performedBy: adminId,
-        notes: payload?.notes,
+        notes: payload?.notes || "Compliance review completed. Customer payment triggered.",
         metadata: { riskLevel: payload?.riskLevel, amlDecision: payload?.amlDecision },
       } as any,
+    });
+
+    // Notify customer to make payment / deposit
+    eventBus.publish(EventTypes.DEPOSIT_INITIATED, {
+      userId: existingTx.userId,
+      amount: updated.nairaEquivalent || updated.foreignAmount,
+      transaction: { id: transactionId, referenceNumber: existingTx.referenceNumber },
     });
 
     const trx = await prisma.transaction.findUnique({
@@ -795,20 +979,6 @@ export class AdminTransactionsService {
             workflowTemplateId: workflow.id,
             currentWorkflowStageId: nextStageId,
           },
-        });
-      } else {
-        // Review was the final stage in the workflow
-        await prisma.transaction.update({
-          where: { id: transactionId },
-          data: {
-            status: TransactionStatus.APPROVED as any,
-            currentWorkflowStageId: null,
-          },
-        });
-
-        eventBus.publish(EventTypes.TRANSACTION_APPROVED, {
-          userId: existingTx.userId,
-          transaction: { id: transactionId, referenceNumber: existingTx.referenceNumber },
         });
       }
     }
@@ -1648,9 +1818,28 @@ export class AdminTransactionsService {
 
     if (!tx) throw new Error("Transaction not found");
 
-    const invalidStatuses = ["DRAFT", "REJECTED", "CANCELLED"];
+    // Block refund if transaction is disbursed or in invalid status
+    const isDisbursed =
+      tx.status === "COMPLETED" ||
+      tx.status === "DISBURSEMENT_IN_PROGRESS" ||
+      (tx as any).disbursementApprovalStatus === "APPROVED" ||
+      (tx as any).disbursementApprovalStatus === "COMPLETED" ||
+      (tx as any).disbursementApprovalStatus === "DISBURSED";
+
+    if (isDisbursed) {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+    }
+
+    const invalidStatuses = ["DRAFT", "REJECTED", "CANCELLED", "REFUNDED"];
     if (invalidStatuses.includes(tx.status)) {
       throw new Error(`Cannot refund transaction with status ${tx.status}`);
+    }
+
+    const disbursedEntry = await (prisma as any).walletEntry.findFirst({
+      where: { transactionId, disbursementStatus: "COMPLETED" },
+    });
+    if (disbursedEntry) {
+      throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
 
     if (tx.workflowTemplateId) {
@@ -1856,10 +2045,292 @@ export class AdminTransactionsService {
     };
     
   }
-  async confirmDisbursement(transactionId: string, adminId: string, notes?: string) {
-    const transaction = await prisma.transaction.findUnique({
+  async initiateDisbursement(transactionId: string, adminId: string, notes?: string) {
+    const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
-      select: { id: true, status: true, userId: true, referenceNumber: true, nairaEquivalent: true },
+      include: {
+        createdByAgent: {
+          select: { branchId: true }
+        }
+      }
+    });
+
+    if (!tx) throw new Error("Transaction not found");
+
+    const invalidStatuses = ["DRAFT", "REJECTED", "CANCELLED"];
+    if (invalidStatuses.includes(tx.status)) {
+      throw new Error(`Cannot initiate disbursement for transaction in status "${tx.status}"`);
+    }
+
+    if ((tx as any).disbursementApprovalStatus === "PENDING_APPROVAL") {
+      throw new Error("Disbursement approval workflow is already in progress for this transaction.");
+    }
+    if ((tx as any).disbursementApprovalStatus === "APPROVED" && tx.status === TransactionStatus.COMPLETED) {
+      throw new Error("Disbursement has already been completed for this transaction.");
+    }
+
+    const template = await workflowService.attachDisbursementWorkflowToTransaction(transactionId);
+
+    if (template) {
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          currentStep: TransactionStep.DISBURSEMENT as any,
+          updatedAt: new Date(),
+        }
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "DISBURSEMENT_INITIATED",
+          performedBy: adminId,
+          notes: notes || "Disbursement approval workflow initiated",
+        }
+      });
+
+      const firstStage = template.stages[0];
+      const adminIds = firstStage.assignees.map((a: any) => a.adminId);
+
+      if (adminIds.length > 0) {
+        const user = await prisma.user.findUnique({
+          where: { id: tx.userId },
+          select: { profile: { select: { firstName: true, lastName: true } }, email: true },
+        });
+        const customerName = user?.profile
+          ? `${user.profile.firstName} ${user.profile.lastName}`.trim()
+          : user?.email;
+
+        eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+          adminIds,
+          transaction: {
+            id: tx.id,
+            referenceNumber: tx.referenceNumber,
+            type: tx.type,
+            foreignAmount: tx.foreignAmount,
+            nairaEquivalent: tx.nairaEquivalent,
+            userId: tx.userId,
+            customerName,
+          },
+        });
+      }
+
+      return {
+        message: "Disbursement approval workflow initiated successfully and queued for approval",
+        pendingApproval: true,
+        workflowId: template.id,
+      };
+    } else {
+      // Auto-approve if no DISBURSEMENT workflow template configured
+      await (prisma as any).transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
+          currentStep: TransactionStep.DISBURSEMENT as any,
+          disbursementApprovalStatus: "APPROVED",
+          updatedAt: new Date(),
+        }
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "DISBURSEMENT_INITIATED",
+          performedBy: adminId,
+          notes: notes || "Disbursement initiated (auto-approved, no workflow template configured)",
+        }
+      });
+
+      return {
+        message: "Disbursement initiated successfully (no approval workflow required; ready for confirmation)",
+        pendingApproval: false,
+      };
+    }
+  }
+
+  async approveDisbursement(transactionId: string, adminId: string, notes?: string) {
+    const tx = await (prisma as any).transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        id: true,
+        referenceNumber: true,
+        userId: true,
+        disbursementWorkflowTemplateId: true,
+        disbursementWorkflowStageId: true,
+        disbursementApprovalStatus: true,
+        status: true,
+      }
+    });
+
+    if (!tx) throw new Error("Transaction not found");
+    if ((tx as any).disbursementApprovalStatus === "APPROVED") {
+      throw new Error("Disbursement approval has already been fully completed for this transaction.");
+    }
+    if ((tx as any).disbursementApprovalStatus === "REJECTED") {
+      throw new Error("Disbursement approval was previously rejected for this transaction.");
+    }
+
+    if (!(tx as any).disbursementWorkflowTemplateId || !(tx as any).disbursementWorkflowStageId) {
+      throw new Error("No active disbursement approval workflow found on this transaction.");
+    }
+
+    const workflow = await prisma.workflowTemplate.findUnique({
+      where: { id: (tx as any).disbursementWorkflowTemplateId },
+      include: {
+        stages: {
+          orderBy: { order: "asc" },
+          include: { assignees: true }
+        }
+      }
+    });
+
+    if (!workflow) throw new Error("Disbursement workflow template not found");
+
+    const currentStageIndex = workflow.stages.findIndex((s: any) => s.id === (tx as any).disbursementWorkflowStageId);
+    if (currentStageIndex === -1) {
+      throw new Error("Transaction is in an invalid disbursement workflow stage.");
+    }
+
+    const currentStage = workflow.stages[currentStageIndex];
+    const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+    if (!isAssigned) {
+      throw new Error("You are not authorized to approve disbursement for this transaction at its current stage.");
+    }
+
+    const isFinalStage = currentStageIndex + 1 >= workflow.stages.length;
+
+    if (isFinalStage) {
+      await (prisma as any).transaction.update({
+        where: { id: transactionId },
+        data: {
+          disbursementApprovalStatus: "APPROVED",
+          updatedAt: new Date(),
+        }
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "DISBURSEMENT_APPROVED",
+          performedBy: adminId,
+          notes: notes || "Disbursement fully approved by all assigned officers",
+        }
+      });
+
+      return {
+        message: "Disbursement approved successfully by all assigned officers. Ready for final disbursement confirmation.",
+        isFinalApproval: true,
+      };
+    } else {
+      const nextStage = workflow.stages[currentStageIndex + 1];
+      await (prisma as any).transaction.update({
+        where: { id: transactionId },
+        data: {
+          disbursementWorkflowStageId: nextStage.id,
+          updatedAt: new Date(),
+        }
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "DISBURSEMENT_STAGE_APPROVED",
+          performedBy: adminId,
+          notes: notes || `Disbursement stage "${currentStage.name}" approved`,
+        }
+      });
+
+      const adminIds = nextStage.assignees.map((a: any) => a.adminId);
+      if (adminIds.length > 0) {
+        eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+          adminIds,
+          transaction: {
+            id: tx.id,
+            referenceNumber: tx.referenceNumber,
+            userId: tx.userId,
+          },
+        });
+      }
+
+      return {
+        message: `Disbursement stage "${currentStage.name}" approved. Advanced to next stage "${nextStage.name}".`,
+        isFinalApproval: false,
+        nextStageId: nextStage.id,
+      };
+    }
+  }
+
+  async rejectDisbursement(transactionId: string, adminId: string, reason: string) {
+    const tx = await (prisma as any).transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        id: true,
+        referenceNumber: true,
+        userId: true,
+        disbursementWorkflowTemplateId: true,
+        disbursementWorkflowStageId: true,
+        disbursementApprovalStatus: true,
+      }
+    });
+
+    if (!tx) throw new Error("Transaction not found");
+    if ((tx as any).disbursementApprovalStatus === "APPROVED") {
+      throw new Error("Disbursement approval has already been fully completed.");
+    }
+    if ((tx as any).disbursementApprovalStatus === "REJECTED") {
+      throw new Error("Disbursement approval was already rejected.");
+    }
+
+    if ((tx as any).disbursementWorkflowTemplateId && (tx as any).disbursementWorkflowStageId) {
+      const workflow = await prisma.workflowTemplate.findUnique({
+        where: { id: (tx as any).disbursementWorkflowTemplateId },
+        include: { stages: { include: { assignees: true } } }
+      });
+
+      if (workflow) {
+        const currentStage = workflow.stages.find((s: any) => s.id === (tx as any).disbursementWorkflowStageId);
+        if (currentStage) {
+          const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
+          if (!isAssigned) {
+            throw new Error("You are not authorized to reject disbursement at its current stage.");
+          }
+        }
+      }
+    }
+
+    await (prisma as any).transaction.update({
+      where: { id: transactionId },
+      data: {
+        disbursementApprovalStatus: "REJECTED",
+        updatedAt: new Date(),
+      }
+    });
+
+    await prisma.transactionHistory.create({
+      data: {
+        transactionId,
+        action: "DISBURSEMENT_REJECTED",
+        performedBy: adminId,
+        notes: reason || "Disbursement approval rejected",
+      }
+    });
+
+    return { message: "Disbursement approval rejected successfully" };
+  }
+
+  async confirmDisbursement(transactionId: string, adminId: string, notes?: string) {
+    const transaction = await (prisma as any).transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        referenceNumber: true,
+        nairaEquivalent: true,
+        disbursementApprovalStatus: true,
+        disbursementWorkflowTemplateId: true,
+      },
     });
 
     if (!transaction) {
@@ -1874,6 +2345,16 @@ export class AdminTransactionsService {
       throw new Error(
         `Cannot confirm disbursement: transaction is currently in status "${transaction.status}"`
       );
+    }
+
+    // Enforce disbursement workflow approval check
+    if ((transaction as any).disbursementWorkflowTemplateId || (transaction as any).disbursementApprovalStatus) {
+      if ((transaction as any).disbursementApprovalStatus === "PENDING_APPROVAL") {
+        throw new Error("Cannot confirm disbursement: Disbursement approval workflow is still pending officer approval.");
+      }
+      if ((transaction as any).disbursementApprovalStatus === "REJECTED") {
+        throw new Error("Cannot confirm disbursement: Disbursement approval was rejected by assigned officers.");
+      }
     }
 
     await prisma.transaction.update({
