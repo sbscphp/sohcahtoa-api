@@ -117,34 +117,58 @@ function buildCustomHtml(config: SwaggerConfig, swaggerSpec: any): string {
   <\/script>
   <div id="scalar-root"></div>
 
-  <!-- Logo pinned to bottom of sidebar -->
-  <div style="
+  <!-- Logo pinned to bottom of sidebar — covers the Generate MCP link -->
+  <div id="sct-sidebar-logo" style="
     position: fixed;
     bottom: 0;
     left: 0;
-    width: 250px;
-    padding: 16px 20px;
+    width: var(--sct-sidebar-w, 320px);
+    height: 80px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    z-index: 9999;
-    pointer-events: none;
+    justify-content: center;
+    z-index: 99999;
+    pointer-events: all;
+    background: #ffffff;
+    border-top: 2px solid #DD4F05;
   ">
     <img
       src="${process.env.APP_URL ? `${process.env.APP_URL}email/logo.png` : ''}"
       alt="SohCahToa"
-      style="height: 28px; width: auto; display: block;"
+      style="height: 52px; width: auto; display: block; object-fit: contain;"
       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
     />
     <span style="
       display: none;
       font-family: Inter, system-ui, sans-serif;
-      font-size: 15px;
+      font-size: 18px;
       font-weight: 700;
       color: #DD4F05;
       letter-spacing: -0.3px;
     ">SohCahToa</span>
   </div>
+
+  <script>
+    (function() {
+      function syncSidebarWidth() {
+        var sidebar = document.querySelector('.sidebar')
+          || document.querySelector('[class*="sidebar"]')
+          || document.querySelector('[class*="t-doc__sidebar"]');
+        if (!sidebar) return;
+        var w = sidebar.getBoundingClientRect().width;
+        if (w > 0) document.documentElement.style.setProperty('--sct-sidebar-w', w + 'px');
+      }
+      var resizeObs = new ResizeObserver(syncSidebarWidth);
+      var mutObs = new MutationObserver(function() {
+        var sidebar = document.querySelector('.sidebar')
+          || document.querySelector('[class*="sidebar"]')
+          || document.querySelector('[class*="t-doc__sidebar"]');
+        if (sidebar) { resizeObs.observe(sidebar); syncSidebarWidth(); }
+      });
+      mutObs.observe(document.body, { childList: true, subtree: true });
+      [200, 600, 1500].forEach(function(t) { setTimeout(syncSidebarWidth, t); });
+    })();
+  <\/script>
 
   <script>
     (function() {
