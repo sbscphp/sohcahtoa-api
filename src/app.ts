@@ -51,9 +51,13 @@ export const createApp = async (): Promise<Application> => {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-          scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-          imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "blob:"],
+          scriptSrcAttr: ["'unsafe-inline'"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "https://validator.swagger.io", "https:"],
+          connectSrc: ["'self'", "blob:"],
+          workerSrc: ["'self'", "blob:"],
         },
       },
     })
