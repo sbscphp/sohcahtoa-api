@@ -11,14 +11,16 @@ export interface SwaggerConfig {
   apiBasePath?: string;
 }
 
-function buildCustomHtml(specUrl: string, config: SwaggerConfig): string {
+function buildCustomHtml(specUrl: string, config: SwaggerConfig, swaggerSpec: any): string {
   const logoUrl = process.env.APP_URL ? `${process.env.APP_URL}/email/logo.png` : '';
+  const serializedSpec = JSON.stringify(swaggerSpec).replace(/<\//g, '<\\/');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <base href="/" />
   <title>${config.title} – API Reference</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -302,12 +304,197 @@ function buildCustomHtml(specUrl: string, config: SwaggerConfig): string {
     .content {
       flex: 1;
       overflow-y: auto;
-      background: #F9FAFB;
+      background: #F3F4F6;
+      padding: 24px 28px 28px;
     }
 
     .content::-webkit-scrollbar { width: 6px; }
     .content::-webkit-scrollbar-track { background: transparent; }
     .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .welcome-panel {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 18px;
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 24px 60px rgba(15,23,42,.08);
+      margin-bottom: 24px;
+    }
+
+    .welcome-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--orange);
+    }
+
+    .welcome-copy h1 {
+      font-size: 30px;
+      line-height: 1.1;
+      color: var(--text);
+      max-width: 680px;
+    }
+
+    .welcome-text {
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--text-muted);
+      max-width: 86%;
+    }
+
+    .welcome-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn-secondary,
+    .btn-link {
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      background: #ffffff;
+      border-color: var(--border);
+      color: var(--text);
+      transition: background .15s, border-color .15s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--orange);
+      background: #fff7ed;
+    }
+
+    .btn-link {
+      background: transparent;
+      color: var(--orange);
+      text-decoration: none;
+    }
+
+    .welcome-cards {
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: #F9FAFB;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      color: var(--text);
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-highlight {
+      background: #FFF7ED;
+      border-color: rgba(221,79,5,.15);
+    }
+
+    .card strong {
+      display: block;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text);
+    }
+
+    .card ol {
+      margin-left: 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .card .endpoint-pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .endpoint-pill {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      text-align: left;
+      min-width: 140px;
+    }
+
+    .endpoint-pill:hover {
+      background: #FEF3C7;
+      border-color: var(--orange);
+    }
+
+    .swagger-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .swagger-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 0 4px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .swagger-panel-inner {
+      background: #ffffff;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,.03);
+      overflow: hidden;
+    }
+
+    .btn-secondary#toggle-samples-btn {
+      background: #ffffff;
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .focused {
+      animation: pulse-highlight 1.8s ease-in-out;
+    }
+
+    @keyframes pulse-highlight {
+      0% { box-shadow: 0 0 0 0 rgba(221,79,5,.25); }
+      50% { box-shadow: 0 0 0 16px rgba(221,79,5,0); }
+      100% { box-shadow: 0 0 0 0 rgba(221,79,5,0); }
+    }
 
     /* ── Swagger UI Overrides ─────────────────────────────── */
     #swagger-ui .swagger-ui {
@@ -604,7 +791,46 @@ function buildCustomHtml(specUrl: string, config: SwaggerConfig): string {
     </div>
 
     <div class="content">
-      <div id="swagger-ui"></div>
+      <section class="welcome-panel">
+        <div class="welcome-copy">
+          <span class="eyebrow">Developer portal</span>
+          <h1>Interactive SohCahToa API explorer</h1>
+          <p class="welcome-text">Test our endpoints with a guided, developer-friendly portal. Authorize once, explore the most useful routes, and run live requests without needing to inspect raw Swagger pages.</p>
+          <div class="welcome-actions">
+            <button type="button" class="btn-secondary" id="welcome-authorize-btn">Authorize</button>
+            <a class="btn-link" href="/api-docs.json" target="_blank">Open API JSON</a>
+            <button type="button" class="btn-secondary" id="copy-bearer-btn">Copy bearer template</button>
+          </div>
+        </div>
+
+        <div class="welcome-cards">
+          <div class="card">
+            <strong>Quick start</strong>
+            <ol>
+              <li>Authorize with your JWT token</li>
+              <li>Choose an endpoint from the left sidebar</li>
+              <li>Click <strong>Try it out</strong>, update values, and send the request</li>
+            </ol>
+          </div>
+          <div class="card card-highlight">
+            <strong>Top endpoints</strong>
+            <div id="popular-endpoints" class="endpoint-pill-list">Loading popular endpoints…</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="swagger-panel">
+        <div class="swagger-panel-header">
+          <div>
+            <div class="section-title">Interactive API explorer</div>
+            <p class="section-subtitle">Browse the API in a cleaner, more approachable format.</p>
+          </div>
+          <button type="button" class="btn-secondary" id="toggle-samples-btn">Focus first endpoint</button>
+        </div>
+        <div class="swagger-panel-inner">
+          <div id="swagger-ui"></div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -746,9 +972,99 @@ window.onload = function() {
     }
   }
 
+  function buildWelcomePanel(spec) {
+    var paths = spec.paths || {};
+    var endpoints = [];
+    Object.entries(paths).forEach(function(entry) {
+      var path = entry[0];
+      var methods = entry[1];
+      Object.entries(methods).forEach(function(me) {
+        var method = me[0];
+        var op = me[1];
+        if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) return;
+        endpoints.push({ path: path, method: method, summary: op.summary || '' });
+      });
+    });
+    endpoints.sort(function(a, b) {
+      if (a.method === b.method) return a.path.localeCompare(b.path);
+      return a.method.localeCompare(b.method);
+    });
+    var target = document.getElementById('popular-endpoints');
+    if (!target) return;
+    target.innerHTML = '';
+    endpoints.slice(0, 6).forEach(function(ep) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'endpoint-pill';
+      button.textContent = ep.method.toUpperCase() + ' ' + ep.path;
+      button.title = ep.summary || 'Jump to this endpoint';
+      button.addEventListener('click', function() {
+        scrollToEndpoint(ep.path, ep.method);
+      });
+      target.appendChild(button);
+    });
+  }
+
+  function scrollToEndpoint(path, method) {
+    var opblocks = document.querySelectorAll('#swagger-ui .opblock');
+    for (var i = 0; i < opblocks.length; i++) {
+      var block = opblocks[i];
+      var summaryPath = block.querySelector('.opblock-summary-path');
+      var methodBadge = block.querySelector('.opblock-summary-method');
+      if (!summaryPath || !methodBadge) continue;
+      var p = summaryPath.textContent.trim();
+      var m = methodBadge.textContent.trim().toLowerCase();
+      if (p === path && m === method.toLowerCase()) {
+        block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        block.classList.add('focused');
+        setTimeout(function() { block.classList.remove('focused'); }, 1800);
+        return;
+      }
+    }
+    scrollToTag(path.split('/')[1] || path);
+  }
+
+  function initPortalButtons() {
+    var welcomeAuthBtn = document.getElementById('welcome-authorize-btn');
+    if (welcomeAuthBtn) {
+      welcomeAuthBtn.addEventListener('click', function() {
+        var btn = document.querySelector('#swagger-ui .authorize');
+        if (btn) btn.click();
+      });
+    }
+
+    var copyBearerBtn = document.getElementById('copy-bearer-btn');
+    if (copyBearerBtn && navigator.clipboard) {
+      copyBearerBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText('Bearer <JWT_TOKEN>').then(function() {
+          var original = copyBearerBtn.textContent;
+          copyBearerBtn.textContent = 'Copied!';
+          setTimeout(function() { copyBearerBtn.textContent = original; }, 1800);
+        }).catch(function() {
+          copyBearerBtn.textContent = 'Unable to copy';
+        });
+      });
+    }
+
+    var toggleBtn = document.getElementById('toggle-samples-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function() {
+        var firstOp = document.querySelector('#swagger-ui .opblock');
+        if (firstOp) {
+          firstOp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          firstOp.classList.add('focused');
+          setTimeout(function() { firstOp.classList.remove('focused'); }, 1800);
+        }
+      });
+    }
+  }
+
+  var apiSpecUrl = window.location.protocol + '//' + window.location.host + '/api-docs.json';
+  var swaggerSpec = window.__SWAGGER_SPEC__ || {};
+
   // ── Init Swagger UI ──────────────────────────────────────
   SwaggerUIBundle({
-    url: '${specUrl}',
+    spec: swaggerSpec,
     dom_id: '#swagger-ui',
     deepLinking: true,
     presets: [SwaggerUIBundle.presets.apis],
@@ -764,14 +1080,14 @@ window.onload = function() {
     defaultModelsExpandDepth: -1,
     syntaxHighlight: { activated: true, theme: 'agate' },
     onComplete: function() {
-      // Build sidebar from fetched spec
-      fetch('${specUrl}')
-        .then(function(r) { return r.json(); })
-        .then(function(spec) { buildSidebar(spec); })
-        .catch(function(e) { console.error('Spec fetch failed', e); });
+      buildSidebar(swaggerSpec);
+      buildWelcomePanel(swaggerSpec);
+      initPortalButtons();
     },
   });
 };
+
+  window.__SWAGGER_SPEC__ = ${serializedSpec};
 </script>
 </body>
 </html>`;
@@ -844,7 +1160,8 @@ export const setupSwagger = async (app: Express, config: SwaggerConfig): Promise
 
   app.get('/api-docs', (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/html');
-    res.send(buildCustomHtml('/api-docs.json', config));
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.send(buildCustomHtml('api-docs.json', config, swaggerSpec));
   });
 
   console.log(`📚 API Docs available at http://localhost:${config.port}/api-docs`);
