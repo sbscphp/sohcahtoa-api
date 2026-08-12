@@ -51,8 +51,10 @@ export interface CustomerTransactionsByTypeResult {
 export interface CustomerTransactionStats {
   total: number;
   pending: number;
+  approved: number;
   completed: number;
   rejected: number;
+  approvedNairaAmount: number;
 }
 
 export interface CustomerPaymentSummaryResult {
@@ -189,7 +191,9 @@ class CustomerDashboardService {
   async getTransactionStats(userId: string): Promise<CustomerTransactionStats> {
     const base = { userId };
 
-    const [total, pending, completed, rejected] = await Promise.all([
+    const APPROVED_STATUSES = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT', 'DEPOSIT_CONFIRMED'];
+
+    const [total, pending, approved, approvedAmountAgg, completed, rejected] = await Promise.all([
       prisma.transaction.count({ where: base }),
       (prisma as any).transaction.count({
         where: {
@@ -197,6 +201,13 @@ class CustomerDashboardService {
           status: { notIn: ['COMPLETED', 'REJECTED', 'CANCELLED'] },
           rejectedAt: null,
         },
+      }),
+      (prisma as any).transaction.count({
+        where: { ...base, status: { in: APPROVED_STATUSES } },
+      }),
+      (prisma as any).transaction.aggregate({
+        where: { ...base, status: { in: APPROVED_STATUSES }, nairaEquivalent: { not: null } },
+        _sum: { nairaEquivalent: true },
       }),
       prisma.transaction.count({ where: { ...base, status: 'COMPLETED' as any } }),
       (prisma as any).transaction.count({
@@ -210,8 +221,9 @@ class CustomerDashboardService {
       }),
     ]);
 
-    logger.debug('[getTransactionStats] Stats computed', { userId, total, pending, completed, rejected });
-    return { total, pending, completed, rejected };
+    const approvedNairaAmount = round2(Number(approvedAmountAgg._sum?.nairaEquivalent ?? 0));
+    logger.debug('[getTransactionStats] Stats computed', { userId, total, pending, approved, completed, rejected });
+    return { total, pending, approved, approvedNairaAmount, completed, rejected };
   }
 
   /**

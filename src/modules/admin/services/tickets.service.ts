@@ -93,6 +93,7 @@ export class TicketsService {
           assignedAgent: {
             select: {
               fullName: true,
+              email: true,
               role: { select: { name: true } },
             },
           },
@@ -106,6 +107,7 @@ export class TicketsService {
           : t?.customer?.email || null;
       const customerEmail = t?.customer?.email || null;
       const assignedAdminName = t?.assignedAgent?.fullName || null;
+      const assignedAdminEmail = t?.assignedAgent?.email || null;
       const assignedAdminRole = t?.assignedAgent?.role?.name || null;
       return {
         id: t.id,
@@ -119,6 +121,7 @@ export class TicketsService {
         customerName,
         customerEmail,
         assignedAdminName,
+        assignedAdminEmail,
         assignedAdminRole,
       };
     });
@@ -442,6 +445,14 @@ private validateAttachment(attachment: {
         })
       );
     }
+    // If a custom resolution note was provided, store it as an additional comment
+    if (notes && notes.trim()) {
+      ops.push(
+        client.ticketComment.create({
+          data: { ticketId: id, adminId, message: notes.trim() },
+        })
+      );
+    }
     const [updated] = await client.$transaction(ops);
     return updated;
   }
@@ -491,14 +502,14 @@ private validateAttachment(attachment: {
         adminId: true,
         message: true,
         createdAt: true,
-        admin: { select: { id: true, fullName: true } },
+        admin: { select: { id: true, fullName: true, email: true } },
       },
     });
     return (comments || []).map((c: any) => ({
       id: c.id,
       message: c.message,
       createdAt: c.createdAt,
-      admin: c.admin ? { id: c.admin.id, fullName: c.admin.fullName } : null,
+      admin: c.admin ? { id: c.admin.id, fullName: c.admin.fullName, email: c.admin.email } : null,
     }));
   }
 
