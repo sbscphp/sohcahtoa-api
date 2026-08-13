@@ -81,6 +81,7 @@ export async function generateTransactionReceipt(
       },
       steps: { orderBy: { createdAt: 'asc' } },
       cashPickup: true,
+      prepaidCard: true,
     },
   });
 
@@ -142,6 +143,7 @@ export async function generateTransactionReceipt(
     beneficiaryDetails,
     refundBankDetails,
     cashPickup:         transaction.cashPickup ?? null,
+    prepaidCard:        transaction.prepaidCard ?? null,
     outboundSettlement: outboundSettlement ?? null,
   });
 
@@ -182,6 +184,7 @@ interface ReceiptData {
   beneficiaryDetails: any;
   refundBankDetails:  any;
   cashPickup:         any;
+  prepaidCard:        any;
   outboundSettlement: any;
 }
 
@@ -296,7 +299,7 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     y = drawTable(doc, INNER_X, y, INNER_W, tableRows);
     y += 12;
 
-    // ── Beneficiary details ───────────────────────────────────────────────────
+    // ── Beneficiary details (bank transfer) ──────────────────────────────────
     if (data.beneficiaryDetails?.accountNumber) {
       const bRows: [string, string][] = [
         ['ACCOUNT NAME',   data.beneficiaryDetails.accountName   ?? '—'],
@@ -315,10 +318,40 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
         ['LOCATION',     data.cashPickup.pickupLocation],
         ['STATE / CITY', `${data.cashPickup.pickupState ?? ''} / ${data.cashPickup.pickupCity ?? ''}`],
         ['PICKUP CODE',  data.cashPickup.pickupCode ?? '—'],
+        ['CASH AMOUNT',  fmt(data.cashPickup.amount, data.cashPickup.currency ?? data.currency)],
       ];
       if (data.cashPickup.recipientName) pRows.push(['RECIPIENT', data.cashPickup.recipientName]);
       y = drawSection(doc, INNER_X, y, INNER_W, 'CASH PICKUP DETAILS', pRows);
       y += 12;
+    }
+
+    // ── Prepaid card ──────────────────────────────────────────────────────────
+    if (data.prepaidCard?.cardNumber) {
+      const cRows: [string, string][] = [
+        ['CARD TYPE',   data.prepaidCard.cardType ?? '—'],
+        ['CARD NUMBER', `**** **** **** ${data.prepaidCard.cardNumber.slice(-4)}`],
+        ['CARD AMOUNT', fmt(data.prepaidCard.amount, data.prepaidCard.currency ?? data.currency)],
+        ['STATUS',      data.prepaidCard.activationStatus ?? '—'],
+      ];
+      y = drawSection(doc, INNER_X, y, INNER_W, 'PREPAID CARD DETAILS', cRows);
+      y += 12;
+    }
+
+    // ── Outbound settlement details ───────────────────────────────────────────
+    if (data.outboundSettlement) {
+      const os = data.outboundSettlement;
+      const osRows: [string, string][] = [];
+      if (os.paymentMethod)   osRows.push(['PAYOUT METHOD', fmtLabel(os.paymentMethod)]);
+      if (os.beneficiaryName) osRows.push(['PAYEE NAME',    os.beneficiaryName]);
+      if (os.beneficiaryBank) osRows.push(['PAYEE BANK',    os.beneficiaryBank]);
+      if (os.beneficiaryAccount) osRows.push(['ACCOUNT / IBAN', os.beneficiaryAccount]);
+      if (os.beneficiarySwift)   osRows.push(['SWIFT / BIC', os.beneficiarySwift]);
+      if (os.beneficiaryIban && os.beneficiaryIban !== os.beneficiaryAccount) osRows.push(['IBAN', os.beneficiaryIban]);
+      if (os.paymentReference)   osRows.push(['PAYMENT REF', os.paymentReference]);
+      if (osRows.length > 0) {
+        y = drawSection(doc, INNER_X, y, INNER_W, 'OUTBOUND PAYMENT DETAILS', osRows);
+        y += 12;
+      }
     }
 
     // ── Refund bank details ───────────────────────────────────────────────────
@@ -329,59 +362,94 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
         ['BANK',           data.refundBankDetails.bankName       ?? '—'],
       ];
       y = drawSection(doc, INNER_X, y, INNER_W, 'REFUND BANK DETAILS', rRows);
-      y += 12;
+      y += 16;
     }
 
-    // ── Outbound payment details (actual settlement record) ───────────────────
-    if (data.outboundSettlement) {
-      const os = data.outboundSettlement;
-      const osRows: [string, string][] = [];
-      if (os.paymentMethod) osRows.push(['PAYOUT METHOD', fmtLabel(os.paymentMethod)]);
-      if (os.beneficiaryName) osRows.push(['PAYEE NAME', os.beneficiaryName]);
-      if (os.beneficiaryBank) osRows.push(['PAYEE BANK', os.beneficiaryBank]);
-      if (os.beneficiaryAccount) osRows.push(['ACCOUNT / IBAN', os.beneficiaryAccount]);
-      if (os.beneficiarySwift) osRows.push(['SWIFT / BIC', os.beneficiarySwift]);
-      if (os.beneficiaryIban && os.beneficiaryIban !== os.beneficiaryAccount) osRows.push(['IBAN', os.beneficiaryIban]);
-      if (os.paymentReference) osRows.push(['PAYMENT REF', os.paymentReference]);
-      if (osRows.length > 0) {
-        y = drawSection(doc, INNER_X, y, INNER_W, 'OUTBOUND PAYMENT DETAILS', osRows);
-        y += 12;
-      }
-    }
-
-    // ── Digital certification stamp ───────────────────────────────────────────
+    // ── CBN regulatory stamp ──────────────────────────────────────────────────
     {
-      const STAMP_R   = 38;
-      const STAMP_CX  = CARD_X + CARD_W - PAD - STAMP_R - 2;
-      const STAMP_CY  = y + STAMP_R + 4;
-      const now       = fmtDate(data.completedAt);
+      const STAMP_X = INNER_X;
+      const STAMP_W = INNER_W;
+      const STAMP_H = 118;
+      const SX      = STAMP_X;
+      const SY      = y;
 
-      // Outer circle (orange border)
+      // Outer border (double-line effect)
       doc.save();
-      doc.circle(STAMP_CX, STAMP_CY, STAMP_R).stroke(ORANGE as any);
-      doc.circle(STAMP_CX, STAMP_CY, STAMP_R - 4).stroke(ORANGE as any);
+      doc.rect(SX, SY, STAMP_W, STAMP_H).lineWidth(1.5).stroke(ORANGE as any);
+      doc.rect(SX + 3, SY + 3, STAMP_W - 6, STAMP_H - 6).lineWidth(0.5).stroke(ORANGE as any);
 
-      // "VERIFIED" text
-      doc.fillColor(ORANGE as any).font('Helvetica-Bold').fontSize(8);
-      doc.text('VERIFIED', STAMP_CX - STAMP_R + 6, STAMP_CY - 10, {
-        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
+      // Header band
+      const BAND_H = 20;
+      doc.rect(SX + 3, SY + 3, STAMP_W - 6, BAND_H).fill(ORANGE as any);
+      txt(doc, 'FOREIGN EXCHANGE TRANSACTION CERTIFICATE', SX, SY + 8, {
+        font: 'Helvetica-Bold', size: 8, color: WHITE,
+        width: STAMP_W, align: 'center', characterSpacing: 0.8,
       });
-      (doc as any).y = 1;
 
-      // Date text
-      doc.font('Helvetica').fontSize(5.5).fillColor(ORANGE as any);
-      doc.text(now, STAMP_CX - STAMP_R + 6, STAMP_CY + 2, {
-        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
-      });
-      (doc as any).y = 1;
+      // Left half fields
+      const COL1_X  = SX + 12;
+      const COL1_VX = SX + 12 + 105;
+      const COL2_X  = SX + STAMP_W / 2 + 6;
+      const COL2_VX = COL2_X + 90;
+      const LINE_H  = 16;
+      const START_Y = SY + BAND_H + 10;
 
-      // "SOHCAHTOA" at bottom of circle
-      doc.font('Helvetica-Bold').fontSize(5).fillColor(ORANGE as any);
-      doc.text('SOHCAHTOA', STAMP_CX - STAMP_R + 6, STAMP_CY + 10, {
-        width: (STAMP_R - 6) * 2, align: 'center', lineBreak: false,
-      });
+      const fxAmount  = parseFloat(String(data.foreignAmount ?? 0));
+      const nairaAmt  = parseFloat(String(data.nairaEquivalent ?? 0));
+      const rate      = parseFloat(String(data.exchangeRate ?? 0));
+      const colW1     = STAMP_W / 2 - 18;
+      const colW2     = STAMP_W / 2 - 18;
+
+      const leftFields: [string, string][] = [
+        ['Foreign Currency:',  data.currency ?? '—'],
+        ['Amount of FX Sold:', `${data.currency} ${fxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Purpose:',           data.purpose ?? '—'],
+      ];
+      const rightFields: [string, string][] = [
+        ['PTA:',               data.type === 'PTA' ? 'Yes' : 'N/A'],
+        ['Value in Naira:',    `₦${nairaAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Date:',              fmtDate(data.completedAt)],
+      ];
+
+      for (let i = 0; i < leftFields.length; i++) {
+        const fy = START_Y + i * LINE_H;
+        txt(doc, leftFields[i][0], COL1_X, fy, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 100 });
+        txt(doc, leftFields[i][1], COL1_VX, fy, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: colW1 });
+        txt(doc, rightFields[i][0], COL2_X, fy, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 88 });
+        txt(doc, rightFields[i][1], COL2_VX, fy, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: colW2 });
+      }
+
+      // Exchange rate row — full width
+      const rateY = START_Y + leftFields.length * LINE_H;
+      txt(doc, 'Exchange Rate:', COL1_X, rateY, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 100 });
+      txt(doc, rate > 0 ? `₦${rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per ${data.currency}` : '—',
+        COL1_VX, rateY, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: STAMP_W - COL1_VX + SX - 12 });
+
+      // Divider line above signature
+      const SIG_Y = SY + STAMP_H - 26;
+      doc.moveTo(SX + 12, SIG_Y).lineTo(SX + STAMP_W - 12, SIG_Y).lineWidth(0.4).stroke(LINE_GREY as any);
+
+      // Signature section
+      const SIG_MID = SX + STAMP_W / 2;
+      txt(doc, 'Authorized Signature:', COL1_X, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 120 });
+      // Dotted line for signature
+      doc.moveTo(COL1_X + 108, SIG_Y + 9).lineTo(SIG_MID - 10, SIG_Y + 9).lineWidth(0.4).dash(2, { space: 2 }).stroke(DARK as any);
+      doc.undash();
+
+      txt(doc, 'Official Stamp', SIG_MID + 10, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 80 });
+
+      // "SOHCAHTOA" watermark text in stamp area
+      doc.save();
+      doc.fillColor(ORANGE as any).fillOpacity(0.06);
+      doc.font('Helvetica-Bold').fontSize(28);
+      const wmText = 'SOHCAHTOA';
+      const wmW    = doc.widthOfString(wmText);
+      doc.text(wmText, SX + (STAMP_W - wmW) / 2, SY + BAND_H + 30, { lineBreak: false });
       (doc as any).y = 1;
       doc.restore();
+
+      doc.restore();
+      y += STAMP_H + 8;
     }
 
     // ── Footer (always pinned to card bottom) ─────────────────────────────────
