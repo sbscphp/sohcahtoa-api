@@ -478,24 +478,17 @@ class CustomerTransactionController {
         return;
       }
 
-      // Check if receipt already exists
-      const existingReceipt = await prisma.receipt.findUnique({
-        where: { transactionId },
-        select: { pdfUrl: true },
-      });
-      if (existingReceipt && existingReceipt.pdfUrl) {
-        return res.redirect(existingReceipt.pdfUrl);
-      }
-
       // Generate receipt PDF
       const { pdf, filename, referenceNumber } = await generateTransactionReceipt(transactionId, userId, 'CUSTOMER');
 
       // Upload to Cloudinary
       const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts', });
 
-      // Save receipt record
-      await prisma.receipt.create({
-        data: {
+      // Save or update receipt record
+      await (prisma as any).receipt.upsert({
+        where: { transactionId },
+        update: { pdfUrl: uploadResult.secureUrl, generatedAt: new Date() },
+        create: {
           transactionId,
           receiptNumber: referenceNumber,
           qrCode: '',
