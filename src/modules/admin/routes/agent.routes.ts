@@ -203,6 +203,7 @@ AgentRouter.get(
  *               attachment:
  *                 type: string
  *                 format: binary
+ *                 description: Optional document attachment for agent profile
  *     responses:
  *       201:
  *         description: Agent created

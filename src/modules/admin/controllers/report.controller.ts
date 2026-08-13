@@ -39,7 +39,15 @@ class ReportController {
 
     const validModules = await reportService.modules();
     const normalizedInput = module.toString().trim().toUpperCase();
-    const isValidModule = validModules.some(m => m.key === normalizedInput || m.name.toUpperCase() === normalizedInput);
+    const singularInput = normalizedInput.endsWith("S") && !normalizedInput.endsWith("SS") ? normalizedInput.slice(0, -1) : normalizedInput;
+    const isValidModule = validModules.some(
+      m => m.key === normalizedInput ||
+           m.key === singularInput ||
+           m.name.toUpperCase() === normalizedInput ||
+           m.name.toUpperCase() === singularInput ||
+           (normalizedInput === "DISCREPANCIES" && m.key === "DISCREPANCY") ||
+           (normalizedInput === "USER_MANAGEMENT" && m.key === "USER_MANAGEMENT")
+    );
     if (!isValidModule) {
       throw new ValidationError(`Invalid report module: ${module}`);
     }

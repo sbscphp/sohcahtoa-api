@@ -835,6 +835,12 @@ model Transaction {
   workflowTemplateId String?
   currentWorkflowStageId String?
 
+  disbursementWorkflowTemplateId String?
+  disbursementWorkflowStageId    String?
+  disbursementApprovalStatus     String?
+
+  disbursementWorkflowTemplate WorkflowTemplate? @relation("TransactionDisbursementWorkflow", fields: [disbursementWorkflowTemplateId], references: [id])
+
   createdByAgent Agent?              @relation("AgentCreatedTransactions", fields: [createdByAgentId], references: [id])
   user           User                @relation("UserTransactions", fields: [userId], references: [id])
   steps       TransactionStepLog[]
@@ -1796,6 +1802,8 @@ enum ReportModule {
   FRANCHISE
   BRANCH
   INCIDENT
+  DISCREPANCY
+  USER_MANAGEMENT
 }
 
 model ReportJob {
@@ -2027,6 +2035,7 @@ enum ApprovalType {
   TRANSACTION
   REFUND
   RATE
+  DISBURSEMENT
 }
 
 model WorkflowTemplate {
@@ -2051,9 +2060,10 @@ model WorkflowTemplate {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  stages            WorkflowStage[]
-  exchangeRates     ExchangeRate[]
-  walletEntries     WalletEntry[]
+  stages                   WorkflowStage[]
+  exchangeRates            ExchangeRate[]
+  walletEntries            WalletEntry[]
+  disbursementTransactions Transaction[]  @relation("TransactionDisbursementWorkflow")
 
   @@index([status])
   @@index([departmentId])

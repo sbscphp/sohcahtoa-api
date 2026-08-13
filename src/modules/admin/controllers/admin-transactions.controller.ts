@@ -236,6 +236,51 @@ class AdminTransactionsController {
     res.json(successResponse(result));
   });
 
+  initiateDisbursement = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const notes = req.body?.notes || req.body?.reason;
+    const result = await adminTransactionsService.initiateDisbursement(req.params.id, adminId, notes);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.DISBURSEMENT_INITIATE,
+      actionLabel: "Initiate transaction disbursement approval workflow",
+      resourceType: "TRANSACTION",
+      resourceId: req.params.id,
+      reason: notes,
+    });
+    res.json(successResponse(result));
+  });
+
+  approveDisbursement = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const notes = req.body?.notes || req.body?.reason;
+    const result = await adminTransactionsService.approveDisbursement(req.params.id, adminId, notes);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.DISBURSEMENT_APPROVE,
+      actionLabel: "Approve transaction disbursement stage",
+      resourceType: "TRANSACTION",
+      resourceId: req.params.id,
+      reason: notes,
+    });
+    res.json(successResponse(result));
+  });
+
+  rejectDisbursement = asyncHandler(async (req: Request, res: Response) => {
+    const adminId = (req as any).user?.userId as string;
+    const reason = req.body?.reason || req.body?.notes;
+    const result = await adminTransactionsService.rejectDisbursement(req.params.id, adminId, reason);
+    await auditTrailService.logAction({
+      adminId,
+      actionType: ActionType.DISBURSEMENT_REJECT,
+      actionLabel: "Reject transaction disbursement workflow",
+      resourceType: "TRANSACTION",
+      resourceId: req.params.id,
+      reason,
+    });
+    res.json(successResponse(result));
+  });
+
   confirmDisbursement = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const result = await adminTransactionsService.confirmDisbursement(

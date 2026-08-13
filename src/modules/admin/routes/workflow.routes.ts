@@ -96,7 +96,7 @@ WorkflowRouter.get(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
- *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE, DISBURSEMENT] }
  *               minAmount: { type: number }
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
@@ -155,7 +155,7 @@ WorkflowRouter.post(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
- *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE, DISBURSEMENT] }
  *               minAmount: { type: number }
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
@@ -272,7 +272,7 @@ WorkflowRouter.get(
  *               name: { type: string }
  *               description: { type: string }
  *               type: { type: string, enum: [REVIEW, APPROVAL] }
- *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE] }
+ *               approvalType: { type: string, enum: [TRANSACTION, REFUND, RATE, DISBURSEMENT] }
  *               minAmount: { type: number }
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }

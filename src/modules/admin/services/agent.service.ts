@@ -5,6 +5,7 @@ import authService from "../../auth/services/auth.service";
 import { OtpPurpose } from "../../../shared/types";
 import customerTransactionService from "../../customer/services/customer-transaction.service";
 import { createLogger } from "../../../shared/utils/logger";
+import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const logger = createLogger("AgentService");
 
@@ -493,6 +494,13 @@ class AgentService {
       logger.error('Failed to send agent welcome email', { email: created.email, error: err?.message || err });
     });
 
+    eventBus.publish(EventTypes.AGENT_CREATED, {
+      agentId: created.id,
+      name: created.name,
+      email: created.email,
+      branchId: created.branchId,
+    });
+
     return created;
   }
 
@@ -754,16 +762,67 @@ class AgentService {
         paidTo: details.settlement?.bankDetails?.accountName || "—",
         bankName: details.settlement?.bankDetails?.bankName || "—",
       },
-      transactionSettlement: {
-        settlementId: details.settlement?.id || "—",
-        settlementDate: details.settlement?.depositedAt || details.settlement?.createdAt || "—",
-        settlementTime: details.settlement?.depositedAt || details.settlement?.createdAt || "—",
-        settlementReceipt: details.settlement?.proofOfPayment || "—",
-        settlementStructureCash: "—",
-        settlementStructurePrepaidCard: "—",
-        seventyFivePercentPaidInto: "—",
-        settlementStatus: details.currentStep || details.status,
-      },
+      transactionSettlement: (() => {
+        const isSettled =
+          details.status === "COMPLETED" ||
+          details.status === "APPROVED" ||
+          (details.settlement?.status as string) === "COMPLETED" ||
+          (details.settlement?.status as string) === "SUCCESS" ||
+          !!details.settlement?.confirmedAt ||
+          !!details.settlement?.depositedAt;
+
+        const foreignAmt = Number(details.foreignAmount || 0);
+        const curr = (details.currency || "USD").toUpperCase();
+        const opt = ((details as any).disbursementOption || "").toString().toUpperCase();
+        const mthd = ((details as any).disbursementMethod || "").toString().toUpperCase();
+
+        let cashStructure = "—";
+        let cardStructure = "—";
+        let paidIntoStructure = "—";
+
+        if (opt === "CARD_AND_CASH" || opt === "CASH_AND_CARD") {
+          const cashPortion = Math.min(foreignAmt * 0.25, 500);
+          const cardPortion = foreignAmt - cashPortion;
+          cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+          cardStructure = `75% Prepaid Card (${curr} ${cardPortion.toLocaleString()})`;
+          paidIntoStructure = "75% Prepaid Card / 25% Cash Pickup";
+        } else if (opt === "CASH_AND_TRANSFER") {
+          const cashPortion = foreignAmt * 0.25;
+          const transferPortion = foreignAmt * 0.75;
+          cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+          cardStructure = "—";
+          paidIntoStructure = `75% Electronic Transfer (${curr} ${transferPortion.toLocaleString()}) / 25% Cash`;
+        } else if (opt === "CARD" || mthd === "PREPAID_CARD") {
+          cashStructure = "0% Cash";
+          cardStructure = `100% Prepaid Card (${curr} ${foreignAmt.toLocaleString()})`;
+          paidIntoStructure = "100% Prepaid Card";
+        } else if (opt === "ELECTRONIC_TRANSFER" || mthd === "BANK_TRANSFER") {
+          cashStructure = "0% Cash";
+          cardStructure = "0% Prepaid Card";
+          paidIntoStructure = "100% Bank Account";
+        } else if (mthd === "CASH_PICKUP") {
+          cashStructure = `100% Cash (${curr} ${foreignAmt.toLocaleString()})`;
+          cardStructure = "0% Prepaid Card";
+          paidIntoStructure = "100% Cash Pickup";
+        } else if (foreignAmt > 0) {
+          const cashPortion = Math.min(foreignAmt * 0.25, 500);
+          const cardPortion = foreignAmt - cashPortion;
+          cashStructure = `Cash: ${curr} ${cashPortion.toLocaleString()}`;
+          cardStructure = `Card: ${curr} ${cardPortion.toLocaleString()}`;
+          paidIntoStructure = "Prepaid Card & Cash";
+        }
+
+        return {
+          settlementId: details.settlement?.id || "—",
+          settlementDate: isSettled ? (details.settlement?.depositedAt || details.settlement?.confirmedAt || details.settlement?.updatedAt || "—") : "—",
+          settlementTime: isSettled ? (details.settlement?.depositedAt || details.settlement?.confirmedAt || details.settlement?.updatedAt || "—") : "—",
+          settlementReceipt: isSettled ? (details.settlement?.proofOfPayment || "—") : "—",
+          settlementStructureCash: cashStructure,
+          settlementStructurePrepaidCard: cardStructure,
+          seventyFivePercentPaidInto: paidIntoStructure,
+          settlementStatus: isSettled ? "SETTLED" : (details.currentStep || details.status),
+        };
+      })(),
       raw: details
     };
   }

@@ -36,6 +36,8 @@ const TEMPLATES = {
   agentWelcome:              process.env.TERMII_TEMPLATE_ID_AGENT_WELCOME               || '',
   // Variables: shared + full_name, reset_password_url
   adminWelcome:              process.env.TERMII_TEMPLATE_ID_ADMIN_WELCOME               || '',
+  // Variables: shared + branch_name, branch_manager, state, address, phone_number, branch_email
+  branchCreated:             process.env.TERMII_TEMPLATE_ID_BRANCH_CREATED              || '',
   // Variables: shared
   passwordResetConfirm:      process.env.TERMII_TEMPLATE_ID_PASSWORD_RESET_CONFIRM      || '',
   // Variables: shared + temporary_password
@@ -81,6 +83,8 @@ const TEMPLATES = {
   touristCardPickup:         process.env.TERMII_TEMPLATE_ID_TOURIST_CARD_PICKUP         || '',
   // Variables: shared + transaction_id, transaction_type_label, refund_amount_display, provide_bank_details_url
   refundBankDetailsRequest:  process.env.TERMII_TEMPLATE_ID_REFUND_BANK_DETAILS_REQUEST || '',
+  // Variables: shared + transaction_ref, reason, severity, amount, customer_name
+  flaggedTransactionEscalated: process.env.TERMII_TEMPLATE_ID_FLAGGED_TRANSACTION_ESCALATED || '',
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -302,6 +306,51 @@ class EmailService {
     });
   }
 
+  // ── Branch creation email ──────────────────────────────────────────────
+
+  async sendBranchCreatedEmail(
+    email: string,
+    data: {
+      branchName: string;
+      branchManager: string;
+      state: string;
+      address: string;
+      phoneNumber: string;
+      branchEmail?: string | null;
+    }
+  ): Promise<boolean> {
+    const shared = sharedVars(email, data.branchManager || 'Branch Manager');
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2>New Branch Created</h2>
+        <p>Hello <strong>${data.branchManager}</strong>,</p>
+        <p>A new branch has been successfully created in the SohCahToa system with the following details:</p>
+        <ul>
+          <li><strong>Branch Name:</strong> ${data.branchName}</li>
+          <li><strong>Branch Manager:</strong> ${data.branchManager}</li>
+          <li><strong>State:</strong> ${data.state}</li>
+          <li><strong>Address:</strong> ${data.address}</li>
+          <li><strong>Phone Number:</strong> ${data.phoneNumber}</li>
+          ${data.branchEmail ? `<li><strong>Branch Email:</strong> ${data.branchEmail}</li>` : ''}
+        </ul>
+        <p>Thank you,<br/><strong>SohCahToa BDC Team</strong></p>
+      </div>
+    `;
+    return this.sendTemplate(email, 'branchCreated', {
+      ...shared,
+      branch_name:    data.branchName,
+      branch_manager: data.branchManager,
+      state:          data.state,
+      address:        data.address,
+      phone_number:   data.phoneNumber,
+      branch_email:   data.branchEmail || '',
+    }, {
+      subject: `New Branch Created: ${data.branchName} - SohCahToa`,
+      text: `Hello ${data.branchManager},\n\nA new branch has been created successfully:\n- Branch Name: ${data.branchName}\n- State: ${data.state}\n- Address: ${data.address}\n- Manager: ${data.branchManager}\n- Phone: ${data.phoneNumber}${data.branchEmail ? `\n- Branch Email: ${data.branchEmail}` : ''}\n\nThank you,\nSohCahToa BDC Team`,
+      html,
+    });
+  }
+
   // ── Password reset confirmation ──────────────────────────────────────────
 
   async sendPasswordResetConfirmationEmail(email: string, firstName?: string): Promise<boolean> {
@@ -491,6 +540,93 @@ class EmailService {
     }, {
       subject: `Complete your refund request - ${data.transactionId}`,
       text: `Hi ${firstName}, a refund of ${data.refundAmountDisplay} has been initiated for your ${data.transactionTypeLabel} transaction (${data.transactionId}). Please provide your bank details here: ${data.provideBankDetailsUrl}`,
+    });
+  }
+
+  // ── Flagged Transaction Escalation Email (Internal Control) ───────────────
+
+  async sendFlaggedTransactionEscalationEmail(
+    toEmail: string,
+    data: {
+      transactionRef: string;
+      reason: string;
+      severity?: string;
+      amount?: string;
+      customerName?: string;
+      flaggedBy?: string;
+    }
+  ): Promise<boolean> {
+    const internalControlEmail = toEmail || process.env.INTERNAL_CONTROL_EMAIL || 'internalcontrol@sohcahtoabdc.com';
+    const shared = sharedVars(internalControlEmail, 'Internal Control Team');
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #dc2626;">🚨 Flagged Transaction Escalation</h2>
+        <p>Dear Internal Control Team,</p>
+        <p>A transaction has been flagged and escalated for internal control review:</p>
+        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
+          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Ref:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Flag Reason / Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.reason}</td></tr>
+          ${data.severity ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Severity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;"><span style="color: #dc2626; font-weight: bold;">${data.severity}</span></td></tr>` : ''}
+          ${data.amount ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
+          ${data.customerName ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
+          ${data.flaggedBy ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Flagged By:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.flaggedBy}</td></tr>` : ''}
+        </table>
+        <p style="margin-top: 20px;">Please log into the Admin Portal to review and take necessary compliance action.</p>
+        <p>Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
+      </div>
+    `;
+
+    return this.sendTemplate(internalControlEmail, 'flaggedTransactionEscalated', {
+      ...shared,
+      transaction_ref: data.transactionRef,
+      reason:          data.reason,
+      severity:        data.severity || 'HIGH',
+      amount:          data.amount || '',
+      customer_name:   data.customerName || '',
+    }, {
+      subject: `🚨 [ESCALATION] Flagged Transaction Alert: ${data.transactionRef}`,
+      text: `ATTENTION INTERNAL CONTROL:\nA transaction has been flagged and escalated to the Control Team.\n- Transaction Ref: ${data.transactionRef}\n- Reason: ${data.reason}\n- Severity: ${data.severity || 'HIGH'}\n${data.amount ? `- Amount: ${data.amount}\n` : ''}${data.customerName ? `- Customer: ${data.customerName}\n` : ''}\nPlease review this transaction immediately in the Admin Portal.`,
+      html,
+    });
+  }
+
+  // ── Admin Transaction Activity Email ─────────────────────────────────────
+
+  async sendAdminTransactionActivityEmail(
+    adminEmail: string,
+    adminName: string,
+    data: {
+      transactionRef: string;
+      activityType: string;
+      details?: string;
+      amount?: string;
+      customerName?: string;
+    }
+  ): Promise<boolean> {
+    const shared = sharedVars(adminEmail, adminName || 'Admin');
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #0284c7;">🔔 Transaction Activity Alert</h2>
+        <p>Dear ${adminName || 'Admin'},</p>
+        <p>A new transaction activity requires your review or attention:</p>
+        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
+          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Activity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.activityType}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Ref:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
+          ${data.amount ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
+          ${data.customerName ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
+          ${data.details ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.details}</td></tr>` : ''}
+        </table>
+        <p style="margin-top: 20px;">Please log into the Admin Portal to manage this transaction.</p>
+        <p>Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
+      </div>
+    `;
+
+    return this.sendTemplate(adminEmail, 'welcome', {
+      ...shared,
+    }, {
+      subject: `[Transaction Alert] ${data.activityType}: ${data.transactionRef}`,
+      text: `Hello ${adminName || 'Admin'},\n\nTransaction Activity: ${data.activityType}\nTransaction Ref: ${data.transactionRef}\n${data.amount ? `Amount: ${data.amount}\n` : ''}${data.customerName ? `Customer: ${data.customerName}\n` : ''}${data.details ? `Details: ${data.details}\n` : ''}\nPlease review this transaction in the Admin Portal.`,
+      html,
     });
   }
 

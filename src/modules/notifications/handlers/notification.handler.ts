@@ -353,6 +353,24 @@ export class NotificationHandler {
           data: { actionUrl: template.actionUrl },
           transactionId: transaction.id,
         });
+
+        // Notify admins via email of new transaction request
+        const activeAdmins = await prisma.adminUser.findMany({
+          where: { isActive: true },
+          select: { email: true, fullName: true },
+        });
+        for (const admin of activeAdmins) {
+          if (admin.email) {
+            await emailService
+              .sendAdminTransactionActivityEmail(admin.email, admin.fullName, {
+                transactionRef: transaction.referenceNumber,
+                activityType: 'New Transaction Request Created',
+                amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
+                details: `A new transaction request (${transaction.referenceNumber}) has been submitted.`,
+              })
+              .catch((e) => logger.error('Error sending transaction created email to admin:', e));
+          }
+        }
       } catch (error) {
         logger.error('Error sending transaction created notification:', error);
       }
@@ -818,25 +836,71 @@ export class NotificationHandler {
    * Handle compliance events
    */
   private handleComplianceEvents() {
+    const notifyInternalControl = async (payload: any) => {
+      try {
+        const { getDatabase } = require('../../../config/database');
+        const prisma = getDatabase();
+
+        const data = payload?.data || payload;
+        const transactionId = data?.transactionId || payload?.transactionId || payload?.transaction?.id;
+        const transactionRef = data?.referenceNumber || payload?.transaction?.referenceNumber || transactionId || 'N/A';
+        const reason = data?.description || data?.reason || data?.flagType || 'Transaction flagged for compliance review';
+        const severity = data?.severity || payload?.severity || 'HIGH';
+        const flaggedBy = data?.flaggedBy || payload?.flaggedBy || 'Compliance Engine';
+
+        let customerName = '';
+        let amountStr = '';
+
+        if (transactionId) {
+          const trx = await prisma.transaction.findUnique({
+            where: { id: transactionId },
+            include: { user: { include: { profile: true } } },
+          }).catch(() => null);
+
+          if (trx) {
+            const userProfile = trx.user?.profile;
+            customerName = userProfile ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() : (trx.user?.email || '');
+            amountStr = `${trx.currency || 'NGN'} ${Number(trx.nairaEquivalent || trx.foreignAmount || 0).toLocaleString()}`;
+          }
+        }
+
+        const internalControlEmail = process.env.INTERNAL_CONTROL_EMAIL || 'internalcontrol@sohcahtoabdc.com';
+        await emailService.sendFlaggedTransactionEscalationEmail(internalControlEmail, {
+          transactionRef,
+          reason,
+          severity,
+          amount: amountStr,
+          customerName,
+          flaggedBy,
+        }).catch((e) => logger.error('Failed to send flagged transaction escalation email to Internal Control:', e));
+      } catch (err) {
+        logger.error('Error handling Internal Control escalation email:', err);
+      }
+    };
+
     eventBus.on(EventTypes.AML_CHECK_COMPLETED, async (event: any) => {
       try {
         const { userId, transaction, status } = event;
 
         if (status === 'FLAGGED') {
-          const template = NotificationTemplates.COMPLIANCE_REVIEW({
-            referenceNumber: transaction.referenceNumber,
-          });
+          if (userId && transaction?.referenceNumber) {
+            const template = NotificationTemplates.COMPLIANCE_REVIEW({
+              referenceNumber: transaction.referenceNumber,
+            });
 
-          await notificationService.sendNotification({
-            userId,
-            type: NotificationType.PUSH,
-            channel: NotificationChannel.ALL,
-            priority: template.priority,
-            title: template.title,
-            body: template.body,
-            data: { actionUrl: template.actionUrl },
-            transactionId: transaction.id,
-          });
+            await notificationService.sendNotification({
+              userId,
+              type: NotificationType.PUSH,
+              channel: NotificationChannel.ALL,
+              priority: template.priority,
+              title: template.title,
+              body: template.body,
+              data: { actionUrl: template.actionUrl },
+              transactionId: transaction.id,
+            }).catch(() => null);
+          }
+
+          await notifyInternalControl(event);
         }
       } catch (error) {
         logger.error('Error sending compliance notification:', error);
@@ -847,23 +911,35 @@ export class NotificationHandler {
       try {
         const { userId, transaction, severity } = event;
 
-        const template = NotificationTemplates.AML_FLAG_RAISED({
-          referenceNumber: transaction.referenceNumber,
-          severity,
-        });
+        if (userId && transaction?.referenceNumber) {
+          const template = NotificationTemplates.AML_FLAG_RAISED({
+            referenceNumber: transaction.referenceNumber,
+            severity: severity || 'HIGH',
+          });
 
-        await notificationService.sendNotification({
-          userId,
-          type: NotificationType.PUSH,
-          channel: NotificationChannel.PUSH,
-          priority: template.priority,
-          title: template.title,
-          body: template.body,
-          data: { actionUrl: template.actionUrl },
-          transactionId: transaction.id,
-        });
+          await notificationService.sendNotification({
+            userId,
+            type: NotificationType.PUSH,
+            channel: NotificationChannel.PUSH,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+            data: { actionUrl: template.actionUrl },
+            transactionId: transaction.id,
+          }).catch(() => null);
+        }
+
+        await notifyInternalControl(event);
       } catch (error) {
         logger.error('Error sending AML flag notification:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.COMPLIANCE_REVIEW_REQUIRED, async (event: any) => {
+      try {
+        await notifyInternalControl(event);
+      } catch (error) {
+        logger.error('Error handling COMPLIANCE_REVIEW_REQUIRED event:', error);
       }
     });
   }
@@ -1218,11 +1294,16 @@ export class NotificationHandler {
           customerName: transaction.customerName || (transaction.user?.profile ? `${transaction.user.profile.firstName} ${transaction.user.profile.lastName}` : 'Customer'),
         });
 
-        for (const adminId of adminIds) {
+        const targetAdmins = await prisma.adminUser.findMany({
+          where: { id: { in: adminIds }, isActive: true },
+          select: { id: true, email: true, fullName: true },
+        });
+
+        for (const admin of targetAdmins) {
           await notificationService.sendNotification({
-            userId: adminId,
+            userId: admin.id,
             type: NotificationType.IN_APP,
-            channel: NotificationChannel.IN_APP,
+            channel: NotificationChannel.ALL,
             priority: template.priority,
             title: template.title,
             body: template.body,
@@ -1233,10 +1314,105 @@ export class NotificationHandler {
             },
             transactionId: transaction.id,
           });
+
+          if (admin.email) {
+            await emailService
+              .sendAdminTransactionActivityEmail(admin.email, admin.fullName, {
+                transactionRef: transaction.referenceNumber,
+                activityType: 'Transaction Review Required',
+                amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
+                customerName: transaction.customerName || 'Customer',
+                details: `Transaction ${transaction.referenceNumber} requires administrative review.`,
+              })
+              .catch((e) => logger.error('Error sending admin transaction activity email:', e));
+          }
         }
-        logger.info(`Admin review notifications sent for transaction ${transaction.id} to ${adminIds.length} admins`);
+        logger.info(`Admin review notifications and emails sent for transaction ${transaction.id} to ${targetAdmins.length} admins`);
       } catch (error) {
         logger.error('Error sending admin review required notifications:', error);
+      }
+    });
+
+    // Handle User creation notification
+    eventBus.on(EventTypes.USER_CREATED, async (event: any) => {
+      try {
+        const { userId, name, email, role } = event;
+        logger.info(`User created notification triggered for ${name || email}`);
+        if (userId) {
+          const template = NotificationTemplates.USER_CREATED({ name: name || email || 'User', email: email || '', role });
+          await notificationService.sendNotification({
+            userId,
+            type: NotificationType.IN_APP,
+            channel: NotificationChannel.IN_APP,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+          }).catch((e) => logger.warn('Failed to send user creation in-app notification:', e));
+        }
+      } catch (error) {
+        logger.error('Error handling USER_CREATED event:', error);
+      }
+    });
+
+    // Handle Branch creation notification
+    eventBus.on(EventTypes.BRANCH_CREATED, async (event: any) => {
+      try {
+        const { branchName, state } = event;
+        logger.info(`Branch created notification triggered for ${branchName}`);
+      } catch (error) {
+        logger.error('Error handling BRANCH_CREATED event:', error);
+      }
+    });
+
+    // Handle Agent creation notification
+    eventBus.on(EventTypes.AGENT_CREATED, async (event: any) => {
+      try {
+        const { name, email } = event;
+        logger.info(`Agent created notification triggered for ${name} (${email})`);
+      } catch (error) {
+        logger.error('Error handling AGENT_CREATED event:', error);
+      }
+    });
+
+    // Handle Role creation notification
+    eventBus.on(EventTypes.ROLE_CREATED, async (event: any) => {
+      try {
+        const { name, createdById } = event;
+        logger.info(`Role created notification triggered for ${name}`);
+        if (createdById) {
+          const template = NotificationTemplates.ROLE_CREATED({ name });
+          await notificationService.sendNotification({
+            userId: createdById,
+            type: NotificationType.IN_APP,
+            channel: NotificationChannel.IN_APP,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+          }).catch((e) => logger.warn('Failed to send role creation notification:', e));
+        }
+      } catch (error) {
+        logger.error('Error handling ROLE_CREATED event:', error);
+      }
+    });
+
+    // Handle Department creation notification
+    eventBus.on(EventTypes.DEPARTMENT_CREATED, async (event: any) => {
+      try {
+        const { name, createdById } = event;
+        logger.info(`Department created notification triggered for ${name}`);
+        if (createdById) {
+          const template = NotificationTemplates.DEPARTMENT_CREATED({ name });
+          await notificationService.sendNotification({
+            userId: createdById,
+            type: NotificationType.IN_APP,
+            channel: NotificationChannel.IN_APP,
+            priority: template.priority,
+            title: template.title,
+            body: template.body,
+          }).catch((e) => logger.warn('Failed to send department creation notification:', e));
+        }
+      } catch (error) {
+        logger.error('Error handling DEPARTMENT_CREATED event:', error);
       }
     });
   }

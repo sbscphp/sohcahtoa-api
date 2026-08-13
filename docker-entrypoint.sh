@@ -59,8 +59,9 @@ fi
 # 3. Run Prisma migrations
 # ──────────────────────────────────────────────
 echo ""
-echo "🚀 Running database migrations..."
+echo "🚀 Running database migrations and schema sync..."
 npx prisma migrate deploy && echo "✅ Migrations deployed successfully" || echo "⚠️  Migration deploy had issues — continuing"
+npx prisma db push --accept-data-loss && echo "✅ Schema synced via db push successfully" || echo "⚠️  Prisma db push had issues — continuing"
 
 # ──────────────────────────────────────────────
 # 4. Schema fallback (idempotent safety net)
@@ -479,6 +480,18 @@ ALTER TABLE "workflow_assignees" ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NU
 
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "workflowTemplateId" TEXT;
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "currentWorkflowStageId" TEXT;
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "disbursementWorkflowTemplateId" TEXT;
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "disbursementWorkflowStageId" TEXT;
+ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "disbursementApprovalStatus" TEXT;
+CREATE INDEX IF NOT EXISTS "transactions_disbursementWorkflowTemplateId_idx" ON "transactions"("disbursementWorkflowTemplateId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_disbursementWorkflowTemplateId_fkey') THEN
+    ALTER TABLE "transactions"
+      ADD CONSTRAINT "transactions_disbursementWorkflowTemplateId_fkey"
+      FOREIGN KEY ("disbursementWorkflowTemplateId") REFERENCES "workflow_templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'DISBURSEMENT'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS "workflow_stage_types" (
   "id" TEXT NOT NULL PRIMARY KEY,
@@ -530,7 +543,8 @@ CREATE TABLE IF NOT EXISTS "transaction_bank_accounts" (
 );
 CREATE INDEX IF NOT EXISTS "transaction_bank_accounts_transactionId_idx" ON "transaction_bank_accounts"("transactionId");
 
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'DisbursementOption') THEN CREATE TYPE "DisbursementOption" AS ENUM ('ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH'); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'DisbursementOption') THEN CREATE TYPE "DisbursementOption" AS ENUM ('ELECTRONIC_TRANSFER', 'CARD', 'CARD_AND_CASH', 'CASH_AND_TRANSFER'); END IF; END $$;
+DO $$ BEGIN ALTER TYPE "DisbursementOption" ADD VALUE IF NOT EXISTS 'CASH_AND_TRANSFER'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "disbursementOption" "DisbursementOption";
 CREATE INDEX IF NOT EXISTS "transactions_disbursementOption_idx" ON "transactions"("disbursementOption");
 
