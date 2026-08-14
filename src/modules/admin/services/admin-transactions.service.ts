@@ -108,7 +108,16 @@ export class AdminTransactionsService {
   // }
 
   async getTransactionStats() {
-    const [underReviewA, underReviewB, underReviewC, underReviewD, rejected, approved, reqInfoGroup] = await Promise.all([
+    const [
+      underReviewA,
+      underReviewB,
+      underReviewC,
+      underReviewD,
+      rejected,
+      approved,
+      reqInfoGroup,
+      operationsReviewCount,
+    ] = await Promise.all([
       prisma.transaction.count({ where: { status: TransactionStatus.AWAITING_VERIFICATION } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.VERIFICATION_IN_PROGRESS } as any }),
       prisma.transaction.count({ where: { status: TransactionStatus.COMPLIANCE_REVIEW } as any }),
@@ -119,10 +128,25 @@ export class AdminTransactionsService {
         by: ["transactionId"],
         where: { verificationStatus: VerificationStatus.REQUIRES_MANUAL_REVIEW } as any,
       }),
+      (prisma as any).transaction.count({
+        where: {
+          OR: [
+            { status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any },
+            { status: TransactionStatus.AWAITING_DISBURSEMENT as any },
+            { disbursementApprovalStatus: "PENDING_APPROVAL" as any },
+          ],
+        },
+      }),
     ]);
+
     const requestInformation = Array.isArray(reqInfoGroup) ? reqInfoGroup.length : 0;
+    const complianceReview = underReviewA + underReviewB + underReviewC + underReviewD;
+    const operationsReview = operationsReviewCount;
+
     return {
-      underReview: underReviewA + underReviewB + underReviewC + underReviewD,
+      underReview: complianceReview,
+      complianceReview,
+      operationsReview,
       rejected,
       requestInformation,
       approved,
@@ -504,7 +528,7 @@ export class AdminTransactionsService {
 
     // Statuses that indicate the entire transaction workflow has completed
     const workflowCompletedStatuses = [
-      "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "REFUNDED",
+      "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "REFUNDED", "DISBURSEMENT_IN_PROGRESS", "AWAITING_DISBURSEMENT",
     ];
     const isWorkflowCompleted = workflowCompletedStatuses.includes(trx.status);
 
@@ -1063,6 +1087,7 @@ export class AdminTransactionsService {
     let nextStageId: string | null = null;
     let nextStageAssignees: string[] = [];
     let isRefundWorkflow = false;
+    let isDisbursementWorkflow = false;
 
     if (tx.workflowTemplateId && !tx.currentWorkflowStageId) {
       throw new Error("Transaction workflow state is invalid (missing current stage).");
@@ -1081,6 +1106,7 @@ export class AdminTransactionsService {
 
       if (workflow) {
         isRefundWorkflow = workflow.approvalType === "REFUND";
+        isDisbursementWorkflow = workflow.approvalType === "DISBURSEMENT";
         let currentStageIndex = workflow.stages.findIndex((s: any) => s.id === tx.currentWorkflowStageId);
         
         if (currentStageIndex === -1) {
@@ -1181,6 +1207,36 @@ export class AdminTransactionsService {
         return { message: "Transaction refund approved and processed successfully" };
       }
 
+      if (isDisbursementWorkflow) {
+        const updateResult = await prisma.transaction.updateMany({
+          where: {
+            id: transactionId,
+            currentWorkflowStageId: tx.currentWorkflowStageId,
+          },
+          data: {
+            disbursementApprovalStatus: "APPROVED",
+            currentWorkflowStageId: null,
+            disbursementWorkflowStageId: null,
+            updatedAt: new Date(),
+          } as any,
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("Transaction state changed during approval. Please refresh and try again.");
+        }
+
+        await prisma.transactionHistory.create({
+          data: {
+            transactionId,
+            action: "DISBURSEMENT_APPROVED",
+            performedBy: adminId,
+            notes: reason || "Disbursement fully approved by all assigned officers",
+          },
+        });
+
+        return { message: "Disbursement approved successfully by all assigned officers. Ready for final disbursement confirmation." };
+      }
+
       const updateResult = await prisma.transaction.updateMany({
         where: { 
           id: transactionId,
@@ -1217,6 +1273,43 @@ export class AdminTransactionsService {
 
       return { message: "Transaction approved successfully" };
     } else {
+      if (isDisbursementWorkflow) {
+        const updateResult = await prisma.transaction.updateMany({
+          where: { 
+            id: transactionId,
+            currentWorkflowStageId: tx.currentWorkflowStageId
+          },
+          data: {
+            currentWorkflowStageId: nextStageId,
+            disbursementWorkflowStageId: nextStageId,
+            updatedAt: new Date(),
+          } as any,
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("Transaction state changed during approval. Please refresh and try again.");
+        }
+
+        await prisma.transactionHistory.create({
+          data: { transactionId, action: "DISBURSEMENT_STAGE_APPROVED", performedBy: adminId, notes: reason },
+        });
+
+        if (nextStageAssignees.length > 0) {
+          const user = await prisma.user.findUnique({
+            where: { id: tx.userId },
+            select: { profile: { select: { firstName: true, lastName: true } }, email: true },
+          });
+          const customerName = user?.profile ? `${user.profile.firstName} ${user.profile.lastName}`.trim() : user?.email;
+
+          eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+            adminIds: nextStageAssignees,
+            transaction: { ...tx, customerName },
+          });
+        }
+
+        return { message: "Disbursement stage approved successfully" };
+      }
+
       const updateResult = await prisma.transaction.updateMany({
         where: { 
           id: transactionId,
@@ -1271,6 +1364,7 @@ export class AdminTransactionsService {
     if (tx.status === "REJECTED") throw new Error("Transaction is already rejected");
 
     let isRefundWorkflow = false;
+    let isDisbursementWorkflow = false;
 
     if (tx.workflowTemplateId && tx.currentWorkflowStageId) {
       const workflow = await prisma.workflowTemplate.findUnique({
@@ -1280,6 +1374,7 @@ export class AdminTransactionsService {
 
       if (workflow) {
         isRefundWorkflow = workflow.approvalType === "REFUND";
+        isDisbursementWorkflow = workflow.approvalType === "DISBURSEMENT";
         const currentStage = workflow.stages.find((s: any) => s.id === tx.currentWorkflowStageId);
         if (currentStage) {
           const isAssigned = currentStage.assignees.some((a: any) => String(a.adminId) === String(adminId));
@@ -1333,6 +1428,28 @@ export class AdminTransactionsService {
       }
 
       return { message: "Transaction refund rejected successfully" };
+    }
+
+    if (isDisbursementWorkflow) {
+      await (prisma as any).transaction.update({
+        where: { id: transactionId },
+        data: {
+          disbursementApprovalStatus: "REJECTED",
+          currentWorkflowStageId: null,
+          updatedAt: new Date(),
+        },
+      });
+
+      await prisma.transactionHistory.create({
+        data: {
+          transactionId,
+          action: "DISBURSEMENT_REJECTED",
+          performedBy: adminId,
+          notes: reason || "Disbursement approval rejected",
+        },
+      });
+
+      return { message: "Disbursement approval rejected successfully" };
     }
 
     const transaction = await prisma.transaction.update({
@@ -2072,11 +2189,17 @@ export class AdminTransactionsService {
     const template = await workflowService.attachDisbursementWorkflowToTransaction(transactionId);
 
     if (template) {
+      const firstStage = template.stages[0];
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
           status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
           currentStep: TransactionStep.DISBURSEMENT as any,
+          workflowTemplateId: template.id,
+          currentWorkflowStageId: firstStage.id,
+          disbursementWorkflowTemplateId: template.id,
+          disbursementWorkflowStageId: firstStage.id,
+          disbursementApprovalStatus: "PENDING_APPROVAL",
           updatedAt: new Date(),
         }
       });
@@ -2090,7 +2213,6 @@ export class AdminTransactionsService {
         }
       });
 
-      const firstStage = template.stages[0];
       const adminIds = firstStage.assignees.map((a: any) => a.adminId);
 
       if (adminIds.length > 0) {
@@ -2129,6 +2251,8 @@ export class AdminTransactionsService {
           status: TransactionStatus.DISBURSEMENT_IN_PROGRESS as any,
           currentStep: TransactionStep.DISBURSEMENT as any,
           disbursementApprovalStatus: "APPROVED",
+          currentWorkflowStageId: null,
+          disbursementWorkflowStageId: null,
           updatedAt: new Date(),
         }
       });
@@ -2205,6 +2329,8 @@ export class AdminTransactionsService {
         where: { id: transactionId },
         data: {
           disbursementApprovalStatus: "APPROVED",
+          currentWorkflowStageId: null,
+          disbursementWorkflowStageId: null,
           updatedAt: new Date(),
         }
       });
@@ -2228,6 +2354,7 @@ export class AdminTransactionsService {
         where: { id: transactionId },
         data: {
           disbursementWorkflowStageId: nextStage.id,
+          currentWorkflowStageId: nextStage.id,
           updatedAt: new Date(),
         }
       });
@@ -2303,6 +2430,7 @@ export class AdminTransactionsService {
       where: { id: transactionId },
       data: {
         disbursementApprovalStatus: "REJECTED",
+        currentWorkflowStageId: null,
         updatedAt: new Date(),
       }
     });
