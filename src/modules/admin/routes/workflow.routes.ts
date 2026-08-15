@@ -101,8 +101,6 @@ WorkflowRouter.get(
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
- *               branchId: { type: string }
- *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
  *               stages:
@@ -160,8 +158,6 @@ WorkflowRouter.post(
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
- *               branchId: { type: string }
- *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
  *               stages:
@@ -277,8 +273,6 @@ WorkflowRouter.get(
  *               maxAmount: { type: number }
  *               processType: { type: string, enum: [RIGID_LINEAR, FLEXIBLE] }
  *               action: { type: string }
- *               branchId: { type: string }
- *               departmentId: { type: string }
  *               escalationMinutes: { type: integer }
  *               hasPtaRequest: { type: boolean }
  *               stages:

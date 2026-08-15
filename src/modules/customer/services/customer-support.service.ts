@@ -2,6 +2,7 @@ import { getDatabase } from "../../../config/database";
 import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import { createLogger } from "../../../shared/utils/logger";
+import { emailService } from "../../../shared/utils/email";
 
 const prisma = getDatabase();
 const logger = createLogger('customer-support-service');
@@ -162,6 +163,21 @@ export class CustomerSupportService {
       customerId,
       hasAttachment: !!attachmentUrl,
     });
+
+    if (customer?.email) {
+      emailService.sendSupportTicketCreatedEmail(
+        customer.email,
+        customer.profile?.firstName || "Customer",
+        {
+          reference: ticket.reference,
+          caseType: ticket.caseType,
+          priority: ticket.priority,
+          description: ticket.description,
+        }
+      ).catch((err: any) => {
+        logger.error(`[createSupportTicket] Failed to send confirmation email to ${customer.email}:`, err);
+      });
+    }
 
     return {
       ticketId: ticket.id,

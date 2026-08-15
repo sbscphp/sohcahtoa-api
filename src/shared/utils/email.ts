@@ -750,6 +750,140 @@ class EmailService {
     });
   }
 
+  // ── Support Ticket / Transaction Dispute Notifications ────────────────────
+
+  async sendSupportTicketCreatedEmail(
+    email: string,
+    firstName: string,
+    ticket: {
+      reference: string;
+      caseType: string;
+      priority?: string;
+      description?: string;
+    }
+  ): Promise<boolean> {
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">Support Ticket Received</h2>
+        <p>Dear ${firstName},</p>
+        <p>Your support ticket has been received and logged in our system. Our support team is reviewing your inquiry.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 140px;">Ticket Reference:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${ticket.reference}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Category:</td><td style="padding: 6px 0; color: #0f172a;">${ticket.caseType}</td></tr>
+            ${ticket.priority ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Priority:</td><td style="padding: 6px 0; color: #0f172a;">${ticket.priority}</td></tr>` : ''}
+            ${ticket.description ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; vertical-align: top;">Description:</td><td style="padding: 6px 0; color: #0f172a;">${ticket.description}</td></tr>` : ''}
+          </table>
+        </div>
+        <p>You can track the progress of this ticket anytime on your SohCahToa portal.</p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Best regards,<br/><strong>SohCahToa Customer Support</strong></p>
+      </div>
+    `;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject: `Support Ticket Received - [${ticket.reference}] ${ticket.caseType}`,
+      text: `Dear ${firstName},\n\nYour support ticket (${ticket.reference}) regarding "${ticket.caseType}" has been received. Our team is currently reviewing it and will respond shortly.\n\nDescription: ${ticket.description || 'N/A'}\n\nRegards,\nSohCahToa Support`,
+      html,
+    });
+    return result.success;
+  }
+
+  async sendSupportTicketUpdatedEmail(
+    email: string,
+    firstName: string,
+    ticket: {
+      reference: string;
+      caseType: string;
+      changesSummary?: string;
+    }
+  ): Promise<boolean> {
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">Support Ticket Updated</h2>
+        <p>Dear ${firstName},</p>
+        <p>There has been an update on your support ticket <strong>${ticket.reference}</strong> (${ticket.caseType}).</p>
+        ${ticket.changesSummary ? `<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;"><p style="margin: 0; font-size: 14px; color: #334155;"><strong>Update Details:</strong> ${ticket.changesSummary}</p></div>` : ''}
+        <p>Log in to your account to view the complete history and details of your request.</p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Best regards,<br/><strong>SohCahToa Customer Support</strong></p>
+      </div>
+    `;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject: `Update on Support Ticket - [${ticket.reference}] ${ticket.caseType}`,
+      text: `Dear ${firstName},\n\nYour support ticket ${ticket.reference} (${ticket.caseType}) has been updated.\n\n${ticket.changesSummary || ''}\n\nPlease check your portal for full details.\n\nRegards,\nSohCahToa Support`,
+      html,
+    });
+    return result.success;
+  }
+
+  async sendSupportTicketStatusUpdatedEmail(
+    email: string,
+    firstName: string,
+    ticket: {
+      reference: string;
+      caseType: string;
+      status: string;
+      notes?: string;
+    }
+  ): Promise<boolean> {
+    const isResolvedOrClosed = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED';
+    const statusColor = isResolvedOrClosed ? '#16a34a' : '#2563eb';
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">Ticket Status: <span style="color: ${statusColor};">${ticket.status.replace(/_/g, ' ')}</span></h2>
+        <p>Dear ${firstName},</p>
+        <p>The status of your support ticket <strong>${ticket.reference}</strong> (${ticket.caseType}) has been updated to <strong style="color: ${statusColor};">${ticket.status.replace(/_/g, ' ')}</strong>.</p>
+        ${ticket.notes ? `<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;"><p style="margin: 0; font-size: 14px; color: #334155;"><strong>Status Notes:</strong> ${ticket.notes}</p></div>` : ''}
+        ${isResolvedOrClosed ? '<p>If you have any further questions or if the issue persists, please reply to this ticket or open a new inquiry.</p>' : '<p>Our team is actively working on resolving your request.</p>'}
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Best regards,<br/><strong>SohCahToa Customer Support</strong></p>
+      </div>
+    `;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject: `Ticket Status Update: ${ticket.status.replace(/_/g, ' ')} - [${ticket.reference}]`,
+      text: `Dear ${firstName},\n\nThe status of your support ticket ${ticket.reference} (${ticket.caseType}) has been updated to "${ticket.status}".\n\n${ticket.notes ? `Notes: ${ticket.notes}\n\n` : ''}Regards,\nSohCahToa Support`,
+      html,
+    });
+    return result.success;
+  }
+
+  async sendSupportTicketCommentEmail(
+    email: string,
+    firstName: string,
+    ticket: {
+      reference: string;
+      caseType: string;
+      message: string;
+      authorName?: string;
+    }
+  ): Promise<boolean> {
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">New Response on Support Ticket</h2>
+        <p>Dear ${firstName},</p>
+        <p>A new response has been posted on your support ticket <strong>${ticket.reference}</strong> (${ticket.caseType}):</p>
+        <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; margin: 20px 0; border-radius: 0 6px 6px 0;">
+          <p style="margin: 0; font-size: 14px; color: #1e293b; white-space: pre-wrap;">${ticket.message}</p>
+          ${ticket.authorName ? `<p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b;">— ${ticket.authorName}</p>` : ''}
+        </div>
+        <p>You can reply directly through your customer portal.</p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Best regards,<br/><strong>SohCahToa Customer Support</strong></p>
+      </div>
+    `;
+
+    const result = await this.sendEmail({
+      to: email,
+      subject: `New Message on Ticket - [${ticket.reference}] ${ticket.caseType}`,
+      text: `Dear ${firstName},\n\nA new message has been added to your support ticket ${ticket.reference} (${ticket.caseType}):\n\n"${ticket.message}"\n\nRegards,\nSohCahToa Support`,
+      html,
+    });
+    return result.success;
+  }
+
   isReady(): boolean {
     return this.isConfigured || this.useTermii;
   }

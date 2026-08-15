@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import { createLogger } from "../../../shared/utils/logger";
 import { UserRole } from "../../../shared/types";
+import { emailService } from "../../../shared/utils/email";
 
 const prisma = getDatabase();
 const logger = createLogger("agent-support-service");
@@ -52,7 +53,11 @@ class AgentSupportService {
 
     const customer = await prisma.user.findFirst({
       where: { id: customerId, createdByAgentId: agent.id },
-      select: { id: true },
+      select: {
+        id: true,
+        email: true,
+        profile: { select: { firstName: true, lastName: true } },
+      },
     });
 
     if (!customer) {
@@ -138,6 +143,21 @@ class AgentSupportService {
         });
         // Follow existing customer ticket behavior: do not fail ticket creation if attachment upload fails.
       }
+    }
+
+    if (customer?.email) {
+      emailService.sendSupportTicketCreatedEmail(
+        customer.email,
+        customer.profile?.firstName || "Customer",
+        {
+          reference: ticket.reference,
+          caseType: ticket.caseType,
+          priority: ticket.priority,
+          description: ticket.description,
+        }
+      ).catch((err: any) => {
+        logger.error(`[createSupportTicket] Failed to send confirmation email to ${customer.email}:`, err);
+      });
     }
 
     return {
