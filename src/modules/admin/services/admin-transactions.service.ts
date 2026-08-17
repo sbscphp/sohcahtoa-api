@@ -332,7 +332,7 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const [user, wallet, settlement, paymentReceipt] = await Promise.all([
+    const [user, wallet, settlement, paymentReceipt, pickupStation] = await Promise.all([
       prisma.user.findUnique({
         where: { id: (trx as any).userId },
         include: { profile: true, kyc: true },
@@ -348,7 +348,15 @@ export class AdminTransactionsService {
       (prisma as any).paymentReceipt.findFirst({
         where: { transactionId: id },
         orderBy: { generatedAt: "desc" }
-      }).catch(() => null)
+      }).catch(() => null),
+      (trx as any).cashPickup?.pickupLocationId
+        ? (prisma as any).pickupStation
+            .findUnique({
+              where: { id: (trx as any).cashPickup.pickupLocationId },
+              select: { address: true, phoneNumber: true, name: true },
+            })
+            .catch(() => null)
+        : Promise.resolve(null),
     ]);
     const name =
       user?.profile
@@ -787,6 +795,8 @@ export class AdminTransactionsService {
         tin,
         numberOfDocuments: docCount,
         pickupLocation: pickup?.pickupLocation || null,
+        pickupAddress: pickupStation?.address || null,
+        pickupPhone: pickupStation?.phoneNumber || null,
         scheduledPickupDate: pickup?.scheduledPickupDate || null,
         scheduledPickupTime: pickup?.scheduledPickupTime || null,
         customerTransientWalletId: wallet?.id || null,

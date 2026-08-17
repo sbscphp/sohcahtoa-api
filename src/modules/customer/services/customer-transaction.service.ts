@@ -1834,7 +1834,7 @@ export class CustomerTransactionService {
 
     // Fetch payment and settlement details in parallel
     const client = prisma as any;
-    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts, transactionBankAccounts, savedBankAccounts] =
+    const [settlement, virtualAccount, deposits, outboundSettlement, paymentReceipts, transactionBankAccounts, savedBankAccounts, pickupStation] =
       await Promise.all([
         prisma.settlement
           .findUnique({ where: { transactionId }, include: { bankDetails: true } })
@@ -1952,6 +1952,14 @@ export class CustomerTransactionService {
             },
           })
           .catch(() => []),
+        transaction.cashPickup?.pickupLocationId
+          ? client.pickupStation
+              .findUnique({
+                where: { id: transaction.cashPickup.pickupLocationId },
+                select: { address: true, phoneNumber: true, name: true },
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
       ]);
 
     // Extract digital signature text from documents (stored in metadata.signatureText)
@@ -2025,6 +2033,8 @@ export class CustomerTransactionService {
       cashPickup: transaction.cashPickup
         ? {
             ...transaction.cashPickup,
+            pickupAddress: pickupStation?.address ?? null,
+            pickupPhone:   pickupStation?.phoneNumber ?? null,
             scheduledPickupDate: (() => {
               const date = transaction.cashPickup.scheduledPickupDate ?? stepPickupLocation?.scheduledPickupDate;
               if (!date) return null;

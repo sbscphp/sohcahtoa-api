@@ -91,6 +91,14 @@ export async function generateTransactionReceipt(
     throw new ValidationError('Receipt is only available for completed transactions');
   }
 
+  // PickupStation — fetch address and phone using cashPickup.pickupLocationId
+  const pickupStationInfo = transaction.cashPickup?.pickupLocationId
+    ? await client.pickupStation.findUnique({
+        where: { id: transaction.cashPickup.pickupLocationId },
+        select: { address: true, phoneNumber: true },
+      }).catch(() => null)
+    : null;
+
   // OutboundSettlement is not a Prisma relation on Transaction — fetch separately
   const outboundSettlement = await client.outboundSettlement.findFirst({
     where: { transactionId: transaction.id },
@@ -142,7 +150,7 @@ export async function generateTransactionReceipt(
     completedAt:        transaction.updatedAt,
     beneficiaryDetails,
     refundBankDetails,
-    cashPickup:         transaction.cashPickup ?? null,
+    cashPickup:         transaction.cashPickup ? { ...transaction.cashPickup, pickupAddress: pickupStationInfo?.address ?? null, pickupPhone: pickupStationInfo?.phoneNumber ?? null } : null,
     prepaidCard:        transaction.prepaidCard ?? null,
     outboundSettlement: outboundSettlement ?? null,
   });
@@ -190,10 +198,8 @@ interface ReceiptData {
 
 function buildPdf(data: ReceiptData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    // autoFirstPage:true — exactly one page created up front, no more
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
     const chunks: Buffer[] = [];
-
     doc.on('data',  (c: Buffer) => chunks.push(c));
     doc.on('end',   () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
@@ -201,277 +207,235 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     const PW = doc.page.width;   // 595.28
     const PH = doc.page.height;  // 841.89
 
-    // ── Page & card geometry ──────────────────────────────────────────────────
-    const CARD_X  = 28;
-    const CARD_Y  = 28;
-    const CARD_W  = PW - 56;
-    const CARD_H  = PH - 56;
-    const RADIUS  = 12;
-    const PAD     = 24;           // inner horizontal padding
-    const INNER_X = CARD_X + PAD;
-    const INNER_W = CARD_W - PAD * 2;
+    // ── Geometry ──────────────────────────────────────────────────────────────
+    const CARD_X  = 22;
+    const CARD_Y  = 22;
+    const CARD_W  = PW - 44;        // 551.28
+    const CARD_H  = PH - 44;        // 797.89
+    const RADIUS  = 10;
+    const PAD     = 18;
+    const INNER_X = CARD_X + PAD;   // 40
+    const INNER_W = CARD_W - PAD * 2; // 515.28
 
-    // ── Page background ───────────────────────────────────────────────────────
+    // Two-column split: left = transaction info, right = payout details
+    const COL_GAP = 12;
+    const L_W     = Math.round(INNER_W * 0.44);   // ~227
+    const R_X     = INNER_X + L_W + COL_GAP;
+    const R_W     = INNER_W - L_W - COL_GAP;      // ~276
+
+    // Fixed bottom zones
+    const FOOTER_H = 34;
+    const FOOTER_Y = CARD_Y + CARD_H - FOOTER_H;  // 785.89
+
+    // ── Page background & card ────────────────────────────────────────────────
     doc.rect(0, 0, PW, PH).fill(PAGE_BG as any);
-
-    // ── White card ────────────────────────────────────────────────────────────
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, RADIUS).fill(WHITE as any);
 
-    // ── Orange header (top-rounded only) ─────────────────────────────────────
-    const HEADER_H = 96;
+    // ── Orange header ─────────────────────────────────────────────────────────
+    const HEADER_H = 66;
     doc.save();
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, HEADER_H + RADIUS, RADIUS).clip();
     doc.rect(CARD_X, CARD_Y + RADIUS, CARD_W, HEADER_H).fill(ORANGE as any);
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, HEADER_H, RADIUS).fill(ORANGE as any);
     doc.restore();
 
-    // Brand name
-    txt(doc, 'SOCHATOA', INNER_X, CARD_Y + 22, { font: 'Helvetica-Bold', size: 18, color: WHITE });
-
-    // "PAYMENT RECEIPT" label
+    txt(doc, 'SOHCAHTOA', INNER_X, CARD_Y + 13, { font: 'Helvetica-Bold', size: 16, color: WHITE });
     doc.fillOpacity(0.85);
-    txt(doc, 'PAYMENT RECEIPT', INNER_X, CARD_Y + 46, {
-      font: 'Helvetica', size: 8, color: WHITE, characterSpacing: 2,
-    });
+    txt(doc, 'PAYMENT RECEIPT', INNER_X, CARD_Y + 33, { font: 'Helvetica', size: 7.5, color: WHITE, characterSpacing: 2 });
     doc.fillOpacity(1);
-
-    // Receipt number + date — right-aligned, calculated manually
-    doc.fillOpacity(0.85);
     const rCol = CARD_X + CARD_W - PAD;
-    txt(doc, `No: ${data.receiptNumber}`, rCol - 160, CARD_Y + 22, {
-      font: 'Helvetica', size: 7.5, color: WHITE, width: 160, align: 'right',
-    });
-    txt(doc, fmtDate(data.completedAt), rCol - 160, CARD_Y + 36, {
-      font: 'Helvetica', size: 7.5, color: WHITE, width: 160, align: 'right',
-    });
+    doc.fillOpacity(0.85);
+    txt(doc, `No: ${data.receiptNumber}`, rCol - 150, CARD_Y + 13, { font: 'Helvetica', size: 7.5, color: WHITE, width: 150, align: 'right' });
+    txt(doc, fmtDate(data.completedAt),   rCol - 150, CARD_Y + 25, { font: 'Helvetica', size: 7.5, color: WHITE, width: 150, align: 'right' });
     doc.fillOpacity(1);
 
-    // ── Body ─────────────────────────────────────────────────────────────────
-    let y = CARD_Y + HEADER_H + 20;
+    // ── Body ──────────────────────────────────────────────────────────────────
+    let y = CARD_Y + HEADER_H + 10;
 
-    // Green success banner
-    doc.rect(INNER_X, y, INNER_W, 36).fill(GREEN_BG as any);
-    doc.rect(INNER_X, y, 3, 36).fill(GREEN_BAR as any);
-    txt(doc, '\u2713  Transaction Completed Successfully', INNER_X + 12, y + 11, {
-      font: 'Helvetica-Bold', size: 10, color: GREEN_TEXT,
-    });
-    y += 46;
+    // Success banner — full width
+    doc.rect(INNER_X, y, INNER_W, 22).fill(GREEN_BG as any);
+    doc.rect(INNER_X, y, 3, 22).fill(GREEN_BAR as any);
+    txt(doc, '\u2713  Transaction Completed Successfully', INNER_X + 10, y + 6, { font: 'Helvetica-Bold', size: 8.5, color: GREEN_TEXT });
+    y += 28;
 
-    // Greeting
-    txt(doc, 'Payment Receipt', INNER_X, y, { font: 'Helvetica-Bold', size: 15, color: DARK });
-    y += 20;
-    txt(doc, `Hi ${data.fullName} — your transaction is complete. Keep this as your official receipt.`,
-      INNER_X, y, { font: 'Helvetica', size: 9, color: GREY, width: INNER_W });
-    y += 22;
-
-    // Amount highlight card
-    doc.rect(INNER_X, y, INNER_W, 58).fill(CARD_BG as any);
-    doc.strokeColor(LINE_GREY as any).rect(INNER_X, y, INNER_W, 58).stroke();
-
-    txt(doc, 'AMOUNT DISBURSED', INNER_X + 14, y + 9, {
-      font: 'Helvetica', size: 7.5, color: LABEL_GREY, characterSpacing: 1.2,
-    });
-    txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 14, y + 22, {
-      font: 'Helvetica-Bold', size: 20, color: ORANGE,
-    });
+    // Amount card — full width
+    const AMT_H = 44;
+    doc.rect(INNER_X, y, INNER_W, AMT_H).fill(CARD_BG as any);
+    doc.strokeColor(LINE_GREY as any).rect(INNER_X, y, INNER_W, AMT_H).stroke();
+    txt(doc, 'AMOUNT DISBURSED', INNER_X + 12, y + 6, { font: 'Helvetica', size: 7, color: LABEL_GREY, characterSpacing: 1.2 });
+    txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 12, y + 16, { font: 'Helvetica-Bold', size: 18, color: ORANGE });
     if (data.nairaEquivalent) {
-      const rate = data.exchangeRate
-        ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}`
-        : '';
-      txt(doc, `\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rate}`, INNER_X + 14, y + 44, {
-        font: 'Helvetica', size: 7.5, color: LABEL_GREY,
-      });
+      const rateStr = data.exchangeRate ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
+      txt(doc, `\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rateStr}`, INNER_X + 12, y + 33, { font: 'Helvetica', size: 7, color: LABEL_GREY });
     }
-    y += 68;
+    // Customer name on the right of the amount card
+    txt(doc, data.fullName, rCol - 180, y + 16, { font: 'Helvetica-Bold', size: 10, color: DARK, width: 180, align: 'right' });
+    txt(doc, data.email || data.phoneNumber || '', rCol - 180, y + 30, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 180, align: 'right' });
+    y += AMT_H + 10;
 
-    // ── Transaction details table ─────────────────────────────────────────────
-    const tableRows: [string, string][] = [
-      ['REFERENCE',      data.referenceNumber],
-      ['CUSTOMER',       data.fullName],
-      ['TYPE',           fmtLabel(data.type)],
-      ['PURPOSE',        data.purpose],
-      ['METHOD',         data.disbursementMethod ? fmtLabel(data.disbursementMethod) : '—'],
-      ['DATE',           fmtDate(data.completedAt)],
+    // ── Two-column content area ───────────────────────────────────────────────
+    const colY = y;
+
+    // LEFT: transaction details table
+    const txRows: [string, string][] = [
+      ['REFERENCE', data.referenceNumber],
+      ['TYPE',      fmtLabel(data.type)],
+      ['PURPOSE',   data.purpose],
+      ['METHOD',    data.disbursementMethod ? fmtLabel(data.disbursementMethod) : '—'],
+      ['DATE',      fmtDate(data.completedAt)],
+      ['EMAIL',     data.email || '—'],
+      ['PHONE',     data.phoneNumber || '—'],
     ];
-    if (data.email)       tableRows.push(['EMAIL', data.email]);
-    if (data.phoneNumber) tableRows.push(['PHONE', data.phoneNumber]);
+    // Left column header label
+    txt(doc, 'TRANSACTION DETAILS', INNER_X, colY, { font: 'Helvetica-Bold', size: 7.5, color: DARK, characterSpacing: 0.4 });
+    const leftEnd = drawTable(doc, INNER_X, colY + 10, L_W, txRows);
 
-    y = drawTable(doc, INNER_X, y, INNER_W, tableRows);
-    y += 12;
+    // RIGHT: payout sections stacked vertically
+    let ry = colY;
+    const GAP = 8;
 
-    // ── Beneficiary details (bank transfer) ──────────────────────────────────
     if (data.beneficiaryDetails?.accountNumber) {
       const bRows: [string, string][] = [
-        ['ACCOUNT NAME',   data.beneficiaryDetails.accountName   ?? '—'],
-        ['ACCOUNT NUMBER', data.beneficiaryDetails.accountNumber],
-        ['BANK',           data.beneficiaryDetails.bankName       ?? '—'],
+        ['ACCT NAME',   data.beneficiaryDetails.accountName ?? '—'],
+        ['ACCT NUMBER', data.beneficiaryDetails.accountNumber],
+        ['BANK',        data.beneficiaryDetails.bankName ?? '—'],
       ];
-      if (data.beneficiaryDetails.swiftCode) bRows.push(['SWIFT CODE', data.beneficiaryDetails.swiftCode]);
-      if (data.beneficiaryDetails.iban)      bRows.push(['IBAN',       data.beneficiaryDetails.iban]);
-      y = drawSection(doc, INNER_X, y, INNER_W, 'BENEFICIARY DETAILS', bRows);
-      y += 12;
+      if (data.beneficiaryDetails.swiftCode) bRows.push(['SWIFT', data.beneficiaryDetails.swiftCode]);
+      if (data.beneficiaryDetails.iban)      bRows.push(['IBAN',  data.beneficiaryDetails.iban]);
+      ry = drawSection(doc, R_X, ry, R_W, 'BENEFICIARY DETAILS', bRows) + GAP;
     }
 
-    // ── Cash pickup ───────────────────────────────────────────────────────────
     if (data.cashPickup?.pickupLocation) {
       const pRows: [string, string][] = [
-        ['LOCATION',     data.cashPickup.pickupLocation],
-        ['STATE / CITY', `${data.cashPickup.pickupState ?? ''} / ${data.cashPickup.pickupCity ?? ''}`],
-        ['PICKUP CODE',  data.cashPickup.pickupCode ?? '—'],
-        ['CASH AMOUNT',  fmt(data.cashPickup.amount, data.cashPickup.currency ?? data.currency)],
+        ['LOCATION',  data.cashPickup.pickupLocation],
+        ['STATE/CITY',`${data.cashPickup.pickupState ?? ''} / ${data.cashPickup.pickupCity ?? ''}`],
+        ['CODE',      data.cashPickup.pickupCode ?? '—'],
+        ['AMOUNT',    fmt(data.cashPickup.amount, data.cashPickup.currency ?? data.currency)],
       ];
+      if (data.cashPickup.pickupAddress) pRows.push(['ADDRESS',   data.cashPickup.pickupAddress]);
+      if (data.cashPickup.pickupPhone)   pRows.push(['PHONE',     data.cashPickup.pickupPhone]);
       if (data.cashPickup.recipientName) pRows.push(['RECIPIENT', data.cashPickup.recipientName]);
-      y = drawSection(doc, INNER_X, y, INNER_W, 'CASH PICKUP DETAILS', pRows);
-      y += 12;
+      ry = drawSection(doc, R_X, ry, R_W, 'CASH PICKUP', pRows) + GAP;
     }
 
-    // ── Prepaid card ──────────────────────────────────────────────────────────
     if (data.prepaidCard?.cardNumber) {
       const cRows: [string, string][] = [
-        ['CARD TYPE',   data.prepaidCard.cardType ?? '—'],
-        ['CARD NUMBER', `**** **** **** ${data.prepaidCard.cardNumber.slice(-4)}`],
-        ['CARD AMOUNT', fmt(data.prepaidCard.amount, data.prepaidCard.currency ?? data.currency)],
-        ['STATUS',      data.prepaidCard.activationStatus ?? '—'],
+        ['CARD TYPE',  data.prepaidCard.cardType ?? '—'],
+        ['CARD NO.',   `**** **** **** ${data.prepaidCard.cardNumber.slice(-4)}`],
+        ['AMOUNT',     fmt(data.prepaidCard.amount, data.prepaidCard.currency ?? data.currency)],
+        ['STATUS',     data.prepaidCard.activationStatus ?? '—'],
       ];
-      y = drawSection(doc, INNER_X, y, INNER_W, 'PREPAID CARD DETAILS', cRows);
-      y += 12;
+      ry = drawSection(doc, R_X, ry, R_W, 'PREPAID CARD', cRows) + GAP;
     }
 
-    // ── Outbound settlement details ───────────────────────────────────────────
     if (data.outboundSettlement) {
       const os = data.outboundSettlement;
       const osRows: [string, string][] = [];
-      if (os.paymentMethod)   osRows.push(['PAYOUT METHOD', fmtLabel(os.paymentMethod)]);
-      if (os.beneficiaryName) osRows.push(['PAYEE NAME',    os.beneficiaryName]);
-      if (os.beneficiaryBank) osRows.push(['PAYEE BANK',    os.beneficiaryBank]);
-      if (os.beneficiaryAccount) osRows.push(['ACCOUNT / IBAN', os.beneficiaryAccount]);
-      if (os.beneficiarySwift)   osRows.push(['SWIFT / BIC', os.beneficiarySwift]);
+      if (os.paymentMethod)      osRows.push(['METHOD',       fmtLabel(os.paymentMethod)]);
+      if (os.beneficiaryName)    osRows.push(['PAYEE NAME',   os.beneficiaryName]);
+      if (os.beneficiaryBank)    osRows.push(['PAYEE BANK',   os.beneficiaryBank]);
+      if (os.beneficiaryAccount) osRows.push(['ACCOUNT',      os.beneficiaryAccount]);
+      if (os.beneficiarySwift)   osRows.push(['SWIFT / BIC',  os.beneficiarySwift]);
       if (os.beneficiaryIban && os.beneficiaryIban !== os.beneficiaryAccount) osRows.push(['IBAN', os.beneficiaryIban]);
-      if (os.paymentReference)   osRows.push(['PAYMENT REF', os.paymentReference]);
-      if (osRows.length > 0) {
-        y = drawSection(doc, INNER_X, y, INNER_W, 'OUTBOUND PAYMENT DETAILS', osRows);
-        y += 12;
-      }
+      if (os.paymentReference)   osRows.push(['PAYMENT REF',  os.paymentReference]);
+      if (osRows.length > 0) ry = drawSection(doc, R_X, ry, R_W, 'PAYOUT DETAILS', osRows) + GAP;
     }
 
-    // ── Refund bank details ───────────────────────────────────────────────────
     if (data.refundBankDetails?.accountNumber) {
       const rRows: [string, string][] = [
-        ['ACCOUNT NAME',   data.refundBankDetails.accountName   ?? '—'],
-        ['ACCOUNT NUMBER', data.refundBankDetails.accountNumber],
-        ['BANK',           data.refundBankDetails.bankName       ?? '—'],
+        ['ACCT NAME',   data.refundBankDetails.accountName ?? '—'],
+        ['ACCT NUMBER', data.refundBankDetails.accountNumber],
+        ['BANK',        data.refundBankDetails.bankName ?? '—'],
       ];
-      y = drawSection(doc, INNER_X, y, INNER_W, 'REFUND BANK DETAILS', rRows);
-      y += 16;
+      ry = drawSection(doc, R_X, ry, R_W, 'REFUND BANK DETAILS', rRows) + GAP;
     }
 
-    // ── CBN regulatory stamp ──────────────────────────────────────────────────
+    // Advance y past both columns
+    y = Math.max(leftEnd, ry) + 12;
+
+    // ── CBN certificate stamp — full width, inline after columns ─────────────
     {
-      const STAMP_X = INNER_X;
-      const STAMP_W = INNER_W;
-      const STAMP_H = 118;
-      const SX      = STAMP_X;
-      const SY      = y;
+      const SX     = INNER_X;
+      const SW     = INNER_W;
+      const BAND_H = 18;
+      const BODY_H = 70;   // fields + signature
+      const SH     = BAND_H + BODY_H;
+      const SY     = y;
 
-      // Outer border (double-line effect)
       doc.save();
-      doc.rect(SX, SY, STAMP_W, STAMP_H).lineWidth(1.5).stroke(ORANGE as any);
-      doc.rect(SX + 3, SY + 3, STAMP_W - 6, STAMP_H - 6).lineWidth(0.5).stroke(ORANGE as any);
-
-      // Header band
-      const BAND_H = 20;
-      doc.rect(SX + 3, SY + 3, STAMP_W - 6, BAND_H).fill(ORANGE as any);
+      doc.rect(SX, SY, SW, SH).lineWidth(1.5).stroke(ORANGE as any);
+      doc.rect(SX + 3, SY + 3, SW - 6, SH - 6).lineWidth(0.4).stroke(ORANGE as any);
+      doc.rect(SX + 3, SY + 3, SW - 6, BAND_H).fill(ORANGE as any);
       txt(doc, 'FOREIGN EXCHANGE TRANSACTION CERTIFICATE', SX, SY + 8, {
-        font: 'Helvetica-Bold', size: 8, color: WHITE,
-        width: STAMP_W, align: 'center', characterSpacing: 0.8,
+        font: 'Helvetica-Bold', size: 7.5, color: WHITE, width: SW, align: 'center', characterSpacing: 0.8,
       });
 
-      // Left half fields
-      const COL1_X  = SX + 12;
-      const COL1_VX = SX + 12 + 105;
-      const COL2_X  = SX + STAMP_W / 2 + 6;
-      const COL2_VX = COL2_X + 90;
-      const LINE_H  = 16;
-      const START_Y = SY + BAND_H + 10;
-
-      const fxAmount  = parseFloat(String(data.foreignAmount ?? 0));
-      const nairaAmt  = parseFloat(String(data.nairaEquivalent ?? 0));
-      const rate      = parseFloat(String(data.exchangeRate ?? 0));
-      const colW1     = STAMP_W / 2 - 18;
-      const colW2     = STAMP_W / 2 - 18;
-
-      const leftFields: [string, string][] = [
-        ['Foreign Currency:',  data.currency ?? '—'],
-        ['Amount of FX Sold:', `${data.currency} ${fxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
-        ['Purpose:',           data.purpose ?? '—'],
-      ];
-      const rightFields: [string, string][] = [
-        ['PTA:',               data.type === 'PTA' ? 'Yes' : 'N/A'],
-        ['Value in Naira:',    `₦${nairaAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
-        ['Date:',              fmtDate(data.completedAt)],
-      ];
-
-      for (let i = 0; i < leftFields.length; i++) {
-        const fy = START_Y + i * LINE_H;
-        txt(doc, leftFields[i][0], COL1_X, fy, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 100 });
-        txt(doc, leftFields[i][1], COL1_VX, fy, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: colW1 });
-        txt(doc, rightFields[i][0], COL2_X, fy, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 88 });
-        txt(doc, rightFields[i][1], COL2_VX, fy, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: colW2 });
-      }
-
-      // Exchange rate row — full width
-      const rateY = START_Y + leftFields.length * LINE_H;
-      txt(doc, 'Exchange Rate:', COL1_X, rateY, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 100 });
-      txt(doc, rate > 0 ? `₦${rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per ${data.currency}` : '—',
-        COL1_VX, rateY, { font: 'Helvetica-Bold', size: 7.5, color: DARK, width: STAMP_W - COL1_VX + SX - 12 });
-
-      // Divider line above signature
-      const SIG_Y = SY + STAMP_H - 26;
-      doc.moveTo(SX + 12, SIG_Y).lineTo(SX + STAMP_W - 12, SIG_Y).lineWidth(0.4).stroke(LINE_GREY as any);
-
-      // Signature section
-      const SIG_MID = SX + STAMP_W / 2;
-      txt(doc, 'Authorized Signature:', COL1_X, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 120 });
-      // Dotted line for signature
-      doc.moveTo(COL1_X + 108, SIG_Y + 9).lineTo(SIG_MID - 10, SIG_Y + 9).lineWidth(0.4).dash(2, { space: 2 }).stroke(DARK as any);
-      doc.undash();
-
-      txt(doc, 'Official Stamp', SIG_MID + 10, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 80 });
-
-      // "SOHCAHTOA" watermark text in stamp area
+      // Watermark
       doc.save();
-      doc.fillColor(ORANGE as any).fillOpacity(0.06);
-      doc.font('Helvetica-Bold').fontSize(28);
-      const wmText = 'SOHCAHTOA';
-      const wmW    = doc.widthOfString(wmText);
-      doc.text(wmText, SX + (STAMP_W - wmW) / 2, SY + BAND_H + 30, { lineBreak: false });
+      doc.fillColor(ORANGE as any).fillOpacity(0.05).font('Helvetica-Bold').fontSize(24);
+      const wmW = doc.widthOfString('SOHCAHTOA');
+      doc.text('SOHCAHTOA', SX + (SW - wmW) / 2, SY + BAND_H + 18, { lineBreak: false });
       (doc as any).y = 1;
       doc.restore();
 
+      // Three-column fields inside the stamp
+      const NUM_COLS  = 3;
+      const FPAD      = 10;
+      const FCOL_W    = (SW - FPAD * 2) / NUM_COLS;
+      const FY        = SY + BAND_H + 8;
+      const FLH       = 13;
+
+      const fxAmt    = parseFloat(String(data.foreignAmount ?? 0));
+      const nairaAmt = parseFloat(String(data.nairaEquivalent ?? 0));
+      const rate     = parseFloat(String(data.exchangeRate ?? 0));
+
+      const stampFields: [string, string][] = [
+        ['Foreign Currency',  data.currency ?? '—'],
+        ['Amount of FX Sold', `${data.currency} ${fxAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Purpose',           data.purpose ?? '—'],
+        ['PTA',               data.type === 'PTA' ? 'Yes' : 'N/A'],
+        ['Value in Naira',    `\u20A6${nairaAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Date',              fmtDate(data.completedAt)],
+        ['Exchange Rate',     rate > 0 ? `\u20A6${rate.toLocaleString('en-US', { minimumFractionDigits: 2 })} / ${data.currency}` : '—'],
+        ['Reference',         data.referenceNumber],
+      ];
+
+      for (let i = 0; i < stampFields.length; i++) {
+        const col = i % NUM_COLS;
+        const row = Math.floor(i / NUM_COLS);
+        const fx  = SX + FPAD + col * FCOL_W;
+        const fy  = FY + row * FLH;
+        txt(doc, stampFields[i][0] + ':', fx, fy, { font: 'Helvetica', size: 6, color: LABEL_GREY, width: FCOL_W - 2 });
+        txt(doc, stampFields[i][1], fx, fy + 7, { font: 'Helvetica-Bold', size: 7, color: DARK, width: FCOL_W - 4 });
+      }
+
+      // Signature row
+      const SIG_Y = SY + SH - 20;
+      doc.moveTo(SX + 8, SIG_Y).lineTo(SX + SW - 8, SIG_Y).lineWidth(0.3).stroke(LINE_GREY as any);
+      const SIG_MID = SX + SW / 2;
+      txt(doc, 'Authorized Signature:', SX + FPAD, SIG_Y + 5, { font: 'Helvetica', size: 6.5, color: LABEL_GREY, width: 110 });
+      doc.moveTo(SX + FPAD + 102, SIG_Y + 9).lineTo(SIG_MID - 6, SIG_Y + 9).lineWidth(0.3).dash(2, { space: 2 }).stroke(DARK as any);
+      doc.undash();
+      txt(doc, 'Official Stamp', SIG_MID + 6, SIG_Y + 5, { font: 'Helvetica', size: 6.5, color: LABEL_GREY, width: 80 });
+
       doc.restore();
-      y += STAMP_H + 8;
+      y += SH + 8;
     }
 
-    // ── Footer (always pinned to card bottom) ─────────────────────────────────
-    const FOOTER_H = 44;
-    const FOOTER_Y = CARD_Y + CARD_H - FOOTER_H;
-
+    // ── Footer ────────────────────────────────────────────────────────────────
     doc.rect(CARD_X, FOOTER_Y, CARD_W, FOOTER_H).fill(PAGE_BG as any);
-    doc.strokeColor(LINE_GREY as any)
-      .moveTo(INNER_X, FOOTER_Y)
-      .lineTo(CARD_X + CARD_W - PAD, FOOTER_Y)
-      .stroke();
-
+    doc.strokeColor(LINE_GREY as any).moveTo(INNER_X, FOOTER_Y).lineTo(CARD_X + CARD_W - PAD, FOOTER_Y).stroke();
     txt(doc, 'SohCahToa \u2014 Licensed & Regulated by the Central Bank of Nigeria',
-      CARD_X, FOOTER_Y + 9, { font: 'Helvetica', size: 7.5, color: LABEL_GREY, width: CARD_W, align: 'center' });
+      CARD_X, FOOTER_Y + 7, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
     txt(doc, 'support@sohcahtoabdc.com',
-      CARD_X, FOOTER_Y + 23, { font: 'Helvetica', size: 7.5, color: LABEL_GREY, width: CARD_W, align: 'center' });
+      CARD_X, FOOTER_Y + 19, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
 
     doc.end();
   });
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
+// Rows are [label, value]. COL_L scales to 40% of width for narrow columns.
 function drawTable(
   doc: PDFKit.PDFDocument,
   x: number,
@@ -479,29 +443,25 @@ function drawTable(
   width: number,
   rows: [string, string][]
 ): number {
-  const ROW_H  = 24;
-  const COL_L  = 140;
-  const PADH   = 10;
+  const ROW_H = 17;
+  const COL_L = Math.round(width * 0.38);
+  const PADH  = 7;
 
   for (let i = 0; i < rows.length; i++) {
     const [label, value] = rows[i];
     const bg = i % 2 === 0 ? CARD_BG : WHITE;
-
     doc.rect(x, y, width, ROW_H).fill(bg as any);
     doc.strokeColor(LINE_GREY as any).rect(x, y, width, ROW_H).stroke();
-
-    txt(doc, label, x + PADH, y + ROW_H / 2 - 4, {
-      font: 'Helvetica', size: 7, color: LABEL_GREY, characterSpacing: 0.6,
+    txt(doc, label, x + PADH, y + ROW_H / 2 - 3, {
+      font: 'Helvetica', size: 6.5, color: LABEL_GREY, characterSpacing: 0.4,
       width: COL_L - PADH, lineBreak: false,
     });
-    txt(doc, value, x + COL_L + PADH, y + ROW_H / 2 - 4.5, {
-      font: 'Helvetica-Bold', size: 8, color: DARK,
+    txt(doc, value, x + COL_L + PADH, y + ROW_H / 2 - 3.5, {
+      font: 'Helvetica-Bold', size: 7.5, color: DARK,
       width: width - COL_L - PADH * 2, lineBreak: false,
     });
-
     y += ROW_H;
   }
-
   return y;
 }
 
@@ -514,7 +474,6 @@ function drawSection(
   title: string,
   rows: [string, string][]
 ): number {
-  txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 8, color: DARK, characterSpacing: 0.5 });
-  y += 12;
-  return drawTable(doc, x, y, width, rows);
+  txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 7.5, color: DARK, characterSpacing: 0.4 });
+  return drawTable(doc, x, y + 10, width, rows);
 }
