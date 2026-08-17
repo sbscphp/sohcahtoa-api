@@ -136,6 +136,169 @@ export class AdminWalletService {
   }
 
   /**
+   * Helper to enrich wallet entries with full linked transaction details.
+   * Works across all linking keys: linkedTransactionId, transactionId, transactionRef, and sessionId.
+   */
+  private async enrichEntriesWithTransactions(entries: any[]) {
+    if (!entries || entries.length === 0) return [];
+
+    const txIds = new Set<string>();
+    const txRefs = new Set<string>();
+
+    for (const e of entries) {
+      if (e.linkedTransactionId) txIds.add(String(e.linkedTransactionId).trim());
+      if (e.transactionId) txIds.add(String(e.transactionId).trim());
+      if (e.transactionRef) txRefs.add(String(e.transactionRef).trim());
+      if (e.sessionId && typeof e.sessionId === 'string' && e.sessionId.startsWith('REFUND-')) {
+        txRefs.add(e.sessionId.replace('REFUND-', '').trim());
+      }
+    }
+
+    const txOrConditions: any[] = [];
+    if (txIds.size > 0) {
+      txOrConditions.push({ id: { in: Array.from(txIds) } });
+      txOrConditions.push({ referenceNumber: { in: Array.from(txIds) } });
+    }
+    if (txRefs.size > 0) {
+      txOrConditions.push({ referenceNumber: { in: Array.from(txRefs) } });
+      txOrConditions.push({ id: { in: Array.from(txRefs) } });
+    }
+
+    const transactions = txOrConditions.length > 0
+      ? await prisma.transaction.findMany({
+          where: { OR: txOrConditions },
+          select: {
+            id: true,
+            referenceNumber: true,
+            type: true,
+            status: true,
+            currentStep: true,
+            foreignAmount: true,
+            nairaEquivalent: true,
+            currency: true,
+            disbursementOption: true,
+            disbursementMethod: true,
+            disbursementApprovalStatus: true,
+            createdAt: true,
+            updatedAt: true,
+            completedAt: true,
+          },
+        })
+      : [];
+
+    const txMapById = new Map<string, any>();
+    const txMapByRef = new Map<string, any>();
+    for (const tx of transactions) {
+      let workflowStage = tx.status as string;
+      if (tx.status === "AWAITING_REFUND_VERIFICATION") {
+        workflowStage = "PENDING_REFUND_APPROVAL";
+      } else if (tx.status === "REFUNDED") {
+        workflowStage = "REFUNDED";
+      } else if (tx.disbursementApprovalStatus === "APPROVED" && tx.status !== "COMPLETED") {
+        workflowStage = "DISBURSEMENT_APPROVED";
+      }
+
+      let requestStatus = "Pending";
+      if (tx.status === "REJECTED" || tx.disbursementApprovalStatus === "REJECTED") {
+        requestStatus = "Rejected";
+      } else if (tx.status === "COMPLETED" || tx.status === "REFUNDED" || tx.status === "CANCELLED") {
+        requestStatus = "Completed";
+      } else if (
+        tx.disbursementApprovalStatus === "APPROVED" ||
+        tx.status === "APPROVED" ||
+        tx.status === "AWAITING_DEPOSIT" ||
+        tx.status === "AWAITING_DISBURSEMENT"
+      ) {
+        requestStatus = "Approved";
+      } else {
+        requestStatus = "Pending";
+      }
+
+      const txObj = {
+        id: tx.id,
+        referenceNumber: tx.referenceNumber,
+        type: tx.type,
+        status: tx.status,
+        currentStep: tx.currentStep,
+        workflowStage,
+        requestStatus,
+        foreignAmount: Number(tx.foreignAmount || 0),
+        nairaEquivalent: Number(tx.nairaEquivalent || 0),
+        currency: tx.currency,
+        disbursementOption: tx.disbursementOption,
+        disbursementMethod: tx.disbursementMethod,
+        disbursementApprovalStatus: tx.disbursementApprovalStatus,
+        createdAt: tx.createdAt,
+        updatedAt: tx.updatedAt,
+        completedAt: tx.completedAt,
+      };
+
+      txMapById.set(tx.id, txObj);
+      txMapByRef.set(tx.referenceNumber, txObj);
+    }
+
+    const findLinkedTx = (e: any) => {
+      const lid = e.linkedTransactionId ? String(e.linkedTransactionId).trim() : null;
+      const tid = e.transactionId ? String(e.transactionId).trim() : null;
+      const tref = e.transactionRef ? String(e.transactionRef).trim() : null;
+
+      if (lid && txMapById.has(lid)) return txMapById.get(lid);
+      if (lid && txMapByRef.has(lid)) return txMapByRef.get(lid);
+      if (tid && txMapById.has(tid)) return txMapById.get(tid);
+      if (tid && txMapByRef.has(tid)) return txMapByRef.get(tid);
+      if (tref && txMapByRef.has(tref)) return txMapByRef.get(tref);
+      if (tref && txMapById.has(tref)) return txMapById.get(tref);
+      if (e.sessionId && typeof e.sessionId === 'string' && e.sessionId.startsWith('REFUND-')) {
+        const ref = e.sessionId.replace('REFUND-', '').trim();
+        if (txMapByRef.has(ref)) return txMapByRef.get(ref);
+        if (txMapById.has(ref)) return txMapById.get(ref);
+      }
+      return null;
+    };
+
+    return entries.map((e: any) => {
+      const linkedTx = findLinkedTx(e);
+      return {
+        id: e.id,
+        walletId: e.walletId,
+        type: e.type,
+        amount: Number(e.amount),
+        balanceBefore: Number(e.balanceBefore),
+        balanceAfter: Number(e.balanceAfter),
+        description: e.description,
+        status: e.status,
+        matchStatus: e.matchStatus || (linkedTx || e.linkedTransactionId ? "MATCHED" : "UNMATCHED"),
+        transactionRef: e.transactionRef || linkedTx?.referenceNumber || null,
+        transactionId: e.transactionId || linkedTx?.id || null,
+        linkedTransactionId: e.linkedTransactionId || linkedTx?.id || null,
+        linkReason: e.linkReason || null,
+        sessionId: e.sessionId || null,
+        linkedTransaction: linkedTx,
+        isFlagged: e.isFlagged ?? false,
+        flagReason: e.flagReason || null,
+        flaggedBy: e.flaggedBy || null,
+        flaggedAt: e.flaggedAt || null,
+        refundStatus: e.refundStatus || null,
+        refundedBy: e.refundedBy || null,
+        refundedAt: e.refundedAt || null,
+        disbursementStatus: e.disbursementStatus || null,
+        disbursedBy: e.disbursedBy || null,
+        disbursedAt: e.disbursedAt || null,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+        notes: e.notes
+          ? e.notes.map((n: any) => ({
+              id: n.id,
+              note: n.note,
+              adminId: n.adminId,
+              createdAt: n.createdAt,
+            }))
+          : undefined,
+      };
+    });
+  }
+
+  /**
    * Get a single wallet by wallet ID, including recent ledger entries.
    */
   async getWalletById(walletId: string) {
@@ -157,8 +320,8 @@ export class AdminWalletService {
       ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
       : undefined;
 
-    // Debit & credit totals
-    const [debitAgg, creditAgg] = await Promise.all([
+    // Debit & credit totals and raw entries
+    const [debitAgg, creditAgg, rawEntries] = await Promise.all([
       (prisma as any).walletEntry.aggregate({
         where: { walletId: wallet.id, type: "DEBIT", status: "COMPLETED" },
         _sum: { amount: true },
@@ -169,7 +332,18 @@ export class AdminWalletService {
         _sum: { amount: true },
         _count: true,
       }),
+      (prisma as any).walletEntry.findMany({
+        where: { walletId: wallet.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          notes: {
+            orderBy: { createdAt: "desc" },
+          },
+        },
+      }),
     ]);
+
+    const mappedEntries = await this.enrichEntriesWithTransactions(rawEntries);
 
     return {
       id: wallet.id,
@@ -184,6 +358,9 @@ export class AdminWalletService {
       totalDebitCount: debitAgg._count || 0,
       totalCredits: Number(creditAgg._sum?.amount || 0),
       totalCreditCount: creditAgg._count || 0,
+      entries: mappedEntries,
+      ledger: mappedEntries,
+      recentEntries: mappedEntries,
       createdAt: wallet.createdAt,
       updatedAt: wallet.updatedAt,
     };
@@ -281,9 +458,16 @@ export class AdminWalletService {
         orderBy,
         skip,
         take: limit,
+        include: {
+          notes: {
+            orderBy: { createdAt: "desc" },
+          },
+        },
       }),
       (prisma as any).walletEntry.count({ where }),
     ]);
+
+    const mappedEntries = await this.enrichEntriesWithTransactions(entries);
 
     return {
       wallet: {
@@ -292,22 +476,7 @@ export class AdminWalletService {
         balance: Number(wallet.balance),
         currency: wallet.currency,
       },
-      entries: entries.map((e: any) => ({
-        id: e.id,
-        type: e.type,
-        amount: Number(e.amount),
-        balanceBefore: Number(e.balanceBefore),
-        balanceAfter: Number(e.balanceAfter),
-        description: e.description,
-        status: e.status,
-        matchStatus: e.matchStatus || (e.linkedTransactionId ? "MATCHED" : "UNMATCHED"),
-        transactionRef: e.transactionRef,
-        transactionId: e.transactionId,
-        linkedTransactionId: e.linkedTransactionId,
-        linkReason: e.linkReason,
-        sessionId: e.sessionId,
-        createdAt: e.createdAt,
-      })),
+      entries: mappedEntries,
       meta: {
         page,
         limit,
@@ -351,65 +520,13 @@ export class AdminWalletService {
       : [];
     const adminMap = new Map(admins.map((a) => [a.id, a.fullName]));
 
-    // Get linked transaction details if any
-    let linkedTransaction = null;
-    const linkedTxId = entry.linkedTransactionId || entry.transactionId;
-    if (linkedTxId) {
-      const tx = await prisma.transaction.findUnique({
-        where: { id: linkedTxId },
-        select: {
-          id: true,
-          referenceNumber: true,
-          type: true,
-          status: true,
-          foreignAmount: true,
-          nairaEquivalent: true,
-          currency: true,
-          createdAt: true,
-        },
-      });
-      if (tx) {
-        linkedTransaction = {
-          id: tx.id,
-          referenceNumber: tx.referenceNumber,
-          type: tx.type,
-          status: tx.status,
-          foreignAmount: Number(tx.foreignAmount || 0),
-          nairaEquivalent: Number(tx.nairaEquivalent || 0),
-          currency: tx.currency,
-          createdAt: tx.createdAt,
-        };
-      }
-    }
+    const [mappedEntry] = await this.enrichEntriesWithTransactions([entry]);
 
     return {
-      id: entry.id,
-      walletId: entry.walletId,
-      type: entry.type,
-      amount: Number(entry.amount),
-      balanceBefore: Number(entry.balanceBefore),
-      balanceAfter: Number(entry.balanceAfter),
-      description: entry.description,
-      status: entry.status,
-      matchStatus: entry.matchStatus || (entry.linkedTransactionId ? "MATCHED" : "UNMATCHED"),
-      transactionRef: entry.transactionRef,
-      transactionId: entry.transactionId,
-      sessionId: entry.sessionId,
-      linkedTransactionId: entry.linkedTransactionId,
-      linkReason: entry.linkReason,
-      linkedTransaction,
-      isFlagged: entry.isFlagged,
-      flagReason: entry.flagReason,
+      ...mappedEntry,
       flaggedBy: entry.flaggedBy ? adminMap.get(entry.flaggedBy) || entry.flaggedBy : null,
-      flaggedAt: entry.flaggedAt,
-      refundStatus: entry.refundStatus,
       refundedBy: entry.refundedBy ? adminMap.get(entry.refundedBy) || entry.refundedBy : null,
-      refundedAt: entry.refundedAt,
-      disbursementStatus: entry.disbursementStatus,
       disbursedBy: entry.disbursedBy ? adminMap.get(entry.disbursedBy) || entry.disbursedBy : null,
-      disbursedAt: entry.disbursedAt,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
       notes: entry.notes.map((n: any) => ({
         id: n.id,
         note: n.note,

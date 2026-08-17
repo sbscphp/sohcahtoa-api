@@ -2641,6 +2641,7 @@ export class AdminTransactionsService {
       data: {
         status: TransactionStatus.COMPLETED as any,
         currentStep: TransactionStep.COMPLETED as any,
+        disbursementApprovalStatus: "COMPLETED",
         completedAt: new Date(),
         updatedAt: new Date(),
       },
@@ -2655,12 +2656,62 @@ export class AdminTransactionsService {
       },
     });
 
+    // Mark any corresponding wallet CREDIT entry as disbursed
+    await (prisma as any).walletEntry.updateMany({
+      where: {
+        OR: [
+          { transactionId },
+          { linkedTransactionId: transactionId },
+          { transactionRef: transaction.referenceNumber },
+        ],
+        type: "CREDIT",
+      },
+      data: {
+        disbursementStatus: "COMPLETED",
+        disbursedBy: adminId,
+        disbursedAt: new Date(),
+      },
+    });
+
+    // Wallet: debit the transaction amount from the user's transient wallet to complete the transaction cycle
+    let debitAmount = Number(transaction.nairaEquivalent || 0);
+    if (!debitAmount || debitAmount <= 0) {
+      const creditEntry = await (prisma as any).walletEntry.findFirst({
+        where: {
+          OR: [
+            { transactionId },
+            { linkedTransactionId: transactionId },
+            { transactionRef: transaction.referenceNumber },
+          ],
+          type: "CREDIT",
+        },
+      });
+      if (creditEntry && Number(creditEntry.amount) > 0) {
+        debitAmount = Number(creditEntry.amount);
+      }
+    }
+
+    if (debitAmount > 0) {
+      const alreadyDebited = await walletService.hasDebitFor(transactionId);
+      if (!alreadyDebited) {
+        await walletService.debitWallet({
+          userId: transaction.userId,
+          amount: debitAmount,
+          transactionId: transaction.id,
+          transactionRef: transaction.referenceNumber,
+          description: `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
+        }).catch((err: any) =>
+          logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId, error: err.message })
+        );
+      }
+    }
+
     eventBus.publish(EventTypes.TRANSACTION_COMPLETED, {
       userId: transaction.userId,
       transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
     });
 
-    logger.info("Disbursement confirmed", { transactionId, adminId });
+    logger.info("Disbursement confirmed and transient wallet debited", { transactionId, adminId, debitedAmount: debitAmount });
 
     return { message: "Disbursement confirmed successfully", transactionId };
   }
