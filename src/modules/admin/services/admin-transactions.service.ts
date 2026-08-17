@@ -389,7 +389,12 @@ export class AdminTransactionsService {
     const bvn = user?.kyc?.bvn || null;
     const maskedBvn = bvn ? `${bvn.slice(0, 2)}********* ${bvn.slice(-3)}` : null;
     const nin = user?.kyc?.nin || null;
-    const tin = user?.kyc?.tin || null;
+    const personalInfoStep = Array.isArray((trx as any).steps)
+      ? ((trx as any).steps.find((s: any) => s.step === 'PERSONAL_INFO') ??
+         (trx as any).steps.find((s: any) => s.step === 'DOCUMENT_UPLOAD'))
+      : null;
+    const stepTin = (personalInfoStep?.data as any)?.tin ?? null;
+    const tin = user?.kyc?.tin || stepTin || null;
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
     const receiptDoc = Array.isArray((trx as any).documents)
       ? (trx as any).documents.find((d: any) => d.documentType === "RECEIPT")

@@ -2098,6 +2098,7 @@ export class AuthService {
       } : null,
       permissions: this.getUserPermissions(user.role),
       activeSessions: user.sessions,
+      lastLoginAt: user.sessions.length > 0 ? user.sessions[0].createdAt : null,
     };
 
     return userProfile;

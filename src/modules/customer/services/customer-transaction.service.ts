@@ -1988,6 +1988,7 @@ export class CustomerTransactionService {
       formAId: transaction.formAId,
       taxClearanceNumber: transaction.taxClearanceNumber,
       customerType: userRecord?.customerType ?? null,
+      tinNumber: userKyc?.tin ?? stepTin ?? null,
 
       // Personal info used during creation
       personalInfo: {
