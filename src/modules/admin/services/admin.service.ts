@@ -90,6 +90,30 @@ export class AdminService {
       settlementWhere.transactionId = { in: txs.map((t) => t.id) };
     }
 
+    const pendingApprovalStatuses = [
+      TransactionStatus.AWAITING_VERIFICATION,
+      TransactionStatus.VERIFICATION_IN_PROGRESS,
+      TransactionStatus.COMPLIANCE_REVIEW,
+      TransactionStatus.ADMIN_APPROVAL_PENDING,
+      TransactionStatus.AWAITING_DISBURSEMENT,
+      TransactionStatus.DISBURSEMENT_IN_PROGRESS,
+      TransactionStatus.AWAITING_REFUND_VERIFICATION,
+    ];
+
+    const pendingTxWhere: any = {
+      ...txWhere,
+      OR: [
+        { status: { in: pendingApprovalStatuses as any } },
+        { disbursementApprovalStatus: "PENDING_APPROVAL" as any },
+        {
+          AND: [
+            { currentWorkflowStageId: { not: null } },
+            { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED", "CANCELLED", "REFUNDED"] as any } },
+          ],
+        },
+      ],
+    };
+
     const [
       totalTransactions,
       totalCustomers,
@@ -115,7 +139,7 @@ export class AdminService {
         select: { createdAt: true, status: true },
       }),
       prisma.transaction.findMany({
-        where: txWhere,
+        where: pendingTxWhere,
         orderBy: { createdAt: "desc" },
         take: 10,
         select: {
@@ -124,6 +148,15 @@ export class AdminService {
           status: true,
           referenceNumber: true,
           type: true,
+          workflowTemplateId: true,
+          disbursementWorkflowTemplateId: true,
+          disbursementApprovalStatus: true,
+          disbursementWorkflowTemplate: {
+            select: {
+              approvalType: true,
+              name: true,
+            },
+          },
           user: {
             select: {
               email: true,
@@ -131,10 +164,10 @@ export class AdminService {
                 select: {
                   firstName: true,
                   lastName: true,
-                }
-              }
-            }
-          }
+                },
+              },
+            },
+          },
         },
       }),
       prisma.transaction.findMany({
@@ -142,7 +175,7 @@ export class AdminService {
         select: { type: true, nairaEquivalent: true },
       }),
       prisma.transaction.count({
-        where: { status: TransactionStatus.ADMIN_APPROVAL_PENDING as any, ...txWhere }
+        where: pendingTxWhere,
       }),
       prisma.amlFlag.count({
         where: {
@@ -403,12 +436,28 @@ export class AdminService {
         const customerName = t.user?.profile
           ? `${t.user.profile.firstName} ${t.user.profile.lastName}`.trim()
           : t.user?.email || "Unknown Customer";
+
+        let workflowType = "Transaction";
+        if (t.status === "AWAITING_REFUND_VERIFICATION" || t.workflowTemplate?.approvalType === "REFUND") {
+          workflowType = "Refund";
+        } else if (
+          t.status === "DISBURSEMENT_IN_PROGRESS" ||
+          t.status === "AWAITING_DISBURSEMENT" ||
+          t.disbursementApprovalStatus === "PENDING_APPROVAL" ||
+          t.workflowTemplate?.approvalType === "DISBURSEMENT" ||
+          t.disbursementWorkflowTemplate?.approvalType === "DISBURSEMENT"
+        ) {
+          workflowType = "Disbursement";
+        }
+
         return {
           id: t.id,
           referenceNumber: t.referenceNumber,
           createdAt: t.createdAt,
           status: t.status,
           type: t.type,
+          workflowType,
+          approvalType: workflowType,
           customerName,
         };
       }),

@@ -101,6 +101,10 @@ export class WorkflowService {
               referenceNumber: true,
               status: true,
               createdAt: true,
+              workflowTemplateId: true,
+              disbursementWorkflowTemplateId: true,
+              disbursementApprovalStatus: true,
+              disbursementWorkflowTemplate: { select: { approvalType: true } },
             },
           }),
       (moduleFilter && moduleFilter !== "Outlet Management")
@@ -132,7 +136,29 @@ export class WorkflowService {
       txs.map((t: any) => {
         let displayStatus = t.status;
         let actionNeeded = t.status;
-        if (t.status === "ADMIN_APPROVAL_PENDING") {
+        let workflowAction = "Transaction Approval";
+
+        if (t.status === "AWAITING_REFUND_VERIFICATION" || t.workflowTemplate?.approvalType === "REFUND") {
+          workflowAction = "Refund Approval";
+        } else if (
+          t.status === "DISBURSEMENT_IN_PROGRESS" ||
+          t.status === "AWAITING_DISBURSEMENT" ||
+          t.disbursementApprovalStatus === "PENDING_APPROVAL" ||
+          t.workflowTemplate?.approvalType === "DISBURSEMENT" ||
+          t.disbursementWorkflowTemplate?.approvalType === "DISBURSEMENT"
+        ) {
+          workflowAction = "Disbursement Approval";
+        }
+
+        if (
+          t.status === "ADMIN_APPROVAL_PENDING" ||
+          t.status === "COMPLIANCE_REVIEW" ||
+          t.status === "AWAITING_VERIFICATION" ||
+          t.status === "VERIFICATION_IN_PROGRESS" ||
+          t.status === "AWAITING_REFUND_VERIFICATION" ||
+          t.status === "DISBURSEMENT_IN_PROGRESS" ||
+          t.disbursementApprovalStatus === "PENDING_APPROVAL"
+        ) {
           displayStatus = "Pending";
           actionNeeded = "Approve";
         } else if (
@@ -145,7 +171,7 @@ export class WorkflowService {
         return {
           id: `${t.id}`,
           module: "Transaction",
-          workflowAction: "Transaction Approval",
+          workflowAction,
           actionNeeded,
           status: displayStatus,
           dateInitiated: t.createdAt,
@@ -211,8 +237,6 @@ export class WorkflowService {
   private async deactivateExistingActiveTemplates(client: any, params: {
     name?: string;
     approvalType?: string;
-    branchId?: string | null;
-    departmentId?: string | null;
     excludeId?: string;
   }) {
     const where: any = {
@@ -220,11 +244,7 @@ export class WorkflowService {
       ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
       OR: [
         { name: { equals: (params.name || "").trim(), mode: "insensitive" } },
-        {
-          approvalType: (params.approvalType || "TRANSACTION") as any,
-          branchId: params.branchId || null,
-          departmentId: params.departmentId || null,
-        },
+        { approvalType: (params.approvalType || "TRANSACTION") as any },
       ],
     };
 
@@ -247,11 +267,27 @@ export class WorkflowService {
       throw new Error(`An active workflow template with the name "${payload.name}" already exists.`);
     }
 
+    let approvalType = payload.approvalType;
+    if (!approvalType) {
+      const typeUpper = (payload.type || "").toUpperCase();
+      const actionUpper = (payload.action || "").toUpperCase();
+      const nameUpper = (payload.name || "").toUpperCase();
+      if (typeUpper === "DISBURSEMENT" || actionUpper.includes("DISBURSEMENT") || nameUpper.includes("DISBURSEMENT")) {
+        approvalType = ApprovalType.DISBURSEMENT;
+      } else if (typeUpper === "REFUND" || actionUpper.includes("REFUND") || nameUpper.includes("REFUND")) {
+        approvalType = ApprovalType.REFUND;
+      } else if (typeUpper === "RATE" || actionUpper.includes("RATE") || nameUpper.includes("RATE")) {
+        approvalType = ApprovalType.RATE;
+      } else {
+        approvalType = ApprovalType.TRANSACTION;
+      }
+    } else {
+      approvalType = (String(approvalType).toUpperCase()) as ApprovalType;
+    }
+
     await this.deactivateExistingActiveTemplates(client, {
       name: payload.name,
-      approvalType: payload.approvalType,
-      branchId: payload.branchId,
-      departmentId: payload.departmentId,
+      approvalType,
     });
 
     const template = await client.workflowTemplate.create({
@@ -259,13 +295,13 @@ export class WorkflowService {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
-        approvalType: payload.approvalType || "TRANSACTION",
+        approvalType: approvalType || "TRANSACTION",
         minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
         maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || "Transaction Approval",
-        branchId: payload.branchId || null,
-        departmentId: payload.departmentId || null,
+        action: payload.action || (approvalType === ApprovalType.DISBURSEMENT ? "Disbursement Approval" : "Transaction Approval"),
+        branchId: null,
+        departmentId: null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
         status: "ACTIVE",
@@ -313,18 +349,36 @@ export class WorkflowService {
 
   async saveDraft(payload: CreateWorkflowDto, adminId: string) {
     const client: any = prisma as any;
+    let approvalType = payload.approvalType;
+    if (!approvalType) {
+      const typeUpper = (payload.type || "").toUpperCase();
+      const actionUpper = (payload.action || "").toUpperCase();
+      const nameUpper = (payload.name || "").toUpperCase();
+      if (typeUpper === "DISBURSEMENT" || actionUpper.includes("DISBURSEMENT") || nameUpper.includes("DISBURSEMENT")) {
+        approvalType = ApprovalType.DISBURSEMENT;
+      } else if (typeUpper === "REFUND" || actionUpper.includes("REFUND") || nameUpper.includes("REFUND")) {
+        approvalType = ApprovalType.REFUND;
+      } else if (typeUpper === "RATE" || actionUpper.includes("RATE") || nameUpper.includes("RATE")) {
+        approvalType = ApprovalType.RATE;
+      } else {
+        approvalType = ApprovalType.TRANSACTION;
+      }
+    } else {
+      approvalType = (String(approvalType).toUpperCase()) as ApprovalType;
+    }
+
     const template = await client.workflowTemplate.create({
       data: {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
-        approvalType: payload.approvalType || "TRANSACTION",
+        approvalType: approvalType || "TRANSACTION",
         minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
         maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || "Transaction Approval",
-        branchId: payload.branchId || null,
-        departmentId: payload.departmentId || null,
+        action: payload.action || (approvalType === ApprovalType.DISBURSEMENT ? "Disbursement Approval" : "Transaction Approval"),
+        branchId: null,
+        departmentId: null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
         status: "DRAFT",
@@ -404,11 +458,7 @@ export class WorkflowService {
         status: true,
         escalationMinutes: true,
         hasPtaRequest: true,
-        departmentId: true,
-        branchId: true,
         createdAt: true,
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
       },
     });
 
@@ -457,11 +507,6 @@ export class WorkflowService {
     }));
 
     const responseTpl: any = { ...tpl };
-    responseTpl.branchName = tpl.branch?.name;
-    responseTpl.departmentName = tpl.department?.name;
-    delete responseTpl.branch;
-    delete responseTpl.department;
-    
     responseTpl.status =
       tpl.status === "ACTIVE" ? "Active" : tpl.status === "ARCHIVED" ? "Deactivated" : "Draft";
 
@@ -471,6 +516,24 @@ export class WorkflowService {
   async updateTemplate(id: string, payload: UpdateWorkflowDto) {
     const client: any = prisma as any;
     
+    let approvalType = payload.approvalType;
+    if (!approvalType) {
+      const typeUpper = (payload.type || "").toUpperCase();
+      const actionUpper = (payload.action || "").toUpperCase();
+      const nameUpper = (payload.name || "").toUpperCase();
+      if (typeUpper === "DISBURSEMENT" || actionUpper.includes("DISBURSEMENT") || nameUpper.includes("DISBURSEMENT")) {
+        approvalType = ApprovalType.DISBURSEMENT;
+      } else if (typeUpper === "REFUND" || actionUpper.includes("REFUND") || nameUpper.includes("REFUND")) {
+        approvalType = ApprovalType.REFUND;
+      } else if (typeUpper === "RATE" || actionUpper.includes("RATE") || nameUpper.includes("RATE")) {
+        approvalType = ApprovalType.RATE;
+      } else {
+        approvalType = ApprovalType.TRANSACTION;
+      }
+    } else {
+      approvalType = (String(approvalType).toUpperCase()) as ApprovalType;
+    }
+
     // Update template metadata
     await client.workflowTemplate.update({
       where: { id },
@@ -478,13 +541,13 @@ export class WorkflowService {
         name: payload.name,
         description: payload.description || null,
         type: payload.type,
-        approvalType: payload.approvalType || "TRANSACTION",
+        approvalType: approvalType || "TRANSACTION",
         minAmount: payload.minAmount !== undefined ? payload.minAmount : null,
         maxAmount: payload.maxAmount !== undefined ? payload.maxAmount : null,
         processType: payload.processType || "RIGID_LINEAR",
-        action: payload.action || "Transaction Approval",
-        branchId: payload.branchId || null,
-        departmentId: payload.departmentId || null,
+        action: payload.action || (approvalType === ApprovalType.DISBURSEMENT ? "Disbursement Approval" : "Transaction Approval"),
+        branchId: null,
+        departmentId: null,
         escalationMinutes: payload.escalationMinutes || 0,
         hasPtaRequest: !!payload.hasPtaRequest,
       },
@@ -563,8 +626,6 @@ export class WorkflowService {
       await this.deactivateExistingActiveTemplates(client, {
         name: target.name,
         approvalType: target.approvalType,
-        branchId: target.branchId,
-        departmentId: target.departmentId,
         excludeId: id,
       });
     }
@@ -657,8 +718,6 @@ export class WorkflowService {
         await this.deactivateExistingActiveTemplates(client, {
           name: target.name,
           approvalType: target.approvalType,
-          branchId: target.branchId,
-          departmentId: target.departmentId,
           excludeId: id,
         });
       }
@@ -692,25 +751,42 @@ export class WorkflowService {
     amount?: number;
   }) {
     const client: any = prisma as any;
-    // Find active templates that match the criteria
-    // Priority: Branch + Department > Branch > Department > Generic
     
     const where: any = {
       status: "ACTIVE",
     };
 
     if (params.approvalType) {
-      where.approvalType = params.approvalType;
-    } else {
+      const typeStr = String(params.approvalType).toUpperCase();
       where.OR = [
-        { action: params.action || "Transaction Approval" },
-        { action: null },
-        { action: "" }
+        { approvalType: typeStr as any },
+        { type: { equals: typeStr, mode: "insensitive" } },
+        { action: { contains: typeStr, mode: "insensitive" } },
+        { name: { contains: typeStr, mode: "insensitive" } },
+      ];
+    } else {
+      where.AND = [
+        {
+          OR: [
+            { approvalType: "TRANSACTION" as any },
+            { action: params.action || "Transaction Approval" },
+            { action: null },
+            { action: "" },
+          ],
+        },
+        {
+          NOT: [
+            { approvalType: "DISBURSEMENT" as any },
+            { approvalType: "REFUND" as any },
+            { approvalType: "RATE" as any },
+          ],
+        },
       ];
     }
 
     if (params.amount !== undefined && params.amount !== null) {
       where.AND = [
+        ...(where.AND || []),
         {
           OR: [
             { minAmount: null },
@@ -728,6 +804,7 @@ export class WorkflowService {
 
     const templates = await client.workflowTemplate.findMany({
       where,
+      orderBy: { createdAt: "desc" },
       include: {
         stages: {
           orderBy: { order: "asc" },
@@ -748,40 +825,7 @@ export class WorkflowService {
     });
 
     if (!templates.length) return null;
-
-    // Filter and score
-    const scored = templates.map((t: any) => {
-      let score = 0;
-      
-      const tBranchId = t.branchId || null;
-      const pBranchId = params.branchId || null;
-      if (tBranchId === pBranchId && pBranchId !== null) {
-        score += 10;
-      } else if (tBranchId !== null && tBranchId !== pBranchId) {
-        if (pBranchId === null) {
-           score -= 1; // Soft penalty for customer transactions
-        } else {
-           score -= 2; // Soft penalty for different branch (fallback allowed)
-        }
-      }
-
-      const tDeptId = t.departmentId || null;
-      const pDeptId = params.departmentId || null;
-      if (tDeptId === pDeptId && pDeptId !== null) {
-        score += 5;
-      } else if (tDeptId !== null && tDeptId !== pDeptId) {
-        if (pDeptId === null) {
-           score -= 1; // Soft penalty
-        } else {
-           score -= 2; // Soft penalty for different department (fallback allowed)
-        }
-      }
-
-      return { t, score };
-    });
-
-    const best = scored.sort((a: any, b: any) => b.score - a.score)[0];
-    return best && best.score > -100 ? best.t : null;
+    return templates[0];
   }
 
   /**
@@ -800,6 +844,17 @@ export class WorkflowService {
     });
     
     if (!tx || tx.workflowTemplateId) return null; // Already attached or not found
+
+    const invalidStatuses = [
+      "APPROVED",
+      "REJECTED",
+      "CANCELLED",
+      "COMPLETED",
+      "REFUNDED",
+      "DISBURSEMENT_IN_PROGRESS",
+      "AWAITING_DISBURSEMENT",
+    ];
+    if (invalidStatuses.includes(tx.status)) return null;
 
     const template = await this.findApplicableWorkflow({
       branchId: tx.createdByAgent?.branchId || undefined,
@@ -903,6 +958,8 @@ export class WorkflowService {
         disbursementWorkflowTemplateId: template.id,
         disbursementWorkflowStageId: firstStage.id,
         disbursementApprovalStatus: "PENDING_APPROVAL",
+        workflowTemplateId: template.id,
+        currentWorkflowStageId: firstStage.id,
       }
     });
 

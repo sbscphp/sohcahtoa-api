@@ -1,5 +1,6 @@
 import { createLogger, generateId, NotFoundError, UploadResult, ValidationError } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
+import { ActionType } from "../../../shared/types/action-type";
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../config/database";
 
@@ -154,15 +155,25 @@ export class TicketsService {
     }
     const [createdAction, assignedAction] = await Promise.all([
       client.adminAction.findFirst({
-        where: { resourceType: "INCIDENCE", resourceId: id, actionLabel: "Create ticket" },
+        where: {
+          resourceId: id,
+          OR: [
+            { resourceType: { in: ["INCIDENCE", "TICKET", "INCIDENT"] as any } },
+            { actionType: ActionType.TICKET_CREATE as any },
+          ],
+          actionLabel: { in: ["Create ticket", "Create ticket for customer", "CREATE_TICKET"] },
+        },
         orderBy: { performedAt: "asc" },
         select: { performedAt: true, admin: { select: { fullName: true } } },
       }),
       client.adminAction.findFirst({
         where: {
-          resourceType: "INCIDENCE",
           resourceId: id,
-          actionLabel: { in: ["Assign ticket", "Assign ticket to admin"] },
+          OR: [
+            { resourceType: { in: ["INCIDENCE", "TICKET", "INCIDENT"] as any } },
+            { actionType: ActionType.TICKET_ASSIGN as any },
+          ],
+          actionLabel: { in: ["Assign ticket", "Assign ticket to admin", "ASSIGN_TICKET"] },
         },
         orderBy: { performedAt: "desc" },
         select: { performedAt: true },
@@ -174,7 +185,7 @@ export class TicketsService {
         : t.customer?.email || null;
     return {
       ...t,
-      dateAssigned: assignedAction?.performedAt || null,
+      dateAssigned: assignedAction?.performedAt || (t.assignedAgentId ? (t.updatedAt || t.createdAt) : null),
       createdBy: createdAction?.admin?.fullName || customerName,
       customer: t.customer
         ? {

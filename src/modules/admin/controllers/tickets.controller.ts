@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
-import { ServiceUnavailableError, successResponse, streamCsv, ValidationError } from "../../../shared/utils";
+import { ServiceUnavailableError, successResponse, streamCsv, ValidationError, createLogger } from "../../../shared/utils";
+import { ServiceName } from "../../../shared/types";
 import { CreateTicketPayload, UpdateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
@@ -8,6 +9,11 @@ import notificationService from "../../notifications/services/notification.servi
 import NotificationTemplates from "../../notifications/templates/notification-templates";
 import { NotificationType, NotificationChannel } from "@prisma/client";
 import { ActionType } from "../../../shared/types/action-type";
+import { emailService } from "../../../shared/utils/email";
+import { getDatabase } from "../../../config/database";
+
+const prisma = getDatabase();
+const logger = createLogger(ServiceName.ADMIN);
 
 class TicketsController {
   stats = asyncHandler(async (_req: Request, res: Response) => {
@@ -80,6 +86,33 @@ class TicketsController {
         newState: result.updated,
         metadata: result.changes,
       });
+
+      // Send email notification to customer asynchronously
+      (async () => {
+        try {
+          const customer = await prisma.user.findUnique({
+            where: { id: result.updated.customerId },
+            select: { email: true, profile: { select: { firstName: true } } },
+          });
+          if (customer?.email) {
+            const changesList = Object.entries(result.changes || {})
+              .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+              .join(", ");
+            await emailService.sendSupportTicketUpdatedEmail(
+              customer.email,
+              customer.profile?.firstName || "Customer",
+              {
+                reference: result.updated.reference,
+                caseType: result.updated.caseType,
+                changesSummary: changesList || "Ticket details updated",
+              }
+            );
+          }
+        } catch (e: any) {
+          logger.error("Failed to send ticket update email:", e);
+        }
+      })();
+
       res.json(successResponse(result.updated));
     } catch (error) {
       if (uploadedFile?.publicId) {
@@ -133,6 +166,30 @@ class TicketsController {
         newState: created,
       });
 
+      // Send email notification to customer asynchronously
+      (async () => {
+        try {
+          const customer = await prisma.user.findUnique({
+            where: { id: created.customerId },
+            select: { email: true, profile: { select: { firstName: true } } },
+          });
+          if (customer?.email) {
+            await emailService.sendSupportTicketCreatedEmail(
+              customer.email,
+              customer.profile?.firstName || "Customer",
+              {
+                reference: created.reference,
+                caseType: created.caseType,
+                priority: created.priority,
+                description: created.description,
+              }
+            );
+          }
+        } catch (e: any) {
+          logger.error("Failed to send ticket created email:", e);
+        }
+      })();
+
       return res.status(201).json(successResponse(created));
     } catch (error) {
       // Prevent orphaned uploads if DB fails
@@ -158,6 +215,31 @@ class TicketsController {
       resourceId: req.params.id,
       metadata: { status: req.body.status },
     });
+
+    // Send email notification to customer asynchronously
+    (async () => {
+      try {
+        const customer = await prisma.user.findUnique({
+          where: { id: updated.customerId },
+          select: { email: true, profile: { select: { firstName: true } } },
+        });
+        if (customer?.email) {
+          await emailService.sendSupportTicketStatusUpdatedEmail(
+            customer.email,
+            customer.profile?.firstName || "Customer",
+            {
+              reference: updated.reference,
+              caseType: updated.caseType,
+              status: req.body.status,
+              notes: req.body.notes,
+            }
+          );
+        }
+      } catch (e: any) {
+        logger.error("Failed to send ticket status updated email:", e);
+      }
+    })();
+
     res.json(successResponse(updated));
   });
 
@@ -238,6 +320,37 @@ class TicketsController {
       resourceId: req.params.id,
       metadata: { message: req.body.message },
     });
+
+    // Send email notification to customer asynchronously
+    (async () => {
+      try {
+        const ticket = await prisma.ticket.findUnique({
+          where: { id: req.params.id },
+          include: {
+            customer: { select: { email: true, profile: { select: { firstName: true } } } },
+          },
+        });
+        if (ticket?.customer?.email) {
+          const admin = await prisma.adminUser.findUnique({
+            where: { id: adminId },
+            select: { fullName: true },
+          });
+          await emailService.sendSupportTicketCommentEmail(
+            ticket.customer.email,
+            ticket.customer.profile?.firstName || "Customer",
+            {
+              reference: ticket.reference,
+              caseType: ticket.caseType,
+              message: req.body.message,
+              authorName: admin?.fullName || "Support Team",
+            }
+          );
+        }
+      } catch (e: any) {
+        logger.error("Failed to send ticket comment email:", e);
+      }
+    })();
+
     res.status(201).json(successResponse(comment));
   });
 
