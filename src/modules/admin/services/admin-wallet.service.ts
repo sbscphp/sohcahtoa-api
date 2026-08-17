@@ -796,6 +796,10 @@ export class AdminWalletService {
       return null;
     }
 
+    if (entry.type !== "CREDIT") {
+      throw new Error("Only CREDIT entries can be refunded. This entry is a DEBIT.");
+    }
+
     if (entry.disbursementStatus === "COMPLETED") {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
@@ -849,6 +853,9 @@ export class AdminWalletService {
       where: { id: entryId, walletId },
     });
     if (!entry) throw new Error("Entry not found");
+    if (entry.type !== "CREDIT") {
+      throw new Error("Only CREDIT entries can be refunded. Refunding a DEBIT entry would corrupt the wallet balance.");
+    }
     if (entry.disbursementStatus === "COMPLETED") {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
@@ -860,7 +867,7 @@ export class AdminWalletService {
 
     const balanceBefore = Number(wallet.balance);
     const refundAmount = Number(entry.amount);
-    // Refunds/reversals always debit the wallet — money leaves the system to the customer's bank
+    // Refund debit — removes the previously credited amount from the wallet
     const balanceAfter = balanceBefore - refundAmount;
 
     // Create reversal entry and update wallet balance in a transaction

@@ -2091,6 +2091,38 @@ export class AdminTransactionsService {
             refundedAt: new Date(),
           },
         });
+      } else {
+        // No prior CREDIT entry for this transaction — still write a DEBIT to record the refund
+        const wallet = await (prisma as any).customerWallet.findUnique({
+          where: { userId: tx.userId },
+        });
+        if (wallet) {
+          const refundAmount = Number(tx.nairaEquivalent || 0);
+          const balanceBefore = Number(wallet.balance);
+          const balanceAfter = Math.max(0, balanceBefore - refundAmount);
+          await (prisma as any).$transaction([
+            (prisma as any).customerWallet.update({
+              where: { id: wallet.id },
+              data: { balance: balanceAfter },
+            }),
+            (prisma as any).walletEntry.create({
+              data: {
+                walletId:      wallet.id,
+                transactionId,
+                transactionRef: tx.referenceNumber,
+                sessionId:     `REFUND-${tx.referenceNumber}`,
+                type:          'DEBIT',
+                amount:        refundAmount,
+                balanceBefore,
+                balanceAfter,
+                description:   reason ?? `Refund debit for transaction ${tx.referenceNumber}`,
+                status:        'COMPLETED',
+                matchStatus:   'MATCHED',
+                metadata:      { isRefund: true, autoApproved: true },
+              },
+            }),
+          ]);
+        }
       }
 
       await prisma.transactionHistory.create({
