@@ -291,7 +291,26 @@ export class AdminTransactionsService {
         workflowStage = "PENDING_REFUND_APPROVAL";
       } else if (t.status === "REFUNDED") {
         workflowStage = "REFUNDED";
+      } else if (t.disbursementApprovalStatus === "APPROVED" && t.status !== "COMPLETED") {
+        workflowStage = "DISBURSEMENT_APPROVED";
       }
+
+      let requestStatus = "Pending";
+      if (t.status === TransactionStatus.REJECTED || t.disbursementApprovalStatus === "REJECTED") {
+        requestStatus = "Rejected";
+      } else if (t.status === TransactionStatus.COMPLETED || t.status === "REFUNDED" || t.status === TransactionStatus.CANCELLED) {
+        requestStatus = "Completed";
+      } else if (
+        t.disbursementApprovalStatus === "APPROVED" ||
+        t.status === TransactionStatus.APPROVED ||
+        t.status === TransactionStatus.AWAITING_DEPOSIT ||
+        t.status === TransactionStatus.AWAITING_DISBURSEMENT
+      ) {
+        requestStatus = "Approved";
+      } else {
+        requestStatus = "Pending";
+      }
+
       return {
         id: t.id,
         customerName: name,
@@ -300,6 +319,7 @@ export class AdminTransactionsService {
         transactionMode: t.transactionMode,
         transactionStage: t.currentStep,
         workflowStage,
+        requestStatus,
         transactionValue: value,
         currency: t.currency,
         status: t.status,
@@ -356,7 +376,7 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const [user, wallet, settlement, paymentReceipt, pickupStation] = await Promise.all([
+    const [user, wallet, settlement, paymentReceipt] = await Promise.all([
       prisma.user.findUnique({
         where: { id: (trx as any).userId },
         include: { profile: true, kyc: true },
@@ -373,28 +393,72 @@ export class AdminTransactionsService {
         where: { transactionId: id },
         orderBy: { generatedAt: "desc" }
       }).catch(() => null),
-      (trx as any).cashPickup?.pickupLocationId
-        ? (prisma as any).pickupStation
-            .findUnique({
-              where: { id: (trx as any).cashPickup.pickupLocationId },
-              select: { address: true, phoneNumber: true, name: true },
-            })
-            .catch(() => null)
-        : Promise.resolve(null),
     ]);
     const name =
       user?.profile
         ? `${user.profile.firstName || ""} ${user.profile.lastName || ""}`.trim()
         : undefined;
-    const bvn = user?.kyc?.bvn || null;
-    const maskedBvn = bvn ? `${bvn.slice(0, 2)}********* ${bvn.slice(-3)}` : null;
-    const nin = user?.kyc?.nin || null;
-    const personalInfoStep = Array.isArray((trx as any).steps)
-      ? ((trx as any).steps.find((s: any) => s.step === 'PERSONAL_INFO') ??
-         (trx as any).steps.find((s: any) => s.step === 'DOCUMENT_UPLOAD'))
-      : null;
-    const stepTin = (personalInfoStep?.data as any)?.tin ?? null;
+
+    const stepsList = Array.isArray((trx as any).steps) ? (trx as any).steps : [];
+    const personalInfoStep =
+      stepsList.find((s: any) => s.step === 'PERSONAL_INFO') ??
+      stepsList.find((s: any) => s.step === 'DOCUMENT_UPLOAD') ??
+      stepsList[0] ??
+      null;
+    const personalInfoData = personalInfoStep?.data as any;
+    const stepTin = personalInfoData?.tin ?? null;
+    const stepBvn = personalInfoData?.bvn ?? null;
+    const stepPickup = personalInfoData?.pickupLocation ?? null;
+
+    const bvn = user?.kyc?.bvn || stepBvn || null;
+    const nin = user?.kyc?.nin || personalInfoData?.nin || null;
     const tin = user?.kyc?.tin || stepTin || null;
+
+    const pickupLocId = (trx as any).cashPickup?.pickupLocationId || stepPickup?.id || (trx as any).createdByAgent?.branchId || null;
+    const pickupLocName = (trx as any).cashPickup?.pickupLocation || stepPickup?.name || null;
+
+    let branchAddress: string | null = stepPickup?.address || null;
+    let branchName: string | null = pickupLocName || null;
+    let branchPhone: string | null = stepPickup?.phoneNumber || stepPickup?.recipientPhone || null;
+    let branchState: string | null = (trx as any).cashPickup?.pickupState || stepPickup?.state || null;
+    let branchCity: string | null = (trx as any).cashPickup?.pickupCity || stepPickup?.city || null;
+
+    if (!branchAddress && (pickupLocId || pickupLocName)) {
+      const branch = await prisma.branch.findFirst({
+        where: {
+          OR: [
+            ...(pickupLocId ? [{ id: pickupLocId }] : []),
+            ...(pickupLocName ? [{ name: pickupLocName }] : []),
+          ],
+        },
+        select: { id: true, name: true, address: true, phoneNumber: true, state: true },
+      }).catch(() => null);
+
+      if (branch) {
+        branchAddress = branch.address || null;
+        branchName = branch.name || branchName;
+        branchPhone = branch.phoneNumber || branchPhone;
+        branchState = branch.state || branchState;
+      } else {
+        const station = await prisma.pickupStation.findFirst({
+          where: {
+            OR: [
+              ...(pickupLocId ? [{ id: pickupLocId }] : []),
+              ...(pickupLocName ? [{ name: pickupLocName }] : []),
+            ],
+          },
+          select: { id: true, name: true, address: true, phoneNumber: true, state: true, region: true },
+        }).catch(() => null);
+
+        if (station) {
+          branchAddress = station.address || null;
+          branchName = station.name || branchName;
+          branchPhone = station.phoneNumber || branchPhone;
+          branchState = station.state || branchState;
+          branchCity = station.region || branchCity;
+        }
+      }
+    }
     const docCount = Array.isArray((trx as any).documents) ? (trx as any).documents.length : 0;
     const receiptDoc = Array.isArray((trx as any).documents)
       ? (trx as any).documents.find((d: any) => d.documentType === "RECEIPT")
@@ -417,25 +481,30 @@ export class AdminTransactionsService {
       statusLabel = "PENDING_REFUND_APPROVAL";
     } else if (trx.status === (TransactionStatus as any).REFUNDED) {
       statusLabel = "REFUNDED";
+    } else if ((trx as any).disbursementApprovalStatus === "APPROVED" && trx.status !== TransactionStatus.COMPLETED) {
+      statusLabel = "DISBURSEMENT_APPROVED";
     }
 
     const stageLabel = trx.currentStep;
-    const requestStatus =
-      trx.status === TransactionStatus.VERIFICATION_IN_PROGRESS || trx.status === TransactionStatus.ADMIN_APPROVAL_PENDING
-        ? "Under Review"
-        : trx.status === TransactionStatus.REJECTED
-        ? "Rejected"
-        : trx.status === (TransactionStatus as any).AWAITING_REFUND_VERIFICATION
-        ? "Pending Refund Approval"
-        : trx.status === (TransactionStatus as any).REFUNDED
-        ? "Completed"
-        : trx.status === TransactionStatus.APPROVED || trx.status === TransactionStatus.AWAITING_DEPOSIT || trx.status === TransactionStatus.AWAITING_DISBURSEMENT
-        ? "Approved"
-        : trx.status === (TransactionStatus.PENDING_RECORD_VALIDATION as any)
-        ? "Pending Record Validation"
-        : trx.status === TransactionStatus.COMPLETED || trx.status === TransactionStatus.CANCELLED
-        ? "Completed" 
-        : "Pending";      
+    let requestStatus = "Pending";
+    if (trx.status === TransactionStatus.REJECTED || (trx as any).disbursementApprovalStatus === "REJECTED") {
+      requestStatus = "Rejected";
+    } else if (
+      trx.status === TransactionStatus.COMPLETED ||
+      trx.status === (TransactionStatus as any).REFUNDED ||
+      trx.status === TransactionStatus.CANCELLED
+    ) {
+      requestStatus = "Completed";
+    } else if (
+      (trx as any).disbursementApprovalStatus === "APPROVED" ||
+      trx.status === TransactionStatus.APPROVED ||
+      trx.status === TransactionStatus.AWAITING_DEPOSIT ||
+      trx.status === TransactionStatus.AWAITING_DISBURSEMENT
+    ) {
+      requestStatus = "Approved";
+    } else {
+      requestStatus = "Pending";
+    }      
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
     const steps = Array.isArray((trx as any).steps) ? (trx as any).steps : [];
@@ -802,6 +871,34 @@ export class AdminTransactionsService {
       requestStatus,
       receiptUrl,
       receipt: receiptObj,
+      bvn,
+      bvnNumber: bvn,
+      branchName: branchName || pickup?.pickupLocation || null,
+      branchAddress: branchAddress || null,
+      pickupLocation: branchName || pickup?.pickupLocation || null,
+      pickupAddress: branchAddress || null,
+      cashPickup: pickup ? {
+        ...pickup,
+        pickupLocation: branchName || pickup.pickupLocation,
+        branchName: branchName || pickup.pickupLocation,
+        pickupAddress: branchAddress || null,
+        branchAddress: branchAddress || null,
+        pickupPhone: branchPhone || null,
+      } : (stepPickup ? {
+        id: stepPickup.id || null,
+        pickupLocation: branchName || stepPickup.name || null,
+        branchName: branchName || stepPickup.name || null,
+        pickupLocationId: stepPickup.id || null,
+        pickupAddress: branchAddress || null,
+        branchAddress: branchAddress || null,
+        pickupPhone: branchPhone || null,
+        pickupState: branchState || null,
+        pickupCity: branchCity || null,
+        scheduledPickupDate: stepPickup.scheduledPickupDate || null,
+        scheduledPickupTime: stepPickup.scheduledPickupTime || null,
+        recipientName: stepPickup.recipientName || null,
+        recipientPhone: stepPickup.recipientPhone || null,
+      } : null),
       approvalProcess: {
         name: workflow?.name || null,
         approvalType: workflow?.approvalType || null,
@@ -819,15 +916,22 @@ export class AdminTransactionsService {
         transactionValueNgn: valueNgn,
         transactionCurrency: trx.currency,
         requesterType: "Customer Direct",
-        bvnNumber: maskedBvn,
+        bvnNumber: bvn,
+        bvn,
         nin,
         tin,
         numberOfDocuments: docCount,
-        pickupLocation: pickup?.pickupLocation || null,
-        pickupAddress: pickupStation?.address || null,
-        pickupPhone: pickupStation?.phoneNumber || null,
-        scheduledPickupDate: pickup?.scheduledPickupDate || null,
-        scheduledPickupTime: pickup?.scheduledPickupTime || null,
+        pickupLocation: branchName || pickup?.pickupLocation || null,
+        branchName: branchName || pickup?.pickupLocation || null,
+        branchAddress: branchAddress || null,
+        pickupAddress: branchAddress || null,
+        pickupPhone: branchPhone || null,
+        pickupState: branchState || pickup?.pickupState || null,
+        pickupCity: branchCity || pickup?.pickupCity || null,
+        scheduledPickupDate: pickup?.scheduledPickupDate || stepPickup?.scheduledPickupDate || null,
+        scheduledPickupTime: pickup?.scheduledPickupTime || stepPickup?.scheduledPickupTime || null,
+        recipientName: pickup?.recipientName || stepPickup?.recipientName || null,
+        recipientPhone: pickup?.recipientPhone || stepPickup?.recipientPhone || null,
         customerTransientWalletId: wallet?.id || null,
         receiptUrl,
         receipt: receiptObj,
