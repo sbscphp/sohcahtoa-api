@@ -26,6 +26,14 @@ This integration enables automated deposit collection through Providus Bank's vi
 10. Transaction proceeds to disbursement
 ```
 
+## Session Verification and Wallet Matching
+
+The Providus `sessionId` is the payment verification key. A webhook can create a wallet credit, but the credit is not considered matched until that session ID is verified successfully. Failed or delayed verification leaves the credit pending.
+
+Admin disbursements and refunds use separate provider session IDs because they are outbound payments to the customer. The admin must supply the session ID when confirming the disbursement or completing the refund. After successful verification, the application creates the corresponding wallet debit with `status: COMPLETED`, `matchStatus: MATCHED`, and the verified session ID.
+
+In simulation mode, session verification returns a successful simulated payment response, so the same workflow can be exercised without a live Providus transaction.
+
 ## Environment Variables
 
 Add these to your `.env` file:

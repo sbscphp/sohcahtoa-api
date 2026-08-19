@@ -132,6 +132,17 @@ WalletRouter.get(
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *     responses:
  *       200:
  *         description: Wallet detail retrieved successfully
@@ -290,6 +301,17 @@ WalletRouter.get(
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *     responses:
  *       200:
  *         description: Customer details retrieved successfully
@@ -615,6 +637,17 @@ WalletRouter.post(
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed refund payment
  *     responses:
  *       200:
  *         description: Refund initiated successfully
@@ -649,6 +682,17 @@ WalletRouter.post(
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed refund payment
  *     responses:
  *       200:
  *         description: Refund approved successfully
@@ -717,6 +761,17 @@ WalletRouter.post(
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *     responses:
  *       200:
  *         description: Disbursement confirmed successfully

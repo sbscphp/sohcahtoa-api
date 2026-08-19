@@ -165,9 +165,14 @@ export class WalletService {
    */
   async reverseCredit(params: {
     transactionId: string;
+    sessionId: string;
     reason?: string;
   }): Promise<{ wallet: any; refundEntry: any } | null> {
-    const { transactionId, reason } = params;
+    const { transactionId, sessionId, reason } = params;
+
+    if (!sessionId?.trim()) {
+      throw new ValidationError('Refund payment session ID is required');
+    }
 
     const creditEntry = await (prisma as any).walletEntry.findFirst({
       where: {
@@ -203,7 +208,7 @@ export class WalletService {
           walletId:       wallet.id,
           transactionId,
           transactionRef: creditEntry.transactionRef,
-          sessionId:      `REFUND-${creditEntry.transactionRef}`,
+          sessionId:      sessionId.trim(),
           type:           'DEBIT',
           amount:         refundAmount,
           balanceBefore,

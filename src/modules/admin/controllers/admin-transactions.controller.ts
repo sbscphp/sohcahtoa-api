@@ -108,7 +108,7 @@ class AdminTransactionsController {
   approve = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
     const notes = req.body?.notes || req.body?.reason;
-    const result = await adminTransactionsService.approveTransaction(req.params.id, adminId, notes);
+    const result = await adminTransactionsService.approveTransaction(req.params.id, adminId, notes, req.body?.sessionId);
     await auditTrailService.logAction({
       adminId,
       actionType: ActionType.TRANSACTION_APPROVE,
@@ -222,7 +222,7 @@ class AdminTransactionsController {
     const entryId = req.body.entryId;
     const walletId = req.body.walletId;
     const reason = req.body?.reason || req.body?.notes;
-    const result = await adminTransactionsService.initiateTransactionRefund(req.params.id, adminId, reason);
+    const result = await adminTransactionsService.initiateTransactionRefund(req.params.id, adminId, reason, req.body?.sessionId);
     await auditTrailService.logAction({
       adminId,
       actionType: ActionType.WALLET_REFUND,
@@ -286,7 +286,8 @@ class AdminTransactionsController {
     const result = await adminTransactionsService.confirmDisbursement(
       req.params.id,
       adminId,
-      req.body?.notes
+      req.body?.notes,
+      req.body?.sessionId
     );
     await auditTrailService.logAction({
       adminId,

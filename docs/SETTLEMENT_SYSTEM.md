@@ -317,6 +317,46 @@ Authorization: Bearer <admin_token>
 }
 ```
 
+## Transient Wallet Verification Rules
+
+The transient wallet records both sides of a customer transaction:
+
+1. A customer payment creates a wallet `CREDIT` entry with the Providus deposit `sessionId`.
+2. The credit remains pending until that session ID is verified successfully. Only then is it promoted to `COMPLETED` and `MATCHED`.
+3. When Sohcahtoa disburses funds to the customer, the admin must provide the payout provider's session ID. It is verified before the wallet `DEBIT` entry is created as `COMPLETED` and `MATCHED`.
+4. Refunds follow the same rule. The real provider session ID is required and replaces the old synthetic `REFUND-{transactionRef}` value.
+
+Inbound customer-payment sessions and outbound disbursement/refund sessions are separate identifiers. The inbound session remains on the credit entry; the outbound session is stored on the debit entry.
+
+### Confirm a Disbursement
+
+Both transaction-level and wallet-entry confirmation endpoints require a provider session ID:
+
+```http
+POST /api/admin/transactions/{transactionId}/confirm-disbursement
+POST /api/admin/wallet/{walletId}/ledger/{entryId}/disburse
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "sessionId": "SIM_SESSION_123456",
+  "notes": "Customer payout confirmed"
+}
+```
+
+### Complete a Refund
+
+For an immediate refund, provide the session ID when initiating it. For a refund approval workflow, provide it on the final approval request:
+
+```json
+{
+  "sessionId": "SIM_SESSION_789012",
+  "reason": "Approved customer refund"
+}
+```
+
+If verification fails, the wallet entry remains unmatched and the transaction is not considered financially completed.
+
 ## Usage Examples
 
 ### Single Transaction Settlement

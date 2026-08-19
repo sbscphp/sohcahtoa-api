@@ -536,11 +536,16 @@ TransactionRouter.post(
  *         schema:
  *           type: string
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [sessionId]
  *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *               notes:
  *                 type: string
  *     responses:
@@ -616,11 +621,16 @@ TransactionRouter.post(
  *         schema:
  *           type: string
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [sessionId]
  *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *               notes:
  *                 type: string
  *     responses:
@@ -980,11 +990,16 @@ TransactionRouter.post(
  *         schema:
  *           type: string
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [sessionId]
  *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: Provider session ID for the completed customer payout
  *               notes:
  *                 type: string
  *                 description: Optional notes about the disbursement confirmation

@@ -379,9 +379,28 @@ export class DepositVerificationService {
    */
   private async matchWalletEntries(transactionId: string, creditEntryId: string) {
     try {
+      const creditEntry = await (prisma as any).walletEntry.findUnique({
+        where: { id: creditEntryId },
+        select: { sessionId: true },
+      });
+
+      if (!creditEntry?.sessionId) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, 'Wallet credit cannot be matched without a payment session ID', 400);
+      }
+
+      const providusService = (await import('./providus.service')).default;
+      const verification = await providusService.verifyTransactionBySessionId(creditEntry.sessionId);
+      if (!verification.sessionId || verification.tranRemarks === 'Transaction not found!!!') {
+        throw new AppError(ErrorCode.EXTERNAL_SERVICE_ERROR, 'Payment session could not be verified', 502);
+      }
+
       await walletService.markCreditConfirmed(creditEntryId);
 
-      logger.info('Wallet credit confirmed by bank', { transactionId, creditEntryId });
+      logger.info('Wallet credit confirmed by bank', {
+        transactionId,
+        creditEntryId,
+        sessionId: verification.sessionId,
+      });
     } catch (err: any) {
       // Non-fatal — matching failure doesn't affect the payment itself
       logger.error('Failed to confirm wallet credit', { transactionId, creditEntryId, error: err.message });

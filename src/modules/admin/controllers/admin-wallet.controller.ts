@@ -301,7 +301,7 @@ class AdminWalletController {
    */
   refund = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const result = await adminWalletService.initiateRefund(req.params.id, req.params.entryId, adminId);
+    const result = await adminWalletService.initiateRefund(req.params.id, req.params.entryId, adminId, req.body?.sessionId);
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;
@@ -323,7 +323,13 @@ class AdminWalletController {
    */
   approveRefund = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const result = await adminWalletService.approveRefund(req.params.id, req.params.entryId, adminId, req.body.notes || req.body.reason);
+    const result = await adminWalletService.approveRefund(
+      req.params.id,
+      req.params.entryId,
+      adminId,
+      req.body.notes || req.body.reason,
+      req.body?.sessionId
+    );
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;
@@ -366,7 +372,12 @@ class AdminWalletController {
    */
   disburse = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const result = await adminWalletService.confirmDisbursement(req.params.id, req.params.entryId, adminId);
+    const result = await adminWalletService.confirmDisbursement(
+      req.params.id,
+      req.params.entryId,
+      adminId,
+      req.body?.sessionId
+    );
     if (!result) {
       res.status(404).json({ success: false, message: "Entry not found" });
       return;

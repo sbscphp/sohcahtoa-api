@@ -7,6 +7,7 @@ import { auditTrailService } from "../services/audit-trail.service";
 import { workflowService } from "../services/workflow.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import walletService from "../../wallet/services/wallet.service";
+import providusService from "../../payments/services/providus.service";
 import { emailService } from "../../../shared/utils/email";
 import path from "path";
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
@@ -1187,7 +1188,7 @@ export class AdminTransactionsService {
     return { message: "Transaction reviewed successfully" };
   }
 
-  async approveTransaction(transactionId: string, adminId: string, reason?: string) {
+  async approveTransaction(transactionId: string, adminId: string, reason?: string, sessionId?: string) {
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
       select: {
@@ -1263,6 +1264,14 @@ export class AdminTransactionsService {
 
     if (isFinalApproval) {
       if (isRefundWorkflow) {
+        if (!sessionId?.trim()) {
+          throw new Error("A payment session ID is required to complete a refund");
+        }
+        const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
+        if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
+          throw new Error("Refund payment session could not be verified");
+        }
+
         const updateResult = await prisma.transaction.updateMany({
           where: {
             id: transactionId,
@@ -1283,6 +1292,7 @@ export class AdminTransactionsService {
         // Reverse the wallet CREDIT (refund debit entry created, immediately MATCHED)
         const refundResult = await walletService.reverseCredit({
           transactionId,
+          sessionId: verification.sessionId,
           reason: reason || "Transaction refund approved",
         });
 
@@ -2046,7 +2056,7 @@ export class AdminTransactionsService {
     return balances;
   }
 
-  async initiateTransactionRefund(transactionId: string, adminId: string, reason?: string) {
+  async initiateTransactionRefund(transactionId: string, adminId: string, reason?: string, sessionId?: string) {
     const tx = await prisma.transaction.findUnique({
       where: { id: transactionId },
       include: {
@@ -2178,6 +2188,14 @@ export class AdminTransactionsService {
         message: "Refund initiated successfully, pending approval",
       };
     } else {
+      if (!sessionId?.trim()) {
+        throw new Error("A payment session ID is required to complete a refund");
+      }
+      const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
+      if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
+        throw new Error("Refund payment session could not be verified");
+      }
+
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
@@ -2192,6 +2210,7 @@ export class AdminTransactionsService {
       // Reverse the wallet CREDIT (refund debit entry created, immediately MATCHED)
       const autoRefundResult = await walletService.reverseCredit({
         transactionId,
+        sessionId: verification.sessionId,
         reason: reason || "Auto-approved transaction refund",
       });
 
@@ -2223,7 +2242,7 @@ export class AdminTransactionsService {
                 walletId:      wallet.id,
                 transactionId,
                 transactionRef: tx.referenceNumber,
-                sessionId:     `REFUND-${tx.referenceNumber}`,
+                sessionId:     verification.sessionId,
                 type:          'DEBIT',
                 amount:        refundAmount,
                 balanceBefore,
@@ -2602,7 +2621,7 @@ export class AdminTransactionsService {
     return { message: "Disbursement approval rejected successfully" };
   }
 
-  async confirmDisbursement(transactionId: string, adminId: string, notes?: string) {
+  async confirmDisbursement(transactionId: string, adminId: string, notes?: string, sessionId?: string) {
     const transaction = await (prisma as any).transaction.findUnique({
       where: { id: transactionId },
       select: {
@@ -2618,6 +2637,15 @@ export class AdminTransactionsService {
 
     if (!transaction) {
       throw new Error("Transaction not found");
+    }
+
+    if (!sessionId?.trim()) {
+      throw new Error("A payment session ID is required to confirm disbursement");
+    }
+
+    const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
+    if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
+      throw new Error("Disbursement payment session could not be verified");
     }
 
     const allowedStatuses: string[] = [
@@ -2703,6 +2731,7 @@ export class AdminTransactionsService {
           amount: debitAmount,
           transactionId: transaction.id,
           transactionRef: transaction.referenceNumber,
+          sessionId: verification.sessionId,
           description: `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
         }).catch((err: any) =>
           logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId, error: err.message })
