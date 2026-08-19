@@ -9,6 +9,8 @@
 export interface TransactionStatusSource {
   status?: string | null;
   disbursementApprovalStatus?: string | null;
+  currentWorkflowStageId?: string | null;
+  disbursementWorkflowStageId?: string | null;
 }
 
 /** Statuses that mean the request has been approved and is progressing towards completion. */
@@ -43,10 +45,24 @@ export function deriveWorkflowStage(tx: TransactionStatusSource): string {
 }
 
 /**
+ * True while an approval workflow still has a stage waiting on a decision.
+ *
+ * A stage id is cleared once the last stage approves, so a stage still being set means the request
+ * has not been fully approved — whether that is the first stage or the last one.
+ */
+function hasOutstandingApproval(tx: TransactionStatusSource, disbursementApprovalStatus: string): boolean {
+  return (
+    disbursementApprovalStatus === "PENDING_APPROVAL" ||
+    Boolean(tx.currentWorkflowStageId) ||
+    Boolean(tx.disbursementWorkflowStageId)
+  );
+}
+
+/**
  * Coarse request status shown to admins: Pending, Approved, Rejected or Completed.
  *
- * A disbursement awaiting approval reports Pending — initiating a disbursement queues it for a
- * decision, so the request is not approved until that decision is made.
+ * Approved appears only once the last workflow stage has approved. Anything still moving through
+ * the stages — including a disbursement that was just initiated — reports Pending.
  */
 export function deriveRequestStatus(tx: TransactionStatusSource): string {
   const status = tx.status ? String(tx.status) : "";
@@ -56,7 +72,7 @@ export function deriveRequestStatus(tx: TransactionStatusSource): string {
 
   if (status === "REJECTED" || disbursementApprovalStatus === "REJECTED") return "Rejected";
   if (COMPLETED_STATUSES.has(status)) return "Completed";
-  if (disbursementApprovalStatus === "PENDING_APPROVAL") return "Pending";
+  if (hasOutstandingApproval(tx, disbursementApprovalStatus)) return "Pending";
   if (disbursementApprovalStatus === "APPROVED" || APPROVED_STATUSES.has(status)) return "Approved";
   return "Pending";
 }

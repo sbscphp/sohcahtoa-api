@@ -180,6 +180,8 @@ export class AdminWalletService {
             disbursementOption: true,
             disbursementMethod: true,
             disbursementApprovalStatus: true,
+            currentWorkflowStageId: true,
+            disbursementWorkflowStageId: true,
             createdAt: true,
             updatedAt: true,
             completedAt: true,
