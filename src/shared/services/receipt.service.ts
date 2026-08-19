@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
 import { getDatabase } from '../../config/database';
 import { NotFoundError, ValidationError } from '../utils';
 import { createLogger } from '../utils/logger';
@@ -7,22 +8,21 @@ const prisma = getDatabase();
 const logger = createLogger('receipt-service');
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
-const ORANGE     = '#F97316';
-const DARK       = '#1a1a1a';
-const GREY       = '#555555';
-const LABEL_GREY = '#aaaaaa';
-const LINE_GREY  = '#eeeeee';
-const CARD_BG    = '#f9f9f9';
-const PAGE_BG    = '#f4f4f4';
-const GREEN_BG   = '#ecfdf5';
-const GREEN_TEXT = '#065f46';
-const GREEN_BAR  = '#10b981';
+const ORANGE     = '#DD4F05';
+const DARK       = '#4D4B4B';
+const GREY       = '#6C6969';
+const LABEL_GREY = '#8A8787';
+const LINE_GREY  = '#F2F4F7';
+const CARD_BG    = '#ffffff';
+const PAGE_BG    = '#FFFAF8';
+const SUCCESS_BG = '#FFF5EF';
 const WHITE      = '#ffffff';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(amount: any, currency: string): string {
   const n = parseFloat(String(amount ?? 0));
-  return `${currency} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const code = String(currency || '').toUpperCase();
+  return `${code} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtDate(date: Date | string | null | undefined): string {
@@ -112,6 +112,8 @@ export async function generateTransactionReceipt(
       paymentReference: true,
       amount: true,
       currency: true,
+      status: true,
+      completedAt: true,
     },
   }).catch(() => null);
 
@@ -147,7 +149,7 @@ export async function generateTransactionReceipt(
     nairaEquivalent:    transaction.nairaEquivalent,
     exchangeRate:       transaction.exchangeRate,
     disbursementMethod,
-    completedAt:        transaction.updatedAt,
+    completedAt:        outboundSettlement?.completedAt ?? transaction.completedAt ?? transaction.updatedAt,
     beneficiaryDetails,
     refundBankDetails,
     cashPickup:         transaction.cashPickup ? { ...transaction.cashPickup, pickupAddress: pickupStationInfo?.address ?? null, pickupPhone: pickupStationInfo?.phoneNumber ?? null } : null,
@@ -230,43 +232,35 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     // ── Page background & card ────────────────────────────────────────────────
     doc.rect(0, 0, PW, PH).fill(PAGE_BG as any);
     doc.roundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, RADIUS).fill(WHITE as any);
+    doc.roundedRect(CARD_X, CARD_Y, CARD_W, CARD_H, RADIUS).lineWidth(1).stroke('#F8DCCD' as any);
 
-    // ── Orange header ─────────────────────────────────────────────────────────
-    const HEADER_H = 66;
-    doc.save();
-    doc.roundedRect(CARD_X, CARD_Y, CARD_W, HEADER_H + RADIUS, RADIUS).clip();
-    doc.rect(CARD_X, CARD_Y + RADIUS, CARD_W, HEADER_H).fill(ORANGE as any);
-    doc.roundedRect(CARD_X, CARD_Y, CARD_W, HEADER_H, RADIUS).fill(ORANGE as any);
-    doc.restore();
-
-    txt(doc, 'SOHCAHTOA', INNER_X, CARD_Y + 13, { font: 'Helvetica-Bold', size: 16, color: WHITE });
-    doc.fillOpacity(0.85);
-    txt(doc, 'PAYMENT RECEIPT', INNER_X, CARD_Y + 33, { font: 'Helvetica', size: 7.5, color: WHITE, characterSpacing: 2 });
-    doc.fillOpacity(1);
+    // ── Minimal branded header ────────────────────────────────────────────────
+    const HEADER_H = 78;
+    const logoPath = path.resolve(process.cwd(), 'src/shared/assets/sohcahtoa-logo.png');
+    doc.image(logoPath, INNER_X, CARD_Y + 8, { fit: [128, 60], valign: 'center' });
     const rCol = CARD_X + CARD_W - PAD;
-    doc.fillOpacity(0.85);
-    txt(doc, `No: ${data.receiptNumber}`, rCol - 150, CARD_Y + 13, { font: 'Helvetica', size: 7.5, color: WHITE, width: 150, align: 'right' });
-    txt(doc, fmtDate(data.completedAt),   rCol - 150, CARD_Y + 25, { font: 'Helvetica', size: 7.5, color: WHITE, width: 150, align: 'right' });
-    doc.fillOpacity(1);
+    txt(doc, `Receipt ${data.receiptNumber}`, rCol - 190, CARD_Y + 22, { font: 'Helvetica-Bold', size: 8, color: DARK, width: 190, align: 'right' });
+    txt(doc, fmtDate(data.completedAt), rCol - 190, CARD_Y + 36, { font: 'Helvetica', size: 8, color: GREY, width: 190, align: 'right' });
+    doc.rect(INNER_X, CARD_Y + HEADER_H, INNER_W, 2).fill(ORANGE as any);
 
     // ── Body ──────────────────────────────────────────────────────────────────
     let y = CARD_Y + HEADER_H + 10;
 
     // Success banner — full width
-    doc.rect(INNER_X, y, INNER_W, 22).fill(GREEN_BG as any);
-    doc.rect(INNER_X, y, 3, 22).fill(GREEN_BAR as any);
-    txt(doc, '\u2713  Transaction Completed Successfully', INNER_X + 10, y + 6, { font: 'Helvetica-Bold', size: 8.5, color: GREEN_TEXT });
+    doc.rect(INNER_X, y, INNER_W, 22).fill(SUCCESS_BG as any);
+    doc.rect(INNER_X, y, 3, 22).fill(ORANGE as any);
+    txt(doc, 'Transaction completed successfully', INNER_X + 10, y + 6, { font: 'Helvetica-Bold', size: 8.5, color: ORANGE });
     y += 28;
 
     // Amount card — full width
-    const AMT_H = 44;
+    const AMT_H = 48;
     doc.rect(INNER_X, y, INNER_W, AMT_H).fill(CARD_BG as any);
     doc.strokeColor(LINE_GREY as any).rect(INNER_X, y, INNER_W, AMT_H).stroke();
-    txt(doc, 'AMOUNT DISBURSED', INNER_X + 12, y + 6, { font: 'Helvetica', size: 7, color: LABEL_GREY, characterSpacing: 1.2 });
+    txt(doc, 'AMOUNT DISBURSED', INNER_X + 12, y + 6, { font: 'Helvetica-Bold', size: 7, color: GREY, characterSpacing: 1.2 });
     txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 12, y + 16, { font: 'Helvetica-Bold', size: 18, color: ORANGE });
     if (data.nairaEquivalent) {
-      const rateStr = data.exchangeRate ? ` @ \u20A6${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
-      txt(doc, `\u2248 ${fmt(data.nairaEquivalent, 'NGN')}${rateStr}`, INNER_X + 12, y + 33, { font: 'Helvetica', size: 7, color: LABEL_GREY });
+      const rateStr = data.exchangeRate ? ` at NGN ${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
+      txt(doc, `Equivalent: ${fmt(data.nairaEquivalent, 'NGN')}${rateStr}`, INNER_X + 12, y + 33, { font: 'Helvetica', size: 7, color: LABEL_GREY });
     }
     // Customer name on the right of the amount card
     txt(doc, data.fullName, rCol - 180, y + 16, { font: 'Helvetica-Bold', size: 10, color: DARK, width: 180, align: 'right' });
@@ -363,20 +357,11 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       const SY     = y;
 
       doc.save();
-      doc.rect(SX, SY, SW, SH).lineWidth(1.5).stroke(ORANGE as any);
-      doc.rect(SX + 3, SY + 3, SW - 6, SH - 6).lineWidth(0.4).stroke(ORANGE as any);
-      doc.rect(SX + 3, SY + 3, SW - 6, BAND_H).fill(ORANGE as any);
+      doc.rect(SX, SY, SW, SH).lineWidth(1).stroke('#F8DCCD' as any);
+      doc.rect(SX + 3, SY + 3, SW - 6, SH - 6).lineWidth(0.4).stroke(LINE_GREY as any);
       txt(doc, 'FOREIGN EXCHANGE TRANSACTION CERTIFICATE', SX, SY + 8, {
-        font: 'Helvetica-Bold', size: 7.5, color: WHITE, width: SW, align: 'center', characterSpacing: 0.8,
+        font: 'Helvetica-Bold', size: 7.5, color: ORANGE, width: SW, align: 'center', characterSpacing: 0.8,
       });
-
-      // Watermark
-      doc.save();
-      doc.fillColor(ORANGE as any).fillOpacity(0.05).font('Helvetica-Bold').fontSize(24);
-      const wmW = doc.widthOfString('SOHCAHTOA');
-      doc.text('SOHCAHTOA', SX + (SW - wmW) / 2, SY + BAND_H + 18, { lineBreak: false });
-      (doc as any).y = 1;
-      doc.restore();
 
       // Three-column fields inside the stamp
       const NUM_COLS  = 3;
@@ -390,13 +375,13 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       const rate     = parseFloat(String(data.exchangeRate ?? 0));
 
       const stampFields: [string, string][] = [
-        ['Foreign Currency',  data.currency ?? '—'],
-        ['Amount of FX Sold', `${data.currency} ${fxAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Foreign Currency',  String(data.currency ?? '—').toUpperCase()],
+        ['Amount of FX Sold', fmt(fxAmt, data.currency)],
         ['Purpose',           data.purpose ?? '—'],
         ['PTA',               data.type === 'PTA' ? 'Yes' : 'N/A'],
-        ['Value in Naira',    `\u20A6${nairaAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+        ['Value in Naira',    fmt(nairaAmt, 'NGN')],
         ['Date',              fmtDate(data.completedAt)],
-        ['Exchange Rate',     rate > 0 ? `\u20A6${rate.toLocaleString('en-US', { minimumFractionDigits: 2 })} / ${data.currency}` : '—'],
+        ['Exchange Rate',     rate > 0 ? `NGN ${rate.toLocaleString('en-US', { minimumFractionDigits: 2 })} / ${String(data.currency ?? '').toUpperCase()}` : '—'],
         ['Reference',         data.referenceNumber],
       ];
 
@@ -443,7 +428,7 @@ function drawTable(
   width: number,
   rows: [string, string][]
 ): number {
-  const ROW_H = 17;
+  const ROW_H = 14;
   const COL_L = Math.round(width * 0.38);
   const PADH  = 7;
 
