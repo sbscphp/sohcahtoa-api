@@ -847,13 +847,19 @@ export class NotificationHandler {
         const reason = data?.description || data?.reason || data?.flagType || 'Transaction flagged for compliance review';
         const severity = data?.severity || payload?.severity || 'HIGH';
         const flaggedBy = data?.flaggedBy || payload?.flaggedBy || 'Compliance Engine';
+        const userId = data?.userId || payload?.userId;
 
         let customerName = '';
         let amountStr = '';
 
         if (transactionId) {
-          const trx = await prisma.transaction.findUnique({
-            where: { id: transactionId },
+          const trx = await prisma.transaction.findFirst({
+            where: {
+              OR: [
+                { id: transactionId },
+                { referenceNumber: transactionId },
+              ],
+            },
             include: { user: { include: { profile: true } } },
           }).catch(() => null);
 
@@ -864,15 +870,48 @@ export class NotificationHandler {
           }
         }
 
-        const internalControlEmail = process.env.INTERNAL_CONTROL_EMAIL || 'internalcontrol@sohcahtoabdc.com';
-        await emailService.sendFlaggedTransactionEscalationEmail(internalControlEmail, {
-          transactionRef,
-          reason,
-          severity,
-          amount: amountStr,
-          customerName,
-          flaggedBy,
-        }).catch((e) => logger.error('Failed to send flagged transaction escalation email to Internal Control:', e));
+        if (!customerName && userId) {
+          const u = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { profile: true },
+          }).catch(() => null);
+          if (u) {
+            customerName = u.profile ? `${u.profile.firstName || ''} ${u.profile.lastName || ''}`.trim() : (u.email || '');
+          }
+        }
+
+        const recipients = new Set<string>();
+        if (process.env.INTERNAL_CONTROL_EMAIL) {
+          recipients.add(process.env.INTERNAL_CONTROL_EMAIL.trim());
+        }
+        recipients.add('internalcontrol@sohcahtoabdc.com');
+
+        // Also query active admin users in Control or Compliance
+        const controlAdmins = await prisma.adminUser.findMany({
+          where: {
+            OR: [
+              { role: { name: { in: ['Internal Control', 'Internal_Control', 'Compliance', 'Compliance Officer', 'Super Admin'], mode: 'insensitive' } } },
+              { department: { name: { in: ['Internal Control', 'Compliance', 'Control'], mode: 'insensitive' } } },
+            ],
+            isActive: true,
+          },
+          select: { email: true },
+        }).catch(() => []);
+
+        for (const admin of controlAdmins) {
+          if (admin?.email) recipients.add(admin.email.trim());
+        }
+
+        for (const recipient of recipients) {
+          await emailService.sendFlaggedTransactionEscalationEmail(recipient, {
+            transactionRef,
+            reason,
+            severity,
+            amount: amountStr,
+            customerName,
+            flaggedBy,
+          }).catch((e) => logger.error('Failed to send flagged transaction escalation email to Internal Control:', { recipient, error: e?.message || e }));
+        }
       } catch (err) {
         logger.error('Error handling Internal Control escalation email:', err);
       }

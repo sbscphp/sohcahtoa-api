@@ -1744,12 +1744,12 @@ export class AuthService {
     });
     await redis.setex(otpOnlyKey, expiryMinutes * 60, otpData);
 
-    // Send OTP via email if email service is configured
-    if (emailService.isReady() && data.email) {
+    // Send OTP via email if email address is provided
+    if (data.email) {
       if (data.purpose === OtpPurpose.AGENT_SET_PASSWORD) {
         // Special welcome email for new agents
         const client: any = prisma as any;
-        const agent = await client.agent.findUnique({
+        const agent = await client.agent.findFirst({
           where: { email: data.email },
           select: { name: true },
         });
@@ -1758,9 +1758,9 @@ export class AuthService {
         const setPasswordUrl = new URL('/agent/auth/create-password', agentBaseUrl);
         setPasswordUrl.searchParams.set('email', data.email);
         setPasswordUrl.searchParams.set('otp', otp);
-        await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp, setPasswordUrl.toString());
+        await emailService.sendAgentWelcomeEmail(data.email, agent?.name || 'Agent', otp, setPasswordUrl.toString()).catch(e => logger.warn('Failed to send agent welcome email:', e));
       } else {
-        await emailService.sendOtpEmail(data.email, otp, data.purpose, data.firstName);
+        await emailService.sendOtpEmail(data.email, otp, data.purpose, data.firstName).catch(e => logger.warn('Failed to send OTP email:', e));
       }
     } else {
       // Log OTP for development

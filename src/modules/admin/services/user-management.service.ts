@@ -92,7 +92,7 @@ class UserManagementService {
             adminUserId: result.id,
         });
 
-        if (emailService.isReady()) {
+        try {
             const otp = generateSecureOtp();
             const hashedOtp = await hashPassword(otp);
             const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -127,6 +127,11 @@ class UserManagementService {
                         message: err.message,
                     }),
                 );
+        } catch (tokenErr: any) {
+            logger.error("Failed to generate setup OTP / send welcome email for new admin user", {
+                userId: result.id,
+                error: tokenErr?.message || tokenErr,
+            });
         }
 
         const computedStatus = !(result as any).password ? "PENDING" : (result as any).isActive ? "ACTIVE" : "DEACTIVATED";

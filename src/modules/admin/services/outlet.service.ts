@@ -11,6 +11,8 @@ import {
   PickupStationQueryDto,
   UpdatePickupStationDto,
 } from "../dto/outlet.dto";
+import authService from "../../auth/services/auth.service";
+import { OtpPurpose } from "../../../shared/types/auth";
 
 const prisma = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -998,6 +1000,15 @@ class OutletService {
               isApproved: false,
             },
           });
+          if (emailAddr) {
+            authService.sendOtp({
+              email: emailAddr,
+              phoneNumber: phoneNum || '',
+              purpose: OtpPurpose.AGENT_SET_PASSWORD
+            }).catch((err: any) => {
+              logger.error('Failed to send agent welcome email on branch creation', { email: emailAddr, error: err?.message || err });
+            });
+          }
         }
       }
     } catch (_e) {
@@ -1014,25 +1025,23 @@ class OutletService {
       if (created.email) recipients.add(created.email.trim());
       if (created.branchEmail) recipients.add(created.branchEmail.trim());
 
-      if (emailService.isReady()) {
-        for (const recipientEmail of recipients) {
-          emailService
-            .sendBranchCreatedEmail(recipientEmail, {
-              branchName: created.name,
-              branchManager: created.branchManager,
-              state: created.state,
-              address: created.address,
-              phoneNumber: created.phoneNumber,
-              branchEmail: created.branchEmail,
+      for (const recipientEmail of recipients) {
+        emailService
+          .sendBranchCreatedEmail(recipientEmail, {
+            branchName: created.name,
+            branchManager: created.branchManager,
+            state: created.state,
+            address: created.address,
+            phoneNumber: created.phoneNumber,
+            branchEmail: created.branchEmail,
+          })
+          .catch((err) =>
+            logger.warn("Branch creation email failed", {
+              branchId: created.id,
+              recipient: recipientEmail,
+              message: err.message,
             })
-            .catch((err) =>
-              logger.warn("Branch creation email failed", {
-                branchId: created.id,
-                recipient: recipientEmail,
-                message: err.message,
-              })
-            );
-        }
+          );
       }
     } catch (_e) {
       logger.warn("Failed to trigger branch creation emails", {

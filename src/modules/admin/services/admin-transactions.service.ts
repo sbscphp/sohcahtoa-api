@@ -293,6 +293,8 @@ export class AdminTransactionsService {
         workflowStage = "REFUNDED";
       } else if (t.disbursementApprovalStatus === "APPROVED" && t.status !== "COMPLETED") {
         workflowStage = "DISBURSEMENT_APPROVED";
+      } else if (t.disbursementApprovalStatus === "REJECTED") {
+        workflowStage = "DISBURSEMENT_REJECTED";
       }
 
       let requestStatus = "Pending";
@@ -303,8 +305,13 @@ export class AdminTransactionsService {
       } else if (
         t.disbursementApprovalStatus === "APPROVED" ||
         t.status === TransactionStatus.APPROVED ||
+        t.status === (TransactionStatus as any).VERIFICATION_COMPLETED ||
         t.status === TransactionStatus.AWAITING_DEPOSIT ||
-        t.status === TransactionStatus.AWAITING_DISBURSEMENT
+        t.status === TransactionStatus.DEPOSIT_PENDING ||
+        t.status === TransactionStatus.DEPOSIT_CONFIRMED ||
+        t.status === TransactionStatus.AWAITING_DISBURSEMENT ||
+        t.status === TransactionStatus.DISBURSEMENT_IN_PROGRESS ||
+        t.status === TransactionStatus.PENDING_RECORD_VALIDATION
       ) {
         requestStatus = "Approved";
       } else {
@@ -483,6 +490,8 @@ export class AdminTransactionsService {
       statusLabel = "REFUNDED";
     } else if ((trx as any).disbursementApprovalStatus === "APPROVED" && trx.status !== TransactionStatus.COMPLETED) {
       statusLabel = "DISBURSEMENT_APPROVED";
+    } else if ((trx as any).disbursementApprovalStatus === "REJECTED") {
+      statusLabel = "DISBURSEMENT_REJECTED";
     }
 
     const stageLabel = trx.currentStep;
@@ -498,8 +507,13 @@ export class AdminTransactionsService {
     } else if (
       (trx as any).disbursementApprovalStatus === "APPROVED" ||
       trx.status === TransactionStatus.APPROVED ||
+      trx.status === (TransactionStatus as any).VERIFICATION_COMPLETED ||
       trx.status === TransactionStatus.AWAITING_DEPOSIT ||
-      trx.status === TransactionStatus.AWAITING_DISBURSEMENT
+      trx.status === TransactionStatus.DEPOSIT_PENDING ||
+      trx.status === TransactionStatus.DEPOSIT_CONFIRMED ||
+      trx.status === TransactionStatus.AWAITING_DISBURSEMENT ||
+      trx.status === TransactionStatus.DISBURSEMENT_IN_PROGRESS ||
+      trx.status === TransactionStatus.PENDING_RECORD_VALIDATION
     ) {
       requestStatus = "Approved";
     } else {
@@ -540,11 +554,22 @@ export class AdminTransactionsService {
       if (action === "ADMIN_REVIEW_COMPLETED") return "Review Completed";
       if (action === "TRANSACTION_APPROVED") return "Approved";
       if (action === "TRANSACTION_REJECTED") return "Rejected";
+      if (action === "TRANSACTION_STAGE_APPROVED") return "Transaction Stage Approved";
+      if (action === "TRANSACTION_STAGE_REJECTED") return "Transaction Stage Rejected";
+      if (action === "REFUND_APPROVED") return "Refund Approved";
+      if (action === "REFUND_REJECTED") return "Refund Rejected";
+      if (action === "REFUND_STAGE_APPROVED") return "Refund Stage Approved";
+      if (action === "REFUND_STAGE_REJECTED") return "Refund Stage Rejected";
+      if (action === "DISBURSEMENT_APPROVED") return "Disbursement Approved";
+      if (action === "DISBURSEMENT_REJECTED") return "Disbursement Rejected";
+      if (action === "DISBURSEMENT_STAGE_APPROVED") return "Disbursement Stage Approved";
+      if (action === "DISBURSEMENT_STAGE_REJECTED") return "Disbursement Stage Rejected";
       if (action === "TRANSACTION_SETTLED") return "Settled";
       if (action === "DEPOSIT_CONFIRMED") return "Deposit Confirmed";
       if (action === "DOCUMENT_MORE_INFO_REQUESTED") return "More Info Requested";
       if (action === "DOCUMENT_APPROVED") return "Document Approved";
       if (action === "DOCUMENT_REJECTED") return "Document Rejected";
+      if (action === "VERIFICATION_COMPLETED") return "Verification Completed";
       if (action === "DISBURSEMENT_CONFIRMED") return "Disbursement Confirmed";
       return action;
     };
@@ -608,11 +633,31 @@ export class AdminTransactionsService {
       });
     }
 
-    // Statuses that indicate the entire transaction workflow has completed
+    // Statuses that indicate the initial transaction approval workflow has completed
     const workflowCompletedStatuses = [
-      "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "REFUNDED", "DISBURSEMENT_IN_PROGRESS", "AWAITING_DISBURSEMENT",
+      "APPROVED",
+      "REJECTED",
+      "CANCELLED",
+      "COMPLETED",
+      "REFUNDED",
+      "DISBURSEMENT_IN_PROGRESS",
+      "AWAITING_DISBURSEMENT",
+      "AWAITING_DEPOSIT",
+      "DEPOSIT_PENDING",
+      "DEPOSIT_CONFIRMED",
+      "PENDING_RECORD_VALIDATION",
+      "AWAITING_REFUND_VERIFICATION",
+      "VERIFICATION_COMPLETED",
     ];
-    const isWorkflowCompleted = workflowCompletedStatuses.includes(trx.status);
+    const isPreApprovalStatus = [
+      "DRAFT",
+      "AWAITING_VERIFICATION",
+      "VERIFICATION_IN_PROGRESS",
+      "COMPLIANCE_REVIEW",
+      "ADMIN_APPROVAL_PENDING",
+    ].includes(trx.status);
+
+    const isWorkflowCompleted = workflowCompletedStatuses.includes(trx.status) || !isPreApprovalStatus;
 
     // If template ID is set but workflow not found, or no template ID set, try to re-attach
     if (!workflow && !isWorkflowCompleted) {
@@ -662,8 +707,8 @@ export class AdminTransactionsService {
         activeStage = sortedStages.find((s: any) => s.id === trx.currentWorkflowStageId);
       } 
       
-      // Fallback to first stage if not officially started but still pending
-      if (!activeStage && sortedStages.length > 0 && !isWorkflowCompleted) {
+      // Fallback to first stage only if not officially started but still in an unapproved pending state
+      if (!activeStage && sortedStages.length > 0 && !isWorkflowCompleted && isPreApprovalStatus) {
         activeStage = sortedStages[0];
       }
 
@@ -681,7 +726,7 @@ export class AdminTransactionsService {
             roleName: a.admin?.role?.name || "No Role",
           }));
         }
-      } else if (isWorkflowCompleted) {
+      } else if (isWorkflowCompleted || !isPreApprovalStatus) {
         if ((trx.status as string) === TransactionStatus.REFUNDED) {
           approvalState = "Refunded (Workflow Completed)";
         } else if ((trx.status as string) === TransactionStatus.REJECTED) {
@@ -1429,6 +1474,42 @@ export class AdminTransactionsService {
         return { message: "Disbursement stage approved successfully" };
       }
 
+      if (isRefundWorkflow) {
+        const updateResult = await prisma.transaction.updateMany({
+          where: { 
+            id: transactionId,
+            currentWorkflowStageId: tx.currentWorkflowStageId
+          },
+          data: {
+            currentWorkflowStageId: nextStageId,
+            updatedAt: new Date(),
+          },
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("Transaction state changed during approval. Please refresh and try again.");
+        }
+
+        await prisma.transactionHistory.create({
+          data: { transactionId, action: "REFUND_STAGE_APPROVED", performedBy: adminId, notes: reason },
+        });
+
+        if (nextStageAssignees.length > 0) {
+          const user = await prisma.user.findUnique({
+            where: { id: tx.userId },
+            select: { profile: { select: { firstName: true, lastName: true } }, email: true },
+          });
+          const customerName = user?.profile ? `${user.profile.firstName} ${user.profile.lastName}`.trim() : user?.email;
+
+          eventBus.publish(EventTypes.ADMIN_REVIEW_REQUIRED, {
+            adminIds: nextStageAssignees,
+            transaction: { ...tx, customerName },
+          });
+        }
+
+        return { message: "Refund advanced to the next approval stage" };
+      }
+
       const updateResult = await prisma.transaction.updateMany({
         where: { 
           id: transactionId,
@@ -1518,9 +1599,9 @@ export class AdminTransactionsService {
       await prisma.transactionHistory.create({
         data: {
           transactionId,
-          action: "REFUND_REJECTED",
+          action: "REFUND_STAGE_REJECTED",
           performedBy: adminId,
-          notes: reason,
+          notes: reason || "Refund stage rejected",
         },
       });
 
@@ -1555,6 +1636,7 @@ export class AdminTransactionsService {
         data: {
           disbursementApprovalStatus: "REJECTED",
           currentWorkflowStageId: null,
+          disbursementWorkflowStageId: null,
           updatedAt: new Date(),
         },
       });
@@ -2054,10 +2136,17 @@ export class AdminTransactionsService {
 
     if (!tx) throw new Error("Transaction not found");
 
-    // Block refund if transaction is disbursed or in invalid status
+    // If disbursement workflow is currently in progress (pending approval)
+    if (
+      tx.status === "DISBURSEMENT_IN_PROGRESS" &&
+      (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
+    ) {
+      throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
+    }
+
+    // Block refund if transaction has already been disbursed/completed
     const isDisbursed =
       tx.status === "COMPLETED" ||
-      tx.status === "DISBURSEMENT_IN_PROGRESS" ||
       (tx as any).disbursementApprovalStatus === "APPROVED" ||
       (tx as any).disbursementApprovalStatus === "COMPLETED" ||
       (tx as any).disbursementApprovalStatus === "DISBURSED";
@@ -2066,8 +2155,13 @@ export class AdminTransactionsService {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
 
-    const invalidStatuses = ["DRAFT", "REJECTED", "CANCELLED", "REFUNDED"];
+    const invalidStatuses = ["DRAFT", "CANCELLED", "REFUNDED"];
     if (invalidStatuses.includes(tx.status)) {
+      throw new Error(`Cannot refund transaction with status ${tx.status}`);
+    }
+
+    // Block if initial transaction review was rejected (not disbursement rejected)
+    if (tx.status === "REJECTED" && (tx as any).disbursementApprovalStatus !== "REJECTED") {
       throw new Error(`Cannot refund transaction with status ${tx.status}`);
     }
 
@@ -2083,7 +2177,7 @@ export class AdminTransactionsService {
         where: { id: tx.workflowTemplateId },
         select: { approvalType: true }
       });
-      if (currentTemplate?.approvalType === "REFUND") {
+      if (currentTemplate?.approvalType === "REFUND" && tx.status === TransactionStatus.AWAITING_REFUND_VERIFICATION) {
         throw new Error("A refund has already been initiated/completed for this transaction");
       }
     }
@@ -2582,6 +2676,7 @@ export class AdminTransactionsService {
       data: {
         disbursementApprovalStatus: "REJECTED",
         currentWorkflowStageId: null,
+        disbursementWorkflowStageId: null,
         updatedAt: new Date(),
       }
     });
@@ -2674,18 +2769,19 @@ export class AdminTransactionsService {
     });
 
     // Wallet: debit the transaction amount from the user's transient wallet to complete the transaction cycle
+    const creditEntry = await (prisma as any).walletEntry.findFirst({
+      where: {
+        OR: [
+          { transactionId },
+          { linkedTransactionId: transactionId },
+          { transactionRef: transaction.referenceNumber },
+        ],
+        type: "CREDIT",
+      },
+    });
+
     let debitAmount = Number(transaction.nairaEquivalent || 0);
     if (!debitAmount || debitAmount <= 0) {
-      const creditEntry = await (prisma as any).walletEntry.findFirst({
-        where: {
-          OR: [
-            { transactionId },
-            { linkedTransactionId: transactionId },
-            { transactionRef: transaction.referenceNumber },
-          ],
-          type: "CREDIT",
-        },
-      });
       if (creditEntry && Number(creditEntry.amount) > 0) {
         debitAmount = Number(creditEntry.amount);
       }
@@ -2694,11 +2790,13 @@ export class AdminTransactionsService {
     if (debitAmount > 0) {
       const alreadyDebited = await walletService.hasDebitFor(transactionId);
       if (!alreadyDebited) {
+        const debitSessionId = creditEntry?.sessionId || `DISBURSE-${transaction.referenceNumber}`;
         await walletService.debitWallet({
           userId: transaction.userId,
           amount: debitAmount,
           transactionId: transaction.id,
           transactionRef: transaction.referenceNumber,
+          sessionId: debitSessionId,
           description: `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
         }).catch((err: any) =>
           logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId, error: err.message })

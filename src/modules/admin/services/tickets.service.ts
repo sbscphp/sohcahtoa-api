@@ -93,9 +93,11 @@ export class TicketsService {
           },
           assignedAgent: {
             select: {
+              id: true,
               fullName: true,
               email: true,
               role: { select: { name: true } },
+              department: { select: { name: true } },
             },
           },
         },
@@ -109,7 +111,7 @@ export class TicketsService {
       const customerEmail = t?.customer?.email || null;
       const assignedAdminName = t?.assignedAgent?.fullName || null;
       const assignedAdminEmail = t?.assignedAgent?.email || null;
-      const assignedAdminRole = t?.assignedAgent?.role?.name || null;
+      const assignedAdminRole = t?.assignedAgent?.role?.name || t?.assignedAgent?.department?.name || null;
       return {
         id: t.id,
         reference: t.reference,
@@ -118,12 +120,28 @@ export class TicketsService {
         priority: t.priority,
         caseType: t.caseType,
         assignedAgentId: t.assignedAgentId,
-        customerId: t.customerId,
-        customerName,
-        customerEmail,
+        assignedTo: t.assignedAgentId,
+        assignedToName: assignedAdminName,
+        assignedAgentName: assignedAdminName,
+        assignedAgentRole: assignedAdminRole,
         assignedAdminName,
         assignedAdminEmail,
         assignedAdminRole,
+        assignedStaff: assignedAdminName,
+        assignedStaffName: assignedAdminName,
+        assignedStaffEmail: assignedAdminEmail,
+        assignedStaffRole: assignedAdminRole,
+        assignedAgent: t.assignedAgent ? {
+          id: t.assignedAgent.id,
+          fullName: assignedAdminName,
+          name: assignedAdminName,
+          email: assignedAdminEmail,
+          role: assignedAdminRole,
+          department: (t.assignedAgent as any).department?.name || null,
+        } : null,
+        customerId: t.customerId,
+        customerName,
+        customerEmail,
       };
     });
     return {
@@ -138,8 +156,29 @@ export class TicketsService {
       where: { id },
       include: {
         attachments: true,
-        comments: true,
-        assignedAgent: { select: { id: true, fullName: true, email: true, role: { select: { name: true } } } },
+        comments: {
+          include: {
+            admin: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: { select: { name: true } },
+                department: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+        assignedAgent: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: { select: { name: true } },
+            department: { select: { name: true } },
+          },
+        },
         customer: {
           select: {
             id: true,
@@ -153,7 +192,7 @@ export class TicketsService {
     if (!t) {
       throw new NotFoundError("Ticket not found");
     }
-    const [createdAction, assignedAction] = await Promise.all([
+    const [createdAction, assignedAction, closedAction] = await Promise.all([
       client.adminAction.findFirst({
         where: {
           resourceId: id,
@@ -176,17 +215,47 @@ export class TicketsService {
           actionLabel: { in: ["Assign ticket", "Assign ticket to admin", "ASSIGN_TICKET"] },
         },
         orderBy: { performedAt: "desc" },
-        select: { performedAt: true },
+        select: { performedAt: true, admin: { select: { fullName: true } } },
+      }),
+      client.adminAction.findFirst({
+        where: {
+          resourceId: id,
+          OR: [
+            { resourceType: { in: ["INCIDENCE", "TICKET", "INCIDENT"] as any } },
+            { actionType: ActionType.TICKET_UPDATE as any },
+          ],
+          actionLabel: { in: ["Update ticket status", "Close ticket", "Resolve ticket", "UPDATE_TICKET_STATUS"] },
+        },
+        orderBy: { performedAt: "desc" },
+        select: { performedAt: true, admin: { select: { fullName: true } } },
       }),
     ]);
     const customerName =
       t.customer?.profile
         ? `${t.customer.profile.firstName || ""} ${t.customer.profile.lastName || ""}`.trim()
         : t.customer?.email || null;
+
+    const assignedAdminName = t?.assignedAgent?.fullName || null;
+    const assignedAdminEmail = t?.assignedAgent?.email || null;
+    const assignedAdminRole = (t?.assignedAgent as any)?.role?.name || (t?.assignedAgent as any)?.department?.name || null;
+
     return {
       ...t,
       dateAssigned: assignedAction?.performedAt || (t.assignedAgentId ? (t.updatedAt || t.createdAt) : null),
       createdBy: createdAction?.admin?.fullName || customerName,
+      closedBy: closedAction?.admin?.fullName || null,
+      assignedAgentId: t.assignedAgentId,
+      assignedTo: t.assignedAgentId,
+      assignedToName: assignedAdminName,
+      assignedAdminName,
+      assignedAdminEmail,
+      assignedAdminRole,
+      assignedAgentName: assignedAdminName,
+      assignedAgentRole: assignedAdminRole,
+      assignedStaff: assignedAdminName,
+      assignedStaffName: assignedAdminName,
+      assignedStaffEmail: assignedAdminEmail,
+      assignedStaffRole: assignedAdminRole,
       customer: t.customer
         ? {
             id: t.customer.id,
@@ -199,8 +268,11 @@ export class TicketsService {
         ? {
             id: t.assignedAgent.id,
             fullName: t.assignedAgent.fullName,
+            name: t.assignedAgent.fullName,
             email: t.assignedAgent.email,
-            assignedAdminRole: (t.assignedAgent as any).role?.name || null,
+            role: (t.assignedAgent as any).role?.name || null,
+            department: (t.assignedAgent as any).department?.name || null,
+            assignedAdminRole,
           }
         : null,
     };
@@ -487,6 +559,17 @@ private validateAttachment(attachment: {
     const updated = await client.ticket.update({
       where: { id },
       data: { assignedAgentId: adminId },
+      include: {
+        assignedAgent: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: { select: { name: true } },
+            department: { select: { name: true } },
+          },
+        },
+      },
     });
     return updated;
   }

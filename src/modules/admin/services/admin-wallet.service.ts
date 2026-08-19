@@ -196,6 +196,8 @@ export class AdminWalletService {
         workflowStage = "REFUNDED";
       } else if (tx.disbursementApprovalStatus === "APPROVED" && tx.status !== "COMPLETED") {
         workflowStage = "DISBURSEMENT_APPROVED";
+      } else if (tx.disbursementApprovalStatus === "REJECTED") {
+        workflowStage = "DISBURSEMENT_REJECTED";
       }
 
       let requestStatus = "Pending";
@@ -206,8 +208,13 @@ export class AdminWalletService {
       } else if (
         tx.disbursementApprovalStatus === "APPROVED" ||
         tx.status === "APPROVED" ||
+        tx.status === "VERIFICATION_COMPLETED" ||
         tx.status === "AWAITING_DEPOSIT" ||
-        tx.status === "AWAITING_DISBURSEMENT"
+        tx.status === "DEPOSIT_PENDING" ||
+        tx.status === "DEPOSIT_CONFIRMED" ||
+        tx.status === "AWAITING_DISBURSEMENT" ||
+        tx.status === "DISBURSEMENT_IN_PROGRESS" ||
+        tx.status === "PENDING_RECORD_VALIDATION"
       ) {
         requestStatus = "Approved";
       } else {
@@ -864,29 +871,53 @@ export class AdminWalletService {
       },
     });
 
-    if (entry.transactionId) {
-      const tx = await (prisma as any).transaction.findUnique({
-        where: { id: entry.transactionId },
-      });
-      if (tx) {
-           
+    let userId = '';
+    const wallet = await (prisma as any).customerWallet.findUnique({
+      where: { id: walletId },
+      select: { userId: true },
+    }).catch(() => null);
+    if (wallet) userId = wallet.userId;
+
+    let txObj: any = null;
+    if (entry.transactionId || entry.linkedTransactionId || entry.transactionRef) {
+      txObj = await (prisma as any).transaction.findFirst({
+        where: {
+          OR: [
+            ...(entry.transactionId ? [{ id: entry.transactionId }, { referenceNumber: entry.transactionId }] : []),
+            ...(entry.linkedTransactionId ? [{ id: entry.linkedTransactionId }, { referenceNumber: entry.linkedTransactionId }] : []),
+            ...(entry.transactionRef ? [{ referenceNumber: entry.transactionRef }] : []),
+          ],
+        },
+      }).catch(() => null);
+
+      if (txObj) {
+        if (!userId) userId = txObj.userId;
         await (prisma as any).transactionHistory.create({
           data: {
-            transactionId: entry.transactionId,
+            transactionId: txObj.id,
             action: "ADMIN_FLAGGED",
             performedBy: adminId,
             notes: `Transaction flagged via wallet entry: ${reason}`,
           },
-        });
+        }).catch(() => null);
       }
     }
 
-    logger.info("Wallet entry flagged", { walletId, entryId, adminId, reason });
+    const transactionRef = txObj?.referenceNumber || entry.transactionRef || entry.sessionId || entryId;
+    const transactionId = txObj?.id || entry.transactionId || entryId;
+
+    logger.info("Wallet entry flagged", { walletId, entryId, adminId, reason, transactionRef });
 
     eventBus.publish(EventTypes.AML_FLAG_RAISED, {
-      userId: entry.wallet?.userId || '',
-      transactionId: entry.transactionId || entryId,
-      transaction: { id: entry.transactionId || entryId, referenceNumber: entry.transactionId || entryId },
+      userId,
+      transactionId,
+      transaction: {
+        id: transactionId,
+        referenceNumber: transactionRef,
+        foreignAmount: txObj?.foreignAmount,
+        nairaEquivalent: txObj?.nairaEquivalent || entry.amount,
+        currency: txObj?.currency || 'NGN',
+      },
       severity: 'HIGH',
       reason,
       flaggedBy: adminId,
@@ -923,8 +954,21 @@ export class AdminWalletService {
 
     if (entry.transactionId) {
       const tx = await prisma.transaction.findUnique({ where: { id: entry.transactionId } });
-      if (tx && (tx.status === "COMPLETED" || tx.status === "DISBURSEMENT_IN_PROGRESS" || (tx as any).disbursementApprovalStatus === "APPROVED" || (tx as any).disbursementApprovalStatus === "COMPLETED")) {
-        throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+      if (tx) {
+        if (
+          tx.status === "DISBURSEMENT_IN_PROGRESS" &&
+          (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
+        ) {
+          throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
+        }
+        if (
+          tx.status === "COMPLETED" ||
+          (tx as any).disbursementApprovalStatus === "APPROVED" ||
+          (tx as any).disbursementApprovalStatus === "COMPLETED" ||
+          (tx as any).disbursementApprovalStatus === "DISBURSED"
+        ) {
+          throw new Error("Refund action is not allowed for transactions that have already been disbursed");
+        }
       }
     }
 
@@ -1185,11 +1229,13 @@ export class AdminWalletService {
       if (transaction?.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
         const alreadyDebited = await walletService.hasDebitFor(targetTrxId);
         if (!alreadyDebited) {
+          const debitSessionId = entry?.sessionId || `DISBURSE-${transaction.referenceNumber}`;
           await walletService.debitWallet({
             userId:         transaction.userId,
             amount:         Number(transaction.nairaEquivalent),
             transactionId:  targetTrxId,
             transactionRef: transaction.referenceNumber,
+            sessionId:      debitSessionId,
             description:    `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
           }).catch((err: any) =>
             logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId: targetTrxId, error: err.message })

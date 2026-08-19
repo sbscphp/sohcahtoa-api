@@ -36,9 +36,20 @@ export class WorkflowService {
       agentsPending,
       agentsCompleted,
     ] = await Promise.all([
-      client.transaction.count({ where: { status: { notIn: ["APPROVED", "COMPLETED", "REJECTED"] } } }),
-      client.transaction.count({ where: { OR: [{ status: "APPROVED" }, { status: "COMPLETED" }] } }),
-      client.transaction.count({ where: { status: "REJECTED" } }),
+      client.transaction.count({
+        where: {
+          OR: [
+            { status: { in: ["ADMIN_APPROVAL_PENDING", "COMPLIANCE_REVIEW", "AWAITING_VERIFICATION", "VERIFICATION_IN_PROGRESS", "AWAITING_REFUND_VERIFICATION"] } },
+            { status: "DISBURSEMENT_IN_PROGRESS", disbursementApprovalStatus: "PENDING_APPROVAL" as any },
+          ]
+        }
+      }),
+      client.transaction.count({
+        where: {
+          status: { in: ["APPROVED", "COMPLETED", "AWAITING_DEPOSIT", "DEPOSIT_PENDING", "DEPOSIT_CONFIRMED", "AWAITING_DISBURSEMENT", "PENDING_RECORD_VALIDATION", "REFUNDED", "VERIFICATION_COMPLETED"] }
+        }
+      }),
+      client.transaction.count({ where: { status: { in: ["REJECTED", "CANCELLED"] } } }),
 
       client.franchise.count({ where: { status: { notIn: ["APPROVED", "ACTIVE", "REJECTED"] } } }),
       client.franchise.count({ where: { OR: [{ status: "APPROVED" }, { status: "ACTIVE" }] } }),
@@ -73,17 +84,20 @@ export class WorkflowService {
 
     if (status !== "ALL") {
       if (status === "PENDING") {
-        txWhere.status = { notIn: ["APPROVED", "COMPLETED", "REJECTED"] };
+        txWhere.OR = [
+          { status: { in: ["ADMIN_APPROVAL_PENDING", "COMPLIANCE_REVIEW", "AWAITING_VERIFICATION", "VERIFICATION_IN_PROGRESS", "AWAITING_REFUND_VERIFICATION"] } },
+          { status: "DISBURSEMENT_IN_PROGRESS", disbursementApprovalStatus: "PENDING_APPROVAL" as any },
+        ];
         frWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         brWhere.status = { notIn: ["APPROVED", "ACTIVE", "REJECTED"] };
         agWhere.isApproved = false;
       } else if (status === "COMPLETED") {
-        txWhere.OR = [{ status: "APPROVED" }, { status: "COMPLETED" }];
+        txWhere.status = { in: ["APPROVED", "COMPLETED", "AWAITING_DEPOSIT", "DEPOSIT_PENDING", "DEPOSIT_CONFIRMED", "AWAITING_DISBURSEMENT", "PENDING_RECORD_VALIDATION", "REFUNDED", "VERIFICATION_COMPLETED"] };
         frWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         brWhere.OR = [{ status: "APPROVED" }, { status: "ACTIVE" }];
         agWhere.isApproved = true;
       } else if (status === "REJECTED") {
-        txWhere.status = "REJECTED";
+        txWhere.status = { in: ["REJECTED", "CANCELLED"] };
         frWhere.status = "REJECTED";
         brWhere.status = "REJECTED";
         agWhere.id = "__none__";
@@ -148,6 +162,12 @@ export class WorkflowService {
           t.disbursementWorkflowTemplate?.approvalType === "DISBURSEMENT"
         ) {
           workflowAction = "Disbursement Approval";
+        } else if (
+          t.status === "AWAITING_VERIFICATION" ||
+          t.status === "VERIFICATION_IN_PROGRESS" ||
+          t.status === "VERIFICATION_COMPLETED"
+        ) {
+          workflowAction = "Document Approval";
         }
 
         if (
@@ -156,14 +176,21 @@ export class WorkflowService {
           t.status === "AWAITING_VERIFICATION" ||
           t.status === "VERIFICATION_IN_PROGRESS" ||
           t.status === "AWAITING_REFUND_VERIFICATION" ||
-          t.status === "DISBURSEMENT_IN_PROGRESS" ||
+          (t.status === "DISBURSEMENT_IN_PROGRESS" && t.disbursementApprovalStatus === "PENDING_APPROVAL") ||
           t.disbursementApprovalStatus === "PENDING_APPROVAL"
         ) {
           displayStatus = "Pending";
           actionNeeded = "Approve";
         } else if (
           t.status === "APPROVED" ||
-          t.status === "COMPLETED"
+          t.status === "COMPLETED" ||
+          t.status === "AWAITING_DEPOSIT" ||
+          t.status === "DEPOSIT_PENDING" ||
+          t.status === "DEPOSIT_CONFIRMED" ||
+          t.status === "AWAITING_DISBURSEMENT" ||
+          t.status === "PENDING_RECORD_VALIDATION" ||
+          t.status === "REFUNDED" ||
+          t.status === "VERIFICATION_COMPLETED"
         ) {
           displayStatus = "Completed";
           actionNeeded = "None";
@@ -853,6 +880,12 @@ export class WorkflowService {
       "REFUNDED",
       "DISBURSEMENT_IN_PROGRESS",
       "AWAITING_DISBURSEMENT",
+      "AWAITING_DEPOSIT",
+      "DEPOSIT_PENDING",
+      "DEPOSIT_CONFIRMED",
+      "PENDING_RECORD_VALIDATION",
+      "AWAITING_REFUND_VERIFICATION",
+      "VERIFICATION_COMPLETED",
     ];
     if (invalidStatuses.includes(tx.status)) return null;
 
@@ -894,9 +927,19 @@ export class WorkflowService {
       }
     });
 
-    if (!tx) return null;
+    if (
+      tx.status === "DISBURSEMENT_IN_PROGRESS" &&
+      (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
+    ) {
+      throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
+    }
 
-    if (tx.status === "COMPLETED" || tx.status === "DISBURSEMENT_IN_PROGRESS" || (tx as any).disbursementApprovalStatus === "APPROVED" || (tx as any).disbursementApprovalStatus === "COMPLETED") {
+    if (
+      tx.status === "COMPLETED" ||
+      (tx as any).disbursementApprovalStatus === "APPROVED" ||
+      (tx as any).disbursementApprovalStatus === "COMPLETED" ||
+      (tx as any).disbursementApprovalStatus === "DISBURSED"
+    ) {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
 

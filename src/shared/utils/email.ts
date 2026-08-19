@@ -202,19 +202,18 @@ class EmailService {
   ): Promise<boolean> {
     if (this.useTermii) {
       const templateId = TEMPLATES[templateKey];
-      if (!templateId) {
-        console.warn(`Termii template ID not configured for "${templateKey}". Email not sent.`);
-        return false;
-      }
-      try {
-        const result = await emailClient.sendTemplateEmail(to, templateId, data, fallback.subject);
-        if (!result.success) {
-          console.error(`Termii template email returned non-success (${templateKey}) for ${to}`);
+      if (templateId) {
+        try {
+          const result = await emailClient.sendTemplateEmail(to, templateId, data, fallback.subject);
+          if (result.success) {
+            return true;
+          }
+          console.warn(`Termii template email returned non-success (${templateKey}) for ${to}, falling back to standard email`);
+        } catch (error: any) {
+          console.warn(`Termii template email failed (${templateKey}) for ${to}, falling back to standard email:`, error?.response?.data || error?.message || error);
         }
-        return result.success;
-      } catch (error: any) {
-        console.error(`Termii template email failed (${templateKey}) for ${to}:`, error?.response?.data || error?.message || error);
-        return false;
+      } else {
+        console.info(`Termii template ID not configured for "${templateKey}", using standard email transport.`);
       }
     }
 
@@ -885,7 +884,7 @@ class EmailService {
   }
 
   isReady(): boolean {
-    return this.isConfigured || this.useTermii;
+    return this.isConfigured || this.useTermii || Boolean(process.env.SMTP_HOST || process.env.SMS_API_KEY);
   }
 }
 

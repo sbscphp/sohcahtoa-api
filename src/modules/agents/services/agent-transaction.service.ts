@@ -1352,11 +1352,23 @@ class AgentTransactionService {
       const nairaAmount = Number(transaction.nairaEquivalent);
       const alreadyDebited = await walletService.hasDebitFor(input.transactionId);
       if (!alreadyDebited) {
+        const creditEntry = await (prisma as any).walletEntry.findFirst({
+          where: {
+            OR: [
+              { transactionId: input.transactionId },
+              { linkedTransactionId: input.transactionId },
+              { transactionRef: transaction.referenceNumber },
+            ],
+            type: "CREDIT",
+          },
+        });
+        const debitSessionId = creditEntry?.sessionId || `DISBURSE-${transaction.referenceNumber}`;
         await walletService.debitWallet({
           userId:         transaction.userId,
           amount:         nairaAmount,
           transactionId:  input.transactionId,
           transactionRef: transaction.referenceNumber,
+          sessionId:      debitSessionId,
           description:    `Debit on cash disbursement for transaction ${transaction.referenceNumber}`,
         }).catch((err: any) =>
           logger.error('Wallet debit failed on disbursement', { transactionId: input.transactionId, error: err.message })

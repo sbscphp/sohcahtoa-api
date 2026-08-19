@@ -219,8 +219,8 @@ class AdminTransactionsController {
 
   refund = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    const entryId = req.body.entryId;
-    const walletId = req.body.walletId;
+    const entryId = req.body?.entryId;
+    const walletId = req.body?.walletId;
     const reason = req.body?.reason || req.body?.notes;
     const result = await adminTransactionsService.initiateTransactionRefund(req.params.id, adminId, reason);
     await auditTrailService.logAction({
@@ -228,8 +228,8 @@ class AdminTransactionsController {
       actionType: ActionType.WALLET_REFUND,
       actionLabel: "Refund transaction",
       resourceType: "WALLET",
-      resourceId: walletId,
-      reason: reason.trim(),
+      resourceId: walletId || req.params.id,
+      reason: reason ? String(reason).trim() : undefined,
       metadata: { entryId },
     });
 

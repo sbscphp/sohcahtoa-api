@@ -448,6 +448,12 @@ export class AdminService {
           t.disbursementWorkflowTemplate?.approvalType === "DISBURSEMENT"
         ) {
           workflowType = "Disbursement";
+        } else if (
+          t.status === "AWAITING_VERIFICATION" ||
+          t.status === "VERIFICATION_IN_PROGRESS" ||
+          t.status === "VERIFICATION_COMPLETED"
+        ) {
+          workflowType = "Document";
         }
 
         return {
