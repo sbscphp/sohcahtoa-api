@@ -4,6 +4,7 @@ import { ServiceName } from "../../../shared/types";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import { workflowService } from "./workflow.service";
 import walletService from "../../wallet/services/wallet.service";
+import providusService from "../../payments/services/providus.service";
 
 const prisma = getDatabase();
 const logger = createLogger(ServiceName.ADMIN);
@@ -935,7 +936,7 @@ export class AdminWalletService {
   /**
    * Initiate a refund for a wallet entry.
    */
-  async initiateRefund(walletId: string, entryId: string, adminId: string) {
+  async initiateRefund(walletId: string, entryId: string, adminId: string, sessionId?: string) {
     const entry = await (prisma as any).walletEntry.findFirst({
       where: { id: entryId, walletId },
     });
@@ -984,7 +985,7 @@ export class AdminWalletService {
 
     if (!attached) {
       // Auto approve / process immediately if no workflow template exists for REFUND
-      return this.executeRefundTransaction(walletId, entryId, adminId);
+      return this.executeRefundTransaction(walletId, entryId, adminId, sessionId);
     }
 
     // Updated with PENDING_APPROVAL status and initiator
@@ -1009,7 +1010,7 @@ export class AdminWalletService {
   /**
    * Execute the actual refund transaction (ledger entries & wallet balance adjustments).
    */
-  async executeRefundTransaction(walletId: string, entryId: string, adminId: string) {
+  async executeRefundTransaction(walletId: string, entryId: string, adminId: string, sessionId?: string) {
     const entry = await (prisma as any).walletEntry.findFirst({
       where: { id: entryId, walletId },
     });
@@ -1021,6 +1022,15 @@ export class AdminWalletService {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
     if (entry.refundStatus === "COMPLETED") throw new Error("Entry has already been refunded");
+
+    if (!sessionId?.trim()) {
+      throw new Error("A payment session ID is required to complete a refund");
+    }
+
+    const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
+    if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
+      throw new Error("Refund payment session could not be verified");
+    }
 
     const wallet = await (prisma as any).customerWallet.findUnique({
       where: { id: walletId },
@@ -1047,7 +1057,7 @@ export class AdminWalletService {
           walletId,
           transactionId: entry.transactionId,
           transactionRef: entry.transactionRef,
-          sessionId: `REFUND-${entry.transactionRef}`,
+          sessionId: verification.sessionId,
           type: "DEBIT",
           amount: refundAmount,
           balanceBefore,
@@ -1074,7 +1084,7 @@ export class AdminWalletService {
     };
   }
 
-  async approveRefund(walletId: string, entryId: string, adminId: string, _reason?: string) {
+  async approveRefund(walletId: string, entryId: string, adminId: string, _reason?: string, sessionId?: string) {
     const client: any = prisma as any;
     const entry = await client.walletEntry.findFirst({
       where: { id: entryId, walletId },
@@ -1127,7 +1137,7 @@ export class AdminWalletService {
     }
 
     // Final approval: Execute the refund transaction
-    await this.executeRefundTransaction(walletId, entryId, adminId);
+    await this.executeRefundTransaction(walletId, entryId, adminId, sessionId);
     return { message: "Refund approved and processed successfully" };
   }
 
@@ -1177,7 +1187,7 @@ export class AdminWalletService {
   /**
    * Confirm disbursement for a wallet entry.
    */
-  async confirmDisbursement(walletId: string, entryId: string, adminId: string) {
+  async confirmDisbursement(walletId: string, entryId: string, adminId: string, sessionId?: string) {
     const entry = await (prisma as any).walletEntry.findFirst({
       where: { id: entryId, walletId },
     });
@@ -1188,6 +1198,15 @@ export class AdminWalletService {
 
     if (entry.disbursementStatus === "COMPLETED") {
       throw new Error("Entry has already been disbursed");
+    }
+
+    if (!sessionId?.trim()) {
+      throw new Error("A payment session ID is required to confirm disbursement");
+    }
+
+    const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
+    if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
+      throw new Error("Disbursement payment session could not be verified");
     }
 
     const updated = await (prisma as any).walletEntry.update({
@@ -1235,7 +1254,7 @@ export class AdminWalletService {
             amount:         Number(transaction.nairaEquivalent),
             transactionId:  targetTrxId,
             transactionRef: transaction.referenceNumber,
-            sessionId:      debitSessionId,
+            sessionId:      verification.sessionId,
             description:    `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
           }).catch((err: any) =>
             logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId: targetTrxId, error: err.message })
