@@ -376,7 +376,7 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const [user, wallet, settlement, paymentReceipt] = await Promise.all([
+    const [user, wallet, settlement, paymentReceipt, refundEntry] = await Promise.all([
       prisma.user.findUnique({
         where: { id: (trx as any).userId },
         include: { profile: true, kyc: true },
@@ -392,6 +392,11 @@ export class AdminTransactionsService {
       (prisma as any).paymentReceipt.findFirst({
         where: { transactionId: id },
         orderBy: { generatedAt: "desc" }
+      }).catch(() => null),
+      (prisma as any).walletEntry.findFirst({
+        where: { transactionId: id, type: "CREDIT", refundStatus: "COMPLETED" },
+        select: { refundedAt: true },
+        orderBy: { refundedAt: "desc" },
       }).catch(() => null),
     ]);
     const name =
@@ -798,11 +803,10 @@ export class AdminTransactionsService {
 
     const isSettled =
       trx.status === TransactionStatus.COMPLETED ||
-      trx.status === TransactionStatus.APPROVED ||
-      (settlement?.status as string) === "COMPLETED" ||
-      (settlement?.status as string) === "SUCCESS" ||
-      !!settlement?.confirmedAt ||
-      !!settlement?.depositedAt;
+      trx.status === (TransactionStatus as any).REFUNDED;
+    const settlementCompletedAt = trx.status === (TransactionStatus as any).REFUNDED
+      ? refundEntry?.refundedAt || null
+      : trx.completedAt || null;
 
     const foreignAmt = Number(trx.foreignAmount || 0);
     const curr = (trx.currency || "USD").toUpperCase();
@@ -847,9 +851,9 @@ export class AdminTransactionsService {
 
     const transactionSettlement = {
       settlementId: settlement?.id || "—",
-      settlementDate: isSettled ? (settlement?.depositedAt || settlement?.confirmedAt || settlement?.updatedAt || "—") : "—",
-      settlementTime: isSettled ? (settlement?.depositedAt || settlement?.confirmedAt || settlement?.updatedAt || "—") : "—",
-      settlementReceipt: isSettled ? (settlement?.proofOfPayment || "—") : "—",
+      settlementDate: isSettled ? settlementCompletedAt : null,
+      settlementTime: isSettled ? settlementCompletedAt : null,
+      settlementReceipt: isSettled ? (settlement?.proofOfPayment || null) : null,
       settlementStructureCash: cashStructure,
       settlementStructurePrepaidCard: cardStructure,
       seventyFivePercentPaidInto: paidIntoStructure,

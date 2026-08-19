@@ -763,13 +763,10 @@ class AgentService {
         bankName: details.settlement?.bankDetails?.bankName || "—",
       },
       transactionSettlement: (() => {
-        const isSettled =
-          details.status === "COMPLETED" ||
-          details.status === "APPROVED" ||
-          (details.settlement?.status as string) === "COMPLETED" ||
-          (details.settlement?.status as string) === "SUCCESS" ||
-          !!details.settlement?.confirmedAt ||
-          !!details.settlement?.depositedAt;
+        const isSettled = details.status === "COMPLETED" || (details.status as string) === "REFUNDED";
+        const settlementCompletedAt = details.status === "COMPLETED"
+          ? details.outboundSettlement?.completedAt || null
+          : null;
 
         const foreignAmt = Number(details.foreignAmount || 0);
         const curr = (details.currency || "USD").toUpperCase();
@@ -814,9 +811,9 @@ class AgentService {
 
         return {
           settlementId: details.settlement?.id || "—",
-          settlementDate: isSettled ? (details.settlement?.depositedAt || details.settlement?.confirmedAt || details.settlement?.updatedAt || "—") : "—",
-          settlementTime: isSettled ? (details.settlement?.depositedAt || details.settlement?.confirmedAt || details.settlement?.updatedAt || "—") : "—",
-          settlementReceipt: isSettled ? (details.settlement?.proofOfPayment || "—") : "—",
+          settlementDate: isSettled ? settlementCompletedAt : null,
+          settlementTime: isSettled ? settlementCompletedAt : null,
+          settlementReceipt: isSettled ? (details.outboundSettlement?.paymentProof || null) : null,
           settlementStructureCash: cashStructure,
           settlementStructurePrepaidCard: cardStructure,
           seventyFivePercentPaidInto: paidIntoStructure,
