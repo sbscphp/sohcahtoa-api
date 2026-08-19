@@ -31,6 +31,23 @@ export interface WebhookPayload {
 }
 
 export class DepositVerificationService {
+  private async initiateDisbursementAfterPayment(transactionId: string) {
+    try {
+      const { adminTransactionsService } = await import('../../admin/services/admin-transactions.service');
+      await adminTransactionsService.initiateDisbursement(
+        transactionId,
+        'SYSTEM',
+        'Disbursement automatically initiated after successful customer payment',
+      );
+      logger.info('Disbursement automatically initiated after payment', { transactionId });
+    } catch (err: any) {
+      logger.error('Automatic disbursement initiation failed after payment', {
+        transactionId,
+        error: err.message,
+      });
+    }
+  }
+
   /**
    * Natural Providus payment flow:
    *
@@ -243,6 +260,8 @@ export class DepositVerificationService {
         }),
       ]);
 
+      await this.initiateDisbursementAfterPayment(transactionId);
+
       // Credit only the expected amount to the wallet (PENDING until bank confirms)
       const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
       if (!alreadyCredited) {
@@ -327,6 +346,8 @@ export class DepositVerificationService {
         },
       }),
     ]);
+
+    await this.initiateDisbursementAfterPayment(transactionId);
 
     // ── Wallet credit (PENDING) + bank confirmation (MATCHED) ───────────────
     const alreadyCredited = await walletService.hasCreditFor(transactionId, deposit.sessionId);
