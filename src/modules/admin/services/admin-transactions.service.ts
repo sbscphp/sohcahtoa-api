@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { CloudinaryService, createLogger } from "../../../shared/utils";
+import { CloudinaryService, createLogger, deriveRequestStatus, deriveWorkflowStage } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod, TransactionType } from "../../../shared/types";
 import { ActionType } from "../../../shared/types/action-type";
 import { auditTrailService } from "../services/audit-trail.service";
@@ -287,37 +287,8 @@ export class AdminTransactionsService {
       const u: any = userMap.get(t.userId);
       const name = u && u.profile ? `${u.profile.firstName || ""} ${u.profile.lastName || ""}`.trim() : undefined;
       const value = Number(t.nairaEquivalent || t.foreignAmount || 0);
-      let workflowStage = t.status;
-      if (t.status === "AWAITING_REFUND_VERIFICATION") {
-        workflowStage = "PENDING_REFUND_APPROVAL";
-      } else if (t.status === "REFUNDED") {
-        workflowStage = "REFUNDED";
-      } else if (t.disbursementApprovalStatus === "APPROVED" && t.status !== "COMPLETED") {
-        workflowStage = "DISBURSEMENT_APPROVED";
-      } else if (t.disbursementApprovalStatus === "REJECTED") {
-        workflowStage = "DISBURSEMENT_REJECTED";
-      }
-
-      let requestStatus = "Pending";
-      if (t.status === TransactionStatus.REJECTED || t.disbursementApprovalStatus === "REJECTED") {
-        requestStatus = "Rejected";
-      } else if (t.status === TransactionStatus.COMPLETED || t.status === "REFUNDED" || t.status === TransactionStatus.CANCELLED) {
-        requestStatus = "Completed";
-      } else if (
-        t.disbursementApprovalStatus === "APPROVED" ||
-        t.status === TransactionStatus.APPROVED ||
-        t.status === (TransactionStatus as any).VERIFICATION_COMPLETED ||
-        t.status === TransactionStatus.AWAITING_DEPOSIT ||
-        t.status === TransactionStatus.DEPOSIT_PENDING ||
-        t.status === TransactionStatus.DEPOSIT_CONFIRMED ||
-        t.status === TransactionStatus.AWAITING_DISBURSEMENT ||
-        t.status === TransactionStatus.DISBURSEMENT_IN_PROGRESS ||
-        t.status === TransactionStatus.PENDING_RECORD_VALIDATION
-      ) {
-        requestStatus = "Approved";
-      } else {
-        requestStatus = "Pending";
-      }
+      const workflowStage = deriveWorkflowStage(t);
+      const requestStatus = deriveRequestStatus(t);
 
       return {
         id: t.id,
@@ -489,42 +460,9 @@ export class AdminTransactionsService {
     const pickup = (trx as any).cashPickup || null;
     const valueFx = Number(trx.foreignAmount || 0);
     const valueNgn = Number(trx.nairaEquivalent || 0);
-    let statusLabel = trx.status as string;
-    if (trx.status === (TransactionStatus as any).AWAITING_REFUND_VERIFICATION) {
-      statusLabel = "PENDING_REFUND_APPROVAL";
-    } else if (trx.status === (TransactionStatus as any).REFUNDED) {
-      statusLabel = "REFUNDED";
-    } else if ((trx as any).disbursementApprovalStatus === "APPROVED" && trx.status !== TransactionStatus.COMPLETED) {
-      statusLabel = "DISBURSEMENT_APPROVED";
-    } else if ((trx as any).disbursementApprovalStatus === "REJECTED") {
-      statusLabel = "DISBURSEMENT_REJECTED";
-    }
-
+    const statusLabel = deriveWorkflowStage(trx as any);
     const stageLabel = trx.currentStep;
-    let requestStatus = "Pending";
-    if (trx.status === TransactionStatus.REJECTED || (trx as any).disbursementApprovalStatus === "REJECTED") {
-      requestStatus = "Rejected";
-    } else if (
-      trx.status === TransactionStatus.COMPLETED ||
-      trx.status === (TransactionStatus as any).REFUNDED ||
-      trx.status === TransactionStatus.CANCELLED
-    ) {
-      requestStatus = "Completed";
-    } else if (
-      (trx as any).disbursementApprovalStatus === "APPROVED" ||
-      trx.status === TransactionStatus.APPROVED ||
-      trx.status === (TransactionStatus as any).VERIFICATION_COMPLETED ||
-      trx.status === TransactionStatus.AWAITING_DEPOSIT ||
-      trx.status === TransactionStatus.DEPOSIT_PENDING ||
-      trx.status === TransactionStatus.DEPOSIT_CONFIRMED ||
-      trx.status === TransactionStatus.AWAITING_DISBURSEMENT ||
-      trx.status === TransactionStatus.DISBURSEMENT_IN_PROGRESS ||
-      trx.status === TransactionStatus.PENDING_RECORD_VALIDATION
-    ) {
-      requestStatus = "Approved";
-    } else {
-      requestStatus = "Pending";
-    }      
+    const requestStatus = deriveRequestStatus(trx as any);
 
     const history = Array.isArray((trx as any).history) ? (trx as any).history : [];
     const steps = Array.isArray((trx as any).steps) ? (trx as any).steps : [];

@@ -1,5 +1,5 @@
 import { getDatabase } from "../../../config/database";
-import { createLogger } from "../../../shared/utils";
+import { createLogger, deriveRequestStatus, deriveWorkflowStage } from "../../../shared/utils";
 import { ServiceName } from "../../../shared/types";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import { workflowService } from "./workflow.service";
@@ -190,37 +190,8 @@ export class AdminWalletService {
     const txMapById = new Map<string, any>();
     const txMapByRef = new Map<string, any>();
     for (const tx of transactions) {
-      let workflowStage = tx.status as string;
-      if (tx.status === "AWAITING_REFUND_VERIFICATION") {
-        workflowStage = "PENDING_REFUND_APPROVAL";
-      } else if (tx.status === "REFUNDED") {
-        workflowStage = "REFUNDED";
-      } else if (tx.disbursementApprovalStatus === "APPROVED" && tx.status !== "COMPLETED") {
-        workflowStage = "DISBURSEMENT_APPROVED";
-      } else if (tx.disbursementApprovalStatus === "REJECTED") {
-        workflowStage = "DISBURSEMENT_REJECTED";
-      }
-
-      let requestStatus = "Pending";
-      if (tx.status === "REJECTED" || tx.disbursementApprovalStatus === "REJECTED") {
-        requestStatus = "Rejected";
-      } else if (tx.status === "COMPLETED" || tx.status === "REFUNDED" || tx.status === "CANCELLED") {
-        requestStatus = "Completed";
-      } else if (
-        tx.disbursementApprovalStatus === "APPROVED" ||
-        tx.status === "APPROVED" ||
-        tx.status === "VERIFICATION_COMPLETED" ||
-        tx.status === "AWAITING_DEPOSIT" ||
-        tx.status === "DEPOSIT_PENDING" ||
-        tx.status === "DEPOSIT_CONFIRMED" ||
-        tx.status === "AWAITING_DISBURSEMENT" ||
-        tx.status === "DISBURSEMENT_IN_PROGRESS" ||
-        tx.status === "PENDING_RECORD_VALIDATION"
-      ) {
-        requestStatus = "Approved";
-      } else {
-        requestStatus = "Pending";
-      }
+      const workflowStage = deriveWorkflowStage(tx as any);
+      const requestStatus = deriveRequestStatus(tx as any);
 
       const txObj = {
         id: tx.id,
