@@ -132,17 +132,6 @@ WalletRouter.get(
  *         required: true
  *         schema:
  *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [sessionId]
- *             properties:
- *               sessionId:
- *                 type: string
- *                 description: Provider session ID for the completed customer payout
  *     responses:
  *       200:
  *         description: Wallet detail retrieved successfully
@@ -301,17 +290,6 @@ WalletRouter.get(
  *         required: true
  *         schema:
  *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [sessionId]
- *             properties:
- *               sessionId:
- *                 type: string
- *                 description: Provider session ID for the completed customer payout
  *     responses:
  *       200:
  *         description: Customer details retrieved successfully
@@ -638,16 +616,17 @@ WalletRouter.post(
  *         schema:
  *           type: string
  *     requestBody:
- *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [sessionId]
  *             properties:
  *               sessionId:
  *                 type: string
- *                 description: Provider session ID for the completed refund payment
+ *                 description: >
+ *                   Provider session ID for the completed refund payment. Not required to raise the
+ *                   refund request. Only required when no refund approval workflow is configured, in
+ *                   which case this call also performs the final approval and executes the refund.
  *     responses:
  *       200:
  *         description: Refund initiated successfully
@@ -683,16 +662,17 @@ WalletRouter.post(
  *         schema:
  *           type: string
  *     requestBody:
- *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [sessionId]
  *             properties:
  *               sessionId:
  *                 type: string
- *                 description: Provider session ID for the completed refund payment
+ *                 description: >
+ *                   Provider session ID for the completed refund payment. Required only on the final
+ *                   approval stage, where the refund is executed. Intermediate approval stages do not
+ *                   need it.
  *     responses:
  *       200:
  *         description: Refund approved successfully

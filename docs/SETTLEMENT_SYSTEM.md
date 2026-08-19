@@ -346,7 +346,14 @@ Content-Type: application/json
 
 ### Complete a Refund
 
-For an immediate refund, provide the session ID when initiating it. For a refund approval workflow, provide it on the final approval request:
+The session ID is only mandated at the point the refund is finally approved, because that is where the money actually moves. Raising a refund request never requires it, and neither do intermediate approval stages — those calls may omit `sessionId` entirely.
+
+Where the final approval happens depends on whether a REFUND workflow template is configured:
+
+- **Workflow configured** — initiating (`POST .../refund`) and every intermediate approval need no session ID. It is required on the last approval request, where the refund executes.
+- **No workflow configured** — initiating the refund *is* the final approval, since it is auto-approved and executed immediately, so the session ID is required on that call.
+
+The final-approval request carries it as:
 
 ```json
 {
