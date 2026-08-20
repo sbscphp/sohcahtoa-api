@@ -693,7 +693,7 @@ export class AdminTransactionsService {
       }));
     }
 
-    // Process disbursement workflow if attached
+    // Process disbursement workflow if attached, or load applicable template for structure preview
     let dbWorkflow = null;
     let isDisbursementOfficer = false;
     let dbApprovalState: string | null = null;
@@ -720,28 +720,70 @@ export class AdminTransactionsService {
       });
     }
 
+    if (!dbWorkflow) {
+      dbWorkflow = await workflowService.findApplicableWorkflow({
+        branchId: (trx as any).createdByAgent?.branchId || undefined,
+        approvalType: "DISBURSEMENT",
+        action: "Disbursement Approval",
+        amount: Number(trx.nairaEquivalent || trx.foreignAmount || 0),
+      }).catch(() => null);
+
+      if (!dbWorkflow) {
+        dbWorkflow = await (prisma as any).workflowTemplate.findFirst({
+          where: {
+            OR: [
+              { approvalType: "DISBURSEMENT" as any },
+              { action: { contains: "DISBURSEMENT", mode: "insensitive" } },
+              { name: { contains: "Disbursement", mode: "insensitive" } },
+            ],
+            status: "ACTIVE",
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            stages: {
+              orderBy: { order: "asc" },
+              include: {
+                assignees: {
+                  include: {
+                    admin: {
+                      select: { id: true, fullName: true, role: { select: { name: true } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }).catch(() => null);
+      }
+    }
+
+    let dbWorkflowStages: any[] = [];
     if (dbWorkflow) {
+      const rawDbStages = dbWorkflow.stages || [];
+      const sortedDbStages = [...rawDbStages].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
       if (adminId) {
-        isDisbursementOfficer = dbWorkflow.stages.some((s: any) =>
-          s.assignees.some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+        isDisbursementOfficer = sortedDbStages.some((s: any) =>
+          (s.assignees || []).some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
         );
       }
 
       let activeDbStage: any = null;
       if ((trx as any).disbursementWorkflowStageId) {
-        activeDbStage = dbWorkflow.stages.find((s: any) => s.id === (trx as any).disbursementWorkflowStageId);
+        activeDbStage = sortedDbStages.find((s: any) => s.id === (trx as any).disbursementWorkflowStageId);
       }
-      if (!activeDbStage && dbWorkflow.stages.length > 0 && (trx as any).disbursementApprovalStatus === "PENDING_APPROVAL") {
-        activeDbStage = dbWorkflow.stages[0];
+      if (!activeDbStage && sortedDbStages.length > 0 && (trx as any).disbursementApprovalStatus === "PENDING_APPROVAL") {
+        activeDbStage = sortedDbStages[0];
       }
 
+      const totalDbStages = sortedDbStages.length;
+
       if (activeDbStage) {
-        const stageIdx = dbWorkflow.stages.findIndex((s: any) => s.id === activeDbStage.id);
+        const stageIdx = sortedDbStages.findIndex((s: any) => s.id === activeDbStage.id);
         if (stageIdx !== -1) {
-          const totalStages = dbWorkflow.stages.length;
-          dbApprovalState = `Stage ${stageIdx + 1} of ${totalStages} (${activeDbStage.name})`;
+          dbApprovalState = `Step ${stageIdx + 1} of ${totalDbStages} (${activeDbStage.name})`;
           dbCurrentOrder = stageIdx + 1;
-          dbPendingAssignees = activeDbStage.assignees.map((a: any) => ({
+          dbPendingAssignees = (activeDbStage.assignees || []).map((a: any) => ({
             adminId: a.adminId,
             adminName: a.admin?.fullName || "Unknown Admin",
             roleName: a.admin?.role?.name || "No Role",
@@ -751,28 +793,38 @@ export class AdminTransactionsService {
         dbApprovalState = "Approved (Disbursement Workflow Completed)";
       } else if ((trx as any).disbursementApprovalStatus === "REJECTED") {
         dbApprovalState = "Rejected (Disbursement Workflow Completed)";
+      } else if (totalDbStages > 0) {
+        dbApprovalState = `Step 1 of ${totalDbStages} (${sortedDbStages[0].name})`;
+        dbCurrentOrder = 1;
+        dbPendingAssignees = (sortedDbStages[0].assignees || []).map((a: any) => ({
+          adminId: a.adminId,
+          adminName: a.admin?.fullName || "Unknown Admin",
+          roleName: a.admin?.role?.name || "No Role",
+        }));
       }
+
+      dbWorkflowStages = sortedDbStages.map((s: any, idx: number) => ({
+        stageId: s.id,
+        name: s.name,
+        order: idx + 1,
+        isCurrent: activeDbStage
+          ? s.id === activeDbStage.id
+          : ((trx as any).disbursementWorkflowStageId ? s.id === (trx as any).disbursementWorkflowStageId : idx === 0),
+        assignees: (s.assignees || []).map((a: any) => ({
+          adminId: a.adminId,
+          adminName: a.admin?.fullName || "Unknown Admin",
+          roleName: a.admin?.role?.name || "No Role",
+        })),
+      }));
     }
 
-    const dbWorkflowStages = dbWorkflow?.stages.map((s: any) => ({
-      stageId: s.id,
-      name: s.name,
-      order: s.order,
-      isCurrent: (trx as any).disbursementWorkflowStageId ? s.id === (trx as any).disbursementWorkflowStageId : false,
-      assignees: s.assignees.map((a: any) => ({
-        adminId: a.adminId,
-        adminName: a.admin?.fullName || "Unknown Admin",
-        roleName: a.admin?.role?.name || "No Role",
-      })),
-    })) || [];
-
     const disbursementApprovalProcess = {
-      name: dbWorkflow?.name || null,
-      status: (trx as any).disbursementApprovalStatus || null,
+      name: dbWorkflow?.name || "Disbursement Approval",
+      status: (trx as any).disbursementApprovalStatus || "Pending",
       isApprovalOfficer: isDisbursementOfficer,
-      approvalState: dbApprovalState,
-      currentOrder: dbCurrentOrder,
-      pendingAssignees: dbPendingAssignees,
+      approvalState: dbApprovalState || (dbWorkflowStages.length > 0 ? `Step 1 of ${dbWorkflowStages.length} (${dbWorkflowStages[0].name})` : "Pending"),
+      currentOrder: dbCurrentOrder || 1,
+      pendingAssignees: dbPendingAssignees.length > 0 ? dbPendingAssignees : (dbWorkflowStages[0]?.assignees || []),
       workflowStages: dbWorkflowStages,
     };
 
@@ -2088,20 +2140,11 @@ export class AdminTransactionsService {
 
     if (!tx) throw new Error("Transaction not found");
 
-    // If disbursement workflow is currently in progress (pending approval)
-    if (
-      tx.status === "DISBURSEMENT_IN_PROGRESS" &&
-      (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
-    ) {
-      throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
-    }
-
     // Block refund if transaction has already been disbursed/completed
     const isDisbursed =
-      tx.status === "COMPLETED" ||
-      (tx as any).disbursementApprovalStatus === "APPROVED" ||
-      (tx as any).disbursementApprovalStatus === "COMPLETED" ||
-      (tx as any).disbursementApprovalStatus === "DISBURSED";
+      (tx as any).disbursementStatus === "COMPLETED" ||
+      (tx as any).disbursementApprovalStatus === "DISBURSED" ||
+      (tx as any).disbursementApprovalStatus === "COMPLETED";
 
     if (isDisbursed) {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
@@ -2141,6 +2184,9 @@ export class AdminTransactionsService {
         where: { id: transactionId },
         data: {
           status: TransactionStatus.AWAITING_REFUND_VERIFICATION as any,
+          disbursementWorkflowTemplateId: null,
+          disbursementWorkflowStageId: null,
+          disbursementApprovalStatus: null,
           updatedAt: new Date(),
         }
       });
@@ -2235,6 +2281,9 @@ export class AdminTransactionsService {
           currentStep: TransactionStep.REFUNDED as any,
           workflowTemplateId: null,
           currentWorkflowStageId: null,
+          disbursementWorkflowTemplateId: null,
+          disbursementWorkflowStageId: null,
+          disbursementApprovalStatus: null,
           updatedAt: new Date(),
         }
       });

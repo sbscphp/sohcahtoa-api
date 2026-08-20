@@ -926,21 +926,21 @@ export class AdminWalletService {
       throw new Error("Refund action is not allowed for transactions that have already been disbursed");
     }
 
-    if (entry.transactionId) {
-      const tx = await prisma.transaction.findUnique({ where: { id: entry.transactionId } });
+    if (entry.transactionId || entry.transactionRef) {
+      const tx = await prisma.transaction.findFirst({
+        where: {
+          OR: [
+            ...(entry.transactionId ? [{ id: entry.transactionId }] : []),
+            ...(entry.transactionRef ? [{ referenceNumber: entry.transactionRef }] : []),
+          ],
+        },
+      });
       if (tx) {
-        if (
-          tx.status === "DISBURSEMENT_IN_PROGRESS" &&
-          (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
-        ) {
-          throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
-        }
-        if (
-          tx.status === "COMPLETED" ||
-          (tx as any).disbursementApprovalStatus === "APPROVED" ||
-          (tx as any).disbursementApprovalStatus === "COMPLETED" ||
-          (tx as any).disbursementApprovalStatus === "DISBURSED"
-        ) {
+        const isDisbursed =
+          (tx as any).disbursementStatus === "COMPLETED" ||
+          (tx as any).disbursementApprovalStatus === "DISBURSED" ||
+          (tx as any).disbursementApprovalStatus === "COMPLETED";
+        if (isDisbursed) {
           throw new Error("Refund action is not allowed for transactions that have already been disbursed");
         }
       }
@@ -970,6 +970,26 @@ export class AdminWalletService {
         refundedAt: new Date(),
       },
     });
+
+    if (entry.transactionId || entry.transactionRef) {
+      await (prisma as any).transaction.updateMany({
+        where: {
+          OR: [
+            ...(entry.transactionId ? [{ id: entry.transactionId }] : []),
+            ...(entry.transactionRef ? [{ referenceNumber: entry.transactionRef }] : []),
+          ],
+        },
+        data: {
+          status: "AWAITING_REFUND_VERIFICATION",
+          workflowTemplateId: attached.workflowTemplateId,
+          currentWorkflowStageId: attached.currentWorkflowStageId,
+          disbursementWorkflowTemplateId: null,
+          disbursementWorkflowStageId: null,
+          disbursementApprovalStatus: null,
+          updatedAt: new Date(),
+        },
+      }).catch(() => null);
+    }
 
     return {
       id: updated.id,
@@ -1046,6 +1066,27 @@ export class AdminWalletService {
         data: { balance: balanceAfter },
       }),
     ]);
+
+    if (entry.transactionId || entry.transactionRef) {
+      await (prisma as any).transaction.updateMany({
+        where: {
+          OR: [
+            ...(entry.transactionId ? [{ id: entry.transactionId }] : []),
+            ...(entry.transactionRef ? [{ referenceNumber: entry.transactionRef }] : []),
+          ],
+        },
+        data: {
+          status: "REFUNDED",
+          currentStep: "REFUNDED",
+          workflowTemplateId: null,
+          currentWorkflowStageId: null,
+          disbursementWorkflowTemplateId: null,
+          disbursementWorkflowStageId: null,
+          disbursementApprovalStatus: null,
+          updatedAt: new Date(),
+        },
+      }).catch(() => null);
+    }
 
     logger.info("Wallet entry refunded", { walletId, entryId, adminId, refundAmount });
 

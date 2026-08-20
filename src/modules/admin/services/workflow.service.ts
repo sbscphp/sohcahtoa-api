@@ -927,16 +927,10 @@ export class WorkflowService {
       }
     });
 
-    if (
-      tx.status === "DISBURSEMENT_IN_PROGRESS" &&
-      (tx as any).disbursementApprovalStatus === "PENDING_APPROVAL"
-    ) {
-      throw new Error("Disbursement is already in progress. Please reject or complete the disbursement workflow before initiating a refund.");
-    }
+    if (!tx) return null;
 
     if (
-      tx.status === "COMPLETED" ||
-      (tx as any).disbursementApprovalStatus === "APPROVED" ||
+      (tx as any).disbursementStatus === "COMPLETED" ||
       (tx as any).disbursementApprovalStatus === "COMPLETED" ||
       (tx as any).disbursementApprovalStatus === "DISBURSED"
     ) {
@@ -960,6 +954,9 @@ export class WorkflowService {
       data: {
         workflowTemplateId: template.id,
         currentWorkflowStageId: firstStage.id,
+        disbursementWorkflowTemplateId: null,
+        disbursementWorkflowStageId: null,
+        disbursementApprovalStatus: null,
       }
     });
 
