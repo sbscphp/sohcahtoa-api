@@ -351,8 +351,8 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     {
       const SX     = INNER_X;
       const SW     = INNER_W;
-      const BAND_H = 18;
-      const BODY_H = 70;   // fields + signature
+      const BAND_H = 22;
+      const BODY_H = 82;   // fields + signature
       const SH     = BAND_H + BODY_H;
       const SY     = y;
 
@@ -367,8 +367,8 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       const NUM_COLS  = 3;
       const FPAD      = 10;
       const FCOL_W    = (SW - FPAD * 2) / NUM_COLS;
-      const FY        = SY + BAND_H + 8;
-      const FLH       = 13;
+      const FY        = SY + BAND_H + 9;
+      const FLH       = 17;
 
       const fxAmt    = parseFloat(String(data.foreignAmount ?? 0));
       const nairaAmt = parseFloat(String(data.nairaEquivalent ?? 0));
@@ -390,18 +390,18 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
         const row = Math.floor(i / NUM_COLS);
         const fx  = SX + FPAD + col * FCOL_W;
         const fy  = FY + row * FLH;
-        txt(doc, stampFields[i][0] + ':', fx, fy, { font: 'Helvetica', size: 6, color: LABEL_GREY, width: FCOL_W - 2 });
-        txt(doc, stampFields[i][1], fx, fy + 7, { font: 'Helvetica-Bold', size: 7, color: DARK, width: FCOL_W - 4 });
+        txt(doc, stampFields[i][0] + ':', fx, fy, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: FCOL_W - 2 });
+        txt(doc, stampFields[i][1], fx, fy + 8, { font: 'Helvetica-Bold', size: 8, color: DARK, width: FCOL_W - 4 });
       }
 
       // Signature row
       const SIG_Y = SY + SH - 20;
       doc.moveTo(SX + 8, SIG_Y).lineTo(SX + SW - 8, SIG_Y).lineWidth(0.3).stroke(LINE_GREY as any);
       const SIG_MID = SX + SW / 2;
-      txt(doc, 'Authorized Signature:', SX + FPAD, SIG_Y + 5, { font: 'Helvetica', size: 6.5, color: LABEL_GREY, width: 110 });
+      txt(doc, 'Authorized Signature:', SX + FPAD, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 110 });
       doc.moveTo(SX + FPAD + 102, SIG_Y + 9).lineTo(SIG_MID - 6, SIG_Y + 9).lineWidth(0.3).dash(2, { space: 2 }).stroke(DARK as any);
       doc.undash();
-      txt(doc, 'Official Stamp', SIG_MID + 6, SIG_Y + 5, { font: 'Helvetica', size: 6.5, color: LABEL_GREY, width: 80 });
+      txt(doc, 'Official Stamp', SIG_MID + 6, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 80 });
 
       doc.restore();
       y += SH + 8;
@@ -428,7 +428,7 @@ function drawTable(
   width: number,
   rows: [string, string][]
 ): number {
-  const ROW_H = 14;
+  const ROW_H = 18;
   const COL_L = Math.round(width * 0.38);
   const PADH  = 7;
 
@@ -438,11 +438,11 @@ function drawTable(
     doc.rect(x, y, width, ROW_H).fill(bg as any);
     doc.strokeColor(LINE_GREY as any).rect(x, y, width, ROW_H).stroke();
     txt(doc, label, x + PADH, y + ROW_H / 2 - 3, {
-      font: 'Helvetica', size: 6.5, color: LABEL_GREY, characterSpacing: 0.4,
+      font: 'Helvetica', size: 7.5, color: LABEL_GREY, characterSpacing: 0.4,
       width: COL_L - PADH, lineBreak: false,
     });
     txt(doc, value, x + COL_L + PADH, y + ROW_H / 2 - 3.5, {
-      font: 'Helvetica-Bold', size: 7.5, color: DARK,
+      font: 'Helvetica-Bold', size: 9, color: DARK,
       width: width - COL_L - PADH * 2, lineBreak: false,
     });
     y += ROW_H;
@@ -459,6 +459,6 @@ function drawSection(
   title: string,
   rows: [string, string][]
 ): number {
-  txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 7.5, color: DARK, characterSpacing: 0.4 });
-  return drawTable(doc, x, y + 10, width, rows);
+  txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 8.5, color: DARK, characterSpacing: 0.4 });
+  return drawTable(doc, x, y + 14, width, rows);
 }
