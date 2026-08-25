@@ -690,6 +690,19 @@ export class NIBSSClient {
       };
     } catch (error: any) {
       logger.error('FAS BVN Core validation error', { error: error.message, data: error.response?.data });
+
+      if (error.response?.status === 401 && !process.env.NIBSS_FAS_CLIENT_ID) {
+        logger.error(
+          'FAS BVN Core validation got 401 using Consent Hub credentials (NIBSS_FAS_CLIENT_ID not set) — ' +
+          'the FAS/CVS product likely requires its own client_id/secret from NIBSS, distinct from Consent Hub.'
+        );
+        return {
+          verified: false,
+          message: 'BVN validation failed: NIBSS rejected the request as unauthorized. The FAS/CVS product ' +
+            'requires its own credentials — set NIBSS_FAS_CLIENT_ID and NIBSS_FAS_CLIENT_SECRET.',
+        };
+      }
+
       return { verified: false, message: `BVN validation failed: ${error.message}` };
     }
   }
