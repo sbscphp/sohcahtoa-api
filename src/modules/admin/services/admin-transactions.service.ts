@@ -376,8 +376,8 @@ export class AdminTransactionsService {
       }),
       (prisma as any).customerWallet.findUnique({
         where: { userId: (trx as any).userId },
-        select: { id: true, balance: true, ledgerBalance: true, status: true },
-      }),
+        select: { id: true, balance: true, currency: true, isActive: true },
+      }).catch(() => null),
       prisma.settlement.findUnique({
         where: { transactionId: id },
         include: { bankDetails: true }
@@ -969,8 +969,8 @@ export class AdminTransactionsService {
       ? {
           id: wallet.id,
           balance: Number(wallet.balance || 0),
-          ledgerBalance: Number(wallet.ledgerBalance || 0),
-          status: wallet.status || null,
+          currency: wallet.currency || "NGN",
+          isActive: wallet.isActive ?? true,
         }
       : null;
 
