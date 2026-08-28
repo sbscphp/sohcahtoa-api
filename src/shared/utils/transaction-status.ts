@@ -8,6 +8,7 @@
 
 export interface TransactionStatusSource {
   status?: string | null;
+  currentStep?: string | null;
   disbursementApprovalStatus?: string | null;
   currentWorkflowStageId?: string | null;
   disbursementWorkflowStageId?: string | null;
@@ -33,12 +34,19 @@ const COMPLETED_STATUSES = new Set(["COMPLETED", "REFUNDED", "CANCELLED"]);
  */
 export function deriveWorkflowStage(tx: TransactionStatusSource): string {
   const status = tx.status ? String(tx.status) : "";
+  const currentStep = tx.currentStep ? String(tx.currentStep) : "";
   const disbursementApprovalStatus = tx.disbursementApprovalStatus
     ? String(tx.disbursementApprovalStatus)
     : "";
 
   if (status === "AWAITING_REFUND_VERIFICATION") return "PENDING_REFUND_APPROVAL";
   if (status === "REFUNDED") return "REFUNDED";
+  if (
+    status === "REFUND_REJECTED" ||
+    (status === "REJECTED" && currentStep === "REFUNDED")
+  ) {
+    return "REFUND_REJECTED";
+  }
   if (disbursementApprovalStatus === "APPROVED" && status !== "COMPLETED") return "DISBURSEMENT_APPROVED";
   if (disbursementApprovalStatus === "REJECTED") return "DISBURSEMENT_REJECTED";
   return status;
@@ -70,7 +78,7 @@ export function deriveRequestStatus(tx: TransactionStatusSource): string {
     ? String(tx.disbursementApprovalStatus)
     : "";
 
-  if (status === "REJECTED" || disbursementApprovalStatus === "REJECTED") return "Rejected";
+  if (status === "REJECTED" || status === "REFUND_REJECTED" || disbursementApprovalStatus === "REJECTED") return "Rejected";
   if (COMPLETED_STATUSES.has(status)) return "Completed";
   if (hasOutstandingApproval(tx, disbursementApprovalStatus)) return "Pending";
   if (disbursementApprovalStatus === "APPROVED" || APPROVED_STATUSES.has(status)) return "Approved";

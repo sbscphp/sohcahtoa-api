@@ -1,5 +1,5 @@
 import { getDatabase } from "../../../config/database";
-import { createLogger, emailService, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
+import { createLogger, deriveRequestStatus, deriveWorkflowStage, emailService, NotFoundError, ValidationError, validateEmail } from "../../../shared/utils";
 import { ServiceName, TransactionStatus, TransactionType } from "../../../shared/types";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import {
@@ -645,7 +645,8 @@ class OutletService {
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
         transactionStage: t.currentStep,
-        workflowStage: t.status,
+        workflowStage: deriveWorkflowStage(t),
+        requestStatus: deriveRequestStatus(t),
         transactionValue: value,
         status: t.status,
         currency: t.currency,
@@ -743,7 +744,8 @@ class OutletService {
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
         transactionStage: t.currentStep,
-        workflowStage: t.status,
+        workflowStage: deriveWorkflowStage(t),
+        requestStatus: deriveRequestStatus(t),
         transactionValue: value,
         status: t.status,
       };
@@ -759,7 +761,6 @@ class OutletService {
       throw new NotFoundError("Branch not found");
     }
 
-    const skip = (page - 1) * limit;
     const where: any = {
       createdByAgent: {
         is: { branchId },
@@ -793,6 +794,7 @@ class OutletService {
     const sortOrder = (filters?.sortOrder || "desc").toString().toLowerCase() === "asc" ? "asc" : "desc";
     orderBy[sortBy] = sortOrder;
 
+    const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
@@ -823,7 +825,8 @@ class OutletService {
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
         transactionStage: t.currentStep,
-        workflowStage: t.status,
+        workflowStage: deriveWorkflowStage(t),
+        requestStatus: deriveRequestStatus(t),
         transactionValue: value,
         status: t.status,
       };
@@ -914,7 +917,8 @@ class OutletService {
         dateAndId: { date: t.createdAt, reference: t.referenceNumber },
         transactionType: t.type,
         transactionStage: t.currentStep,
-        workflowStage: t.status,
+        workflowStage: deriveWorkflowStage(t),
+        requestStatus: deriveRequestStatus(t),
         transactionValue: value,
         status: t.status,
       };
