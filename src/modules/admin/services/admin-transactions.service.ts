@@ -171,8 +171,22 @@ export class AdminTransactionsService {
     const where: any = {};
 
     const statusValues = parseFilterValues(normalizedFilters.status).map((status) => status.toUpperCase());
-    if (statusValues.length === 1) where.status = statusValues[0];
-    else if (statusValues.length > 1) where.status = { in: statusValues as any };
+    if (statusValues.length === 1) {
+      if (statusValues[0] === "REFUND_REJECTED") {
+        where.status = "REJECTED";
+        where.currentStep = "REFUNDED";
+      } else if (statusValues[0] === "PENDING_REFUND_APPROVAL") {
+        where.status = "AWAITING_REFUND_VERIFICATION";
+      } else if (statusValues[0] === "DISBURSEMENT_REJECTED") {
+        where.disbursementApprovalStatus = "REJECTED";
+      } else if (statusValues[0] === "DISBURSEMENT_APPROVED") {
+        where.disbursementApprovalStatus = "APPROVED";
+      } else {
+        where.status = statusValues[0];
+      }
+    } else if (statusValues.length > 1) {
+      where.status = { in: statusValues as any };
+    }
 
     const stepValues = parseFilterValues(normalizedFilters.step).map((step) => step.toUpperCase());
     if (stepValues.length === 1) where.currentStep = stepValues[0];
@@ -355,14 +369,14 @@ export class AdminTransactionsService {
     );
     if (!trx) return null;
 
-    const [user, wallet, settlement, paymentReceipt, refundEntry] = await Promise.all([
+    const [user, wallet, settlement, paymentReceipt, refundEntry, walletEntries] = await Promise.all([
       prisma.user.findUnique({
         where: { id: (trx as any).userId },
         include: { profile: true, kyc: true },
       }),
       (prisma as any).customerWallet.findUnique({
         where: { userId: (trx as any).userId },
-        select: { id: true },
+        select: { id: true, balance: true, ledgerBalance: true, status: true },
       }),
       prisma.settlement.findUnique({
         where: { transactionId: id },
@@ -377,6 +391,23 @@ export class AdminTransactionsService {
         select: { refundedAt: true },
         orderBy: { refundedAt: "desc" },
       }).catch(() => null),
+      (prisma as any).walletEntry.findMany({
+        where: {
+          OR: [
+            { transactionId: id },
+            { linkedTransactionId: id },
+            ...(trx.referenceNumber ? [
+              { transactionRef: trx.referenceNumber },
+              { sessionId: `REFUND-${trx.referenceNumber}` },
+            ] : []),
+          ],
+        },
+        include: {
+          notes: { orderBy: { createdAt: "asc" } },
+          workflowTemplate: { select: { id: true, name: true, approvalType: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }).catch(() => []),
     ]);
     const name =
       user?.profile
@@ -896,6 +927,53 @@ export class AdminTransactionsService {
       settlementStatus: isSettled ? "SETTLED" : (trx.currentStep || trx.status),
     };
 
+    const transientWalletEntries = (walletEntries || []).map((e: any) => ({
+      id: e.id,
+      walletId: e.walletId,
+      type: e.type,
+      amount: Number(e.amount),
+      balanceBefore: Number(e.balanceBefore),
+      balanceAfter: Number(e.balanceAfter),
+      description: e.description,
+      status: e.status,
+      matchStatus: e.matchStatus || "MATCHED",
+      transactionRef: e.transactionRef || trx.referenceNumber,
+      transactionId: e.transactionId || trx.id,
+      linkedTransactionId: e.linkedTransactionId || trx.id,
+      linkReason: e.linkReason || null,
+      sessionId: e.sessionId || null,
+      isFlagged: e.isFlagged ?? false,
+      flagReason: e.flagReason || null,
+      flaggedBy: e.flaggedBy || null,
+      flaggedAt: e.flaggedAt || null,
+      refundStatus: e.refundStatus || null,
+      refundedBy: e.refundedBy || null,
+      refundedAt: e.refundedAt || null,
+      disbursementStatus: e.disbursementStatus || null,
+      disbursedBy: e.disbursedBy || null,
+      disbursedAt: e.disbursedAt || null,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+      workflowTemplate: e.workflowTemplate || null,
+      notes: e.notes
+        ? e.notes.map((n: any) => ({
+            id: n.id,
+            note: n.note,
+            adminId: n.adminId,
+            createdAt: n.createdAt,
+          }))
+        : [],
+    }));
+
+    const customerTransientWallet = wallet
+      ? {
+          id: wallet.id,
+          balance: Number(wallet.balance || 0),
+          ledgerBalance: Number(wallet.ledgerBalance || 0),
+          status: wallet.status || null,
+        }
+      : null;
+
     return {
       id: trx.id,
       reference: trx.referenceNumber,
@@ -904,6 +982,9 @@ export class AdminTransactionsService {
       customerName: name,
       customerType: user?.customerType || null,
       customerTransientWalletId: wallet?.id || null,
+      customerTransientWallet,
+      transientWalletEntries,
+      walletEntries: transientWalletEntries,
       transactionType: trx.type,
       fxType: "Buy FX",
       transactionStage: stageLabel,
@@ -973,6 +1054,9 @@ export class AdminTransactionsService {
         recipientName: pickup?.recipientName || stepPickup?.recipientName || null,
         recipientPhone: pickup?.recipientPhone || stepPickup?.recipientPhone || null,
         customerTransientWalletId: wallet?.id || null,
+        customerTransientWallet,
+        transientWalletEntries,
+        walletEntries: transientWalletEntries,
         receiptUrl,
         receipt: receiptObj,
         paymentDetails,
@@ -984,6 +1068,8 @@ export class AdminTransactionsService {
         receipt: (trx as any).receipt || receiptObj,
         receiptUrl: (trx as any).receipt?.pdfUrl || receiptUrl,
         history: decoratedHistory,
+        transientWalletEntries,
+        walletEntries,
       },
     };
   }
@@ -1593,7 +1679,10 @@ export class AdminTransactionsService {
       const transaction = await prisma.transaction.update({
         where: { id: transactionId },
         data: {
-          status: TransactionStatus.AWAITING_DISBURSEMENT as any,
+          status: TransactionStatus.REJECTED as any,
+          currentStep: TransactionStep.REFUNDED as any,
+          rejectionReason: reason || "Refund stage rejected",
+          rejectedAt: new Date(),
           workflowTemplateId: null,
           currentWorkflowStageId: null,
           updatedAt: new Date(),
@@ -1603,7 +1692,7 @@ export class AdminTransactionsService {
       await prisma.transactionHistory.create({
         data: {
           transactionId,
-          action: "REFUND_STAGE_REJECTED",
+          action: "REFUND_REJECTED",
           performedBy: adminId,
           notes: reason || "Refund stage rejected",
         },
@@ -1630,6 +1719,15 @@ export class AdminTransactionsService {
           metadata: { entryId: entry.id, transactionId, reason },
         }).catch((err) => logger.error("Audit log failed for wallet entry refund rejection", { error: err.message }));
       }
+
+      eventBus.publish(EventTypes.TRANSACTION_REJECTED, {
+        userId: tx.userId,
+        transaction: {
+          id: tx.id,
+          referenceNumber: tx.referenceNumber,
+        },
+        reason: reason || "Refund rejected",
+      });
 
       return { message: "Transaction refund rejected successfully" };
     }
