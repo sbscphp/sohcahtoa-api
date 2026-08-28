@@ -128,6 +128,8 @@ interface CreateCustomerTransactionPayload {
 
   // Nigeria address — required for Tourist Sell FX transactions
   nigeriaAddress?: string;
+  /** Alias for `nigeriaAddress` */
+  address?: string;
 
   /** Digital signature text submitted by the customer instead of uploading a DIGITAL_SIGNATURE file */
   digitalSignature?: string;
@@ -196,11 +198,15 @@ export class CustomerTransactionService {
       beneficiaryDetails,
       pickupLocation,
       refundBankDetails,
-      nigeriaAddress,
+      nigeriaAddress: nigeriaAddressRaw,
+      address: addressAlias,
     } = payload;
 
     // Normalize tin — accept either `tin` or `tinNumber` from the payload
     const tin = tinRaw ?? tinNumber ?? undefined;
+
+    // Normalize address — accept either `nigeriaAddress` or `address` from the payload
+    const nigeriaAddress = nigeriaAddressRaw ?? addressAlias ?? undefined;
 
     // Coerce amount to number — guards against string values from JSON body
     const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
@@ -2331,7 +2337,7 @@ export class CustomerTransactionService {
         'OVERSEAS_MEDICAL_LETTER',
       ],
       PROFESSIONAL_BODY: ['MEMBERSHIP_CARD', 'INVOICE'],
-      TOURIST_FX: ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'],
+      TOURIST_FX: ['VISA', 'PASSPORT', 'RETURN_TICKET'],
       RESIDENT_FX: ['PASSPORT', 'UTILITY_BILL'],
       EXPATRIATE_FX: ['PASSPORT', 'WORK_PERMIT', 'UTILITY_BILL'],
       IMTO_REMITTANCE: [],
@@ -2343,11 +2349,11 @@ export class CustomerTransactionService {
     // For TOURIST_FX, differentiate based on transaction mode
     if (transactionType === 'TOURIST_FX') {
       if (transactionMode === 'BUY') {
-        // TOURING (buying FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
-        required = ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'];
+        // TOURING (buying FX): requires VISA, PASSPORT, RETURN_TICKET
+        required = ['VISA', 'PASSPORT', 'RETURN_TICKET'];
       } else if (transactionMode === 'SELL') {
-        // TOURIST (selling FX): requires VISA, PASSPORT, RETURN_TICKET, RECEIPT
-        required = ['VISA', 'PASSPORT', 'RETURN_TICKET', 'RECEIPT'];
+        // TOURIST (selling FX): requires VISA, PASSPORT, RETURN_TICKET
+        required = ['VISA', 'PASSPORT', 'RETURN_TICKET'];
       }
     }
 
