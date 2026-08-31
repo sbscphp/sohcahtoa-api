@@ -124,7 +124,6 @@ UserManagementRouter.get(
 UserManagementRouter.get(
   "/users/all",
   authenticate,
-  requirePermission({ module: "USER_MANAGEMENT", feature: "USERS", action: "view" }),
   userManagementController.listAllUsers
 );
 
@@ -308,7 +307,6 @@ UserManagementRouter.get(
 UserManagementRouter.get(
   "/lookups",
   authenticate,
-  requirePermission({ module: "USER_MANAGEMENT", feature: "MODULE", action: "view" }),
   userManagementController.getLookups
 );
 

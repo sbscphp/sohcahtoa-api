@@ -136,7 +136,6 @@ AgentRouter.get(
 AgentRouter.get(
   "/all",
   authenticate,
-  requirePermission({ module: "AGENTS", feature: "MODULE", action: "view" }),
   agentController.listAll
 );
 
