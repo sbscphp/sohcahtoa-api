@@ -710,12 +710,120 @@ class AgentService {
     });
     if (!row) throw new NotFoundError("Transaction not found for this agent");
 
-    const details = await customerTransactionService.getTransactionDetails(row.id, row.userId);
+    const [details, settlement, paymentReceipt, refundEntry, trx] = await Promise.all([
+      customerTransactionService.getTransactionDetails(row.id, row.userId),
+      prisma.settlement.findUnique({
+        where: { transactionId: row.id },
+        include: { bankDetails: true },
+      }).catch(() => null),
+      (prisma as any).paymentReceipt.findFirst({
+        where: { transactionId: row.id },
+        orderBy: { generatedAt: "desc" },
+      }).catch(() => null),
+      (prisma as any).walletEntry.findFirst({
+        where: { transactionId: row.id, type: "CREDIT", refundStatus: "COMPLETED" },
+        select: { refundedAt: true },
+        orderBy: { refundedAt: "desc" },
+      }).catch(() => null),
+      prisma.transaction.findUnique({
+        where: { id: row.id },
+        include: {
+          receipt: true,
+          documents: { where: { documentType: "RECEIPT" }, take: 1 },
+        },
+      } as any).catch(() => null),
+    ]);
 
     // Helper to find document URL by type
     const getDocUrl = (type: string) => {
-      const doc = details.requiredDocuments.find((d: any) => d.type === type);
+      const doc = details.requiredDocuments?.find((d: any) => d.type === type);
       return doc?.uploaded?.fileUrl || null;
+    };
+
+    const receiptDoc = (trx as any)?.documents?.[0];
+    const receiptUrl =
+      (trx as any)?.receipt?.pdfUrl ||
+      receiptDoc?.fileUrl ||
+      paymentReceipt?.pdfUrl ||
+      settlement?.proofOfPayment ||
+      details.settlement?.proofOfPayment ||
+      getDocUrl("RECEIPT") ||
+      null;
+
+    const isSettled =
+      details.status === "COMPLETED" ||
+      (details.status as string) === "REFUNDED" ||
+      trx?.status === "COMPLETED" ||
+      (trx?.status as string) === "REFUNDED";
+
+    const settlementCompletedAt =
+      (details.status as string) === "REFUNDED" || (trx?.status as string) === "REFUNDED"
+        ? refundEntry?.refundedAt || trx?.completedAt || settlement?.updatedAt || details.createdAt
+        : trx?.completedAt || settlement?.confirmedAt || settlement?.updatedAt || (details as any).completedAt || details.updatedAt || null;
+
+    const settlementReceipt = isSettled
+      ? (settlement?.proofOfPayment || details.settlement?.proofOfPayment || receiptUrl || null)
+      : null;
+
+    const paidTo =
+      settlement?.bankDetails?.accountName ||
+      details.settlement?.bankDetails?.accountName ||
+      "—";
+    const bankName =
+      settlement?.bankDetails?.bankName ||
+      details.settlement?.bankDetails?.bankName ||
+      "—";
+
+    const foreignAmt = Number(details.foreignAmount || trx?.foreignAmount || 0);
+    const curr = (details.currency || trx?.currency || "USD").toUpperCase();
+    const opt = ((details as any).disbursementOption || (trx as any)?.disbursementOption || "").toString().toUpperCase();
+    const mthd = ((details as any).disbursementMethod || (trx as any)?.disbursementMethod || "").toString().toUpperCase();
+
+    let cashStructure = "—";
+    let cardStructure = "—";
+    let paidIntoStructure = "—";
+
+    if (opt === "CARD_AND_CASH" || opt === "CASH_AND_CARD") {
+      const cashPortion = Math.min(foreignAmt * 0.25, 500);
+      const cardPortion = foreignAmt - cashPortion;
+      cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+      cardStructure = `75% Prepaid Card (${curr} ${cardPortion.toLocaleString()})`;
+      paidIntoStructure = "75% Prepaid Card / 25% Cash Pickup";
+    } else if (opt === "CASH_AND_TRANSFER") {
+      const cashPortion = foreignAmt * 0.25;
+      const transferPortion = foreignAmt * 0.75;
+      cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
+      cardStructure = "—";
+      paidIntoStructure = `75% Electronic Transfer (${curr} ${transferPortion.toLocaleString()}) / 25% Cash`;
+    } else if (opt === "CARD" || mthd === "PREPAID_CARD") {
+      cashStructure = "0% Cash";
+      cardStructure = `100% Prepaid Card (${curr} ${foreignAmt.toLocaleString()})`;
+      paidIntoStructure = "100% Prepaid Card";
+    } else if (opt === "ELECTRONIC_TRANSFER" || mthd === "BANK_TRANSFER") {
+      cashStructure = "0% Cash";
+      cardStructure = "0% Prepaid Card";
+      paidIntoStructure = "100% Bank Account";
+    } else if (mthd === "CASH_PICKUP") {
+      cashStructure = `100% Cash (${curr} ${foreignAmt.toLocaleString()})`;
+      cardStructure = "0% Prepaid Card";
+      paidIntoStructure = "100% Cash Pickup";
+    } else if (foreignAmt > 0) {
+      const cashPortion = Math.min(foreignAmt * 0.25, 500);
+      const cardPortion = foreignAmt - cashPortion;
+      cashStructure = `Cash: ${curr} ${cashPortion.toLocaleString()}`;
+      cardStructure = `Card: ${curr} ${cardPortion.toLocaleString()}`;
+      paidIntoStructure = "Prepaid Card & Cash";
+    }
+
+    const transactionSettlement = {
+      settlementId: settlement?.id || details.settlement?.id || "—",
+      settlementDate: isSettled ? settlementCompletedAt : null,
+      settlementTime: isSettled ? settlementCompletedAt : null,
+      settlementReceipt,
+      settlementStructureCash: cashStructure,
+      settlementStructurePrepaidCard: cardStructure,
+      seventyFivePercentPaidInto: paidIntoStructure,
+      settlementStatus: isSettled ? "SETTLED" : (details.currentStep || details.status),
     };
 
     return {
@@ -746,81 +854,24 @@ class AgentService {
         nin: details.personalInfo?.nin || "—",
         tin: details.personalInfo?.tinNumber || "—",
         taxClearanceNumber: details.taxClearanceNumber || "—",
-        documentsCount: details.requiredDocuments.filter((d: any) => d.uploaded).length,
+        documentsCount: details.requiredDocuments?.filter((d: any) => d.uploaded).length || 0,
         visa: getDocUrl('VISA'),
         returnTicket: getDocUrl('RETURN_TICKET'),
         passport: getDocUrl('PASSPORT'),
         schoolAdmission: getDocUrl('SCHOOL_ADMISSION'),
         invoice: getDocUrl('INVOICE'),
-        receipt: getDocUrl('RECEIPT'),
+        receipt: receiptUrl,
       },
       paymentDetails: {
         transactionId: details.transactionId,
         transactionDate: details.createdAt,
         transactionTime: details.createdAt,
-        transactionReceipt: getDocUrl('RECEIPT'),
-        paidTo: details.settlement?.bankDetails?.accountName || "—",
-        bankName: details.settlement?.bankDetails?.bankName || "—",
+        transactionReceipt: receiptUrl,
+        paidTo,
+        bankName,
       },
-      transactionSettlement: (() => {
-        const isSettled = details.status === "COMPLETED" || (details.status as string) === "REFUNDED";
-        const settlementCompletedAt = details.status === "COMPLETED"
-          ? details.outboundSettlement?.completedAt || null
-          : null;
-
-        const foreignAmt = Number(details.foreignAmount || 0);
-        const curr = (details.currency || "USD").toUpperCase();
-        const opt = ((details as any).disbursementOption || "").toString().toUpperCase();
-        const mthd = ((details as any).disbursementMethod || "").toString().toUpperCase();
-
-        let cashStructure = "—";
-        let cardStructure = "—";
-        let paidIntoStructure = "—";
-
-        if (opt === "CARD_AND_CASH" || opt === "CASH_AND_CARD") {
-          const cashPortion = Math.min(foreignAmt * 0.25, 500);
-          const cardPortion = foreignAmt - cashPortion;
-          cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
-          cardStructure = `75% Prepaid Card (${curr} ${cardPortion.toLocaleString()})`;
-          paidIntoStructure = "75% Prepaid Card / 25% Cash Pickup";
-        } else if (opt === "CASH_AND_TRANSFER") {
-          const cashPortion = foreignAmt * 0.25;
-          const transferPortion = foreignAmt * 0.75;
-          cashStructure = `25% Cash (${curr} ${cashPortion.toLocaleString()})`;
-          cardStructure = "—";
-          paidIntoStructure = `75% Electronic Transfer (${curr} ${transferPortion.toLocaleString()}) / 25% Cash`;
-        } else if (opt === "CARD" || mthd === "PREPAID_CARD") {
-          cashStructure = "0% Cash";
-          cardStructure = `100% Prepaid Card (${curr} ${foreignAmt.toLocaleString()})`;
-          paidIntoStructure = "100% Prepaid Card";
-        } else if (opt === "ELECTRONIC_TRANSFER" || mthd === "BANK_TRANSFER") {
-          cashStructure = "0% Cash";
-          cardStructure = "0% Prepaid Card";
-          paidIntoStructure = "100% Bank Account";
-        } else if (mthd === "CASH_PICKUP") {
-          cashStructure = `100% Cash (${curr} ${foreignAmt.toLocaleString()})`;
-          cardStructure = "0% Prepaid Card";
-          paidIntoStructure = "100% Cash Pickup";
-        } else if (foreignAmt > 0) {
-          const cashPortion = Math.min(foreignAmt * 0.25, 500);
-          const cardPortion = foreignAmt - cashPortion;
-          cashStructure = `Cash: ${curr} ${cashPortion.toLocaleString()}`;
-          cardStructure = `Card: ${curr} ${cardPortion.toLocaleString()}`;
-          paidIntoStructure = "Prepaid Card & Cash";
-        }
-
-        return {
-          settlementId: details.settlement?.id || "—",
-          settlementDate: isSettled ? settlementCompletedAt : null,
-          settlementTime: isSettled ? settlementCompletedAt : null,
-          settlementReceipt: isSettled ? (details.outboundSettlement?.paymentProof || null) : null,
-          settlementStructureCash: cashStructure,
-          settlementStructurePrepaidCard: cardStructure,
-          seventyFivePercentPaidInto: paidIntoStructure,
-          settlementStatus: isSettled ? "SETTLED" : (details.currentStep || details.status),
-        };
-      })(),
-      raw: details
+      transactionSettlement,
+      raw: details,
     };
   }
 
