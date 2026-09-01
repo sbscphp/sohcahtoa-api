@@ -289,7 +289,6 @@ OutletRouter.get(
 OutletRouter.get(
   "/franchises/:id/branches/all",
   authenticate,
-  requirePermission({ module: "BRANCH", feature: "MODULE", action: "view" }),
   outletController.listFranchiseBranchesAll
 );
 
@@ -1013,7 +1012,6 @@ OutletRouter.get(
 OutletRouter.get(
   "/branches/all",
   authenticate,
-  requirePermission({ module: "OUTLET", feature: "MODULE", action: "view" }),
   outletController.listAllBranches
 );
 

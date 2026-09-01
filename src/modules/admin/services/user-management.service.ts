@@ -16,9 +16,10 @@ class UserManagementService {
 
     addUser = async (body: CreateAdminUserDto) => {
         try {
+            const cleanEmail = body.email.toLowerCase().trim();
             const result = await this.prisma.$transaction(async tx => {
 
-                const existingByEmail = await tx.adminUser.findUnique({ where: { email: body.email } });
+                const existingByEmail = await tx.adminUser.findUnique({ where: { email: cleanEmail } });
                 if (existingByEmail) {
                     throw new DuplicateError("Admin user with this email already exists");
                 }

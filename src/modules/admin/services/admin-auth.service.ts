@@ -404,7 +404,8 @@ async submitNewPassword(resetToken: string, newPassword: string) {
 }
 
   async initiateLogin(email: string, password: string) {
-    const user = await this.prisma.adminUser.findUnique({ where: { email } });
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await this.prisma.adminUser.findUnique({ where: { email: cleanEmail } });
     if (!user) throw new NotFoundError("User not found");
     if (!user.password) throw new UnauthorizedError("Password not set. Please complete registration first.");
     if (!user.isActive) throw new UnauthorizedError("Account is deactivated. Please contact the administrator.");
