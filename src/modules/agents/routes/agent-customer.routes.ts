@@ -52,7 +52,14 @@ AgentCustomerRouter.use(authenticate, authorize(UserRole.AGENT));
  *         schema:
  *           type: string
  *           enum: [NIGERIAN_CITIZEN, TOURIST, EXPATRIATE]
- *         description: Filter by customer type
+ *         description: Filter by customer residency type
+ *       - in: query
+ *         name: segment
+ *         schema:
+ *           type: string
+ *           enum: [ALL, VERIFIED, RETURNING, PENDING_KYC]
+ *           default: ALL
+ *         description: Filter by customer segment — ALL (default), VERIFIED (KYC verified), RETURNING (at least 2 completed transactions), or PENDING_KYC
  *       - in: query
  *         name: fromDate
  *         schema:

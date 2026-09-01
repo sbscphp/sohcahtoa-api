@@ -7,10 +7,19 @@ export interface AgentCreateNigerianCustomerAccountRequest {
   customerType?: CustomerType;
 }
 
+/** Customer segment filter — distinct from `customerType` (residency), based on KYC/transaction history */
+export enum AgentCustomerSegment {
+  ALL = "ALL",
+  VERIFIED = "VERIFIED",
+  RETURNING = "RETURNING",
+  PENDING_KYC = "PENDING_KYC",
+}
+
 export interface AgentCustomerListFilters {
   status?: KycStatus | string;
   lastTransactionType?: TransactionType | string;
   customerType?: CustomerType | string;
+  segment?: AgentCustomerSegment | string;
   fromDate?: string;
   toDate?: string;
   search?: string;

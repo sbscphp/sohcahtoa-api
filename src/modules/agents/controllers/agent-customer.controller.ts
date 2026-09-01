@@ -81,6 +81,7 @@ class AgentCustomerController {
         status: req.query.status as string | undefined,
         lastTransactionType: req.query.lastTransactionType as string | undefined,
         customerType: req.query.customerType as string | undefined,
+        segment: req.query.segment as string | undefined,
         fromDate: req.query.fromDate as string | undefined,
         toDate: req.query.toDate as string | undefined,
         search: req.query.search as string | undefined,

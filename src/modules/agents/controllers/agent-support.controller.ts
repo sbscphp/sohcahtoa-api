@@ -11,10 +11,11 @@ class AgentSupportController {
         throw new ValidationError("Authentication required");
       }
 
-      const { customerId, category, description } = req.body as {
+      const { customerId, category, description, transactionId } = req.body as {
         customerId?: string;
         category?: string;
         description?: string;
+        transactionId?: string;
       };
 
       if (!customerId) {
@@ -34,6 +35,7 @@ class AgentSupportController {
         customerId,
         category,
         description,
+        transactionId,
         file,
       });
 

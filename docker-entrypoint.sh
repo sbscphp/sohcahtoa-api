@@ -148,6 +148,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "transactionId" TEXT;
+CREATE INDEX IF NOT EXISTS "tickets_transactionId_idx" ON "tickets"("transactionId");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tickets_transactionId_fkey') THEN
+    ALTER TABLE "tickets"
+      ADD CONSTRAINT "tickets_transactionId_fkey"
+      FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 ALTER TABLE "exchange_rates" ADD COLUMN IF NOT EXISTS "note" TEXT;
 
 DO $$ BEGIN
@@ -288,6 +298,7 @@ DO $$ BEGIN ALTER TYPE "DocumentType" ADD VALUE IF NOT EXISTS 'STUDENT_PASSPORT'
 DO $$ BEGIN ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'PENDING_RECORD_VALIDATION'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'AWAITING_DISBURSEMENT'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'AWAITING_REFUND_VERIFICATION'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE "TransactionStatus" ADD VALUE IF NOT EXISTS 'REFUNDED'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TYPE "TransactionStep" ADD VALUE IF NOT EXISTS 'REFUNDED'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TYPE "TransactionStep" ADD VALUE IF NOT EXISTS 'COMPLETED'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TYPE "VerificationStatus" ADD VALUE IF NOT EXISTS 'REJECTED'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

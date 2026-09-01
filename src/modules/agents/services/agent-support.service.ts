@@ -13,6 +13,7 @@ interface CreateAgentSupportTicketPayload {
   customerId: string;
   category: string;
   description: string;
+  transactionId?: string;
   file?: Express.Multer.File;
 }
 
@@ -40,7 +41,7 @@ class AgentSupportService {
   }
 
   async createSupportTicket(payload: CreateAgentSupportTicketPayload) {
-    const { agentUserId, customerId, category, description, file } = payload;
+    const { agentUserId, customerId, category, description, transactionId, file } = payload;
 
     logger.info("[createSupportTicket] Creating support ticket for customer (agent)", {
       agentUserId,
@@ -86,6 +87,28 @@ class AgentSupportService {
       throw new ValidationError("Description is required");
     }
 
+    let validatedTransactionId: string | undefined;
+    if (category === "TRANSACTION_ISSUE") {
+      const trimmedTransactionId = transactionId?.trim?.();
+      if (!trimmedTransactionId) {
+        throw new ValidationError("transactionId is required when category is TRANSACTION_ISSUE");
+      }
+
+      const transaction = await prisma.transaction.findFirst({
+        where: {
+          OR: [{ id: trimmedTransactionId }, { referenceNumber: trimmedTransactionId }],
+          userId: customerId,
+        },
+        select: { id: true },
+      });
+
+      if (!transaction) {
+        throw new NotFoundError("Transaction not found for this customer");
+      }
+
+      validatedTransactionId = transaction.id;
+    }
+
     const reference = `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
     const ticket = await prisma.ticket.create({
@@ -93,6 +116,7 @@ class AgentSupportService {
         reference,
         customerId,
         caseType: category,
+        transactionId: validatedTransactionId ?? null,
         description: normalizedDescription,
         priority: "MEDIUM",
         status: "OPEN",
@@ -164,6 +188,7 @@ class AgentSupportService {
       ticketId: ticket.id,
       reference: ticket.reference,
       category: ticket.caseType,
+      transactionId: ticket.transactionId,
       description: ticket.description,
       status: ticket.status,
       priority: ticket.priority,
@@ -233,6 +258,7 @@ class AgentSupportService {
         id: true,
         reference: true,
         caseType: true,
+        transactionId: true,
         description: true,
         status: true,
         createdAt: true,
@@ -256,6 +282,7 @@ class AgentSupportService {
       ticketId: ticket.id,
       reference: ticket.reference,
       category: ticket.caseType,
+      transactionId: ticket.transactionId,
       description: ticket.description,
       status: ticket.status,
       timestamp: ticket.createdAt,

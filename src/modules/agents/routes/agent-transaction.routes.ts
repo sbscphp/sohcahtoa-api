@@ -410,6 +410,26 @@ router.get("/fx-inventory/export", agentTransactionController.exportFxInventory)
  *                       transaction_status:
  *                         type: string
  *                         example: DRAFT
+ *                       customer_email:
+ *                         type: string
+ *                         nullable: true
+ *                         example: "jo***@example.com"
+ *                         description: Partially redacted customer email
+ *                       customer_bvn:
+ *                         type: string
+ *                         nullable: true
+ *                         example: "*******1234"
+ *                         description: Partially redacted customer BVN
+ *                       customer_nin:
+ *                         type: string
+ *                         nullable: true
+ *                         example: "*******1234"
+ *                         description: Partially redacted customer NIN
+ *                       customer_tin:
+ *                         type: string
+ *                         nullable: true
+ *                         example: "*******1234"
+ *                         description: Partially redacted customer TIN
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -537,7 +557,9 @@ router.get(
  *     summary: Get transaction detail by ID (agent)
  *     description: |
  *       Returns the same `data` shape as **GET /api/customer/transactions/{transactionId}**
- *       (reference number, status, required documents, steps, cash pickup, prepaid card, masked BVN/NIN, etc.).
+ *       (reference number, status, required documents, steps, cash pickup, prepaid card, etc.),
+ *       plus a `customerEmail` field. BVN, NIN, TIN, and customer email are partially redacted
+ *       (e.g. "*******1234", "jo***@example.com") for the agent-facing view.
  *       Only transactions with `createdByAgentId` matching the authenticated agent are accessible.
  *     tags: [Agent Transactions]
  *     security:

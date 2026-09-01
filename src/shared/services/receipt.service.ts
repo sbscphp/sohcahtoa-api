@@ -247,25 +247,25 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     let y = CARD_Y + HEADER_H + 10;
 
     // Success banner — full width
-    doc.rect(INNER_X, y, INNER_W, 22).fill(SUCCESS_BG as any);
-    doc.rect(INNER_X, y, 3, 22).fill(ORANGE as any);
-    txt(doc, 'Transaction completed successfully', INNER_X + 10, y + 6, { font: 'Helvetica-Bold', size: 8.5, color: ORANGE });
-    y += 28;
+    doc.rect(INNER_X, y, INNER_W, 26).fill(SUCCESS_BG as any);
+    doc.rect(INNER_X, y, 3, 26).fill(ORANGE as any);
+    txt(doc, 'Transaction completed successfully', INNER_X + 10, y + 8, { font: 'Helvetica-Bold', size: 8.5, color: ORANGE });
+    y += 36;
 
     // Amount card — full width
-    const AMT_H = 48;
+    const AMT_H = 56;
     doc.rect(INNER_X, y, INNER_W, AMT_H).fill(CARD_BG as any);
     doc.strokeColor(LINE_GREY as any).rect(INNER_X, y, INNER_W, AMT_H).stroke();
-    txt(doc, 'AMOUNT DISBURSED', INNER_X + 12, y + 6, { font: 'Helvetica-Bold', size: 7, color: GREY, characterSpacing: 1.2 });
-    txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 12, y + 16, { font: 'Helvetica-Bold', size: 18, color: ORANGE });
+    txt(doc, 'AMOUNT DISBURSED', INNER_X + 12, y + 9, { font: 'Helvetica-Bold', size: 7, color: GREY, characterSpacing: 1.2 });
+    txt(doc, fmt(data.foreignAmount, data.currency), INNER_X + 12, y + 20, { font: 'Helvetica-Bold', size: 18, color: ORANGE });
     if (data.nairaEquivalent) {
       const rateStr = data.exchangeRate ? ` at NGN ${parseFloat(String(data.exchangeRate)).toLocaleString()}` : '';
-      txt(doc, `Equivalent: ${fmt(data.nairaEquivalent, 'NGN')}${rateStr}`, INNER_X + 12, y + 33, { font: 'Helvetica', size: 7, color: LABEL_GREY });
+      txt(doc, `Equivalent: ${fmt(data.nairaEquivalent, 'NGN')}${rateStr}`, INNER_X + 12, y + 40, { font: 'Helvetica', size: 7, color: LABEL_GREY });
     }
     // Customer name on the right of the amount card
-    txt(doc, data.fullName, rCol - 180, y + 16, { font: 'Helvetica-Bold', size: 10, color: DARK, width: 180, align: 'right' });
-    txt(doc, data.email || data.phoneNumber || '', rCol - 180, y + 30, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 180, align: 'right' });
-    y += AMT_H + 10;
+    txt(doc, data.fullName, rCol - 180, y + 20, { font: 'Helvetica-Bold', size: 10, color: DARK, width: 180, align: 'right' });
+    txt(doc, data.email || data.phoneNumber || '', rCol - 180, y + 36, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 180, align: 'right' });
+    y += AMT_H + 16;
 
     // ── Two-column content area ───────────────────────────────────────────────
     const colY = y;
@@ -282,11 +282,11 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     ];
     // Left column header label
     txt(doc, 'TRANSACTION DETAILS', INNER_X, colY, { font: 'Helvetica-Bold', size: 7.5, color: DARK, characterSpacing: 0.4 });
-    const leftEnd = drawTable(doc, INNER_X, colY + 10, L_W, txRows);
+    const leftEnd = drawTable(doc, INNER_X, colY + 14, L_W, txRows);
 
     // RIGHT: payout sections stacked vertically
     let ry = colY;
-    const GAP = 8;
+    const GAP = 14;
 
     if (data.beneficiaryDetails?.accountNumber) {
       const bRows: [string, string][] = [
@@ -345,21 +345,21 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
     }
 
     // Advance y past both columns
-    y = Math.max(leftEnd, ry) + 12;
+    y = Math.max(leftEnd, ry) + 18;
 
     // ── CBN certificate stamp — full width, inline after columns ─────────────
     {
       const SX     = INNER_X;
       const SW     = INNER_W;
-      const BAND_H = 22;
-      const BODY_H = 82;   // fields + signature
+      const BAND_H = 26;
+      const BODY_H = 94;   // fields + signature
       const SH     = BAND_H + BODY_H;
       const SY     = y;
 
       doc.save();
       doc.rect(SX, SY, SW, SH).lineWidth(1).stroke('#F8DCCD' as any);
       doc.rect(SX + 3, SY + 3, SW - 6, SH - 6).lineWidth(0.4).stroke(LINE_GREY as any);
-      txt(doc, 'FOREIGN EXCHANGE TRANSACTION CERTIFICATE', SX, SY + 8, {
+      txt(doc, 'FOREIGN EXCHANGE TRANSACTION CERTIFICATE', SX, SY + 10, {
         font: 'Helvetica-Bold', size: 7.5, color: ORANGE, width: SW, align: 'center', characterSpacing: 0.8,
       });
 
@@ -367,8 +367,8 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       const NUM_COLS  = 3;
       const FPAD      = 10;
       const FCOL_W    = (SW - FPAD * 2) / NUM_COLS;
-      const FY        = SY + BAND_H + 9;
-      const FLH       = 17;
+      const FY        = SY + BAND_H + 12;
+      const FLH       = 20;
 
       const fxAmt    = parseFloat(String(data.foreignAmount ?? 0));
       const nairaAmt = parseFloat(String(data.nairaEquivalent ?? 0));
@@ -404,16 +404,16 @@ function buildPdf(data: ReceiptData): Promise<Buffer> {
       txt(doc, 'Official Stamp', SIG_MID + 6, SIG_Y + 5, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: 80 });
 
       doc.restore();
-      y += SH + 8;
+      y += SH + 14;
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
     doc.rect(CARD_X, FOOTER_Y, CARD_W, FOOTER_H).fill(PAGE_BG as any);
     doc.strokeColor(LINE_GREY as any).moveTo(INNER_X, FOOTER_Y).lineTo(CARD_X + CARD_W - PAD, FOOTER_Y).stroke();
     txt(doc, 'SohCahToa \u2014 Licensed & Regulated by the Central Bank of Nigeria',
-      CARD_X, FOOTER_Y + 7, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
+      CARD_X, FOOTER_Y + 9, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
     txt(doc, 'support@sohcahtoabdc.com',
-      CARD_X, FOOTER_Y + 19, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
+      CARD_X, FOOTER_Y + 21, { font: 'Helvetica', size: 7, color: LABEL_GREY, width: CARD_W, align: 'center' });
 
     doc.end();
   });
@@ -428,9 +428,9 @@ function drawTable(
   width: number,
   rows: [string, string][]
 ): number {
-  const ROW_H = 18;
+  const ROW_H = 22;
   const COL_L = Math.round(width * 0.38);
-  const PADH  = 7;
+  const PADH  = 8;
 
   for (let i = 0; i < rows.length; i++) {
     const [label, value] = rows[i];
@@ -460,5 +460,5 @@ function drawSection(
   rows: [string, string][]
 ): number {
   txt(doc, title, x, y, { font: 'Helvetica-Bold', size: 8.5, color: DARK, characterSpacing: 0.4 });
-  return drawTable(doc, x, y + 14, width, rows);
+  return drawTable(doc, x, y + 16, width, rows);
 }

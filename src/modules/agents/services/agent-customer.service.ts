@@ -5,6 +5,7 @@ import {
   AgentCreateNigerianCustomerAccountRequest,
   AgentCustomerDetailsResponse,
   AgentCustomerListFilters,
+  AgentCustomerSegment,
   AgentCustomerStatsResponse,
   AgentCustomerTransactionListItem,
   AgentUpdateCustomerRequest,
@@ -222,6 +223,38 @@ export class AgentCustomerService {
     ) {
       const desiredType = filters.lastTransactionType as TransactionType;
       filtered = filtered.filter((u) => u.lastTransactionType === desiredType);
+    }
+
+    if (
+      filters.segment &&
+      Object.values(AgentCustomerSegment).includes(filters.segment as AgentCustomerSegment) &&
+      filters.segment !== AgentCustomerSegment.ALL
+    ) {
+      if (filters.segment === AgentCustomerSegment.VERIFIED) {
+        filtered = filtered.filter((u) => u.kyc?.status === KycStatus.VERIFIED);
+      } else if (filters.segment === AgentCustomerSegment.PENDING_KYC) {
+        // Matches getCustomerStats' pendingKyc definition
+        filtered = filtered.filter(
+          (u) =>
+            !!u.kyc &&
+            ![KycStatus.VERIFIED, KycStatus.REJECTED, KycStatus.IN_PROGRESS, KycStatus.NOT_STARTED].includes(
+              u.kyc.status as KycStatus,
+            ),
+        );
+      } else if (filters.segment === AgentCustomerSegment.RETURNING) {
+        const completedCounts = await (prisma as any).transaction.groupBy({
+          by: ["userId"],
+          where: {
+            userId: { in: filtered.map((u) => u.id) },
+            status: TransactionStatus.COMPLETED,
+          },
+          _count: { _all: true },
+        });
+        const returningUserIds = new Set(
+          completedCounts.filter((g: any) => (g._count?._all ?? 0) >= 2).map((g: any) => g.userId),
+        );
+        filtered = filtered.filter((u) => returningUserIds.has(u.id));
+      }
     }
 
     const total = filtered.length;

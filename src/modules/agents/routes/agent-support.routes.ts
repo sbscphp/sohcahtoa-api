@@ -54,6 +54,9 @@ const uploadTicketAttachment = createUploadMiddleware({
  *       **Attachment requirements:**
  *       - Maximum file size: 5MB
  *       - Supported formats: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX
+ *
+ *       `transactionId` is required when `category` is `TRANSACTION_ISSUE` (accepts either the
+ *       transaction's id or its reference number, and must belong to the given customer).
  *     tags: [Agent Support]
  *     security:
  *       - bearerAuth: []
@@ -82,6 +85,10 @@ const uploadTicketAttachment = createUploadMiddleware({
  *                 type: string
  *                 description: Detailed description of the issue
  *                 example: "I have been trying to complete my transaction for the past 2 days but the payment keeps failing."
+ *               transactionId:
+ *                 type: string
+ *                 description: Required when category is TRANSACTION_ISSUE. Transaction id or reference number; must belong to the customer.
+ *                 example: "TXN-20260901-0001"
  *               attachment:
  *                 type: string
  *                 format: binary

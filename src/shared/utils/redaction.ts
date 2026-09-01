@@ -78,7 +78,7 @@ export function redactSensitiveData<T extends Record<string, any>>(
  * @param type - The type of field (email, phone, bvn, etc.)
  * @returns Partially redacted value
  */
-export function partiallyRedactField(value: string, type: 'email' | 'phone' | 'bvn' | 'nin' | 'passport'): string {
+export function partiallyRedactField(value: string, type: 'email' | 'phone' | 'bvn' | 'nin' | 'tin' | 'passport'): string {
   if (!value) return '';
 
   switch (type) {
@@ -93,7 +93,8 @@ export function partiallyRedactField(value: string, type: 'email' | 'phone' | 'b
       return `${'*'.repeat(Math.max(1, value.length - 4))}${visibleEnd}`;
     }
     case 'bvn':
-    case 'nin': {
+    case 'nin':
+    case 'tin': {
       const visibleEnd = value.slice(-4);
       return `${'*'.repeat(Math.max(1, value.length - 4))}${visibleEnd}`;
     }

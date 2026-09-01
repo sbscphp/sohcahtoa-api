@@ -1,7 +1,7 @@
 import { getDatabase } from "../../../config/database";
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
 import { CloudinaryService } from "../../../shared/utils/cloudinary";
-import { ValidationError, NotFoundError } from "../../../shared/utils";
+import { ValidationError, NotFoundError, partiallyRedactField } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
 import {
   DisbursementMethod,
@@ -41,6 +41,14 @@ export interface AgentTransactionListItem {
   transaction_type: string;
   transaction_stage: string;
   transaction_status: string;
+  /** Partially redacted, e.g. "jo***@example.com" */
+  customer_email: string | null;
+  /** Partially redacted, e.g. "*******1234" */
+  customer_bvn: string | null;
+  /** Partially redacted, e.g. "*******1234" */
+  customer_nin: string | null;
+  /** Partially redacted, e.g. "*******1234" */
+  customer_tin: string | null;
 }
 
 export interface AgentTransactionListFilters {
@@ -236,10 +244,15 @@ export interface AgentRecordInboundPaymentInput {
 
 export type { AgentTransactionDetailUploadedDoc } from "./agent-transaction-view.helpers";
 
-/** Same payload as GET /api/customer/transactions/:transactionId (customer transaction detail). */
+/**
+ * Same payload as GET /api/customer/transactions/:transactionId (customer transaction detail),
+ * with BVN/NIN/TIN and customer email partially redacted for the agent-facing view.
+ */
 export type AgentTransactionDetailView = Awaited<
   ReturnType<typeof customerTransactionService.getTransactionDetails>
->;
+> & {
+  customerEmail: string | null;
+};
 
 class AgentTransactionService {
   /**
@@ -365,7 +378,7 @@ class AgentTransactionService {
     const [rows, total] = await Promise.all([
       (prisma as any).transaction.findMany({
         where,
-        select: { id: true, createdAt: true, type: true, currentStep: true, status: true, referenceNumber: true, currency: true, foreignAmount: true, transactionMode: true },
+        select: { id: true, userId: true, createdAt: true, type: true, currentStep: true, status: true, referenceNumber: true, currency: true, foreignAmount: true, transactionMode: true },
         orderBy: { [sortBy]: sortOrder },
         skip,
         take: limit,
@@ -373,17 +386,34 @@ class AgentTransactionService {
       (prisma as any).transaction.count({ where }),
     ]);
 
-    const data: AgentTransactionListItem[] = rows.map((t: any) => ({
-      transaction_id: t.id,
-      transaction_date: t.createdAt.toISOString(),
-      transaction_type: t.type,
-      transaction_stage: t.currentStep,
-      transaction_status: t.status,
-      referenceNumber: t.referenceNumber,
-      currency: t.currency,
-      foreignAmount: t.foreignAmount,
-      mode: t.transactionMode,
-    }));
+    // Batch-fetch customer identity fields (email/BVN/NIN/TIN) for the page of transactions
+    const customerUserIds = [...new Set(rows.map((t: any) => t.userId))];
+    const customers = customerUserIds.length
+      ? await (prisma as any).user.findMany({
+          where: { id: { in: customerUserIds } },
+          select: { id: true, email: true, kyc: { select: { bvn: true, nin: true, tin: true } } },
+        })
+      : [];
+    const customerById = new Map(customers.map((c: any) => [c.id, c]));
+
+    const data: AgentTransactionListItem[] = rows.map((t: any) => {
+      const customer = customerById.get(t.userId) as any;
+      return {
+        transaction_id: t.id,
+        transaction_date: t.createdAt.toISOString(),
+        transaction_type: t.type,
+        transaction_stage: t.currentStep,
+        transaction_status: t.status,
+        referenceNumber: t.referenceNumber,
+        currency: t.currency,
+        foreignAmount: t.foreignAmount,
+        mode: t.transactionMode,
+        customer_email: customer?.email ? partiallyRedactField(customer.email, "email") : null,
+        customer_bvn: customer?.kyc?.bvn ? partiallyRedactField(customer.kyc.bvn, "bvn") : null,
+        customer_nin: customer?.kyc?.nin ? partiallyRedactField(customer.kyc.nin, "nin") : null,
+        customer_tin: customer?.kyc?.tin ? partiallyRedactField(customer.kyc.tin, "tin") : null,
+      };
+    });
 
     return {
       data,
@@ -1049,14 +1079,29 @@ class AgentTransactionService {
 
     const row = await prisma.transaction.findFirst({
       where: { id: transactionId, createdByAgentId: agent.id },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, user: { select: { email: true } } },
     });
 
     if (!row) {
       throw new NotFoundError("Transaction not found or you are not the creating agent");
     }
 
-    return customerTransactionService.getTransactionDetails(row.id, row.userId);
+    const detail = await customerTransactionService.getTransactionDetails(row.id, row.userId);
+
+    // Mask sensitive customer identifiers for the agent-facing view.
+    return {
+      ...detail,
+      tinNumber: detail.tinNumber ? partiallyRedactField(detail.tinNumber, "tin") : detail.tinNumber,
+      personalInfo: {
+        ...detail.personalInfo,
+        bvn: detail.personalInfo?.bvn ? partiallyRedactField(detail.personalInfo.bvn, "bvn") : detail.personalInfo?.bvn,
+        nin: detail.personalInfo?.nin ? partiallyRedactField(detail.personalInfo.nin, "nin") : detail.personalInfo?.nin,
+        tinNumber: detail.personalInfo?.tinNumber
+          ? partiallyRedactField(detail.personalInfo.tinNumber, "tin")
+          : detail.personalInfo?.tinNumber,
+      },
+      customerEmail: (row as any).user?.email ? partiallyRedactField((row as any).user.email, "email") : null,
+    };
   }
 
   /**
