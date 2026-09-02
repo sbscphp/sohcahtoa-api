@@ -451,8 +451,8 @@ export class AgentCustomerService {
         .groupBy({
           by: ["userId"],
           where: {
-            createdByAgentId: agent.id,
             status: TransactionStatus.COMPLETED,
+            user: { createdByAgentId: agent.id, role: UserRole.CUSTOMER },
           },
           _count: { _all: true },
         })

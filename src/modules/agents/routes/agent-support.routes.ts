@@ -117,6 +117,10 @@ const uploadTicketAttachment = createUploadMiddleware({
  *                     category:
  *                       type: string
  *                       example: "TRANSACTION_ISSUE"
+ *                     transactionId:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Set when category is TRANSACTION_ISSUE
  *                     description:
  *                       type: string
  *                       example: "I have been trying to complete my transaction..."
@@ -219,6 +223,10 @@ router.get("/tickets", agentSupportController.listTickets);
  *                       type: string
  *                       description: Ticket case type/category
  *                       example: "TRANSACTION_ISSUE"
+ *                     transactionId:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Set when category is TRANSACTION_ISSUE
  *                     description:
  *                       type: string
  *                     status:
