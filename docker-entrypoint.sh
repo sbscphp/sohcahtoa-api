@@ -622,6 +622,9 @@ CREATE TABLE IF NOT EXISTS "wallet_entry_notes" (
   CONSTRAINT "wallet_entry_notes_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "wallet_entries"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS "wallet_entry_notes_entryId_idx" ON "wallet_entry_notes"("entryId");
+
+-- Ensure branches.city column exists
+ALTER TABLE "branches" ADD COLUMN IF NOT EXISTS "city" TEXT;
 EOF
 
 psql "${DATABASE_URL%\?*}" -f /tmp/schema-fallback.sql || echo "⚠️  Schema fallback had non-fatal errors, continuing..."

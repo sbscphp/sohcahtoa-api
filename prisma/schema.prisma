@@ -574,6 +574,7 @@ model Branch {
   name             String
   branchEmail      String?
   state            String
+  city             String?
   address          String
   branchManager    String
   email            String

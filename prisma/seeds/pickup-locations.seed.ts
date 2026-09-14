@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 interface BranchData {
   name: string;
   state: string;
+  city?: string;
   address: string;
   branchManager: string;
   email: string;

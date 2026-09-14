@@ -1029,8 +1029,13 @@ export class AdminWalletService {
       where: { id: walletId },
     });
 
-    const balanceBefore = Number(wallet.balance);
+    const balanceBefore = Number(wallet?.balance || 0);
     const refundAmount = Number(entry.amount);
+    if (balanceBefore < refundAmount) {
+      throw new Error(
+        `Cannot approve refund: Insufficient balance on customer's transient wallet. Required: ₦${refundAmount.toLocaleString()}, Available: ₦${balanceBefore.toLocaleString()}`
+      );
+    }
     // Refund debit — removes the previously credited amount from the wallet
     const balanceAfter = balanceBefore - refundAmount;
 
@@ -1223,6 +1228,35 @@ export class AdminWalletService {
       throw new Error("Disbursement payment session could not be verified");
     }
 
+    const targetTrxId = entry.linkedTransactionId || entry.transactionId;
+    let transaction: any = null;
+    let debitAmount = 0;
+    let alreadyDebited = false;
+
+    if (targetTrxId) {
+      transaction = await (prisma as any).transaction.findUnique({
+        where: { id: targetTrxId },
+        select: { userId: true, referenceNumber: true, nairaEquivalent: true },
+      });
+
+      if (transaction?.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
+        alreadyDebited = await walletService.hasDebitFor(targetTrxId);
+        if (!alreadyDebited) {
+          debitAmount = Number(transaction.nairaEquivalent);
+          const customerWallet = await (prisma as any).customerWallet.findUnique({
+            where: { userId: transaction.userId },
+            select: { balance: true },
+          });
+          const availableBalance = Number(customerWallet?.balance || 0);
+          if (availableBalance < debitAmount) {
+            throw new Error(
+              `Cannot confirm disbursement: Insufficient balance on customer's transient wallet. Required: ₦${debitAmount.toLocaleString()}, Available: ₦${availableBalance.toLocaleString()}`
+            );
+          }
+        }
+      }
+    }
+
     const updated = await (prisma as any).walletEntry.update({
       where: { id: entryId },
       data: {
@@ -1232,13 +1266,7 @@ export class AdminWalletService {
       },
     });
 
-    const targetTrxId = entry.linkedTransactionId || entry.transactionId;
-    if (targetTrxId) {
-      const transaction = await (prisma as any).transaction.findUnique({
-        where: { id: targetTrxId },
-        select: { userId: true, referenceNumber: true, nairaEquivalent: true },
-      });
-
+    if (targetTrxId && transaction) {
       await (prisma as any).transaction.update({
         where: { id: targetTrxId },
         data: {
@@ -1259,21 +1287,16 @@ export class AdminWalletService {
       });
 
       // Wallet: debit the naira equivalent now that disbursement is confirmed
-      if (transaction?.nairaEquivalent && Number(transaction.nairaEquivalent) > 0) {
-        const alreadyDebited = await walletService.hasDebitFor(targetTrxId);
-        if (!alreadyDebited) {
-          const debitSessionId = entry?.sessionId || `DISBURSE-${transaction.referenceNumber}`;
-          await walletService.debitWallet({
-            userId:         transaction.userId,
-            amount:         Number(transaction.nairaEquivalent),
-            transactionId:  targetTrxId,
-            transactionRef: transaction.referenceNumber,
-            sessionId:      verification.sessionId,
-            description:    `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
-          }).catch((err: any) =>
-            logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId: targetTrxId, error: err.message })
-          );
-        }
+      if (debitAmount > 0 && !alreadyDebited) {
+        const debitSessionId = entry?.sessionId || `DISBURSE-${transaction.referenceNumber}`;
+        await walletService.debitWallet({
+          userId:         transaction.userId,
+          amount:         debitAmount,
+          transactionId:  targetTrxId,
+          transactionRef: transaction.referenceNumber,
+          sessionId:      verification.sessionId,
+          description:    `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
+        });
       }
     }
 

@@ -313,6 +313,7 @@ class EmailService {
       branchName: string;
       branchManager: string;
       state: string;
+      city?: string | null;
       address: string;
       phoneNumber: string;
       branchEmail?: string | null;
@@ -328,6 +329,7 @@ class EmailService {
           <li><strong>Branch Name:</strong> ${data.branchName}</li>
           <li><strong>Branch Manager:</strong> ${data.branchManager}</li>
           <li><strong>State:</strong> ${data.state}</li>
+          ${data.city ? `<li><strong>City:</strong> ${data.city}</li>` : ''}
           <li><strong>Address:</strong> ${data.address}</li>
           <li><strong>Phone Number:</strong> ${data.phoneNumber}</li>
           ${data.branchEmail ? `<li><strong>Branch Email:</strong> ${data.branchEmail}</li>` : ''}
@@ -340,12 +342,13 @@ class EmailService {
       branch_name:    data.branchName,
       branch_manager: data.branchManager,
       state:          data.state,
+      city:           data.city || '',
       address:        data.address,
       phone_number:   data.phoneNumber,
       branch_email:   data.branchEmail || '',
     }, {
       subject: `New Branch Created: ${data.branchName} - SohCahToa`,
-      text: `Hello ${data.branchManager},\n\nA new branch has been created successfully:\n- Branch Name: ${data.branchName}\n- State: ${data.state}\n- Address: ${data.address}\n- Manager: ${data.branchManager}\n- Phone: ${data.phoneNumber}${data.branchEmail ? `\n- Branch Email: ${data.branchEmail}` : ''}\n\nThank you,\nSohCahToa BDC Team`,
+      text: `Hello ${data.branchManager},\n\nA new branch has been created successfully:\n- Branch Name: ${data.branchName}\n- State: ${data.state}${data.city ? `\n- City: ${data.city}` : ''}\n- Address: ${data.address}\n- Manager: ${data.branchManager}\n- Phone: ${data.phoneNumber}${data.branchEmail ? `\n- Branch Email: ${data.branchEmail}` : ''}\n\nThank you,\nSohCahToa BDC Team`,
       html,
     });
   }
