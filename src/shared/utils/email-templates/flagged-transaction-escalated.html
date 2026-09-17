@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <title>Flagged Transaction – Action Required</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    #outlook a { padding: 0; }
+    body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a { color: #DD4F05; }
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; }
+      .card-padding { padding-left: 16px !important; padding-right: 16px !important; }
+      .btn-full { width: 100% !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#FFFAF8;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    Transaction {{transaction_ref}} has been flagged and requires your review.
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFAF8;">
+    <tr>
+      <td align="center" style="padding:0 0 40px 0;">
+        <table role="presentation" class="email-container" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:640px;">
+
+          <!-- Logo Header -->
+          <tr>
+            <td>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-bottom:1px solid #F2F4F7;">
+                <tr>
+                  <td align="left" style="padding:22px 28px;">
+                    <a href="{{app_url}}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+                      <img src="{{app_url}}/email/logo.png" width="134" height="67" alt="{{company_name}}" style="display:block;width:134px;max-width:134px;height:auto;border:0;" />
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Spacer -->
+          <tr><td style="height:60px;line-height:60px;font-size:60px;">&nbsp;</td></tr>
+
+          <!-- Card -->
+          <tr>
+            <td align="center" style="padding:0 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:576px;border:1.5px solid #F8DCCD;box-shadow:0 6px 10px 4px rgba(11,10,10,0.05);">
+
+                <!-- Card Body -->
+                <tr>
+                  <td class="card-padding" style="padding:32px 24px;background-color:#FFFFFF;border-radius:4px 4px 0 0;">
+
+                    <!-- Title -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center" style="padding-bottom:24px;">
+                          <h1 style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:24px;font-weight:600;line-height:32px;color:#DD4F05;text-align:center;letter-spacing:-0.032px;">Flagged Transaction &ndash; Action Required</h1>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Greeting -->
+                    <p style="margin:0 0 24px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#4D4B4B;">
+                      Hello Admin, a transaction has been flagged for your review.
+                    </p>
+
+                    <!-- Details Box -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;border:1px solid #F2F4F7;border-radius:4px;">
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Transaction Reference</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{transaction_ref}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Customer Name</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{customer_name}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Transaction Type</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{transaction_type}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Amount</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{amount}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Date &amp; Time</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{date_time}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #F2F4F7;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Severity</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#DD4F05;">{{severity}}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 16px;">
+                          <p style="margin:0 0 2px 0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#6C6969;text-transform:uppercase;letter-spacing:0.5px;">Flagged By</p>
+                          <p style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:24px;color:#1A1A1A;">{{flagged_by}}</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Orange Notice -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:32px;">
+                      <tr>
+                        <td style="background-color:#FFF7ED;border-left:4px solid #DD4F05;border-radius:0 4px 4px 0;padding:14px 16px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#4D4B4B;">
+                          <strong>Reason for Flag:</strong> {{reason}}
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- CTA Button -->
+                    <table role="presentation" class="btn-full" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto;">
+                      <tr>
+                        <td align="center" bgcolor="#DD4F05" style="border-radius:8px;background-color:#DD4F05;">
+                          <!--[if mso]>
+                          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{dashboard_url}}" style="height:44px;v-text-anchor:middle;width:280px;" arcsize="18%" strokecolor="#DD4F05" fillcolor="#DD4F05">
+                            <w:anchorlock/>
+                            <center style="color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;">Review in Admin Portal</center>
+                          </v:roundrect>
+                          <![endif]-->
+                          <!--[if !mso]><!-->
+                          <a href="{{dashboard_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;line-height:20px;color:#FFFFFF;text-decoration:none;border-radius:8px;background-color:#DD4F05;">
+                            Review in Admin Portal
+                          </a>
+                          <!--<![endif]-->
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+
+                <!-- Card Footer -->
+                <tr>
+                  <td class="card-padding" style="padding:32px 24px 24px 24px;background-color:#FFFFFF;border-radius:0 0 4px 4px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center" style="font-family:Inter,Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#6C6969;text-align:center;">
+                          <p style="margin:0 0 16px 0;">
+                            This email was sent to <a href="mailto:{{recipient_email}}" style="color:#6C6969;text-decoration:underline;">{{recipient_email}}</a>.
+                            If you&apos;d rather not receive this kind of email, you can
+                            <a href="{{unsubscribe_url}}" target="_blank" rel="noopener noreferrer" style="color:#6C6969;text-decoration:underline;">unsubscribe</a>
+                            or
+                            <a href="{{preferences_url}}" target="_blank" rel="noopener noreferrer" style="color:#6C6969;text-decoration:underline;">manage your email preferences</a>.
+                          </p>
+                          <p style="margin:0 0 32px 0;">
+                            &copy; {{current_year}} {{company_name}}, {{company_address}}. Licensed and Regulated by the Central Bank of Nigeria.
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td align="center">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                            <tr>
+                              <td style="padding:0 8px;"><a href="{{x_url}}" target="_blank" rel="noopener noreferrer"><img src="{{app_url}}/email/icon-x.png" width="20" height="20" alt="X" style="display:block;border:0;" /></a></td>
+                              <td style="padding:0 8px;"><a href="{{facebook_url}}" target="_blank" rel="noopener noreferrer"><img src="{{app_url}}/email/icon-facebook.png" width="20" height="20" alt="Facebook" style="display:block;border:0;" /></a></td>
+                              <td style="padding:0 8px;"><a href="{{instagram_url}}" target="_blank" rel="noopener noreferrer"><img src="{{app_url}}/email/icon-instagram.png" width="20" height="20" alt="Instagram" style="display:block;border:0;" /></a></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

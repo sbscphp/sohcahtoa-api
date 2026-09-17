@@ -328,20 +328,21 @@ class EmailService {
   ): Promise<boolean> {
     const shared = sharedVars(email, data.branchManager || 'Branch Manager');
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2>New Branch Created</h2>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">New Branch Created</h2>
         <p>Hello ${data.branchManager},</p>
         <p>A new branch has been successfully created.</p>
-        <p><strong>Branch Details:</strong></p>
-        <ul>
-          <li><strong>Branch Name:</strong> ${data.branchName}</li>
-          <li><strong>Branch Code:</strong> ${data.branchCode}</li>
-          <li><strong>Branch Location:</strong> ${data.address}</li>
-          <li><strong>Branch Manager:</strong> ${data.branchManager}</li>
-        </ul>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 160px;">Branch Name:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${data.branchName}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Branch Code:</td><td style="padding: 6px 0; color: #0f172a;">${data.branchCode}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; vertical-align: top;">Branch Location:</td><td style="padding: 6px 0; color: #0f172a;">${data.address}</td></tr>
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Branch Manager:</td><td style="padding: 6px 0; color: #0f172a;">${data.branchManager}</td></tr>
+          </table>
+        </div>
         <p>You can now access the platform and begin managing activities assigned to your branch.</p>
-        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #DD4F05; color: #fff; text-decoration: none; border-radius: 4px;">Login here</a></p>
-        <p>Regards.</p>
+        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">Login here</a></p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Regards,<br/><strong>SohCahToa Team</strong></p>
       </div>
     `;
     return this.sendTemplate(email, 'branchCreated', {
@@ -574,32 +575,39 @@ class EmailService {
     const internalControlEmail = toEmail || process.env.INTERNAL_CONTROL_EMAIL || 'internalcontrol@sohcahtoabdc.com';
     const shared = sharedVars(internalControlEmail, 'Internal Control Team');
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #dc2626;">🚨 Flagged Transaction Escalation</h2>
-        <p>Dear Internal Control Team,</p>
-        <p>A transaction has been flagged and escalated for internal control review:</p>
-        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
-          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Ref:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
-          ${data.customerName ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer Name:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
-          ${data.transactionType ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionType}</td></tr>` : ''}
-          ${data.amount ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
-          ${dateTimeStr ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Date &amp; Time:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${dateTimeStr}</td></tr>` : ''}
-          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Reason for Flag:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.reason}</td></tr>
-          ${data.severity ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Severity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;"><span style="color: #dc2626; font-weight: bold;">${data.severity}</span></td></tr>` : ''}
-          ${data.flaggedBy ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Flagged By:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.flaggedBy}</td></tr>` : ''}
-        </table>
-        <p style="margin-top: 20px;">Please log into the Admin Portal to review and take necessary compliance action.</p>
-        <p>Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #dc2626; margin-top: 0;">Flagged Transaction – Action Required</h2>
+        <p>Hello Admin,</p>
+        <p>A transaction has been flagged for your review.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 160px;">Transaction Reference:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${data.transactionRef}</td></tr>
+            ${data.customerName ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Customer Name:</td><td style="padding: 6px 0; color: #0f172a;">${data.customerName}</td></tr>` : ''}
+            ${data.transactionType ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Transaction Type:</td><td style="padding: 6px 0; color: #0f172a;">${data.transactionType}</td></tr>` : ''}
+            ${data.amount ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Amount:</td><td style="padding: 6px 0; color: #0f172a;">${data.amount}</td></tr>` : ''}
+            ${dateTimeStr ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Date &amp; Time:</td><td style="padding: 6px 0; color: #0f172a;">${dateTimeStr}</td></tr>` : ''}
+            ${data.severity ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Severity:</td><td style="padding: 6px 0; color: #dc2626; font-weight: 700;">${data.severity}</td></tr>` : ''}
+            ${data.flaggedBy ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Flagged By:</td><td style="padding: 6px 0; color: #0f172a;">${data.flaggedBy}</td></tr>` : ''}
+          </table>
+        </div>
+        <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0; border-radius: 0 6px 6px 0;">
+          <p style="margin: 0; font-size: 14px; color: #1e293b;"><strong>Reason for Flag:</strong> ${data.reason}</p>
+        </div>
+        <p>Please log in to the Admin Portal to review and take the appropriate action.</p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
       </div>
     `;
 
     return this.sendTemplate(internalControlEmail, 'flaggedTransactionEscalated', {
       ...shared,
-      transaction_ref: data.transactionRef,
-      reason:          data.reason,
-      severity:        data.severity || 'HIGH',
-      amount:          data.amount || '',
-      customer_name:   data.customerName || '',
+      transaction_ref:  data.transactionRef,
+      reason:           data.reason,
+      severity:         data.severity || 'HIGH',
+      amount:           data.amount || '',
+      customer_name:    data.customerName || '',
+      transaction_type: data.transactionType || '',
+      date_time:        dateTimeStr,
+      flagged_by:       data.flaggedBy || '',
     }, {
       subject: `Action Required: Flagged Transaction – ${data.transactionRef}`,
       text: `Hello Admin,\nA transaction has been flagged for your review.\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}- Reason for Flag: ${data.reason}\n\nPlease log in to the Admin Portal to review and take the appropriate action.`,
@@ -637,36 +645,43 @@ class EmailService {
     const dateTimeStr = data.dateTime
       ? new Date(data.dateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })
       : '';
+    const statusColors: Record<string, string> = {
+      APPROVED: '#16a34a', REJECTED: '#dc2626', FLAGGED: '#dc2626', CANCELLED: '#64748b', UPDATED: '#2563eb',
+    };
+    const statusColor = statusColors[data.activityType.toUpperCase()] || '#2563eb';
 
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #0284c7;">Transaction Update</h2>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">Transaction Update: <span style="color: ${statusColor};">${data.activityType.replace(/_/g, ' ')}</span></h2>
         <p>Dear Admin,</p>
         <p>${activityStatement}</p>
-        <p><strong>Activity Details:</strong></p>
-        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 10px;">
-          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Activity Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.activityType}</td></tr>
-          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Reference:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
-          ${data.customerName ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer Name:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
-          ${data.transactionType ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionType}</td></tr>` : ''}
-          ${data.amount ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
-          ${data.performedBy ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Performed By:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.performedBy}</td></tr>` : ''}
-          ${dateTimeStr ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Date &amp; Time:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${dateTimeStr}</td></tr>` : ''}
-          ${data.details ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.details}</td></tr>` : ''}
-        </table>
-        <p style="margin-top: 20px;">Please log in to the Admin Portal for further details.</p>
-        <p>Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 160px;">Transaction Reference:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${data.transactionRef}</td></tr>
+            ${data.customerName ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Customer Name:</td><td style="padding: 6px 0; color: #0f172a;">${data.customerName}</td></tr>` : ''}
+            ${data.transactionType ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Transaction Type:</td><td style="padding: 6px 0; color: #0f172a;">${data.transactionType}</td></tr>` : ''}
+            ${data.amount ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Amount:</td><td style="padding: 6px 0; color: #0f172a;">${data.amount}</td></tr>` : ''}
+            ${data.performedBy ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Performed By:</td><td style="padding: 6px 0; color: #0f172a;">${data.performedBy}</td></tr>` : ''}
+            ${dateTimeStr ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Date &amp; Time:</td><td style="padding: 6px 0; color: #0f172a;">${dateTimeStr}</td></tr>` : ''}
+          </table>
+        </div>
+        ${data.details ? `<div style="background: #f8fafc; border-left: 4px solid ${statusColor}; padding: 16px; margin: 20px 0; border-radius: 0 6px 6px 0;"><p style="margin: 0; font-size: 14px; color: #334155;"><strong>Details:</strong> ${data.details}</p></div>` : ''}
+        <p>Please log in to the Admin Portal for further details.</p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
       </div>
     `;
 
     return this.sendTemplate(adminEmail, 'transactionActivityAdmin', {
       ...shared,
-      activity_type:     data.activityType,
-      transaction_ref:   data.transactionRef,
-      customer_name:     data.customerName || '',
-      transaction_type:  data.transactionType || '',
-      amount:            data.amount || '',
-      performed_by:      data.performedBy || '',
+      activity_type:      data.activityType,
+      activity_statement: activityStatement,
+      transaction_ref:    data.transactionRef,
+      customer_name:      data.customerName || '',
+      transaction_type:   data.transactionType || '',
+      amount:             data.amount || '',
+      performed_by:       data.performedBy || '',
+      date_time:          dateTimeStr,
+      details:            data.details || '',
     }, {
       subject: `Transaction Update – ${data.activityType}`,
       text: `Dear Admin,\n${activityStatement}\n- Activity Type: ${data.activityType}\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${data.performedBy ? `- Performed By: ${data.performedBy}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}${data.details ? `- Details: ${data.details}\n` : ''}\nPlease log in to the Admin Portal for further details.`,
@@ -692,21 +707,22 @@ class EmailService {
       : '';
 
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2>New Transaction Initiated</h2>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0f172a; margin-top: 0;">New Transaction Initiated</h2>
         <p>Hello Admin,</p>
-        <p>A new transaction has been initiated and awaiting your review.</p>
-        <p><strong>Transaction Details:</strong></p>
-        <ul>
-          <li><strong>Transaction Reference:</strong> ${data.transactionRef}</li>
-          ${data.customerName ? `<li><strong>Customer Name:</strong> ${data.customerName}</li>` : ''}
-          ${data.transactionType ? `<li><strong>Transaction Type:</strong> ${data.transactionType}</li>` : ''}
-          ${data.amount ? `<li><strong>Amount:</strong> ${data.amount}</li>` : ''}
-          ${dateTimeStr ? `<li><strong>Date &amp; Time:</strong> ${dateTimeStr}</li>` : ''}
-        </ul>
+        <p>A new transaction has been initiated and is awaiting your review.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 6px 0; color: #64748b; font-weight: 600; width: 160px;">Transaction Reference:</td><td style="padding: 6px 0; color: #0f172a; font-weight: 700;">${data.transactionRef}</td></tr>
+            ${data.customerName ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Customer Name:</td><td style="padding: 6px 0; color: #0f172a;">${data.customerName}</td></tr>` : ''}
+            ${data.transactionType ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Transaction Type:</td><td style="padding: 6px 0; color: #0f172a;">${data.transactionType}</td></tr>` : ''}
+            ${data.amount ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Amount:</td><td style="padding: 6px 0; color: #0f172a;">${data.amount}</td></tr>` : ''}
+            ${dateTimeStr ? `<tr><td style="padding: 6px 0; color: #64748b; font-weight: 600;">Date &amp; Time:</td><td style="padding: 6px 0; color: #0f172a;">${dateTimeStr}</td></tr>` : ''}
+          </table>
+        </div>
         <p>Please log in to the Admin Portal to review the transaction.</p>
-        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #DD4F05; color: #fff; text-decoration: none; border-radius: 4px;">Login here</a></p>
-        <p>Regards,</p>
+        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">Login here</a></p>
+        <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
       </div>
     `;
 
@@ -716,6 +732,7 @@ class EmailService {
       customer_name:    data.customerName || '',
       transaction_type: data.transactionType || '',
       amount:           data.amount || '',
+      date_time:        dateTimeStr,
     }, {
       subject: `New Transaction Initiated – ${data.transactionRef}`,
       text: `Hello Admin,\nA new transaction has been initiated and awaiting your review.\nTransaction Details:\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}\nPlease log in to the Admin Portal to review the transaction.\nLogin here: ${shared.login_url}\n\nRegards,`,
