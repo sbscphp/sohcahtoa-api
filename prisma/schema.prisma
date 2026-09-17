@@ -575,6 +575,7 @@ model Branch {
   branchCode       String   @unique
   branchEmail      String?
   state            String
+  city             String?
   address          String
   branchManager    String
   email            String

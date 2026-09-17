@@ -65,6 +65,7 @@ export class CreateBranchDto {
   branchName!: string;
   branchEmail?: string;
   state!: string;
+  city?: string;
   address!: string;
   branchManager!: string;
   email!: string;

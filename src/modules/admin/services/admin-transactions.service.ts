@@ -859,6 +859,157 @@ export class AdminTransactionsService {
       workflowStages: dbWorkflowStages,
     };
 
+    // Process refund workflow if attached, or load applicable template for structure preview
+    let rfWorkflow = null;
+    let isRefundOfficer = false;
+    let rfApprovalState: string | null = null;
+    let rfCurrentOrder: number | null = null;
+    let rfPendingAssignees: any[] = [];
+
+    // Check if the currently attached workflow on the transaction is a REFUND workflow
+    if (workflow && (workflow.approvalType === "REFUND" || String(workflow.approvalType).toUpperCase() === "REFUND")) {
+      rfWorkflow = workflow;
+    } else if (trx.workflowTemplateId) {
+      const candidateTemplate = await prisma.workflowTemplate.findUnique({
+        where: { id: trx.workflowTemplateId },
+        include: {
+          stages: {
+            orderBy: { order: "asc" },
+            include: {
+              assignees: {
+                include: {
+                  admin: {
+                    select: { id: true, fullName: true, role: { select: { name: true } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }).catch(() => null);
+
+      if (candidateTemplate && (candidateTemplate.approvalType === "REFUND" || String(candidateTemplate.approvalType).toUpperCase() === "REFUND")) {
+        rfWorkflow = candidateTemplate;
+      }
+    }
+
+    if (!rfWorkflow) {
+      rfWorkflow = await workflowService.findApplicableWorkflow({
+        branchId: (trx as any).createdByAgent?.branchId || undefined,
+        approvalType: "REFUND",
+        action: "Refund Approval",
+        amount: Number(trx.nairaEquivalent || trx.foreignAmount || 0),
+      }).catch(() => null);
+
+      if (!rfWorkflow) {
+        rfWorkflow = await (prisma as any).workflowTemplate.findFirst({
+          where: {
+            OR: [
+              { approvalType: "REFUND" as any },
+              { action: { contains: "REFUND", mode: "insensitive" } },
+              { name: { contains: "Refund", mode: "insensitive" } },
+            ],
+            status: "ACTIVE",
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            stages: {
+              orderBy: { order: "asc" },
+              include: {
+                assignees: {
+                  include: {
+                    admin: {
+                      select: { id: true, fullName: true, role: { select: { name: true } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }).catch(() => null);
+      }
+    }
+
+    let rfWorkflowStages: any[] = [];
+    const isRefundActive =
+      (rfWorkflow && trx.workflowTemplateId === rfWorkflow.id) ||
+      trx.status === (TransactionStatus as any).AWAITING_REFUND_VERIFICATION;
+    const isRefundCompleted = trx.status === (TransactionStatus as any).REFUNDED;
+
+    if (rfWorkflow) {
+      const rawRfStages = rfWorkflow.stages || [];
+      const sortedRfStages = [...rawRfStages].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+      if (adminId) {
+        isRefundOfficer = sortedRfStages.some((s: any) =>
+          (s.assignees || []).some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase())
+        );
+      }
+
+      let activeRfStage: any = null;
+      if (isRefundActive && trx.currentWorkflowStageId) {
+        activeRfStage = sortedRfStages.find((s: any) => s.id === trx.currentWorkflowStageId);
+      }
+      if (!activeRfStage && sortedRfStages.length > 0 && isRefundActive) {
+        activeRfStage = sortedRfStages[0];
+      }
+
+      const totalRfStages = sortedRfStages.length;
+
+      if (activeRfStage) {
+        const stageIdx = sortedRfStages.findIndex((s: any) => s.id === activeRfStage.id);
+        if (stageIdx !== -1) {
+          rfApprovalState = `Step ${stageIdx + 1} of ${totalRfStages} (${activeRfStage.name})`;
+          rfCurrentOrder = stageIdx + 1;
+          rfPendingAssignees = (activeRfStage.assignees || []).map((a: any) => ({
+            adminId: a.adminId,
+            adminName: a.admin?.fullName || "Unknown Admin",
+            roleName: a.admin?.role?.name || "No Role",
+          }));
+        }
+      } else if (isRefundCompleted) {
+        rfApprovalState = "Approved (Refund Workflow Completed)";
+      } else if (totalRfStages > 0) {
+        rfApprovalState = `Step 1 of ${totalRfStages} (${sortedRfStages[0].name})`;
+        rfCurrentOrder = 1;
+        rfPendingAssignees = (sortedRfStages[0].assignees || []).map((a: any) => ({
+          adminId: a.adminId,
+          adminName: a.admin?.fullName || "Unknown Admin",
+          roleName: a.admin?.role?.name || "No Role",
+        }));
+      }
+
+      rfWorkflowStages = sortedRfStages.map((s: any, idx: number) => ({
+        stageId: s.id,
+        name: s.name,
+        order: idx + 1,
+        isCurrent: activeRfStage
+          ? s.id === activeRfStage.id
+          : (isRefundActive && trx.currentWorkflowStageId ? s.id === trx.currentWorkflowStageId : idx === 0),
+        assignees: (s.assignees || []).map((a: any) => ({
+          adminId: a.adminId,
+          adminName: a.admin?.fullName || "Unknown Admin",
+          roleName: a.admin?.role?.name || "No Role",
+        })),
+      }));
+    }
+
+    const refundStatusResolved = isRefundCompleted
+      ? "APPROVED"
+      : isRefundActive
+      ? "PENDING_APPROVAL"
+      : ((trx as any).refundStatus || "Pending");
+
+    const refundApprovalProcess = {
+      name: rfWorkflow?.name || "Refund Approval",
+      status: refundStatusResolved,
+      isApprovalOfficer: isRefundOfficer,
+      approvalState: rfApprovalState || (rfWorkflowStages.length > 0 ? `Step 1 of ${rfWorkflowStages.length} (${rfWorkflowStages[0].name})` : "Pending"),
+      currentOrder: rfCurrentOrder || 1,
+      pendingAssignees: rfPendingAssignees.length > 0 ? rfPendingAssignees : (rfWorkflowStages[0]?.assignees || []),
+      workflowStages: rfWorkflowStages,
+    };
+
     const paymentDetails = {
       transactionId: trx.id,
       transactionDate: trx.createdAt,
@@ -1030,6 +1181,9 @@ export class AdminTransactionsService {
         workflowStages,
       },
       disbursementApprovalProcess,
+      disbursementApproval: disbursementApprovalProcess,
+      refundApprovalProcess,
+      refundApproval: refundApprovalProcess,
       paymentDetails,
       transactionSettlement,
       details: {
@@ -1391,6 +1545,31 @@ export class AdminTransactionsService {
         const verification = await providusService.verifyTransactionBySessionId(sessionId.trim());
         if (!verification.sessionId || verification.tranRemarks === "Transaction not found!!!") {
           throw new Error("Refund payment session could not be verified");
+        }
+
+        // Check customer's transient wallet balance before approving refund
+        const creditEntry = await (prisma as any).walletEntry.findFirst({
+          where: {
+            OR: [
+              { transactionId },
+              { linkedTransactionId: transactionId },
+              ...(tx.referenceNumber ? [{ transactionRef: tx.referenceNumber }] : []),
+            ],
+            type: 'CREDIT',
+            status: { not: 'REVERSED' },
+            refundStatus: { not: 'COMPLETED' },
+          },
+          include: { wallet: true },
+        });
+
+        const refundAmount = Number(creditEntry?.amount || tx.nairaEquivalent || 0);
+        const wallet = creditEntry?.wallet || (await (prisma as any).customerWallet.findUnique({ where: { userId: tx.userId } }));
+        const availableBalance = Number(wallet?.balance || 0);
+
+        if (refundAmount > 0 && availableBalance < refundAmount) {
+          throw new Error(
+            `Cannot approve refund: Insufficient balance on customer's transient wallet. Required: ₦${refundAmount.toLocaleString()}, Available: ₦${availableBalance.toLocaleString()}`
+          );
         }
 
         const updateResult = await prisma.transaction.updateMany({
@@ -2377,6 +2556,31 @@ export class AdminTransactionsService {
         throw new Error("Refund payment session could not be verified");
       }
 
+      // Check customer's transient wallet balance before processing refund
+      const creditEntry = await (prisma as any).walletEntry.findFirst({
+        where: {
+          OR: [
+            { transactionId },
+            { linkedTransactionId: transactionId },
+            ...(tx.referenceNumber ? [{ transactionRef: tx.referenceNumber }] : []),
+          ],
+          type: 'CREDIT',
+          status: { not: 'REVERSED' },
+          refundStatus: { not: 'COMPLETED' },
+        },
+        include: { wallet: true },
+      });
+
+      const refundAmount = Number(creditEntry?.amount || tx.nairaEquivalent || 0);
+      const wallet = creditEntry?.wallet || (await (prisma as any).customerWallet.findUnique({ where: { userId: tx.userId } }));
+      const availableBalance = Number(wallet?.balance || 0);
+
+      if (refundAmount > 0 && availableBalance < refundAmount) {
+        throw new Error(
+          `Cannot process refund: Insufficient balance on customer's transient wallet. Required: ₦${refundAmount.toLocaleString()}, Available: ₦${availableBalance.toLocaleString()}`
+        );
+      }
+
       await prisma.transaction.update({
         where: { id: transactionId },
         data: {
@@ -2853,6 +3057,41 @@ export class AdminTransactionsService {
       }
     }
 
+    // Check customer's transient wallet balance before confirming disbursement
+    const creditEntry = await (prisma as any).walletEntry.findFirst({
+      where: {
+        OR: [
+          { transactionId },
+          { linkedTransactionId: transactionId },
+          { transactionRef: transaction.referenceNumber },
+        ],
+        type: "CREDIT",
+      },
+    });
+
+    let debitAmount = Number(transaction.nairaEquivalent || 0);
+    if (!debitAmount || debitAmount <= 0) {
+      if (creditEntry && Number(creditEntry.amount) > 0) {
+        debitAmount = Number(creditEntry.amount);
+      }
+    }
+
+    if (debitAmount > 0) {
+      const alreadyDebited = await walletService.hasDebitFor(transactionId);
+      if (!alreadyDebited) {
+        const customerWallet = await (prisma as any).customerWallet.findUnique({
+          where: { userId: transaction.userId },
+          select: { balance: true },
+        });
+        const availableBalance = Number(customerWallet?.balance || 0);
+        if (availableBalance < debitAmount) {
+          throw new Error(
+            `Cannot confirm disbursement: Insufficient balance on customer's transient wallet. Required: ₦${debitAmount.toLocaleString()}, Available: ₦${availableBalance.toLocaleString()}`
+          );
+        }
+      }
+    }
+
     await prisma.transaction.update({
       where: { id: transactionId },
       data: {
@@ -2891,24 +3130,6 @@ export class AdminTransactionsService {
     });
 
     // Wallet: debit the transaction amount from the user's transient wallet to complete the transaction cycle
-    const creditEntry = await (prisma as any).walletEntry.findFirst({
-      where: {
-        OR: [
-          { transactionId },
-          { linkedTransactionId: transactionId },
-          { transactionRef: transaction.referenceNumber },
-        ],
-        type: "CREDIT",
-      },
-    });
-
-    let debitAmount = Number(transaction.nairaEquivalent || 0);
-    if (!debitAmount || debitAmount <= 0) {
-      if (creditEntry && Number(creditEntry.amount) > 0) {
-        debitAmount = Number(creditEntry.amount);
-      }
-    }
-
     if (debitAmount > 0) {
       const alreadyDebited = await walletService.hasDebitFor(transactionId);
       if (!alreadyDebited) {
@@ -2920,9 +3141,7 @@ export class AdminTransactionsService {
           transactionRef: transaction.referenceNumber,
           sessionId: verification.sessionId,
           description: `Debit on admin-confirmed disbursement for transaction ${transaction.referenceNumber}`,
-        }).catch((err: any) =>
-          logger.error('Wallet debit failed on admin disbursement confirmation', { transactionId, error: err.message })
-        );
+        });
       }
     }
 

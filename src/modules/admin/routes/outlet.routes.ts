@@ -1128,6 +1128,8 @@ OutletRouter.get(
  *                 format: email
  *               state:
  *                 type: string
+ *               city:
+ *                 type: string
  *               address:
  *                 type: string
  *               branchManager:
@@ -1215,6 +1217,9 @@ OutletRouter.get(
  *                 nullable: true
  *               state:
  *                 type: string
+ *               city:
+ *                 type: string
+ *                 nullable: true
  *               address:
  *                 type: string
  *               branchManager:

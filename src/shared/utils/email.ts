@@ -320,6 +320,7 @@ class EmailService {
       branchCode: string;
       branchManager: string;
       state: string;
+      city?: string | null;
       address: string;
       phoneNumber: string;
       branchEmail?: string | null;
@@ -349,6 +350,7 @@ class EmailService {
       branch_code:    data.branchCode,
       branch_manager: data.branchManager,
       state:          data.state,
+      city:           data.city || '',
       address:        data.address,
       phone_number:   data.phoneNumber,
       branch_email:   data.branchEmail || '',

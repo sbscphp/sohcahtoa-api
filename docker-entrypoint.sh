@@ -643,6 +643,9 @@ DO $$ BEGIN
   END IF;
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS "branches_branchCode_key" ON "branches"("branchCode");
+
+-- Ensure branches.city column exists
+ALTER TABLE "branches" ADD COLUMN IF NOT EXISTS "city" TEXT;
 EOF
 
 psql "${DATABASE_URL%\?*}" -f /tmp/schema-fallback.sql || echo "⚠️  Schema fallback had non-fatal errors, continuing..."

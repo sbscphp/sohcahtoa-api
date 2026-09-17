@@ -369,20 +369,23 @@ class ReportService {
           { header: "Branch Name", select: (r) => r.name },
           { header: "Email", select: (r) => r.branchEmail },
           { header: "State", select: (r) => r.state },
+          { header: "City", select: (r) => r.city },
           { header: "Manager", select: (r) => r.branchManager },
           { header: "Franchise", select: (r) => r.franchise?.name },
           { header: "Status", select: (r) => r.status },
         ];
         pdfColumns = [
-          { header: "Name", width: 120 },
-          { header: "State", width: 80 },
-          { header: "Manager", width: 100 },
-          { header: "Franchise", width: 100 },
-          { header: "Status", width: 100 },
+          { header: "Name", width: 110 },
+          { header: "State", width: 70 },
+          { header: "City", width: 70 },
+          { header: "Manager", width: 90 },
+          { header: "Franchise", width: 90 },
+          { header: "Status", width: 70 },
         ];
         pdfRows = rows.map((r: any) => [
           r.name || "",
           r.state || "",
+          r.city || "",
           r.branchManager || "",
           r.franchise?.name || "Independent",
           r.status || "",

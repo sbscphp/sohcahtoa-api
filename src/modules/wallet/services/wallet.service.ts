@@ -46,6 +46,9 @@ export class WalletService {
     const wallet = await this.ensureWallet(userId);
 
     const balanceBefore = Number(wallet.balance);
+    if (balanceBefore < amount) {
+      throw new ValidationError(`Insufficient balance on customer's transient wallet. Required: ₦${amount.toLocaleString()}, Available: ₦${balanceBefore.toLocaleString()}`);
+    }
     const balanceAfter = balanceBefore - amount;
 
     const [updatedWallet, entry] = await (prisma as any).$transaction([
@@ -176,7 +179,10 @@ export class WalletService {
 
     const creditEntry = await (prisma as any).walletEntry.findFirst({
       where: {
-        transactionId,
+        OR: [
+          { transactionId },
+          { linkedTransactionId: transactionId },
+        ],
         type: 'CREDIT',
         status: { not: 'REVERSED' },
         refundStatus: { not: 'COMPLETED' },
@@ -196,6 +202,9 @@ export class WalletService {
     const wallet = creditEntry.wallet;
     const refundAmount = Number(creditEntry.amount);
     const balanceBefore = Number(wallet.balance);
+    if (balanceBefore < refundAmount) {
+      throw new ValidationError(`Insufficient balance on customer's transient wallet for refund. Required: ₦${refundAmount.toLocaleString()}, Available: ₦${balanceBefore.toLocaleString()}`);
+    }
     const balanceAfter = balanceBefore - refundAmount;
 
     const [updatedWallet, refundEntry] = await (prisma as any).$transaction([

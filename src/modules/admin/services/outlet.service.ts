@@ -352,6 +352,8 @@ class OutletService {
         branchManager: true,
         email: true,
         address: true,
+        state: true,
+        city: true,
         status: true,
       },
     });
@@ -362,6 +364,8 @@ class OutletService {
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
+      state: b.state,
+      city: b.city,
       status: b.status,
     }));
   }
@@ -385,9 +389,13 @@ class OutletService {
         { address: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
         { branchManager: { contains: search, mode: "insensitive" } },
+        { state: { contains: search, mode: "insensitive" } },
+        { city: { contains: search, mode: "insensitive" } },
       ];
     }
     if (query.status) where.status = { equals: query.status, mode: "insensitive" };
+    if (query.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query.city) where.city = { equals: query.city, mode: "insensitive" };
     return where;
   }
 
@@ -415,6 +423,8 @@ class OutletService {
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
+      state: b.state,
+      city: b.city,
       status: b.status,
       isActive: b.isActive,
       totalAgents: b._count?.agents || 0,
@@ -481,6 +491,8 @@ class OutletService {
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
+      state: b.state,
+      city: b.city,
       status: b.status,
       isActive: b.isActive,
       totalAgents: b._count?.agents || 0,
@@ -504,9 +516,13 @@ class OutletService {
         { address: { contains: q, mode: "insensitive" } },
         { email: { contains: q, mode: "insensitive" } },
         { branchManager: { contains: q, mode: "insensitive" } },
+        { state: { contains: q, mode: "insensitive" } },
+        { city: { contains: q, mode: "insensitive" } },
       ];
     }
     if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
+    if (query?.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query?.city) where.city = { equals: query.city, mode: "insensitive" };
 
     const rows = await db.branch.findMany({
       where,
@@ -521,6 +537,8 @@ class OutletService {
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
+      state: b.state,
+      city: b.city,
       status: b.status,
       isActive: b.isActive,
     }));
@@ -543,9 +561,13 @@ class OutletService {
         { address: { contains: q, mode: "insensitive" } },
         { email: { contains: q, mode: "insensitive" } },
         { branchManager: { contains: q, mode: "insensitive" } },
+        { state: { contains: q, mode: "insensitive" } },
+        { city: { contains: q, mode: "insensitive" } },
       ];
     }
     if (query?.status) where.status = { equals: query.status, mode: "insensitive" };
+    if (query?.state) where.state = { equals: query.state, mode: "insensitive" };
+    if (query?.city) where.city = { equals: query.city, mode: "insensitive" };
 
     const rows = await db.branch.findMany({
       where,
@@ -558,6 +580,8 @@ class OutletService {
         branchManager: true,
         email: true,
         address: true,
+        state: true,
+        city: true,
         status: true,
         isActive: true,
       },
@@ -570,6 +594,8 @@ class OutletService {
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
+      state: b.state,
+      city: b.city,
       status: b.status,
       isActive: b.isActive,
     }));
@@ -933,7 +959,7 @@ class OutletService {
   }
 
   async createBranch(payload: CreateBranchDto) {
-    const { branchName, branchEmail, state, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
+    const { branchName, branchEmail, state, city, address, branchManager, email, phoneNumber, agentName, agentEmail, agentPhoneNumber, franchiseId } = payload || {};
     if (!branchName || !state || !address || !branchManager || !email || !phoneNumber) {
       throw new ValidationError("branchName, state, address, branchManager, email, phoneNumber are required");
     }
@@ -971,6 +997,7 @@ class OutletService {
         branchCode,
         branchEmail,
         state,
+        city: typeof city === "string" && city.trim() ? city.trim() : null,
         address,
         branchManager,
         email,
@@ -1046,6 +1073,7 @@ class OutletService {
             branchCode: created.branchCode,
             branchManager: created.branchManager,
             state: created.state,
+            city: created.city ?? undefined,
             address: created.address,
             phoneNumber: created.phoneNumber,
             branchEmail: created.branchEmail,
@@ -1068,6 +1096,7 @@ class OutletService {
       branchId: created.id,
       branchName: created.name,
       state: created.state,
+      city: created.city,
       branchEmail: created.branchEmail,
       managerEmail: created.email,
     });
@@ -1125,6 +1154,11 @@ class OutletService {
     }
 
     if (typeof payload.state === "string" && payload.state.trim()) patch.state = payload.state.trim();
+    if (typeof payload.city === "string") {
+      patch.city = payload.city.trim() || null;
+    } else if (payload.city === null) {
+      patch.city = null;
+    }
     if (typeof payload.address === "string" && payload.address.trim()) patch.address = payload.address.trim();
     if (typeof payload.branchManager === "string" && payload.branchManager.trim()) patch.branchManager = payload.branchManager.trim();
     if (typeof payload.email === "string" && payload.email.trim()) {
