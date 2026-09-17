@@ -1456,6 +1456,7 @@ export class AdminTransactionsService {
           userId: tx.userId,
           transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
           reason: reason || "Transaction has been refunded",
+          performedBy: adminId,
         });
 
         return { message: "Transaction refund approved and processed successfully" };
@@ -1523,6 +1524,7 @@ export class AdminTransactionsService {
       eventBus.publish(EventTypes.TRANSACTION_APPROVED, {
         userId: transaction.userId,
         transaction: { id: transaction.id, referenceNumber: transaction.referenceNumber },
+        performedBy: adminId,
       });
 
       return { message: "Transaction approved successfully" };
@@ -1727,6 +1729,7 @@ export class AdminTransactionsService {
           referenceNumber: tx.referenceNumber,
         },
         reason: reason || "Refund rejected",
+        performedBy: adminId,
       });
 
       return { message: "Transaction refund rejected successfully" };
@@ -1783,6 +1786,7 @@ export class AdminTransactionsService {
         referenceNumber: transaction.referenceNumber,
       },
       reason,
+      performedBy: adminId,
     });
 
     return { message: "Transaction rejected successfully" };
@@ -1964,6 +1968,7 @@ export class AdminTransactionsService {
           userId: tx.userId,
           transaction: { id: tx.id, referenceNumber: tx.referenceNumber },
           reason: `Document rejected: ${updated.documentType}. ${reason || ''}`.trim(),
+          performedBy: adminId,
         });
       }
     }

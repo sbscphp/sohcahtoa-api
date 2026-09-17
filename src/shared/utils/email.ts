@@ -85,6 +85,12 @@ const TEMPLATES = {
   refundBankDetailsRequest:  process.env.TERMII_TEMPLATE_ID_REFUND_BANK_DETAILS_REQUEST || '',
   // Variables: shared + transaction_ref, reason, severity, amount, customer_name
   flaggedTransactionEscalated: process.env.TERMII_TEMPLATE_ID_FLAGGED_TRANSACTION_ESCALATED || '',
+  // Admin notification sent when a customer initiates a new transaction.
+  // Variables: shared + transaction_ref, customer_name, transaction_type, amount
+  transactionInitiatedAdmin: process.env.TERMII_TEMPLATE_ID_TRANSACTION_INITIATED_ADMIN || '',
+  // Reusable admin notification for transaction lifecycle activity (Approved/Rejected/Cancelled/Updated/Flagged).
+  // Variables: shared + activity_type, transaction_ref, customer_name, transaction_type, amount, performed_by
+  transactionActivityAdmin: process.env.TERMII_TEMPLATE_ID_TRANSACTION_ACTIVITY_ADMIN || '',
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -311,6 +317,7 @@ class EmailService {
     email: string,
     data: {
       branchName: string;
+      branchCode: string;
       branchManager: string;
       state: string;
       address: string;
@@ -322,30 +329,32 @@ class EmailService {
     const html = `
       <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
         <h2>New Branch Created</h2>
-        <p>Hello <strong>${data.branchManager}</strong>,</p>
-        <p>A new branch has been successfully created in the SohCahToa system with the following details:</p>
+        <p>Hello ${data.branchManager},</p>
+        <p>A new branch has been successfully created.</p>
+        <p><strong>Branch Details:</strong></p>
         <ul>
           <li><strong>Branch Name:</strong> ${data.branchName}</li>
+          <li><strong>Branch Code:</strong> ${data.branchCode}</li>
+          <li><strong>Branch Location:</strong> ${data.address}</li>
           <li><strong>Branch Manager:</strong> ${data.branchManager}</li>
-          <li><strong>State:</strong> ${data.state}</li>
-          <li><strong>Address:</strong> ${data.address}</li>
-          <li><strong>Phone Number:</strong> ${data.phoneNumber}</li>
-          ${data.branchEmail ? `<li><strong>Branch Email:</strong> ${data.branchEmail}</li>` : ''}
         </ul>
-        <p>Thank you,<br/><strong>SohCahToa BDC Team</strong></p>
+        <p>You can now access the platform and begin managing activities assigned to your branch.</p>
+        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #DD4F05; color: #fff; text-decoration: none; border-radius: 4px;">Login here</a></p>
+        <p>Regards.</p>
       </div>
     `;
     return this.sendTemplate(email, 'branchCreated', {
       ...shared,
       branch_name:    data.branchName,
+      branch_code:    data.branchCode,
       branch_manager: data.branchManager,
       state:          data.state,
       address:        data.address,
       phone_number:   data.phoneNumber,
       branch_email:   data.branchEmail || '',
     }, {
-      subject: `New Branch Created: ${data.branchName} - SohCahToa`,
-      text: `Hello ${data.branchManager},\n\nA new branch has been created successfully:\n- Branch Name: ${data.branchName}\n- State: ${data.state}\n- Address: ${data.address}\n- Manager: ${data.branchManager}\n- Phone: ${data.phoneNumber}${data.branchEmail ? `\n- Branch Email: ${data.branchEmail}` : ''}\n\nThank you,\nSohCahToa BDC Team`,
+      subject: `New Branch Created – ${data.branchName}`,
+      text: `Hello ${data.branchManager},\n\nA new branch has been successfully created.\nBranch Details:\n- Branch Name: ${data.branchName}\n- Branch Code: ${data.branchCode}\n- Branch Location: ${data.address}\n- Branch Manager: ${data.branchManager}\n\nYou can now access the platform and begin managing activities assigned to your branch.\nLogin here: ${shared.login_url}\n\nRegards.`,
       html,
     });
   }
@@ -553,8 +562,13 @@ class EmailService {
       amount?: string;
       customerName?: string;
       flaggedBy?: string;
+      transactionType?: string;
+      transactionDate?: Date | string | null;
     }
   ): Promise<boolean> {
+    const dateTimeStr = data.transactionDate
+      ? new Date(data.transactionDate).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })
+      : '';
     const internalControlEmail = toEmail || process.env.INTERNAL_CONTROL_EMAIL || 'internalcontrol@sohcahtoabdc.com';
     const shared = sharedVars(internalControlEmail, 'Internal Control Team');
     const html = `
@@ -564,10 +578,12 @@ class EmailService {
         <p>A transaction has been flagged and escalated for internal control review:</p>
         <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
           <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Ref:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
-          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Flag Reason / Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.reason}</td></tr>
-          ${data.severity ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Severity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;"><span style="color: #dc2626; font-weight: bold;">${data.severity}</span></td></tr>` : ''}
+          ${data.customerName ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer Name:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
+          ${data.transactionType ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionType}</td></tr>` : ''}
           ${data.amount ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
-          ${data.customerName ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
+          ${dateTimeStr ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Date &amp; Time:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${dateTimeStr}</td></tr>` : ''}
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Reason for Flag:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.reason}</td></tr>
+          ${data.severity ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Severity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;"><span style="color: #dc2626; font-weight: bold;">${data.severity}</span></td></tr>` : ''}
           ${data.flaggedBy ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Flagged By:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.flaggedBy}</td></tr>` : ''}
         </table>
         <p style="margin-top: 20px;">Please log into the Admin Portal to review and take necessary compliance action.</p>
@@ -583,14 +599,18 @@ class EmailService {
       amount:          data.amount || '',
       customer_name:   data.customerName || '',
     }, {
-      subject: `🚨 [ESCALATION] Flagged Transaction Alert: ${data.transactionRef}`,
-      text: `ATTENTION INTERNAL CONTROL:\nA transaction has been flagged and escalated to the Control Team.\n- Transaction Ref: ${data.transactionRef}\n- Reason: ${data.reason}\n- Severity: ${data.severity || 'HIGH'}\n${data.amount ? `- Amount: ${data.amount}\n` : ''}${data.customerName ? `- Customer: ${data.customerName}\n` : ''}\nPlease review this transaction immediately in the Admin Portal.`,
+      subject: `Action Required: Flagged Transaction – ${data.transactionRef}`,
+      text: `Hello Admin,\nA transaction has been flagged for your review.\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}- Reason for Flag: ${data.reason}\n\nPlease log in to the Admin Portal to review and take the appropriate action.`,
       html,
     });
   }
 
   // ── Admin Transaction Activity Email ─────────────────────────────────────
 
+  /**
+   * Reusable admin-facing "Transaction Activity" notification —
+   * covers Approved / Rejected / Cancelled / Updated / Flagged.
+   */
   async sendAdminTransactionActivityEmail(
     adminEmail: string,
     adminName: string,
@@ -600,31 +620,103 @@ class EmailService {
       details?: string;
       amount?: string;
       customerName?: string;
+      transactionType?: string;
+      performedBy?: string;
+      dateTime?: Date | string | null;
     }
   ): Promise<boolean> {
     const shared = sharedVars(adminEmail, adminName || 'Admin');
+    const pastTense: Record<string, string> = {
+      APPROVED: 'approved', REJECTED: 'rejected', CANCELLED: 'cancelled', UPDATED: 'updated', FLAGGED: 'flagged',
+    };
+    const activityStatement = pastTense[data.activityType.toUpperCase()]
+      ? `Transaction has been ${pastTense[data.activityType.toUpperCase()]}.`
+      : `Transaction activity: ${data.activityType}.`;
+    const dateTimeStr = data.dateTime
+      ? new Date(data.dateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })
+      : '';
+
     const html = `
       <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2 style="color: #0284c7;">🔔 Transaction Activity Alert</h2>
-        <p>Dear ${adminName || 'Admin'},</p>
-        <p>A new transaction activity requires your review or attention:</p>
-        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
-          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Activity:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.activityType}</td></tr>
-          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Ref:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
+        <h2 style="color: #0284c7;">Transaction Update</h2>
+        <p>Dear Admin,</p>
+        <p>${activityStatement}</p>
+        <p><strong>Activity Details:</strong></p>
+        <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 10px;">
+          <tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Activity Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.activityType}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Reference:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionRef}</td></tr>
+          ${data.customerName ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer Name:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
+          ${data.transactionType ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Type:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.transactionType}</td></tr>` : ''}
           ${data.amount ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Amount:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.amount}</td></tr>` : ''}
-          ${data.customerName ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Customer:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.customerName}</td></tr>` : ''}
-          ${data.details ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.details}</td></tr>` : ''}
+          ${data.performedBy ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Performed By:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.performedBy}</td></tr>` : ''}
+          ${dateTimeStr ? `<tr style="background: #f8fafc;"><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Date &amp; Time:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${dateTimeStr}</td></tr>` : ''}
+          ${data.details ? `<tr><td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">Details:</td><td style="padding: 8px; border: 1px solid #e2e8f0;">${data.details}</td></tr>` : ''}
         </table>
-        <p style="margin-top: 20px;">Please log into the Admin Portal to manage this transaction.</p>
+        <p style="margin-top: 20px;">Please log in to the Admin Portal for further details.</p>
         <p>Regards,<br/><strong>SohCahToa System Automated Alerts</strong></p>
       </div>
     `;
 
-    return this.sendTemplate(adminEmail, 'welcome', {
+    return this.sendTemplate(adminEmail, 'transactionActivityAdmin', {
       ...shared,
+      activity_type:     data.activityType,
+      transaction_ref:   data.transactionRef,
+      customer_name:     data.customerName || '',
+      transaction_type:  data.transactionType || '',
+      amount:            data.amount || '',
+      performed_by:      data.performedBy || '',
     }, {
-      subject: `[Transaction Alert] ${data.activityType}: ${data.transactionRef}`,
-      text: `Hello ${adminName || 'Admin'},\n\nTransaction Activity: ${data.activityType}\nTransaction Ref: ${data.transactionRef}\n${data.amount ? `Amount: ${data.amount}\n` : ''}${data.customerName ? `Customer: ${data.customerName}\n` : ''}${data.details ? `Details: ${data.details}\n` : ''}\nPlease review this transaction in the Admin Portal.`,
+      subject: `Transaction Update – ${data.activityType}`,
+      text: `Dear Admin,\n${activityStatement}\n- Activity Type: ${data.activityType}\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${data.performedBy ? `- Performed By: ${data.performedBy}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}${data.details ? `- Details: ${data.details}\n` : ''}\nPlease log in to the Admin Portal for further details.`,
+      html,
+    });
+  }
+
+  // ── Admin notification: transaction initiated ────────────────────────────
+
+  async sendTransactionInitiatedAdminEmail(
+    adminEmail: string,
+    data: {
+      transactionRef: string;
+      customerName?: string;
+      transactionType?: string;
+      amount?: string;
+      dateTime?: Date | string | null;
+    }
+  ): Promise<boolean> {
+    const shared = sharedVars(adminEmail, 'Admin');
+    const dateTimeStr = data.dateTime
+      ? new Date(data.dateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })
+      : '';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2>New Transaction Initiated</h2>
+        <p>Hello Admin,</p>
+        <p>A new transaction has been initiated and awaiting your review.</p>
+        <p><strong>Transaction Details:</strong></p>
+        <ul>
+          <li><strong>Transaction Reference:</strong> ${data.transactionRef}</li>
+          ${data.customerName ? `<li><strong>Customer Name:</strong> ${data.customerName}</li>` : ''}
+          ${data.transactionType ? `<li><strong>Transaction Type:</strong> ${data.transactionType}</li>` : ''}
+          ${data.amount ? `<li><strong>Amount:</strong> ${data.amount}</li>` : ''}
+          ${dateTimeStr ? `<li><strong>Date &amp; Time:</strong> ${dateTimeStr}</li>` : ''}
+        </ul>
+        <p>Please log in to the Admin Portal to review the transaction.</p>
+        <p><a href="${shared.login_url}" style="display: inline-block; padding: 10px 20px; background: #DD4F05; color: #fff; text-decoration: none; border-radius: 4px;">Login here</a></p>
+        <p>Regards,</p>
+      </div>
+    `;
+
+    return this.sendTemplate(adminEmail, 'transactionInitiatedAdmin', {
+      ...shared,
+      transaction_ref:  data.transactionRef,
+      customer_name:    data.customerName || '',
+      transaction_type: data.transactionType || '',
+      amount:           data.amount || '',
+    }, {
+      subject: `New Transaction Initiated – ${data.transactionRef}`,
+      text: `Hello Admin,\nA new transaction has been initiated and awaiting your review.\nTransaction Details:\n- Transaction Reference: ${data.transactionRef}\n${data.customerName ? `- Customer Name: ${data.customerName}\n` : ''}${data.transactionType ? `- Transaction Type: ${data.transactionType}\n` : ''}${data.amount ? `- Amount: ${data.amount}\n` : ''}${dateTimeStr ? `- Date & Time: ${dateTimeStr}\n` : ''}\nPlease log in to the Admin Portal to review the transaction.\nLogin here: ${shared.login_url}\n\nRegards,`,
       html,
     });
   }

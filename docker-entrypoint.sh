@@ -622,6 +622,27 @@ CREATE TABLE IF NOT EXISTS "wallet_entry_notes" (
   CONSTRAINT "wallet_entry_notes_entryId_fkey" FOREIGN KEY ("entryId") REFERENCES "wallet_entries"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS "wallet_entry_notes_entryId_idx" ON "wallet_entry_notes"("entryId");
+
+-- Ensure branches.branchCode exists, backfilled for existing rows
+ALTER TABLE "branches" ADD COLUMN IF NOT EXISTS "branchCode" TEXT;
+DO $$
+DECLARE
+  rec RECORD;
+  seq INTEGER := 1;
+BEGIN
+  IF EXISTS (SELECT 1 FROM "branches" WHERE "branchCode" IS NULL) THEN
+    FOR rec IN SELECT "id" FROM "branches" WHERE "branchCode" IS NULL ORDER BY "createdAt" ASC LOOP
+      UPDATE "branches" SET "branchCode" = 'BR' || LPAD(seq::text, 2, '0') WHERE "id" = rec."id";
+      seq := seq + 1;
+    END LOOP;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'branches' AND column_name = 'branchCode' AND is_nullable = 'YES') THEN
+    ALTER TABLE "branches" ALTER COLUMN "branchCode" SET NOT NULL;
+  END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "branches_branchCode_key" ON "branches"("branchCode");
 EOF
 
 psql "${DATABASE_URL%\?*}" -f /tmp/schema-fallback.sql || echo "⚠️  Schema fallback had non-fatal errors, continuing..."

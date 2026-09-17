@@ -4,6 +4,7 @@ import NotificationTemplates from '../templates/notification-templates';
 import { NotificationChannel, NotificationType, NotificationPriority, PrismaClient } from '@prisma/client';
 import { createLogger } from '../../../shared/utils/logger';
 import { emailService } from '../../../shared/utils/email';
+import { getComplianceAdminEmails } from '../../../shared/utils/admin-recipients';
 
 const logger = createLogger('NotificationHandler');
 const prisma = new PrismaClient();
@@ -335,12 +336,17 @@ export class NotificationHandler {
   private handleTransactionEvents() {
     eventBus.on(EventTypes.TRANSACTION_CREATED, async (event: any) => {
       try {
-        const { userId, transaction } = event;
+        const { userId, transactionId, referenceNumber } = event;
+
+        const trx = await prisma.transaction.findUnique({
+          where: { id: transactionId },
+          include: { user: { include: { profile: true } } },
+        }).catch(() => null);
 
         const template = NotificationTemplates.TRANSACTION_CREATED({
-          referenceNumber: transaction.referenceNumber,
-          amount: transaction.foreignAmount?.toString() || '0',
-          currency: transaction.currency,
+          referenceNumber: referenceNumber || trx?.referenceNumber || '',
+          amount: trx?.foreignAmount?.toString() || '0',
+          currency: trx?.currency || 'USD',
         });
 
         await notificationService.sendNotification({
@@ -351,24 +357,27 @@ export class NotificationHandler {
           title: template.title,
           body: template.body,
           data: { actionUrl: template.actionUrl },
-          transactionId: transaction.id,
+          transactionId,
         });
 
-        // Notify admins via email of new transaction request
-        const activeAdmins = await prisma.adminUser.findMany({
-          where: { isActive: true },
-          select: { email: true, fullName: true },
-        });
-        for (const admin of activeAdmins) {
-          if (admin.email) {
+        // Notify Compliance/Control/Super Admin of the new transaction request
+        if (trx) {
+          const customerName = trx.user?.profile
+            ? `${trx.user.profile.firstName || ''} ${trx.user.profile.lastName || ''}`.trim()
+            : (trx.user?.email || '');
+          const amountStr = `${trx.currency || 'NGN'} ${Number(trx.nairaEquivalent || trx.foreignAmount || 0).toLocaleString()}`;
+
+          const recipients = await getComplianceAdminEmails();
+          for (const recipient of recipients) {
             await emailService
-              .sendAdminTransactionActivityEmail(admin.email, admin.fullName, {
-                transactionRef: transaction.referenceNumber,
-                activityType: 'New Transaction Request Created',
-                amount: String(transaction.nairaEquivalent || transaction.foreignAmount || 0),
-                details: `A new transaction request (${transaction.referenceNumber}) has been submitted.`,
+              .sendTransactionInitiatedAdminEmail(recipient, {
+                transactionRef: trx.referenceNumber,
+                customerName,
+                transactionType: trx.type,
+                amount: amountStr,
+                dateTime: trx.createdAt,
               })
-              .catch((e) => logger.error('Error sending transaction created email to admin:', e));
+              .catch((e) => logger.error('Error sending transaction initiated email to admin:', e));
           }
         }
       } catch (error) {
@@ -432,7 +441,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_APPROVED, async (event: any) => {
       try {
-        const { userId, transaction } = event;
+        const { userId, transaction, performedBy } = event;
 
         const template = NotificationTemplates.TRANSACTION_APPROVED({
           referenceNumber: transaction.referenceNumber,
@@ -460,7 +469,10 @@ export class NotificationHandler {
             logger.error('Error sending transaction approved email:', e)
           );
         }
-        const agentTx = await prisma.transaction.findUnique({ where: { id: transaction.id }, select: { createdByAgentId: true } });
+        const agentTx = await prisma.transaction.findUnique({
+          where: { id: transaction.id },
+          include: { user: { include: { profile: true } } },
+        });
         const agentInfo = agentTx?.createdByAgentId ? await resolveAgentNotifyInfo(agentTx.createdByAgentId) : null;
         if (agentInfo) {
           await notificationService.sendNotification({
@@ -482,6 +494,30 @@ export class NotificationHandler {
             logger.error('Error sending transaction approved email to agent:', e)
           );
         }
+
+        // Notify Compliance/Control/Super Admin of the approval activity
+        if (agentTx) {
+          const adminInfo = performedBy
+            ? await prisma.adminUser.findUnique({ where: { id: performedBy }, select: { fullName: true } }).catch(() => null)
+            : null;
+          const customerName = agentTx.user?.profile
+            ? `${agentTx.user.profile.firstName || ''} ${agentTx.user.profile.lastName || ''}`.trim()
+            : (agentTx.user?.email || '');
+          const amountStr = `${agentTx.currency || 'NGN'} ${Number(agentTx.nairaEquivalent || agentTx.foreignAmount || 0).toLocaleString()}`;
+
+          const recipients = await getComplianceAdminEmails();
+          for (const recipient of recipients) {
+            await emailService.sendAdminTransactionActivityEmail(recipient, 'Admin', {
+              transactionRef: transaction.referenceNumber,
+              activityType: 'Approved',
+              customerName,
+              transactionType: agentTx.type,
+              amount: amountStr,
+              performedBy: adminInfo?.fullName || performedBy || 'Admin',
+              dateTime: agentTx.updatedAt,
+            }).catch((e) => logger.error('Error sending transaction activity email to admin:', e));
+          }
+        }
       } catch (error) {
         logger.error('Error sending transaction approved notification:', error);
       }
@@ -489,7 +525,7 @@ export class NotificationHandler {
 
     eventBus.on(EventTypes.TRANSACTION_REJECTED, async (event: any) => {
       try {
-        const { userId, transaction, reason } = event;
+        const { userId, transaction, reason, performedBy } = event;
 
         const template = NotificationTemplates.TRANSACTION_REJECTED({
           referenceNumber: transaction.referenceNumber,
@@ -508,11 +544,13 @@ export class NotificationHandler {
           transactionId: transaction.id,
         });
 
+        const fullTx = await prisma.transaction.findUnique({
+          where: { id: transaction.id },
+          include: { user: { include: { profile: true } } },
+        });
+
         // Push to agent
-        const agentInfo = await (async () => {
-          const tx = await prisma.transaction.findUnique({ where: { id: transaction.id }, select: { createdByAgentId: true } });
-          return tx?.createdByAgentId ? resolveAgentNotifyInfo(tx.createdByAgentId) : null;
-        })();
+        const agentInfo = fullTx?.createdByAgentId ? await resolveAgentNotifyInfo(fullTx.createdByAgentId) : null;
         if (agentInfo) {
           await notificationService.sendNotification({
             userId: agentInfo.userId,
@@ -536,6 +574,31 @@ export class NotificationHandler {
           await emailService.sendTransactionRejectedEmail(agentInfo.email, agentInfo.firstName, transaction.referenceNumber, reason || 'No reason provided').catch((e) =>
             logger.error('Error sending transaction rejected email to agent:', e)
           );
+        }
+
+        // Notify Compliance/Control/Super Admin of the rejection activity
+        if (fullTx) {
+          const adminInfo = performedBy
+            ? await prisma.adminUser.findUnique({ where: { id: performedBy }, select: { fullName: true } }).catch(() => null)
+            : null;
+          const customerName = fullTx.user?.profile
+            ? `${fullTx.user.profile.firstName || ''} ${fullTx.user.profile.lastName || ''}`.trim()
+            : (fullTx.user?.email || '');
+          const amountStr = `${fullTx.currency || 'NGN'} ${Number(fullTx.nairaEquivalent || fullTx.foreignAmount || 0).toLocaleString()}`;
+
+          const recipients = await getComplianceAdminEmails();
+          for (const recipient of recipients) {
+            await emailService.sendAdminTransactionActivityEmail(recipient, 'Admin', {
+              transactionRef: transaction.referenceNumber,
+              activityType: 'Rejected',
+              customerName,
+              transactionType: fullTx.type,
+              amount: amountStr,
+              performedBy: adminInfo?.fullName || performedBy || 'Admin',
+              dateTime: fullTx.updatedAt,
+              details: reason,
+            }).catch((e) => logger.error('Error sending transaction activity email to admin:', e));
+          }
         }
       } catch (error) {
         logger.error('Error sending transaction rejected notification:', error);
@@ -851,6 +914,8 @@ export class NotificationHandler {
 
         let customerName = '';
         let amountStr = '';
+        let transactionType = '';
+        let transactionDate: Date | null = null;
 
         if (transactionId) {
           const trx = await prisma.transaction.findFirst({
@@ -867,6 +932,8 @@ export class NotificationHandler {
             const userProfile = trx.user?.profile;
             customerName = userProfile ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() : (trx.user?.email || '');
             amountStr = `${trx.currency || 'NGN'} ${Number(trx.nairaEquivalent || trx.foreignAmount || 0).toLocaleString()}`;
+            transactionType = trx.type || '';
+            transactionDate = trx.createdAt || null;
           }
         }
 
@@ -880,27 +947,7 @@ export class NotificationHandler {
           }
         }
 
-        const recipients = new Set<string>();
-        if (process.env.INTERNAL_CONTROL_EMAIL) {
-          recipients.add(process.env.INTERNAL_CONTROL_EMAIL.trim());
-        }
-        recipients.add('internalcontrol@sohcahtoabdc.com');
-
-        // Also query active admin users in Control or Compliance
-        const controlAdmins = await prisma.adminUser.findMany({
-          where: {
-            OR: [
-              { role: { name: { in: ['Internal Control', 'Internal_Control', 'Compliance', 'Compliance Officer', 'Super Admin'], mode: 'insensitive' } } },
-              { department: { name: { in: ['Internal Control', 'Compliance', 'Control'], mode: 'insensitive' } } },
-            ],
-            isActive: true,
-          },
-          select: { email: true },
-        }).catch(() => []);
-
-        for (const admin of controlAdmins) {
-          if (admin?.email) recipients.add(admin.email.trim());
-        }
+        const recipients = await getComplianceAdminEmails();
 
         for (const recipient of recipients) {
           await emailService.sendFlaggedTransactionEscalationEmail(recipient, {
@@ -910,6 +957,8 @@ export class NotificationHandler {
             amount: amountStr,
             customerName,
             flaggedBy,
+            transactionType,
+            transactionDate,
           }).catch((e) => logger.error('Failed to send flagged transaction escalation email to Internal Control:', { recipient, error: e?.message || e }));
         }
       } catch (err) {

@@ -348,6 +348,7 @@ class OutletService {
       select: {
         id: true,
         name: true,
+        branchCode: true,
         branchManager: true,
         email: true,
         address: true,
@@ -357,6 +358,7 @@ class OutletService {
     return (rows || []).map((b: any) => ({
       id: b.id,
       branchName: b.name,
+      branchCode: b.branchCode,
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
@@ -409,6 +411,7 @@ class OutletService {
     const items = rows.map((b: any) => ({
       id: b.id,
       branchName: b.name,
+      branchCode: b.branchCode,
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
@@ -474,6 +477,7 @@ class OutletService {
     const items = (rows || []).map((b: any) => ({
       id: b.id,
       branchName: b.name,
+      branchCode: b.branchCode,
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
@@ -513,6 +517,7 @@ class OutletService {
     return (rows || []).map((b: any) => ({
       id: b.id,
       branchName: b.name,
+      branchCode: b.branchCode,
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
@@ -549,6 +554,7 @@ class OutletService {
       select: {
         id: true,
         name: true,
+        branchCode: true,
         branchManager: true,
         email: true,
         address: true,
@@ -560,6 +566,7 @@ class OutletService {
     return (rows || []).map((b: any) => ({
       id: b.id,
       branchName: b.name,
+      branchCode: b.branchCode,
       branchManager: b.branchManager,
       email: b.email,
       address: b.address,
@@ -955,10 +962,13 @@ class OutletService {
         throw new ValidationError("Branch email already exists", { field: "branchEmail" });
       }
     }
+    const branchCount = await db.branch.count();
+    const branchCode = `BR${String(branchCount + 1).padStart(2, "0")}`;
     const created = await db.branch.create({
       data: {
         franchiseId,
         name: branchName,
+        branchCode,
         branchEmail,
         state,
         address,
@@ -1033,6 +1043,7 @@ class OutletService {
         emailService
           .sendBranchCreatedEmail(recipientEmail, {
             branchName: created.name,
+            branchCode: created.branchCode,
             branchManager: created.branchManager,
             state: created.state,
             address: created.address,
