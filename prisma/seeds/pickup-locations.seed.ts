@@ -335,12 +335,17 @@ async function seedPickupLocations() {
 
     let successCount = 0;
     let failureCount = 0;
+    let branchCodeSeq = existingCount + 1;
 
     for (const location of pickupLocations) {
       try {
         await prisma.branch.create({
-          data: location,
+          data: {
+            ...location,
+            branchCode: `BR${String(branchCodeSeq).padStart(2, '0')}`,
+          },
         });
+        branchCodeSeq++;
         successCount++;
         console.log(`   ✓ Created: ${location.name}`);
       } catch (error) {
