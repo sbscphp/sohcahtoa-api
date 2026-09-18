@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 import authService from "../../auth/services/auth.service";
-import { NotFoundError, ValidationError, validatePhoneNumber } from "../../../shared/utils";
+import { NotFoundError, ValidationError, validatePhoneNumber, partiallyRedactField } from "../../../shared/utils";
 import {
   AgentCreateNigerianCustomerAccountRequest,
   AgentCustomerDetailsResponse,
@@ -387,14 +387,14 @@ export class AgentCustomerService {
       userId: user.id,
       registeredAt,
       fullName,
-      email: user.email,
+      email: user.email ? partiallyRedactField(user.email, "email") : user.email,
       dateOnboarded,
       totalTransactionsCompleted,
       idDetails: {
         idType,
-        nin: user.kyc?.nin ?? null,
-        bvn: user.kyc?.bvn ?? null,
-        tin: user.kyc?.tin ?? null,
+        nin: user.kyc?.nin ? partiallyRedactField(user.kyc.nin, "nin") : (user.kyc?.nin ?? null),
+        bvn: user.kyc?.bvn ? partiallyRedactField(user.kyc.bvn, "bvn") : (user.kyc?.bvn ?? null),
+        tin: user.kyc?.tin ? partiallyRedactField(user.kyc.tin, "tin") : (user.kyc?.tin ?? null),
         formAId,
       },
       files: {

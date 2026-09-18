@@ -56,6 +56,21 @@ if [ $attempt -eq $max_attempts ]; then
 fi
 
 # ──────────────────────────────────────────────
+# 2b. Ensure the database session timezone is UTC
+#     (Postgres previously defaulted to Africa/Lagos, which made
+#      TIMESTAMP-without-timezone columns — e.g. createdAt — store
+#      wall-clock WAT instead of UTC, showing up as "1 hour behind"
+#      wherever the app displays those timestamps.)
+# ──────────────────────────────────────────────
+DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^/?]*\)\(\?.*\)\{0,1\}$#\1#p')
+if [ -n "$DB_NAME" ]; then
+  echo "🕐 Ensuring database timezone is UTC for \"$DB_NAME\"..."
+  psql "${DATABASE_URL%\?*}" -c "ALTER DATABASE \"$DB_NAME\" SET timezone TO 'UTC';" \
+    && echo "✅ Database timezone set to UTC" \
+    || echo "⚠️  Could not set database timezone — continuing"
+fi
+
+# ──────────────────────────────────────────────
 # 3. Run Prisma migrations
 # ──────────────────────────────────────────────
 echo ""

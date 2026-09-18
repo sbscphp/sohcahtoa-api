@@ -220,6 +220,7 @@ class AgentSupportService {
           createdAt: true,
           status: true,
           description: true,
+          customer: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } },
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -236,6 +237,9 @@ class AgentSupportService {
         timestamp: t.createdAt,
         status: t.status,
         description: t.description,
+        customerName: t.customer?.profile
+          ? `${t.customer.profile.firstName || ''} ${t.customer.profile.lastName || ''}`.trim()
+          : (t.customer?.email || null),
       })),
       pagination: {
         page: safePage,
@@ -262,7 +266,11 @@ class AgentSupportService {
         description: true,
         status: true,
         createdAt: true,
-        customer: { select: { email: true } },
+        customer: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } },
+        attachments: {
+          select: { id: true, fileUrl: true, fileName: true, fileSize: true, mimeType: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        },
         comments: {
           select: {
             message: true,
@@ -287,6 +295,17 @@ class AgentSupportService {
       status: ticket.status,
       timestamp: ticket.createdAt,
       customerEmail: ticket.customer.email,
+      customerName: ticket.customer.profile
+        ? `${ticket.customer.profile.firstName || ''} ${ticket.customer.profile.lastName || ''}`.trim()
+        : (ticket.customer.email || null),
+      attachments: (ticket.attachments || []).map((a) => ({
+        id: a.id,
+        fileUrl: a.fileUrl,
+        fileName: a.fileName,
+        fileSize: a.fileSize,
+        mimeType: a.mimeType,
+        uploadedAt: a.createdAt,
+      })),
       messages: (ticket.comments || []).map((comment) => ({
         senderMail: comment.admin?.email ?? ticket.customer.email,
         senderTimestamp: comment.createdAt,
