@@ -7,6 +7,7 @@ const logger = createLogger('BvnService');
 export interface BvnVerificationResult {
   success: boolean;
   data?: {
+    bvn?: string;
     firstName: string;
     lastName: string;
     middleName?: string;
@@ -106,9 +107,9 @@ export class BvnService {
   async verifyBvnWithIGreeCode(code: string): Promise<BvnVerificationResult> {
     try {
       logger.info('iGree: exchanging authorization code for access token');
-      const { accessToken } = await nibssClient.iGreeExchangeCode(code);
+      const { accessToken, bvn } = await nibssClient.iGreeExchangeCode(code);
 
-      const result = await nibssClient.iGreeGetBvnDetails(accessToken);
+      const result = await nibssClient.iGreeGetBvnDetails(accessToken, bvn);
 
       if (!result.verified || !result.data) {
         return { success: false, message: result.message };
@@ -117,6 +118,7 @@ export class BvnService {
       return {
         success: true,
         data: {
+          bvn:                bvn,
           firstName:          result.data.firstName,
           lastName:           result.data.lastName,
           middleName:         result.data.middleName,

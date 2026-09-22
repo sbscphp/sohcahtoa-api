@@ -52,6 +52,25 @@ export class AuthController {
     }
   }
 
+  // iGree Flow - Step 1: Initiate consent with self-reported identity fields
+  // (cross-checked against NIBSS's verified BVN record once the callback lands)
+  async iGreeInitiate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { bvn, firstName, lastName, dateOfBirth, email, phoneNumber } = req.body;
+      if (!bvn) throw new ValidationError('BVN is required');
+      if (!firstName) throw new ValidationError('firstName is required');
+      if (!lastName) throw new ValidationError('lastName is required');
+      if (!dateOfBirth) throw new ValidationError('dateOfBirth is required');
+
+      const result = await authService.initiateIGreeConsentForSignup({
+        bvn, firstName, lastName, dateOfBirth, email, phoneNumber,
+      });
+      res.json(successResponse(result));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // iGree Callback: NIBSS redirects here with ?code=...&state=... after user authenticates
   async iGreeCallback(req: Request, res: Response, next: NextFunction) {
     try {

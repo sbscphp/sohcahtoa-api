@@ -217,6 +217,38 @@ router.post('/signup', authController.signup);
  *       429:
  *         description: Too many requests
  */
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/igree/initiate:
+ *   post:
+ *     summary: iGree Flow - Step 1 - Initiate BVN consent with self-reported identity fields
+ *     description: |
+ *       Alternative to the Consent Hub flow (`/signup/nigerian/verify-bvn`). Collects the
+ *       customer's bvn, firstName, lastName, dateOfBirth (and optionally email/phoneNumber)
+ *       up front, then redirects to NIBSS iGree for OTP consent. Once NIBSS redirects back
+ *       to the iGree callback, these submitted fields are cross-checked against NIBSS's
+ *       verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [bvn, firstName, lastName, dateOfBirth]
+ *             properties:
+ *               bvn: { type: string, example: "22222222248" }
+ *               firstName: { type: string, example: "John" }
+ *               lastName: { type: string, example: "Smith" }
+ *               dateOfBirth: { type: string, example: "1990-01-01" }
+ *               email: { type: string, example: "john@example.com" }
+ *               phoneNumber: { type: string, example: "+2348000000000" }
+ *     responses:
+ *       200:
+ *         description: Consent initiated — redirect the user to authUrl, then poll bvn-consent-status with the returned state
+ */
+router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
+
 // iGree callback — NIBSS redirects here with ?code=...&state=... after user authenticates
 router.get('/nibss/igree/callback', authController.iGreeCallback);
 router.post('/nibss/igree/callback', authController.iGreeCallback);

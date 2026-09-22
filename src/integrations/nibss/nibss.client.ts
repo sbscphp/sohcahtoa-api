@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import jwt from 'jsonwebtoken';
+import jwksRsa from 'jwks-rsa';
 import { createLogger } from '../../shared/utils/logger';
 
 const logger = createLogger('NIBSSClient');
@@ -7,6 +9,7 @@ const logger = createLogger('NIBSSClient');
 
 interface NIBSSTokenResponse {
   access_token: string;
+  id_token?: string;
   token_type: string;
   expires_in: number;
   scope?: string;
@@ -260,6 +263,8 @@ export class NIBSSClient {
   private iGreeConsumerCustomId: string = '';
   private iGreeChannelCode: string = '02';
   private idpBaseUrl: string = '';
+  private iGreeJwksClient: jwksRsa.JwksClient | null = null;
+  private iGreeJwksUriPromise: Promise<string | null> | null = null;
 
   // ── Token cache ──
   private bivsToken: string | null = null;
@@ -1146,50 +1151,141 @@ export class NIBSSClient {
    */
   iGreeGetAuthUrl(state: string): string {
     const params = new URLSearchParams({
-      scope:         'bvn',
-      acr_values:    'nibss_otp',
+      scope:         'openid bvn profile address',
+      acr_values:    'otp',
       response_type: 'code',
       redirect_uri:  this.iGreeRedirectUri,
       client_id:     this.iGreeClientId,
       state,
       nonce:         state,
     });
-    return `${this.idpBaseUrl}/oxauth/authorize.htm?${params.toString()}`;
+    return `${this.idpBaseUrl}/oxauth/restv1/authorize?${params.toString()}`;
   }
 
   /**
    * Exchange the authorization code for an access token via the iGree IdP.
+   * Falls back to client_secret_post (credentials in the body) if the IdP
+   * rejects HTTP Basic Auth — some NIBSS environments expect this instead.
    */
-  async iGreeExchangeCode(code: string): Promise<{ accessToken: string; expiresIn: number }> {
-    const params = new URLSearchParams();
-    params.append('client_id',     this.iGreeClientId);
-    params.append('client_secret', this.iGreeClientSecret);
-    params.append('code',          code);
-    params.append('redirect_uri',  this.iGreeRedirectUri);
-    params.append('grant_type',    'authorization_code');
+  async iGreeExchangeCode(code: string): Promise<{ accessToken: string; idToken?: string; expiresIn: number; bvn?: string }> {
+    const tokenUrl = `${this.idpBaseUrl}/oxauth/restv1/token`;
+    const baseParams = {
+      code,
+      redirect_uri: this.iGreeRedirectUri,
+      grant_type:   'authorization_code',
+    };
 
-    const credentials = Buffer.from(`${this.iGreeClientId}:${this.iGreeClientSecret}`).toString('base64');
+    let tokenData: NIBSSTokenResponse;
+    try {
+      const params = new URLSearchParams(baseParams);
+      const credentials = Buffer.from(`${this.iGreeClientId}:${this.iGreeClientSecret}`).toString('base64');
 
-    const res = await axios.post<NIBSSTokenResponse>(
-      `${this.idpBaseUrl}/oxauth/restv1/token`,
-      params,
-      {
+      const res = await axios.post<NIBSSTokenResponse>(tokenUrl, params, {
         headers: {
           'Content-Type':  'application/x-www-form-urlencoded',
           'Authorization': `Basic ${credentials}`,
         },
         timeout: 15000,
-      }
-    );
+      });
+      tokenData = res.data;
+    } catch (error: any) {
+      const status = error.response?.status;
+      if (status !== 400 && status !== 401) throw error;
 
-    return { accessToken: res.data.access_token, expiresIn: res.data.expires_in };
+      logger.warn('iGree: Basic Auth token exchange rejected, retrying with client_secret_post', { status });
+
+      const params = new URLSearchParams({
+        ...baseParams,
+        client_id:     this.iGreeClientId,
+        client_secret: this.iGreeClientSecret,
+      });
+
+      const retryRes = await axios.post<NIBSSTokenResponse>(tokenUrl, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 15000,
+      });
+      tokenData = retryRes.data;
+    }
+
+    // The id_token (JWT) carries identity claims for the requested scopes (openid bvn profile address).
+    // Verify its signature against NIBSS's published JWKS before trusting the bvn claim —
+    // this token determines which BVN the resource call fetches, so it must not be trusted unverified.
+    let bvn: string | undefined;
+    if (tokenData.id_token) {
+      const claims = await this.verifyIGreeIdToken(tokenData.id_token);
+      bvn = claims?.bvn || claims?.BVN;
+    }
+
+    return {
+      accessToken: tokenData.access_token,
+      idToken:     tokenData.id_token,
+      expiresIn:   tokenData.expires_in,
+      bvn,
+    };
+  }
+
+  /**
+   * Resolve and cache the iGree IdP's JWKS URI, either from NIBSS_IGREE_JWKS_URI
+   * or via OIDC discovery at {idpBaseUrl}/.well-known/openid-configuration.
+   */
+  private async resolveIGreeJwksUri(): Promise<string | null> {
+    const override = process.env.NIBSS_IGREE_JWKS_URI;
+    if (override) return override;
+
+    if (!this.iGreeJwksUriPromise) {
+      this.iGreeJwksUriPromise = axios
+        .get(`${this.idpBaseUrl}/.well-known/openid-configuration`, { timeout: 10000 })
+        .then((res) => res.data?.jwks_uri || null)
+        .catch((err: any) => {
+          logger.error('iGree: failed to fetch OIDC discovery document for jwks_uri', { error: err.message });
+          return null;
+        });
+    }
+    return this.iGreeJwksUriPromise;
+  }
+
+  /**
+   * Verify an iGree id_token's signature against NIBSS's published JWKS and return its claims.
+   * Returns null (and logs) if the JWKS can't be resolved or verification fails —
+   * callers must treat that as "claims not trusted", not fall back to unverified decoding.
+   */
+  private async verifyIGreeIdToken(idToken: string): Promise<Record<string, any> | null> {
+    try {
+      const decodedHeader = jwt.decode(idToken, { complete: true });
+      const kid = decodedHeader?.header?.kid;
+
+      if (!this.iGreeJwksClient) {
+        const jwksUri = await this.resolveIGreeJwksUri();
+        if (!jwksUri) {
+          logger.error('iGree: no jwks_uri available — cannot verify id_token signature');
+          return null;
+        }
+        this.iGreeJwksClient = jwksRsa({
+          jwksUri,
+          cache: true,
+          cacheMaxAge: 12 * 60 * 60 * 1000,
+          rateLimit: true,
+        });
+      }
+
+      const signingKey = await this.iGreeJwksClient.getSigningKey(kid);
+      const publicKey = signingKey.getPublicKey();
+
+      return jwt.verify(idToken, publicKey, {
+        algorithms: ['RS256'],
+        audience: this.iGreeClientId,
+      }) as Record<string, any>;
+    } catch (err: any) {
+      logger.error('iGree: id_token signature verification failed', { error: err.message });
+      return null;
+    }
   }
 
   /**
    * Retrieve BVN partial details using an iGree access token.
    * Calls POST /getPartialDetailsWithBvn at the iGree base URL.
    */
-  async iGreeGetBvnDetails(accessToken: string): Promise<{
+  async iGreeGetBvnDetails(accessToken: string, bvn?: string): Promise<{
     verified: boolean;
     data?: {
       firstName: string;
@@ -1213,12 +1309,14 @@ export class NIBSSClient {
 
       const res = await this.iGreeClient.post<any[]>(
         '/getPartialDetailsWithBvn',
-        {},
+        bvn ? { bvn } : {},
         {
           headers: {
             'Authorization':       `Bearer ${accessToken}`,
             'x-consumer-unique-id': consumerUniqueId,
             'x-consumer-custom-id': this.iGreeConsumerCustomId,
+            'Content-Type':         'application/json',
+            'Accept':               'application/json',
           },
         }
       );

@@ -273,8 +273,8 @@ export class AgentCustomerService {
         lastTransactionDate: user.lastTransactionDate ? (user.lastTransactionDate as Date).toISOString() : null,
         registeredAt: user.createdAt.toISOString(),
         kycStatus: user.kyc?.status as KycStatus | undefined,
-        nin: user.kyc?.nin ?? null,
-        bvn: user.kyc?.bvn ?? null,
+        nin: user.kyc?.nin ? partiallyRedactField(user.kyc.nin, "nin") : null,
+        bvn: user.kyc?.bvn ? partiallyRedactField(user.kyc.bvn, "bvn") : null,
       };
     });
 
@@ -614,12 +614,12 @@ export class AgentCustomerService {
       return [
         user.id,
         fullName,
-        user.email,
+        user.email ? partiallyRedactField(user.email, "email") : "",
         user.phoneNumber ?? "",
         user.customerType ?? "",
         user.kyc?.status ?? "",
-        user.kyc?.bvn ?? "",
-        user.kyc?.nin ?? "",
+        user.kyc?.bvn ? partiallyRedactField(user.kyc.bvn, "bvn") : "",
+        user.kyc?.nin ? partiallyRedactField(user.kyc.nin, "nin") : "",
         user.lastTransactionType ?? "",
         user.lastTransactionDate ? (user.lastTransactionDate as Date).toISOString() : "",
         user.createdAt.toISOString(),

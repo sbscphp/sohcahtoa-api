@@ -17,6 +17,7 @@ import {
   validateEmail,
   validatePhoneNumber,
   validatePasswordStrength,
+  validateBvn,
   emailService,
   createLogger,
   redactSensitiveData,
@@ -58,6 +59,28 @@ const prisma = getDatabase();
 const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '5');
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 30;
+
+// Case/whitespace-insensitive comparison, used to cross-check customer-submitted
+// identity fields (name, bvn) against NIBSS's verified BVN record.
+function fieldsMatch(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// Compares two dates by calendar day, tolerant of differing source formats
+// (e.g. "1990-01-01" vs "25-Nov-1977"). Falls back to normalized string
+// comparison if either value fails to parse as a Date.
+function datesMatch(a: string, b: string): boolean {
+  const dateA = new Date(a);
+  const dateB = new Date(b);
+  if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+    return (
+      dateA.getUTCFullYear() === dateB.getUTCFullYear() &&
+      dateA.getUTCMonth() === dateB.getUTCMonth() &&
+      dateA.getUTCDate() === dateB.getUTCDate()
+    );
+  }
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
 
 export class AuthService {
   async signup(data: SignupRequest): Promise<{ userId: string; message: string }> {
@@ -709,6 +732,50 @@ export class AuthService {
     };
   }
 
+  // STEP 1 (iGree variant): Initiate NIBSS iGree consent — collects the customer's
+  // self-reported identity fields up front so they can be cross-checked against
+  // NIBSS's verified BVN record once the consent callback comes back.
+  async initiateIGreeConsentForSignup(data: {
+    bvn: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    email?: string;
+    phoneNumber?: string;
+  }): Promise<{ state: string; authUrl: string; message: string }> {
+    const { bvn, firstName, lastName, dateOfBirth, email, phoneNumber } = data;
+
+    if (!validateBvn(bvn)) {
+      throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
+    }
+
+    const existingKyc = await prisma.userKyc.findFirst({ where: { bvn } });
+    if (existingKyc?.status === KycStatus.VERIFIED) {
+      throw new DuplicateError('An account with this BVN already exists');
+    }
+
+    const state = generateId();
+    const { authUrl } = bvnService.initiateIGreeConsent(state);
+
+    // Reuses the bvn:consent:${state} cache namespace also used by the Consent Hub flow —
+    // handleIGreeCallback below reads firstName/lastName/dateOfBirth from here to validate.
+    await redis.setex(`bvn:consent:${state}`, 30 * 60, JSON.stringify({
+      bvn,
+      firstName,
+      lastName,
+      dateOfBirth,
+      email,
+      phoneNumber,
+      status: 'PENDING',
+    }));
+
+    return {
+      state,
+      authUrl,
+      message: 'iGree consent initiated. Please authenticate to continue.',
+    };
+  }
+
   // iGree Callback: NIBSS redirects here with ?code=...&state=... after user authenticates
   async handleIGreeCallback(code: string, state: string): Promise<void> {
     const consentKey = `bvn:consent:${state}`;
@@ -733,6 +800,29 @@ export class AuthService {
     if (!bvnResult.success || !bvnResult.data) {
       logger.error('iGree BVN verification failed', { state, message: bvnResult.message });
       await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
+      return;
+    }
+
+    // Cross-check the customer's self-reported identity fields against NIBSS's
+    // verified BVN record. Any mismatch is a hard reject — the two identities don't line up.
+    const mismatches: string[] = [];
+    if (session.bvn && bvnResult.data.bvn && !fieldsMatch(session.bvn, bvnResult.data.bvn)) {
+      mismatches.push('bvn');
+    }
+    if (session.firstName && !fieldsMatch(session.firstName, bvnResult.data.firstName)) {
+      mismatches.push('firstName');
+    }
+    if (session.lastName && !fieldsMatch(session.lastName, bvnResult.data.lastName)) {
+      mismatches.push('lastName');
+    }
+    if (session.dateOfBirth && bvnResult.data.dateOfBirth && !datesMatch(session.dateOfBirth, bvnResult.data.dateOfBirth)) {
+      mismatches.push('dateOfBirth');
+    }
+
+    if (mismatches.length > 0) {
+      const errorMessage = `Submitted details do not match your BVN record: ${mismatches.join(', ')}`;
+      logger.warn('iGree BVN cross-validation failed', { state, mismatches });
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage }));
       return;
     }
 

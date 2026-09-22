@@ -1,5 +1,5 @@
 import { getDatabase } from "../../../config/database";
-import { NotFoundError, ValidationError } from "../../../shared/utils";
+import { NotFoundError, ValidationError, partiallyRedactField } from "../../../shared/utils";
 import { v2 as cloudinary } from "cloudinary";
 import { createLogger } from "../../../shared/utils/logger";
 import { UserRole } from "../../../shared/types";
@@ -294,10 +294,10 @@ class AgentSupportService {
       description: ticket.description,
       status: ticket.status,
       timestamp: ticket.createdAt,
-      customerEmail: ticket.customer.email,
+      customerEmail: ticket.customer.email ? partiallyRedactField(ticket.customer.email, "email") : null,
       customerName: ticket.customer.profile
         ? `${ticket.customer.profile.firstName || ''} ${ticket.customer.profile.lastName || ''}`.trim()
-        : (ticket.customer.email || null),
+        : (ticket.customer.email ? partiallyRedactField(ticket.customer.email, "email") : null),
       attachments: (ticket.attachments || []).map((a) => ({
         id: a.id,
         fileUrl: a.fileUrl,
@@ -306,11 +306,18 @@ class AgentSupportService {
         mimeType: a.mimeType,
         uploadedAt: a.createdAt,
       })),
-      messages: (ticket.comments || []).map((comment) => ({
-        senderMail: comment.admin?.email ?? ticket.customer.email,
-        senderTimestamp: comment.createdAt,
-        senderMessage: comment.message,
-      })),
+      messages: (ticket.comments || []).map((comment) => {
+        // Admin (staff) emails are operational identity, not customer PII — leave those as-is.
+        // Only mask when the sender is the customer.
+        const senderMail = comment.admin?.email
+          ? comment.admin.email
+          : (ticket.customer.email ? partiallyRedactField(ticket.customer.email, "email") : null);
+        return {
+          senderMail,
+          senderTimestamp: comment.createdAt,
+          senderMessage: comment.message,
+        };
+      }),
     };
   }
 }
