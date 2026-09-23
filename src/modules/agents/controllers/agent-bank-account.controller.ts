@@ -24,7 +24,7 @@ export const agentBankAccountController = {
     try {
       const { bankName, accountNumber } = req.query as Record<string, string>;
       const result = await customerBankAccountService.lookupAccountName(bankName, accountNumber);
-      res.json(successResponse(result, 'Account name retrieved'));
+      res.json(successResponse(result));
     } catch (e: any) {
       res.status(e.statusCode || 400).json({ success: false, message: e.message });
     }

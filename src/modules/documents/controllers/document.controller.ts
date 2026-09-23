@@ -40,7 +40,7 @@ export class DocumentController {
         metadata: metadata ? JSON.parse(metadata) : undefined,
       });
 
-      res.status(201).json(successResponse(result, 'Document uploaded successfully'));
+      res.status(201).json(successResponse(result));
     } catch (error) {
       next(error);
     }
@@ -199,7 +199,7 @@ export class DocumentController {
 
       await documentService.deleteDocument(documentId, userId);
 
-      res.json(successResponse(null, 'Document deleted successfully'));
+      res.json(successResponse(null));
     } catch (error) {
       next(error);
     }

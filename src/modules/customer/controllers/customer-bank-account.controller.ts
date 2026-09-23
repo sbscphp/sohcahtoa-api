@@ -27,7 +27,7 @@ export class CustomerBankAccountController {
     try {
       const { bankName, accountNumber } = req.query as Record<string, string>;
       const result = await customerBankAccountService.lookupAccountName(bankName, accountNumber);
-      res.json(successResponse(result, 'Account name retrieved'));
+      res.json(successResponse(result));
     } catch (err) {
       next(err);
     }
@@ -67,7 +67,7 @@ export class CustomerBankAccountController {
         routingNumber,
         bankAddress,
       });
-      res.status(201).json(successResponse(account, 'Bank account saved'));
+      res.status(201).json(successResponse(account));
     } catch (err) {
       next(err);
     }
@@ -82,7 +82,7 @@ export class CustomerBankAccountController {
       const userId = req.user!.userId;
       const { bankAccountId } = req.params;
       const account = await customerBankAccountService.setDefault(userId, bankAccountId);
-      res.json(successResponse(account, 'Default bank account updated'));
+      res.json(successResponse(account));
     } catch (err) {
       next(err);
     }
@@ -97,7 +97,7 @@ export class CustomerBankAccountController {
       const userId = req.user!.userId;
       const { bankAccountId } = req.params;
       await customerBankAccountService.deleteBankAccount(userId, bankAccountId);
-      res.json(successResponse(null, 'Bank account removed'));
+      res.json(successResponse(null));
     } catch (err) {
       next(err);
     }
@@ -123,7 +123,7 @@ export class CustomerBankAccountController {
         transactionId,
         bankAccountIds,
       );
-      res.json(successResponse(accounts, 'Bank accounts attached to transaction'));
+      res.json(successResponse(accounts));
     } catch (err) {
       next(err);
     }
@@ -156,7 +156,7 @@ export class CustomerBankAccountController {
       const userId = req.user!.userId;
       const { transactionId, bankAccountId } = req.params;
       await customerBankAccountService.detachFromTransaction(userId, transactionId, bankAccountId);
-      res.json(successResponse(null, 'Bank account removed from transaction'));
+      res.json(successResponse(null));
     } catch (err) {
       next(err);
     }

@@ -408,7 +408,7 @@ export class AuthController {
         throw new ValidationError('User ID not found');
       }
       const profile = await authService.getUserProfile(userId);
-      res.json(successResponse(profile, 'Profile retrieved successfully'));
+      res.json(successResponse(profile));
     } catch (error) {
       next(error);
     }
