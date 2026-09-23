@@ -147,6 +147,15 @@ export const EventTypes = {
 
   // Audit events
   AUDIT_LOG_CREATED: 'audit.log.created',
+
+  // FX Inventory events
+  FX_DISBURSEMENT_INITIATED: 'fx.disbursement.initiated',
+  FX_DISBURSEMENT_REVIEW_REQUIRED: 'fx.disbursement.review.required',
+  FX_DISBURSEMENT_APPROVED: 'fx.disbursement.approved',
+  FX_DISBURSEMENT_REJECTED: 'fx.disbursement.rejected',
+  FX_LODGMENT_SUBMITTED: 'fx.lodgment.submitted',
+  FX_LODGMENT_CONFIRMED: 'fx.lodgment.confirmed',
+  FX_LODGMENT_REJECTED: 'fx.lodgment.rejected',
 } as const;
 
 export type EventType = typeof EventTypes[keyof typeof EventTypes];

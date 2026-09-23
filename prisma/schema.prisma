@@ -588,9 +588,10 @@ model Branch {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  franchise         Franchise?         @relation(fields: [franchiseId], references: [id])
-  agents            Agent[]
-  workflowTemplates WorkflowTemplate[]
+  franchise           Franchise?           @relation(fields: [franchiseId], references: [id])
+  agents              Agent[]
+  workflowTemplates   WorkflowTemplate[]
+  fxInventoryBalances FxInventoryBalance[]
 
   @@unique([franchiseId, name])
   @@index([franchiseId])
@@ -635,6 +636,9 @@ model Agent {
   createdCustomers    User[]            @relation("AgentCreatedCustomers")
   createdTransactions Transaction[]     @relation("AgentCreatedTransactions")
   createdTickets      Ticket[]          @relation("TicketCreatedByAgent")
+  cashBalances        AgentCashBalance[]
+  cashDisbursements   CashDisbursement[]
+  cashLodgments       CashLodgment[]
 
   @@index([branchId])
   @@index([name])
@@ -2039,6 +2043,7 @@ enum ApprovalType {
   REFUND
   RATE
   DISBURSEMENT
+  FX_CASH_DISBURSEMENT
 }
 
 model WorkflowTemplate {
@@ -2116,4 +2121,179 @@ model WorkflowAssignee {
   @@index([stageId])
   @@index([adminId])
   @@map("workflow_assignees")
+}
+
+// ========================================
+// FX INVENTORY: CASH DISBURSEMENT & LODGMENT
+// ========================================
+
+model FxInventoryBalance {
+  id        String   @id @default(uuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  currency  String
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries FxInventoryEntry[]
+
+  @@unique([branchId, currency])
+  @@map("fx_inventory_balances")
+}
+
+enum FxInventoryEntryType {
+  DEBIT
+  CREDIT
+}
+
+model FxInventoryEntry {
+  id            String               @id @default(uuid())
+  balanceId     String
+  balance       FxInventoryBalance   @relation(fields: [balanceId], references: [id])
+  branchId      String
+  currency      String
+  type          FxInventoryEntryType
+  amount        Decimal              @db.Decimal(18, 2)
+  balanceBefore Decimal              @db.Decimal(18, 2)
+  balanceAfter  Decimal              @db.Decimal(18, 2)
+  sourceType    String
+  sourceId      String
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+
+  @@index([balanceId])
+  @@index([sourceType, sourceId])
+  @@map("fx_inventory_entries")
+}
+
+model AgentCashBalance {
+  id        String   @id @default(uuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  currency  String
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries AgentCashEntry[]
+
+  @@unique([agentId, currency])
+  @@map("agent_cash_balances")
+}
+
+enum AgentCashEntryType {
+  DEBIT
+  CREDIT
+}
+
+model AgentCashEntry {
+  id             String             @id @default(uuid())
+  agentBalanceId String
+  agentBalance   AgentCashBalance   @relation(fields: [agentBalanceId], references: [id])
+  agentId        String
+  currency       String
+  type           AgentCashEntryType
+  amount         Decimal            @db.Decimal(18, 2)
+  balanceBefore  Decimal            @db.Decimal(18, 2)
+  balanceAfter   Decimal            @db.Decimal(18, 2)
+  sourceType     String
+  sourceId       String
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([agentBalanceId])
+  @@index([sourceType, sourceId])
+  @@map("agent_cash_entries")
+}
+
+enum CashDisbursementStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model CashDisbursement {
+  id              String                 @id @default(uuid())
+  referenceNumber String                 @unique
+  agentId         String
+  agent           Agent                  @relation(fields: [agentId], references: [id])
+  branchId        String
+  currency        String
+  amount          Decimal                @db.Decimal(18, 2)
+  purpose         String?
+  status          CashDisbursementStatus @default(PENDING_APPROVAL)
+
+  initiatedBy String
+  initiatedAt DateTime @default(now())
+
+  workflowTemplateId String?
+  currentStageId     String?
+
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  decisionReason String?
+
+  autoApproved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  history CashDisbursementHistory[]
+
+  @@index([agentId])
+  @@index([branchId, currency])
+  @@index([status])
+  @@map("cash_disbursements")
+}
+
+model CashDisbursementHistory {
+  id             String           @id @default(uuid())
+  disbursementId String
+  disbursement   CashDisbursement @relation(fields: [disbursementId], references: [id], onDelete: Cascade)
+  action         String
+  performedBy    String?
+  reason         String?
+  createdAt      DateTime         @default(now())
+
+  @@index([disbursementId])
+  @@map("cash_disbursement_history")
+}
+
+enum CashLodgmentStatus {
+  PENDING_VERIFICATION
+  CONFIRMED
+  REJECTED
+}
+
+model CashLodgment {
+  id              String             @id @default(uuid())
+  referenceNumber String             @unique
+  agentId         String
+  agent           Agent              @relation(fields: [agentId], references: [id])
+  branchId        String
+  currency        String
+  statedAmount    Decimal            @db.Decimal(18, 2)
+  confirmedAmount Decimal?           @db.Decimal(18, 2)
+  varianceAmount  Decimal?           @db.Decimal(18, 2)
+  notes           String?
+  status          CashLodgmentStatus @default(PENDING_VERIFICATION)
+
+  submittedAt DateTime @default(now())
+
+  confirmedBy    String?
+  confirmedAt    DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  decisionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId])
+  @@index([branchId, currency])
+  @@index([status])
+  @@map("cash_lodgments")
 }

@@ -19,6 +19,7 @@ import AgentNotificationRouter from './modules/agents/routes/agent-notifications
 import AgentRateRouter from './modules/agents/routes/agent-rate.routes';
 import AgentDashboardRouter from './modules/agents/routes/agent-dashboard.routes';
 import AgentSupportRouter from './modules/agents/routes/agent-support.routes';
+import AgentFxInventoryRouter from './modules/agents/routes/agent-fx-inventory.routes';
 import customerSupportRoutes from './modules/customer/routes/customer-support.routes';
 import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
@@ -137,6 +138,7 @@ export const createApp = async (): Promise<Application> => {
   logger.info('Agent transaction routes registered');
 
   app.use('/api/agent/support', AgentSupportRouter);
+  app.use('/api/agent/fx-inventory', AgentFxInventoryRouter);
   logger.info('Agent support routes registered');
 
   app.use('/api/customer/support', customerSupportRoutes);

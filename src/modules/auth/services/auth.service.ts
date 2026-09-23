@@ -741,17 +741,25 @@ export class AuthService {
     lastName: string;
     dateOfBirth: string;
     email?: string;
-    phoneNumber?: string;
+    phoneNumber: string;
   }): Promise<{ state: string; authUrl: string; message: string }> {
     const { bvn, firstName, lastName, dateOfBirth, email, phoneNumber } = data;
 
     if (!validateBvn(bvn)) {
       throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
     }
+    if (!phoneNumber || !validatePhoneNumber(phoneNumber)) {
+      throw new ValidationError('A valid phoneNumber is required. NIBSS iGree does not return a phone number, so this is the only source for the account.');
+    }
 
     const existingKyc = await prisma.userKyc.findFirst({ where: { bvn } });
     if (existingKyc?.status === KycStatus.VERIFIED) {
       throw new DuplicateError('An account with this BVN already exists');
+    }
+
+    const existingPhone = await prisma.user.findUnique({ where: { phoneNumber } });
+    if (existingPhone) {
+      throw new DuplicateError('An account with this phone number already exists');
     }
 
     const state = generateId();

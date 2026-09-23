@@ -61,6 +61,7 @@ export class AuthController {
       if (!firstName) throw new ValidationError('firstName is required');
       if (!lastName) throw new ValidationError('lastName is required');
       if (!dateOfBirth) throw new ValidationError('dateOfBirth is required');
+      if (!phoneNumber) throw new ValidationError('phoneNumber is required');
 
       const result = await authService.initiateIGreeConsentForSignup({
         bvn, firstName, lastName, dateOfBirth, email, phoneNumber,

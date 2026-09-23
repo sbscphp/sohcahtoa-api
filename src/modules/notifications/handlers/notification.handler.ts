@@ -115,6 +115,9 @@ export class NotificationHandler {
     // Admin Events
     this.handleAdminEvents();
 
+    // FX Inventory Events
+    this.handleFxInventoryEvents();
+
     logger.info('Notification event handlers initialized successfully');
   }
 
@@ -1501,6 +1504,123 @@ export class NotificationHandler {
         }
       } catch (error) {
         logger.error('Error handling DEPARTMENT_CREATED event:', error);
+      }
+    });
+  }
+
+  /**
+   * FX Inventory: cash disbursement (Admin -> Agent) and cash lodgment (Agent -> Admin) events.
+   */
+  private handleFxInventoryEvents() {
+    const notifyAdmin = async (adminId: string | null | undefined, title: string, body: string) => {
+      if (!adminId) return;
+      const admin = await prisma.adminUser.findUnique({ where: { id: adminId }, select: { id: true, email: true } }).catch(() => null);
+      if (!admin) return;
+      await notificationService.sendNotification({
+        userId: admin.id,
+        type: NotificationType.IN_APP,
+        channel: NotificationChannel.IN_APP,
+        priority: NotificationPriority.NORMAL,
+        title,
+        body,
+      }).catch((e) => logger.warn('Failed to send FX inventory in-app notification to admin:', e));
+      if (admin.email) {
+        await emailService.sendEmail({ to: admin.email, subject: title, text: body }).catch((e) =>
+          logger.warn('Failed to send FX inventory email to admin:', e)
+        );
+      }
+    };
+
+    const notifyAgent = async (agentId: string | null | undefined, title: string, body: string) => {
+      if (!agentId) return;
+      const info = await resolveAgentNotifyInfo(agentId);
+      if (!info) return;
+      await notificationService.sendNotification({
+        userId: info.userId,
+        type: NotificationType.IN_APP,
+        channel: NotificationChannel.ALL,
+        priority: NotificationPriority.NORMAL,
+        title,
+        body,
+      }).catch((e) => logger.warn('Failed to send FX inventory notification to agent:', e));
+      if (info.email) {
+        await emailService.sendEmail({ to: info.email, subject: title, text: body }).catch((e) =>
+          logger.warn('Failed to send FX inventory email to agent:', e)
+        );
+      }
+    };
+
+    eventBus.on(EventTypes.FX_DISBURSEMENT_REVIEW_REQUIRED, async (event: any) => {
+      try {
+        const { disbursementId, adminIds = [] } = event;
+        for (const adminId of adminIds) {
+          await notifyAdmin(
+            adminId,
+            'Cash Disbursement Awaiting Your Approval',
+            `A cash disbursement request (${disbursementId}) requires your approval.`
+          );
+        }
+      } catch (error) {
+        logger.error('Error handling FX_DISBURSEMENT_REVIEW_REQUIRED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_DISBURSEMENT_APPROVED, async (event: any) => {
+      try {
+        const { disbursementId, agentId, initiatedBy } = event;
+        await notifyAdmin(initiatedBy, 'Cash Disbursement Approved', `Your cash disbursement request (${disbursementId}) has been approved.`);
+        await notifyAgent(agentId, 'Cash Received from HQ', `A cash disbursement (${disbursementId}) has been approved and credited to your balance.`);
+      } catch (error) {
+        logger.error('Error handling FX_DISBURSEMENT_APPROVED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_DISBURSEMENT_REJECTED, async (event: any) => {
+      try {
+        const { disbursementId, agentId, initiatedBy, reason } = event;
+        const suffix = reason ? ` Reason: ${reason}` : '';
+        await notifyAdmin(initiatedBy, 'Cash Disbursement Rejected', `Your cash disbursement request (${disbursementId}) was rejected.${suffix}`);
+        await notifyAgent(agentId, 'Cash Disbursement Rejected', `A cash disbursement (${disbursementId}) intended for you was rejected.${suffix}`);
+      } catch (error) {
+        logger.error('Error handling FX_DISBURSEMENT_REJECTED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_LODGMENT_SUBMITTED, async (event: any) => {
+      try {
+        const { lodgmentId, currency, amount } = event;
+        const recipients = await getComplianceAdminEmails();
+        for (const email of recipients) {
+          await emailService.sendEmail({
+            to: email,
+            subject: 'Cash Lodgment Pending Verification',
+            text: `An agent has submitted a cash lodgment (${lodgmentId}) of ${currency} ${amount} for verification.`,
+          }).catch((e) => logger.warn('Failed to send FX lodgment submitted email:', e));
+        }
+      } catch (error) {
+        logger.error('Error handling FX_LODGMENT_SUBMITTED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_LODGMENT_CONFIRMED, async (event: any) => {
+      try {
+        const { lodgmentId, agentId, varianceAmount } = event;
+        const varianceNote = varianceAmount && Number(varianceAmount) !== 0
+          ? ` A variance of ${varianceAmount} was recorded against your stated amount.`
+          : '';
+        await notifyAgent(agentId, 'Cash Lodgment Confirmed', `Your cash lodgment (${lodgmentId}) has been confirmed.${varianceNote}`);
+      } catch (error) {
+        logger.error('Error handling FX_LODGMENT_CONFIRMED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_LODGMENT_REJECTED, async (event: any) => {
+      try {
+        const { lodgmentId, agentId, reason } = event;
+        const suffix = reason ? ` Reason: ${reason}` : '';
+        await notifyAgent(agentId, 'Cash Lodgment Rejected', `Your cash lodgment (${lodgmentId}) was rejected.${suffix}`);
+      } catch (error) {
+        logger.error('Error handling FX_LODGMENT_REJECTED event:', error);
       }
     });
   }

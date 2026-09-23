@@ -162,8 +162,10 @@ router.post('/signup', authController.signup);
  *       - **COMPLETED** — NIBSS callback received and BVN data verified. The response includes
  *         a `verificationToken` — **save this token**. It is required for all subsequent steps
  *         (send-otp, validate-otp, create-account). Valid for 30 minutes.
- *       - **FAILED** — verification failed (e.g. user denied consent, NIBSS error). Restart
- *         from Step 1a.
+ *       - **FAILED** — verification failed. Either NIBSS-side (user denied consent, NIBSS
+ *         error) or, for the iGree flow, because the submitted firstName/lastName/dateOfBirth/bvn
+ *         didn't match NIBSS's verified BVN record (`errorMessage` names which field(s) mismatched).
+ *         Restart from Step 1a.
  *
  *       **Do NOT call send-otp before this endpoint returns `status: "COMPLETED"`.**
  *     tags: [Authentication]
@@ -178,7 +180,7 @@ router.post('/signup', authController.signup);
  *             properties:
  *               sessionId:
  *                 type: string
- *                 description: The sessionId returned from Step 1a (verify-bvn)
+ *                 description: The sessionId (Consent Hub) or state (iGree) returned from the initiate step
  *                 example: "202615269624757096223712376916"
  *     responses:
  *       200:
@@ -224,10 +226,17 @@ router.post('/signup', authController.signup);
  *     summary: iGree Flow - Step 1 - Initiate BVN consent with self-reported identity fields
  *     description: |
  *       Alternative to the Consent Hub flow (`/signup/nigerian/verify-bvn`). Collects the
- *       customer's bvn, firstName, lastName, dateOfBirth (and optionally email/phoneNumber)
+ *       customer's bvn, firstName, lastName, dateOfBirth, phoneNumber (and optionally email)
  *       up front, then redirects to NIBSS iGree for OTP consent. Once NIBSS redirects back
- *       to the iGree callback, these submitted fields are cross-checked against NIBSS's
- *       verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *       to the iGree callback, bvn/firstName/lastName/dateOfBirth are cross-checked against
+ *       NIBSS's verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *
+ *       phoneNumber is required here — NIBSS iGree does not return a phone number, so this is
+ *       the only source for it, and it's required (unique) on the account created in Step 4.
+ *
+ *       **Recommended flow after this step:** poll bvn-consent-status until COMPLETED, then call
+ *       send-otp with `verificationType: "email"` once and validate-otp — no phone OTP, and the
+ *       separate send-email-otp/validate-email-otp endpoints are not needed for this flow.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -235,17 +244,43 @@ router.post('/signup', authController.signup);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [bvn, firstName, lastName, dateOfBirth]
+ *             required: [bvn, firstName, lastName, dateOfBirth, phoneNumber]
  *             properties:
  *               bvn: { type: string, example: "22222222248" }
  *               firstName: { type: string, example: "John" }
  *               lastName: { type: string, example: "Smith" }
  *               dateOfBirth: { type: string, example: "1990-01-01" }
- *               email: { type: string, example: "john@example.com" }
  *               phoneNumber: { type: string, example: "+2348000000000" }
+ *               email: { type: string, example: "john@example.com" }
  *     responses:
  *       200:
  *         description: Consent initiated — redirect the user to authUrl, then poll bvn-consent-status with the returned state
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     state:
+ *                       type: string
+ *                       description: Use this in bvn-consent-status (as sessionId) to poll for completion
+ *                       example: "a1b2c3d4e5f6"
+ *                     authUrl:
+ *                       type: string
+ *                       description: Redirect the user here to authenticate and consent on the NIBSS iGree portal
+ *                       example: "https://idsandbox.nibss-plc.com.ng/oxauth/restv1/authorize?scope=openid+bvn+profile+address&..."
+ *                     message:
+ *                       type: string
+ *                       example: "iGree consent initiated. Please authenticate to continue."
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       409:
+ *         description: An account with this BVN already exists (KYC already verified)
  */
 router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
 

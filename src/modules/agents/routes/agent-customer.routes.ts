@@ -112,9 +112,13 @@ AgentCustomerRouter.use(authenticate, authorize(UserRole.AGENT));
  *                       nin:
  *                         type: string
  *                         nullable: true
+ *                         description: Partially masked — last 4 digits visible
+ *                         example: "*******4555"
  *                       bvn:
  *                         type: string
  *                         nullable: true
+ *                         description: Partially masked — last 4 digits visible
+ *                         example: "*******9012"
  *                 meta:
  *                   type: object
  *                   properties:
@@ -141,6 +145,7 @@ AgentCustomerRouter.get("/customers", agentCustomerController.listAgentCustomers
  *       Up to 10,000 rows. Same filter parameters as GET /api/agent/customers.
  *       CSV columns: Customer ID, Full Name, Email, Phone Number, Customer Type, KYC Status,
  *       BVN, NIN, Last Transaction Type, Last Transaction Date, Registered At.
+ *       Email, BVN, and NIN columns are partially masked (e.g. "jo**@example.com", "*******4555").
  *     tags: [Agent Customers]
  *     security:
  *       - bearerAuth: []
@@ -260,6 +265,8 @@ AgentCustomerRouter.get("/customers/stats", agentCustomerController.getCustomerS
  *                       type: string
  *                     email:
  *                       type: string
+ *                       description: Partially masked (e.g. "jo**@example.com")
+ *                       example: "ch**@yopmail.com"
  *                     dateOnboarded:
  *                       type: string
  *                       format: date-time
@@ -275,12 +282,17 @@ AgentCustomerRouter.get("/customers/stats", agentCustomerController.getCustomerS
  *                         nin:
  *                           type: string
  *                           nullable: true
+ *                           description: Partially masked — last 4 digits visible
+ *                           example: "*******4555"
  *                         bvn:
  *                           type: string
  *                           nullable: true
+ *                           description: Partially masked — last 4 digits visible
+ *                           example: "*******9012"
  *                         tin:
  *                           type: string
  *                           nullable: true
+ *                           description: Partially masked — last 4 digits visible
  *                         formAId:
  *                           type: string
  *                           nullable: true

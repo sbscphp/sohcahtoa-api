@@ -177,6 +177,52 @@ router.post("/tickets", uploadTicketAttachment, agentSupportController.createTic
  *     responses:
  *       200:
  *         description: Tickets retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           caseType:
+ *                             type: string
+ *                           category:
+ *                             type: string
+ *                           timestamp:
+ *                             type: string
+ *                             format: date-time
+ *                           status:
+ *                             type: string
+ *                             enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+ *                           description:
+ *                             type: string
+ *                           customerName:
+ *                             type: string
+ *                             nullable: true
+ *                             description: Falls back to the customer's email if no profile name is on file
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         total:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
@@ -238,6 +284,35 @@ router.get("/tickets", agentSupportController.listTickets);
  *                     customerEmail:
  *                       type: string
  *                       format: email
+ *                       description: Partially masked (e.g. "jo**@example.com")
+ *                     customerName:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Falls back to the masked customer email if no profile name is on file
+ *                       example: "Chidi Nwosu"
+ *                     attachments:
+ *                       type: array
+ *                       description: Files uploaded when the ticket was created
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           fileUrl:
+ *                             type: string
+ *                             example: "https://res.cloudinary.com/.../work_orders_export.pdf"
+ *                           fileName:
+ *                             type: string
+ *                             nullable: true
+ *                           fileSize:
+ *                             type: integer
+ *                             nullable: true
+ *                           mimeType:
+ *                             type: string
+ *                           uploadedAt:
+ *                             type: string
+ *                             format: date-time
  *                     messages:
  *                       type: array
  *                       items:
@@ -246,6 +321,7 @@ router.get("/tickets", agentSupportController.listTickets);
  *                           senderMail:
  *                             type: string
  *                             format: email
+ *                             description: Masked when the sender is the customer; shown in full for admin/staff replies
  *                           senderTimestamp:
  *                             type: string
  *                             format: date-time
