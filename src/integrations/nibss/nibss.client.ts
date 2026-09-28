@@ -286,15 +286,15 @@ export class NIBSSClient {
     // BIVS
     this.bivsClientId        = process.env.NIBSS_BIVS_CLIENT_ID       || '';
     this.bivsClientSecret    = process.env.NIBSS_BIVS_CLIENT_SECRET   || '';
-    this.bivsBaseUrl         = process.env.NIBSS_BIVS_BASE_URL        || 'https://apitest.nibss-plc.com.ng:1443';
-    this.bivsResetUrl        = process.env.NIBSS_BIVS_RESET_URL       || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.bivsBaseUrl         = process.env.NIBSS_BIVS_BASE_URL        || 'https://apitest.nibss-plc.com.ng';
+    this.bivsResetUrl        = process.env.NIBSS_BIVS_RESET_URL       || 'https://apitest.nibss-plc.com.ng/reset';
     this.bivsClientUsername  = process.env.NIBSS_BIVS_CLIENT_USERNAME || '';
     this.tinIdentityBaseUrl  = process.env.NIBSS_TIN_BASE_URL         || 'https://apitest.nibss-plc.com.ng/identity/v2';
 
     // Consent Hub / FAS (same credentials)
     this.consentClientId     = process.env.NIBSS_CONSENT_CLIENT_ID     || '';
     this.consentClientSecret = process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
-    this.consentResetUrl     = process.env.NIBSS_CONSENT_RESET_URL     || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.consentResetUrl     = process.env.NIBSS_CONSENT_RESET_URL     || 'https://apitest.nibss-plc.com.ng/reset';
 
     // FAS-specific credentials — fall back to consent credentials if not set
     this.fasClientId     = process.env.NIBSS_FAS_CLIENT_ID     || this.consentClientId;
@@ -322,7 +322,7 @@ export class NIBSSClient {
     // iGree — retrieval phase (Step 4 data fetch): separate NIBSS app registration + own token
     this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || '';
     this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || '';
-    this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || 'https://apitest.nibss-plc.com.ng/reset';
     this.iGreeConsumerCustomId      = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || this.iGreeRetrievalClientId;
     this.iGreeChannelCode           = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
 
