@@ -80,92 +80,22 @@ router.post('/signup', authController.signup);
 
 /**
  * @swagger
- * /api/auth/signup/nigerian/verify-bvn:
- *   post:
- *     summary: "Nigerian signup — Step 1a: Initiate BVN consent"
- *     description: |
- *       Initiates the NIBSS Consent Hub flow for BVN verification.
- *
- *       **Important:** This endpoint does NOT return a `verificationToken`. It returns a
- *       `sessionId` and a `consentUrl`. The frontend must:
- *       1. Redirect or open `consentUrl` so the user can authenticate on the NIBSS portal.
- *       2. Poll **Step 1b** (`POST /api/auth/signup/nigerian/bvn-consent-status`) with the
- *          returned `sessionId` until `status` becomes `"COMPLETED"`.
- *       3. Save the `verificationToken` from the Step 1b response — this is what all
- *          subsequent steps (send-otp, validate-otp, create-account) require.
- *
- *       **Do NOT call send-otp before Step 1b returns `COMPLETED`.**
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - bvn
- *             properties:
- *               bvn:
- *                 type: string
- *                 description: 11-digit BVN number
- *                 example: "12345678901"
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Optional — used as fallback if BVN has no email on record
- *                 example: "user@example.com"
- *               phoneNumber:
- *                 type: string
- *                 description: Optional — used as fallback if BVN has no phone on record
- *                 example: "+2348012345678"
- *     responses:
- *       200:
- *         description: Consent initiated — redirect user to consentUrl, then poll bvn-consent-status
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     sessionId:
- *                       type: string
- *                       description: Use this in Step 1b (bvn-consent-status) to poll for completion
- *                       example: "202615269624757096223712376916"
- *                     consentUrl:
- *                       type: string
- *                       description: Open this URL so the user can authenticate on the NIBSS portal
- *                       example: "https://consent.nibss-plc.com.ng/auth?session=abc123"
- *                     message:
- *                       type: string
- *                       example: "BVN consent initiated. Please authenticate on the NIBSS portal to continue."
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         description: Too many requests
- */
-/**
- * @swagger
  * /api/auth/signup/nigerian/bvn-consent-status:
  *   post:
  *     summary: "Nigerian signup — Step 1b: Poll BVN consent status"
  *     description: |
- *       Polls the status of the NIBSS consent initiated in Step 1a. The frontend must call
- *       this endpoint repeatedly (e.g. every 2–3 seconds) until `status` is `"COMPLETED"`
- *       or `"FAILED"`.
+ *       Polls the status of the iGree consent initiated in Step 1 (`/signup/nigerian/igree/initiate`).
+ *       The frontend must call this endpoint repeatedly (e.g. every 2–3 seconds) until `status`
+ *       is `"COMPLETED"` or `"FAILED"`.
  *
  *       - **PENDING** — user has not yet authenticated on the NIBSS portal. Keep polling.
  *       - **COMPLETED** — NIBSS callback received and BVN data verified. The response includes
  *         a `verificationToken` — **save this token**. It is required for all subsequent steps
  *         (send-otp, validate-otp, create-account). Valid for 30 minutes.
  *       - **FAILED** — verification failed. Either NIBSS-side (user denied consent, NIBSS
- *         error) or, for the iGree flow, because the submitted firstName/lastName/dateOfBirth/bvn
- *         didn't match NIBSS's verified BVN record (`errorMessage` names which field(s) mismatched).
- *         Restart from Step 1a.
+ *         error) or because the submitted firstName/lastName/dateOfBirth/bvn didn't match
+ *         NIBSS's verified BVN record (`errorMessage` names which field(s) mismatched).
+ *         Restart from Step 1.
  *
  *       **Do NOT call send-otp before this endpoint returns `status: "COMPLETED"`.**
  *     tags: [Authentication]
@@ -180,7 +110,7 @@ router.post('/signup', authController.signup);
  *             properties:
  *               sessionId:
  *                 type: string
- *                 description: The sessionId (Consent Hub) or state (iGree) returned from the initiate step
+ *                 description: The state returned from Step 1 (igree/initiate)
  *                 example: "202615269624757096223712376916"
  *     responses:
  *       200:
@@ -202,7 +132,7 @@ router.post('/signup', authController.signup);
  *                       description: |
  *                         PENDING = still waiting for user to authenticate on NIBSS portal.
  *                         COMPLETED = BVN verified, verificationToken is available.
- *                         FAILED = verification failed, must restart from Step 1a.
+ *                         FAILED = verification failed, must restart from Step 1.
  *                       example: "COMPLETED"
  *                     verificationToken:
  *                       type: string
@@ -223,13 +153,13 @@ router.post('/signup', authController.signup);
  * @swagger
  * /api/auth/signup/nigerian/igree/initiate:
  *   post:
- *     summary: iGree Flow - Step 1 - Initiate BVN consent with self-reported identity fields
+ *     summary: "Nigerian signup — Step 1: Initiate BVN consent (iGree)"
  *     description: |
- *       Alternative to the Consent Hub flow (`/signup/nigerian/verify-bvn`). Collects the
- *       customer's bvn, firstName, lastName, dateOfBirth, phoneNumber (and optionally email)
- *       up front, then redirects to NIBSS iGree for OTP consent. Once NIBSS redirects back
- *       to the iGree callback, bvn/firstName/lastName/dateOfBirth are cross-checked against
- *       NIBSS's verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *       Collects the customer's bvn, firstName, lastName, dateOfBirth, phoneNumber
+ *       (and optionally email) up front, then redirects to NIBSS iGree for OTP consent.
+ *       This is the only supported BVN verification method for Nigerian signup. Once NIBSS
+ *       redirects back to the iGree callback, bvn/firstName/lastName/dateOfBirth are cross-checked
+ *       against NIBSS's verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
  *
  *       phoneNumber is required here — NIBSS iGree does not return a phone number, so this is
  *       the only source for it, and it's required (unique) on the account created in Step 4.
@@ -290,8 +220,7 @@ router.post('/nibss/igree/callback', authController.iGreeCallback);
 
 // NIBSS Consent Hub callback is mounted at /callback (top-level) in app.ts
 
-// Nigerian signup flow (4 steps)
-router.post('/signup/nigerian/verify-bvn', authController.verifyBvn); // Step 1a: initiates consent, returns sessionId + consentUrl
+// Nigerian signup flow (iGree only — see /signup/nigerian/igree/initiate above for Step 1)
 router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsentStatus); // Step 1b: poll until COMPLETED, returns verificationToken
 /**
  * @swagger
@@ -328,8 +257,11 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Whether to send the OTP to the BVN-registered phone or email
- *                 example: phone
+ *                 description: |
+ *                   Use "email". NIBSS iGree doesn't return/verify a phone number, so "phone"
+ *                   would send to the self-reported (not NIBSS-verified) number from Step 1 —
+ *                   email is the recommended and only NIBSS-verified channel for this flow.
+ *                 example: email
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -380,7 +312,7 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *         description: |
  *           Invalid or expired verificationToken. This usually means Step 1b was not
  *           completed before calling this endpoint, or the 30-minute session has expired.
- *           Restart from Step 1a (verify-bvn).
+ *           Restart from Step 1 (igree/initiate).
  *       429:
  *         description: Too many requests
  */
@@ -501,158 +433,6 @@ router.post('/signup/nigerian/resend-otp', authController.sendBvnOtp);
  *         description: Too many requests
  */
 router.post('/signup/nigerian/validate-otp', authController.validateBvnOtp); // Step 3
-
-/**
- * @swagger
- * /api/auth/signup/nigerian/send-email-otp:
- *   post:
- *     summary: Step 3.5 - Send OTP to email for Nigerian citizen
- *     description: After validating the phone OTP from BVN, send an additional OTP to the user's email for verification.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1 (BVN verification)
- *                 example: "abc123xyz789"
- *     responses:
- *       200:
- *         description: OTP sent successfully to email
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: "OTP sent successfully to your email"
- *                     email:
- *                       type: string
- *                       description: Redacted email address
- *                       example: "c***@example.com"
- *                     otp:
- *                       type: string
- *                       description: OTP code (only in development)
- *                       example: "123456"
- *       400:
- *         description: Invalid or expired verification token
- *       429:
- *         description: Too many requests
- */
-router.post('/signup/nigerian/send-email-otp', authController.sendNigerianEmailOtp); // Step 3.5
-
-/**
- * @swagger
- * /api/auth/signup/nigerian/resend-email-otp:
- *   post:
- *     summary: Resend email OTP for Nigerian signup
- *     description: Resend OTP to email during step 3.5 of the Nigerian signup flow. Uses the same verification token.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1
- *                 example: "abc123xyz789"
- *     responses:
- *       200:
- *         description: Email OTP resent successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: OTP sent successfully to your email
- *                     email:
- *                       type: string
- *                       example: "c***@example.com"
- *                     otp:
- *                       type: string
- *                       description: Only included in non-production environments
- *                       example: "123456"
- *       400:
- *         description: Invalid or expired verification token
- *       429:
- *         description: Too many requests
- */
-router.post('/signup/nigerian/resend-email-otp', authController.sendNigerianEmailOtp);
-
-/**
- * @swagger
- * /api/auth/signup/nigerian/validate-email-otp:
- *   post:
- *     summary: Step 3.6 - Validate email OTP for Nigerian citizen
- *     description: Validate the OTP sent to the user's email address.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *               - otp
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1 (BVN verification)
- *                 example: "abc123xyz789"
- *               otp:
- *                 type: string
- *                 description: OTP code received via email
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: Email OTP validated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: "Email OTP validated successfully. Please proceed to create your account."
- *       400:
- *         description: Invalid OTP or expired verification token
- *       429:
- *         description: Too many requests
- */
-router.post('/signup/nigerian/validate-email-otp', authController.validateNigerianEmailOtp); // Step 3.6
 
 /**
  * @swagger

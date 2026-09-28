@@ -16,13 +16,19 @@ const AgentCustomerAuthRouter: Router = Router();
 AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
 /**
  * @swagger
- * /api/agent/customer-auth/verify-bvn:
+ * /api/agent/customer-auth/igree/initiate:
  *   post:
- *     summary: Step 1 - Verify Nigerian BVN for agent-created customer
- *     description: >
- *       Verifies BVN for a customer being onboarded by an agent and returns a verification token.
- *       Sensitive data (BVN, email, phone, address) is stored server-side for security.
- *       This mirrors the standard Nigerian signup BVN verification flow.
+ *     summary: Step 1 - Initiate BVN consent (iGree) for agent-created customer
+ *     description: |
+ *       Agent submits the customer's bvn, firstName, lastName, dateOfBirth, phoneNumber
+ *       (and optionally email) up front, then the customer (or agent, on their behalf)
+ *       authenticates on NIBSS's iGree portal via the returned authUrl. Once NIBSS redirects
+ *       back to the iGree callback, these submitted fields are cross-checked against NIBSS's
+ *       verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *       The customer is linked to this agent later, at account-creation time.
+ *
+ *       **Recommended flow after this step:** poll bvn-consent-status until COMPLETED, then call
+ *       send-otp with `verificationType: "email"` once and validate-otp — no phone OTP needed.
  *     tags: [Agent Customer Authentication]
  *     security:
  *       - bearerAuth: []
@@ -32,16 +38,17 @@ AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - bvn
+ *             required: [bvn, firstName, lastName, dateOfBirth, phoneNumber]
  *             properties:
- *               bvn:
- *                 type: string
- *                 description: 11-digit BVN number
- *                 example: "12345678901"
+ *               bvn: { type: string, example: "22222222248" }
+ *               firstName: { type: string, example: "John" }
+ *               lastName: { type: string, example: "Smith" }
+ *               dateOfBirth: { type: string, example: "1990-01-01" }
+ *               phoneNumber: { type: string, example: "+2348000000000" }
+ *               email: { type: string, example: "john@example.com" }
  *     responses:
  *       200:
- *         description: BVN verified successfully for agent-created customer
+ *         description: Consent initiated — redirect to authUrl, then poll bvn-consent-status with the returned state
  *         content:
  *           application/json:
  *             schema:
@@ -53,19 +60,54 @@ AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
  *                 data:
  *                   type: object
  *                   properties:
- *                     verificationToken:
+ *                     state:
  *                       type: string
- *                       description: Token to use in subsequent steps (valid for 30 minutes). All sensitive data is stored server-side in Redis.
- *                       example: "abc123xyz789"
+ *                       description: Use this in bvn-consent-status (as sessionId) to poll for completion
+ *                       example: "a1b2c3d4e5f6"
+ *                     authUrl:
+ *                       type: string
+ *                       description: Redirect here to authenticate and consent on the NIBSS iGree portal
  *                     message:
  *                       type: string
- *                       example: "BVN verified successfully. Use the verification token to proceed."
  *       400:
  *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         description: Too many requests
+ *       409:
+ *         description: An account with this BVN already exists (KYC already verified)
  */
-AgentCustomerAuthRouter.post('/verify-bvn', authController.verifyBvn);
+AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
+
+/**
+ * @swagger
+ * /api/agent/customer-auth/bvn-consent-status:
+ *   post:
+ *     summary: Step 1b - Poll BVN consent status for agent-created customer
+ *     description: |
+ *       Polls the status of the iGree consent initiated in Step 1. Call repeatedly (e.g. every
+ *       2–3 seconds) until status is COMPLETED (returns verificationToken — save it, required
+ *       for send-otp/validate-otp/create-account) or FAILED (identity mismatch or NIBSS error;
+ *       restart from Step 1).
+ *     tags: [Agent Customer Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sessionId
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: The state returned from Step 1 (igree/initiate)
+ *     responses:
+ *       200:
+ *         description: Consent status response
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+AgentCustomerAuthRouter.post('/bvn-consent-status', authController.checkBvnConsentStatus);
 
 /**
  * @swagger
@@ -95,8 +137,9 @@ AgentCustomerAuthRouter.post('/verify-bvn', authController.verifyBvn);
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Method to receive OTP (phone or email from BVN data)
- *                 example: phone
+ *                 description: |
+ *                   Use "email" — email is the only NIBSS-verified channel for this flow.
+ *                 example: email
  *     responses:
  *       200:
  *         description: OTP sent successfully for agent-created customer
@@ -170,8 +213,8 @@ AgentCustomerAuthRouter.post('/send-otp', authController.sendBvnOtp);
  *               verificationType:
  *                 type: string
  *                 enum: [phone, email]
- *                 description: Method to receive OTP (phone or email)
- *                 example: phone
+ *                 description: Use "email" — email is the only NIBSS-verified channel for this flow.
+ *                 example: email
  *     responses:
  *       200:
  *         description: OTP resent successfully for agent-created customer
@@ -265,170 +308,6 @@ AgentCustomerAuthRouter.post('/resend-otp', authController.sendBvnOtp);
  *         description: Too many requests
  */
 AgentCustomerAuthRouter.post('/validate-otp', authController.validateBvnOtp);
-
-/**
- * @swagger
- * /api/agent/customer-auth/send-email-otp:
- *   post:
- *     summary: Step 3.5 - Send email OTP for agent-created Nigerian customer
- *     description: >
- *       After validating the phone OTP from BVN, send an additional OTP to the customer's email for verification.
- *       This mirrors the standard Nigerian email OTP sending step.
- *     tags: [Agent Customer Authentication]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1 (BVN verification)
- *                 example: "abc123xyz789"
- *     responses:
- *       200:
- *         description: Email OTP sent successfully for agent-created customer
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: "OTP sent successfully to your email"
- *                     email:
- *                       type: string
- *                       description: Redacted email address
- *                       example: "c***@example.com"
- *                     otp:
- *                       type: string
- *                       description: OTP code (only in development)
- *                       example: "123456"
- *       400:
- *         description: Invalid or expired verification token
- *       429:
- *         description: Too many requests
- */
-AgentCustomerAuthRouter.post('/send-email-otp', authController.sendNigerianEmailOtp);
-
-/**
- * @swagger
- * /api/agent/customer-auth/resend-email-otp:
- *   post:
- *     summary: Resend email OTP for agent-created Nigerian customer
- *     description: >
- *       Resend OTP to email during step 3.5 of the agent-managed Nigerian customer signup flow.
- *       Uses the same verification token and mirrors the standard Nigerian resend email OTP behavior.
- *     tags: [Agent Customer Authentication]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1
- *                 example: "abc123xyz789"
- *     responses:
- *       200:
- *         description: Email OTP resent successfully for agent-created customer
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: "OTP sent successfully to your email"
- *                     email:
- *                       type: string
- *                       example: "c***@example.com"
- *                     otp:
- *                       type: string
- *                       description: Only included in non-production environments
- *                       example: "123456"
- *       400:
- *         description: Invalid or expired verification token
- *       429:
- *         description: Too many requests
- */
-AgentCustomerAuthRouter.post('/resend-email-otp', authController.sendNigerianEmailOtp);
-
-/**
- * @swagger
- * /api/agent/customer-auth/validate-email-otp:
- *   post:
- *     summary: Step 3.6 - Validate email OTP for agent-created Nigerian customer
- *     description: >
- *       Validate the OTP sent to the customer's email address.
- *       This mirrors the standard Nigerian email OTP validation step and prepares for account creation under the agent.
- *     tags: [Agent Customer Authentication]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - verificationToken
- *               - otp
- *             properties:
- *               verificationToken:
- *                 type: string
- *                 description: Verification token from step 1 (BVN verification)
- *                 example: "abc123xyz789"
- *               otp:
- *                 type: string
- *                 description: OTP code received via email
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: Email OTP validated successfully for agent-created customer
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       example: "Email OTP validated successfully. Please proceed to create the customer account under the agent."
- *       400:
- *         description: Invalid OTP or expired verification token
- *       429:
- *         description: Too many requests
- */
-AgentCustomerAuthRouter.post('/validate-email-otp', authController.validateNigerianEmailOtp);
 
 /**
  * @swagger
