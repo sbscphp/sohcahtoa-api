@@ -28,6 +28,19 @@ class AgentFxInventoryController {
     res.json(successResponse(data.data, { pagination: data.pagination }));
   });
 
+  confirmReceipt = asyncHandler(async (req: Request, res: Response) => {
+    const agentUserId = (req as any).user?.userId as string;
+    const data = await agentFxInventoryService.confirmReceipt(agentUserId, req.params.id);
+    res.json(successResponse(data));
+  });
+
+  rejectReceipt = asyncHandler(async (req: Request, res: Response) => {
+    const agentUserId = (req as any).user?.userId as string;
+    if (!req.body?.reason) throw new ValidationError("reason is required");
+    const data = await agentFxInventoryService.rejectReceipt(agentUserId, req.params.id, req.body.reason);
+    res.json(successResponse(data));
+  });
+
   listMyDisbursements = asyncHandler(async (req: Request, res: Response) => {
     const agentUserId = (req as any).user?.userId as string;
     const data = await agentFxInventoryService.listMyDisbursements(agentUserId, {

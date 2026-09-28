@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError, createLogger, generateTransactionRefere
 import { ActionType } from "../../../shared/types/action-type";
 import { auditTrailService } from "./audit-trail.service";
 import { workflowService } from "./workflow.service";
+import { adminTransactionsService } from "./admin-transactions.service";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 
 const prisma: any = getDatabase();
@@ -89,7 +90,25 @@ class FxInventoryService {
    * Applies the balance-mutating side of a disbursement: inventory decreases, agent balance increases.
    * Must only be called once a disbursement is truly approved (final stage, or auto-approved).
    */
-  private async applyDisbursementToBalances(disbursement: { id: string; branchId: string; agentId: string; currency: string; amount: number }) {
+  /**
+   * Converts an amount to its NGN equivalent for approval-matrix matching.
+   * The disbursement amount/currency itself is unaffected — this is only
+   * used so approval thresholds can be configured in a single base currency (NGN)
+   * regardless of which currency is actually being disbursed.
+   */
+  async convertToNgn(currency: string, amount: number): Promise<number> {
+    const code = currency.toUpperCase();
+    if (code === "NGN") return amount;
+    const rate = await adminTransactionsService.getExchangeRate(code);
+    return amount * rate;
+  }
+
+  /**
+   * Applies the balance-mutating side of an approved disbursement. Called only once
+   * the AGENT confirms receipt of the cash — not at admin approval time — since the
+   * cash hasn't actually changed hands until then.
+   */
+  async applyDisbursementToBalances(disbursement: { id: string; branchId: string; agentId: string; currency: string; amount: number }) {
     // Balance rows may not exist yet — create them first, outside the batched array
     // (Prisma's array-form $transaction can't run dependent reads between writes).
     const [inventoryBalance, agentBalance] = await Promise.all([
@@ -205,10 +224,14 @@ class FxInventoryService {
     }
 
     const referenceNumber = generateTransactionReference("FXD");
-    const template = await workflowService.findApplicableWorkflow({ approvalType: "FX_CASH_DISBURSEMENT", amount });
+    // Approval thresholds are configured in NGN regardless of the currency being
+    // disbursed, so convert to NGN equivalent before matching against the approval matrix.
+    const ngnEquivalent = await this.convertToNgn(currency, amount);
+    const template = await workflowService.findApplicableWorkflow({ approvalType: "FX_CASH_DISBURSEMENT", amount: ngnEquivalent });
 
     if (!template || !template.stages?.length) {
-      // No workflow configured — auto-approve immediately and apply balances now.
+      // No workflow configured — admin side auto-approved. Balances are still NOT
+      // applied yet: the agent must confirm receipt of the physical cash first.
       const disbursement = await prisma.cashDisbursement.create({
         data: {
           referenceNumber,
@@ -224,8 +247,6 @@ class FxInventoryService {
           history: { create: { action: "AUTO_APPROVED", performedBy: adminId } },
         },
       });
-
-      await this.applyDisbursementToBalances({ id: disbursement.id, branchId: agent.branchId, agentId, currency, amount });
 
       await auditTrailService.logAction({
         adminId,
@@ -405,11 +426,8 @@ class FxInventoryService {
 
     await prisma.cashDisbursementHistory.create({ data: { disbursementId: id, action: "APPROVED", performedBy: adminId, reason } });
 
-    await this.applyDisbursementToBalances({
-      id: disbursement.id, branchId: disbursement.branchId, agentId: disbursement.agentId,
-      currency: disbursement.currency, amount: Number(disbursement.amount),
-    });
-
+    // Balances are NOT applied here — only once the agent confirms receipt of the
+    // physical cash (see agent-fx-inventory.service.ts#confirmReceipt).
     await auditTrailService.logAction({
       adminId, actionType: ActionType.FX_DISBURSEMENT_APPROVE, resourceType: "CashDisbursement", resourceId: id,
       newState: { status: "APPROVED" }, reason,
@@ -417,7 +435,7 @@ class FxInventoryService {
 
     eventBus.publish(EventTypes.FX_DISBURSEMENT_APPROVED, { disbursementId: id, agentId: disbursement.agentId, initiatedBy: disbursement.initiatedBy, approvedBy: adminId });
 
-    return { message: "Cash disbursement approved and applied to balances.", isFinalApproval: true };
+    return { message: "Cash disbursement approved. Awaiting agent confirmation of receipt.", isFinalApproval: true };
   }
 
   async rejectDisbursement(id: string, adminId: string, reason: string) {

@@ -266,13 +266,14 @@ export class WorkflowService {
     approvalType?: string;
     excludeId?: string;
   }) {
+    // Scoped by name only — NOT by approvalType. Amount-banded approval matrices
+    // (e.g. FX_CASH_DISBURSEMENT tiers) rely on multiple simultaneously-ACTIVE
+    // templates of the same approvalType with different minAmount/maxAmount bands;
+    // archiving every sibling with a matching approvalType would break that.
     const where: any = {
       status: "ACTIVE",
+      name: { equals: (params.name || "").trim(), mode: "insensitive" },
       ...(params.excludeId ? { id: { not: params.excludeId } } : {}),
-      OR: [
-        { name: { equals: (params.name || "").trim(), mode: "insensitive" } },
-        { approvalType: (params.approvalType || "TRANSACTION") as any },
-      ],
     };
 
     await client.workflowTemplate.updateMany({

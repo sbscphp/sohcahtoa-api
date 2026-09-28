@@ -1568,10 +1568,36 @@ export class NotificationHandler {
     eventBus.on(EventTypes.FX_DISBURSEMENT_APPROVED, async (event: any) => {
       try {
         const { disbursementId, agentId, initiatedBy } = event;
-        await notifyAdmin(initiatedBy, 'Cash Disbursement Approved', `Your cash disbursement request (${disbursementId}) has been approved.`);
-        await notifyAgent(agentId, 'Cash Received from HQ', `A cash disbursement (${disbursementId}) has been approved and credited to your balance.`);
+        await notifyAdmin(initiatedBy, 'Cash Disbursement Approved', `Your cash disbursement request (${disbursementId}) has been approved and is awaiting the agent's confirmation of receipt.`);
+        await notifyAgent(agentId, 'Cash Disbursement Awaiting Your Confirmation', `A cash disbursement (${disbursementId}) has been approved for you. Please confirm receipt once you have the cash in hand.`);
       } catch (error) {
         logger.error('Error handling FX_DISBURSEMENT_APPROVED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_DISBURSEMENT_RECEIPT_CONFIRMED, async (event: any) => {
+      try {
+        const { disbursementId, initiatedBy, approvedBy } = event;
+        const body = `The agent has confirmed receipt of cash disbursement (${disbursementId}). Balances have been updated and it is now marked Completed.`;
+        await notifyAdmin(initiatedBy, 'Cash Disbursement Completed', body);
+        if (approvedBy && approvedBy !== initiatedBy) {
+          await notifyAdmin(approvedBy, 'Cash Disbursement Completed', body);
+        }
+      } catch (error) {
+        logger.error('Error handling FX_DISBURSEMENT_RECEIPT_CONFIRMED event:', error);
+      }
+    });
+
+    eventBus.on(EventTypes.FX_DISBURSEMENT_RECEIPT_REJECTED, async (event: any) => {
+      try {
+        const { disbursementId, initiatedBy, approvedBy, reason } = event;
+        const body = `The agent disputed receipt of cash disbursement (${disbursementId}). Reason: ${reason}. It remains awaiting the agent's confirmation.`;
+        await notifyAdmin(initiatedBy, 'Cash Disbursement Receipt Rejected by Agent', body);
+        if (approvedBy && approvedBy !== initiatedBy) {
+          await notifyAdmin(approvedBy, 'Cash Disbursement Receipt Rejected by Agent', body);
+        }
+      } catch (error) {
+        logger.error('Error handling FX_DISBURSEMENT_RECEIPT_REJECTED event:', error);
       }
     });
 

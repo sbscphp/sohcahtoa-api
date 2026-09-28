@@ -72,10 +72,14 @@ FxInventoryRouter.get(
  *   post:
  *     summary: Cash Disbursement (initiation) - Admin records cash released to an Agent
  *     description: |
- *       Creates a cash disbursement request. If an ACTIVE workflow template exists for
- *       approvalType FX_CASH_DISBURSEMENT matching the amount, the request is created as
- *       PENDING_APPROVAL and routed to the first stage's assignees. If no matching template
- *       exists, the disbursement is auto-approved immediately and balances are updated right away.
+ *       Creates a cash disbursement request. The amount is converted to its NGN equivalent
+ *       (using the current exchange rate) to match against the approval matrix, since approval
+ *       thresholds are configured in NGN regardless of the currency being disbursed. If an ACTIVE
+ *       workflow template exists for approvalType FX_CASH_DISBURSEMENT matching that NGN amount,
+ *       the request is created as PENDING_APPROVAL and routed to the first stage's assignees. If
+ *       no matching template exists, it's auto-approved on the admin side (status APPROVED).
+ *       Either way, balances are NOT updated yet — the agent must confirm receipt of the physical
+ *       cash first (see POST /api/agent/fx-inventory/disbursements/{id}/confirm-receipt).
  *     tags: [admin-fx-inventory]
  *     security:
  *       - bearerAuth: []
@@ -93,7 +97,7 @@ FxInventoryRouter.get(
  *               purpose: { type: string, example: "Weekly float top-up" }
  *     responses:
  *       201:
- *         description: Disbursement initiated (PENDING_APPROVAL or auto-approved)
+ *         description: Disbursement initiated (PENDING_APPROVAL or auto-approved; agent receipt confirmation still required either way)
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -106,7 +110,7 @@ FxInventoryRouter.get(
  *     parameters:
  *       - in: query
  *         name: status
- *         schema: { type: string, enum: [PENDING_APPROVAL, APPROVED, REJECTED] }
+ *         schema: { type: string, enum: [PENDING_APPROVAL, APPROVED, REJECTED, COMPLETED] }
  *       - in: query
  *         name: branchId
  *         schema: { type: string, format: uuid }
@@ -171,7 +175,7 @@ FxInventoryRouter.get(
  * @swagger
  * /api/admin/fx-inventory/disbursements/{id}/approve:
  *   post:
- *     summary: Approve a cash disbursement (advances stage, or applies balances on final approval)
+ *     summary: Approve a cash disbursement (advances to next stage, or marks APPROVED awaiting agent receipt confirmation on final approval — balances are not applied yet)
  *     tags: [admin-fx-inventory]
  *     security:
  *       - bearerAuth: []

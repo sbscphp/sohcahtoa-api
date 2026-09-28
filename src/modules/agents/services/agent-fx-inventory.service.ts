@@ -1,7 +1,8 @@
 import { getDatabase } from "../../../config/database";
-import { ValidationError, createLogger, generateTransactionReference } from "../../../shared/utils";
+import { NotFoundError, ValidationError, createLogger, generateTransactionReference } from "../../../shared/utils";
 import { eventBus, EventTypes } from "../../../events/event-bus";
 import { UserRole } from "../../../shared/types";
+import { fxInventoryService } from "../../admin/services/fx-inventory.service";
 
 const prisma: any = getDatabase();
 const logger = createLogger("AgentFxInventoryService");
@@ -89,6 +90,75 @@ class AgentFxInventoryService {
     };
   }
 
+  /**
+   * Agent confirms physical receipt of a disbursement already approved on the admin side.
+   * This is the point at which balances actually move — the agent's cash balance increases
+   * and the branch's FX inventory decreases — since the cash has now genuinely changed hands.
+   */
+  async confirmReceipt(agentUserId: string, disbursementId: string) {
+    const agent = await this.resolveAgent(agentUserId);
+
+    const disbursement = await prisma.cashDisbursement.findFirst({ where: { id: disbursementId, agentId: agent.id } });
+    if (!disbursement) throw new NotFoundError("Cash disbursement not found");
+    if (disbursement.status !== "APPROVED") {
+      throw new ValidationError(`Cannot confirm receipt — disbursement is currently ${disbursement.status}`);
+    }
+
+    const updated = await prisma.cashDisbursement.update({
+      where: { id: disbursementId },
+      data: { status: "COMPLETED", receiptConfirmedAt: new Date() },
+    });
+
+    await prisma.cashDisbursementHistory.create({
+      data: { disbursementId, action: "RECEIPT_CONFIRMED", performedBy: agent.id },
+    });
+
+    await fxInventoryService.applyDisbursementToBalances({
+      id: disbursement.id, branchId: disbursement.branchId, agentId: disbursement.agentId,
+      currency: disbursement.currency, amount: Number(disbursement.amount),
+    });
+
+    logger.info("Agent confirmed disbursement receipt", { agentId: agent.id, disbursementId });
+    eventBus.publish(EventTypes.FX_DISBURSEMENT_RECEIPT_CONFIRMED, {
+      disbursementId, agentId: agent.id, initiatedBy: disbursement.initiatedBy, approvedBy: disbursement.approvedBy,
+    });
+
+    return { ...updated, amount: Number(updated.amount) };
+  }
+
+  /**
+   * Agent rejects a disbursement they were told to expect — e.g. the cash never actually
+   * arrived. Per spec this does NOT terminate the disbursement: it stays awaiting the
+   * agent's decision (status remains APPROVED) so the agent can still confirm later once
+   * resolved. No balance change either way.
+   */
+  async rejectReceipt(agentUserId: string, disbursementId: string, reason: string) {
+    if (!reason?.trim()) throw new ValidationError("A rejection reason is required");
+    const agent = await this.resolveAgent(agentUserId);
+
+    const disbursement = await prisma.cashDisbursement.findFirst({ where: { id: disbursementId, agentId: agent.id } });
+    if (!disbursement) throw new NotFoundError("Cash disbursement not found");
+    if (disbursement.status !== "APPROVED") {
+      throw new ValidationError(`Cannot reject receipt — disbursement is currently ${disbursement.status}`);
+    }
+
+    const updated = await prisma.cashDisbursement.update({
+      where: { id: disbursementId },
+      data: { receiptRejectedAt: new Date(), receiptRejectionReason: reason },
+    });
+
+    await prisma.cashDisbursementHistory.create({
+      data: { disbursementId, action: "RECEIPT_REJECTED", performedBy: agent.id, reason },
+    });
+
+    logger.info("Agent rejected disbursement receipt", { agentId: agent.id, disbursementId, reason });
+    eventBus.publish(EventTypes.FX_DISBURSEMENT_RECEIPT_REJECTED, {
+      disbursementId, agentId: agent.id, initiatedBy: disbursement.initiatedBy, approvedBy: disbursement.approvedBy, reason,
+    });
+
+    return { ...updated, amount: Number(updated.amount) };
+  }
+
   async listMyDisbursements(agentUserId: string, filters: { status?: string; page?: number; limit?: number } = {}) {
     const agent = await this.resolveAgent(agentUserId);
     const page = Math.max(1, filters.page || 1);
@@ -113,6 +183,10 @@ class AgentFxInventoryService {
         approvedAt: r.approvedAt,
         rejectedAt: r.rejectedAt,
         decisionReason: r.decisionReason,
+        receiptConfirmedAt: r.receiptConfirmedAt,
+        receiptRejectedAt: r.receiptRejectedAt,
+        receiptRejectionReason: r.receiptRejectionReason,
+        canConfirmReceipt: r.status === "APPROVED",
       })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     };

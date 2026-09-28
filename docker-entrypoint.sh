@@ -804,6 +804,15 @@ CREATE INDEX IF NOT EXISTS "cash_lodgments_agentId_idx" ON "cash_lodgments"("age
 CREATE INDEX IF NOT EXISTS "cash_lodgments_branchId_currency_idx" ON "cash_lodgments"("branchId", "currency");
 CREATE INDEX IF NOT EXISTS "cash_lodgments_status_idx" ON "cash_lodgments"("status");
 
+-- Agent receipt confirmation step for cash disbursements
+DO $$ BEGIN
+  ALTER TYPE "CashDisbursementStatus" ADD VALUE IF NOT EXISTS 'COMPLETED';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+ALTER TABLE "cash_disbursements" ADD COLUMN IF NOT EXISTS "receiptConfirmedAt" TIMESTAMP(3);
+ALTER TABLE "cash_disbursements" ADD COLUMN IF NOT EXISTS "receiptRejectedAt" TIMESTAMP(3);
+ALTER TABLE "cash_disbursements" ADD COLUMN IF NOT EXISTS "receiptRejectionReason" TEXT;
+
 DO $$ BEGIN
   ALTER TABLE "fx_inventory_balances" ADD CONSTRAINT "fx_inventory_balances_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "branches"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;

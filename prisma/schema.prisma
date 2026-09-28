@@ -2211,6 +2211,7 @@ enum CashDisbursementStatus {
   PENDING_APPROVAL
   APPROVED
   REJECTED
+  COMPLETED
 }
 
 model CashDisbursement {
@@ -2235,6 +2236,12 @@ model CashDisbursement {
   rejectedBy     String?
   rejectedAt     DateTime?
   decisionReason String?
+
+  // Agent receipt confirmation — balances are only applied once the agent confirms
+  // physically receiving the cash, not at admin approval time.
+  receiptConfirmedAt     DateTime?
+  receiptRejectedAt      DateTime?
+  receiptRejectionReason String?
 
   autoApproved Boolean @default(false)
 

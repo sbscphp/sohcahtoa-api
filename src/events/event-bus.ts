@@ -151,8 +151,10 @@ export const EventTypes = {
   // FX Inventory events
   FX_DISBURSEMENT_INITIATED: 'fx.disbursement.initiated',
   FX_DISBURSEMENT_REVIEW_REQUIRED: 'fx.disbursement.review.required',
-  FX_DISBURSEMENT_APPROVED: 'fx.disbursement.approved',
-  FX_DISBURSEMENT_REJECTED: 'fx.disbursement.rejected',
+  FX_DISBURSEMENT_APPROVED: 'fx.disbursement.approved', // admin-side approval done; awaiting agent receipt confirmation
+  FX_DISBURSEMENT_REJECTED: 'fx.disbursement.rejected', // admin rejected (terminal)
+  FX_DISBURSEMENT_RECEIPT_CONFIRMED: 'fx.disbursement.receipt.confirmed', // agent confirmed — balances applied, disbursement COMPLETED
+  FX_DISBURSEMENT_RECEIPT_REJECTED: 'fx.disbursement.receipt.rejected', // agent rejected receipt — stays awaiting agent decision
   FX_LODGMENT_SUBMITTED: 'fx.lodgment.submitted',
   FX_LODGMENT_CONFIRMED: 'fx.lodgment.confirmed',
   FX_LODGMENT_REJECTED: 'fx.lodgment.rejected',
