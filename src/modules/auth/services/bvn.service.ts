@@ -107,9 +107,11 @@ export class BvnService {
   async verifyBvnWithIGreeCode(code: string): Promise<BvnVerificationResult> {
     try {
       logger.info('iGree: exchanging authorization code for access token');
-      const { accessToken, bvn } = await nibssClient.iGreeExchangeCode(code);
+      // accessToken from the consent-phase exchange is not used for retrieval — that phase
+      // authenticates with its own separate client_credentials token (see nibss.client.ts).
+      const { bvn } = await nibssClient.iGreeExchangeCode(code);
 
-      const result = await nibssClient.iGreeGetBvnDetails(accessToken, bvn);
+      const result = await nibssClient.iGreeGetBvnDetails(bvn);
 
       if (!result.verified || !result.data) {
         return { success: false, message: result.message };

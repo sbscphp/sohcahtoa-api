@@ -26,7 +26,6 @@ import {
 
 const logger = createLogger('AuthService');
 import {
-  SignupRequest,
   LoginRequest,
   LoginResponse,
   OtpRequest,
@@ -83,94 +82,6 @@ function datesMatch(a: string, b: string): boolean {
 }
 
 export class AuthService {
-  async signup(data: SignupRequest): Promise<{ userId: string; message: string }> {
-    // Validate input
-    if (!validateEmail(data.email)) {
-      throw new ValidationError('Invalid email format');
-    }
-
-    if (!validatePhoneNumber(data.phoneNumber)) {
-      throw new ValidationError('Invalid phone number format');
-    }
-
-    const passwordValidation = validatePasswordStrength(data.password);
-    if (!passwordValidation.valid) {
-      throw new ValidationError('Password does not meet requirements', passwordValidation.errors);
-    }
-
-    // Check for existing user
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ email: data.email }, { phoneNumber: data.phoneNumber }],
-      },
-    });
-
-    if (existingUser) {
-      throw new DuplicateError('User with this email or phone number already exists');
-    }
-
-    // Create user
-    const passwordHash = await hashPassword(data.password);
-
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        phoneNumber: data.phoneNumber,
-        role: UserRole.CUSTOMER,
-        credentials: {
-          create: {
-            passwordHash,
-          },
-        },
-        profile: {
-          create: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-          },
-        },
-        kyc: {
-          create: {
-            status: KycStatus.NOT_STARTED,
-          },
-        },
-      },
-    });
-
-    // Create transient wallet for customer
-    walletService.createWallet(user.id).catch((err) =>
-      logger.error('Failed to create wallet on signup', { userId: user.id, error: err.message }),
-    );
-
-    // Publish event
-    eventBus.publish(EventType.USER_REGISTERED, {
-      eventId: generateId(),
-      source: ServiceName.AUTH,
-      timestamp: new Date().toISOString(),
-      userId: user.id,
-      data: {
-        userId: user.id,
-        email: user.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-      },
-    });
-
-    // Audit trail
-    auditService.logAuthEvent({ userId: user.id, action: 'REGISTER', success: true, metadata: { email: user.email } });
-
-    // Send OTP
-    await this.sendOtp({
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      purpose: OtpPurpose.REGISTRATION,
-    });
-
-    return {
-      userId: user.id,
-      message: 'User registered successfully. Please verify your email/phone with the OTP sent.',
-    };
-  }
-
   async login(data: LoginRequest, userAgent?: string, ipAddress?: string): Promise<LoginResponse> {
     const user = await prisma.user.findUnique({
       where: { email: data.email },
@@ -638,98 +549,6 @@ export class AuthService {
     });
 
     return { message: 'Password updated successfully' };
-  }
-
-  // STEP 1: Initiate NIBSS consent for BVN — returns consentUrl for user to authenticate
-  async verifyBvnForSignup(bvn: string, phoneNumber?: string, email?: string): Promise<{
-    sessionId: string;
-    consentUrl: string;
-    message: string;
-  }> {
-    // Check DB first — before any expensive external call
-    const existingKyc = await prisma.userKyc.findFirst({
-      where: { bvn },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            phoneNumber: true,
-            customerType: true,
-            profile: {
-              select: {
-                firstName: true,
-                lastName: true,
-                dateOfBirth: true,
-                address: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (existingKyc) {
-      // User completed full onboarding — hard block
-      if (existingKyc.status === KycStatus.VERIFIED) {
-        throw new DuplicateError('An account with this BVN already exists');
-      }
-
-      // User started but never finished — restore data from DB and issue a fake sessionId
-      // to let them skip consent and go straight to the OTP step
-      const storedUser = existingKyc.user;
-      const resumeSessionId = `resume:${generateId()}`;
-      const verificationToken = generateId();
-      const cacheKey = `bvn:verification:${verificationToken}`;
-      const resumedBvnData = {
-        bvn,
-        firstName: storedUser.profile!.firstName,
-        lastName: storedUser.profile!.lastName,
-        email: storedUser.email,
-        phoneNumber: storedUser.phoneNumber,
-        dateOfBirth: storedUser.profile?.dateOfBirth
-          ? storedUser.profile.dateOfBirth.toISOString().split('T')[0]
-          : null,
-        address: storedUser.profile?.address ?? null,
-        gender: null,
-      };
-      await redis.setex(cacheKey, 30 * 60, JSON.stringify(resumedBvnData));
-      // Mark consent session as already completed so status-check works immediately
-      const consentKey = `bvn:consent:${resumeSessionId}`;
-      await redis.setex(consentKey, 30 * 60, JSON.stringify({
-        bvn, phoneNumber, email,
-        status: 'COMPLETED',
-        verificationToken,
-      }));
-
-      return {
-        sessionId: resumeSessionId,
-        consentUrl: '',
-        message: 'BVN recognised. Your previous verification session has been restored.',
-      };
-    }
-
-    // New BVN — initiate NIBSS Consent Hub flow
-    const consentResult = await bvnService.initiateConsentForBvn(bvn);
-
-    if (!consentResult.success || !consentResult.sessionId || !consentResult.consentUrl) {
-      throw new ValidationError(consentResult.message || 'BVN consent initiation failed');
-    }
-
-    // Persist the pending consent session in Redis (30 min TTL)
-    const consentKey = `bvn:consent:${consentResult.sessionId}`;
-    await redis.setex(consentKey, 30 * 60, JSON.stringify({
-      bvn,
-      phoneNumber,
-      email,
-      status: 'PENDING',
-    }));
-
-    return {
-      sessionId: consentResult.sessionId,
-      consentUrl: consentResult.consentUrl,
-      message: 'BVN consent initiated. Please authenticate to continue.',
-    };
   }
 
   // STEP 1 (iGree variant): Initiate NIBSS iGree consent — collects the customer's

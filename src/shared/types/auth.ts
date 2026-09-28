@@ -42,14 +42,6 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
-export interface SignupRequest {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-}
-
 export interface NigerianSignupRequest {
   bvn: string;
 }

@@ -12,71 +12,7 @@ const router: Router = Router();
  *   description: User authentication and authorization endpoints
  */
 
-/**
- * @swagger
- * /api/auth/signup:
- *   post:
- *     summary: Standard user registration
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *               - firstName
- *               - lastName
- *               - phoneNumber
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: user@example.com
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 example: SecurePass123!
- *               firstName:
- *                 type: string
- *                 example: John
- *               lastName:
- *                 type: string
- *                 example: Doe
- *               phoneNumber:
- *                 type: string
- *                 example: +2348012345678
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: User registered successfully
- *                 data:
- *                   type: object
- *                   properties:
- *                     userId:
- *                       type: string
- *                     email:
- *                       type: string
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         description: Too many requests
- */
 // Public routes
-router.post('/signup', authController.signup);
 
 /**
  * @swagger
@@ -214,7 +150,75 @@ router.post('/signup', authController.signup);
  */
 router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
 
-// iGree callback — NIBSS redirects here with ?code=...&state=... after user authenticates
+/**
+ * @swagger
+ * /api/auth/nibss/igree/callback:
+ *   get:
+ *     summary: "Nigerian signup — Step 1a: iGree consent callback"
+ *     description: |
+ *       NIBSS redirects the user's browser here (or calls it server-to-server) after the user
+ *       authenticates and consents on the iGree IdP, with `code` and `state` as query params
+ *       (GET) or body fields (POST). `state` is the value returned from `igree/initiate`.
+ *
+ *       Responds immediately with 200 so the redirect doesn't hang, then asynchronously:
+ *       exchanges `code` for a token using the iGree consent-phase credentials, verifies the
+ *       returned id_token's signature against NIBSS's published JWKS, extracts the `bvn` claim,
+ *       and fetches BVN details using a separate iGree retrieval-phase `client_credentials`
+ *       token. Poll `/signup/nigerian/bvn-consent-status` with the same `state` (as `sessionId`)
+ *       to observe the result — this endpoint's own response body carries no verification result.
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema: { type: string }
+ *         description: Authorization code issued by the iGree IdP
+ *       - in: query
+ *         name: state
+ *         required: true
+ *         schema: { type: string }
+ *         description: The state value returned from igree/initiate, used to correlate this callback to the pending session
+ *     responses:
+ *       200:
+ *         description: Callback acknowledged. BVN verification continues asynchronously — poll bvn-consent-status.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Consent received" }
+ *       400:
+ *         description: code or state missing
+ *         $ref: '#/components/responses/ValidationError'
+ *   post:
+ *     summary: "Nigerian signup — Step 1a: iGree consent callback (server-to-server variant)"
+ *     description: Identical to the GET variant above, but with `code`/`state` supplied in the JSON body instead of query params.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code, state]
+ *             properties:
+ *               code: { type: string }
+ *               state: { type: string }
+ *     responses:
+ *       200:
+ *         description: Callback acknowledged. BVN verification continues asynchronously — poll bvn-consent-status.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Consent received" }
+ *       400:
+ *         description: code or state missing
+ *         $ref: '#/components/responses/ValidationError'
+ */
 router.get('/nibss/igree/callback', authController.iGreeCallback);
 router.post('/nibss/igree/callback', authController.iGreeCallback);
 

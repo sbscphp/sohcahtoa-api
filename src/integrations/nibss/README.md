@@ -2,79 +2,127 @@
 
 ## Overview
 
-This module provides integration with **NIBSS (Nigeria Inter-Bank Settlement System)** for various financial verification and compliance services.
+This module integrates with **NIBSS (Nigeria Inter-Bank Settlement System)** for BVN/NIN verification, TIN verification, bank account verification, and consent management. The client lives at [nibss.client.ts](nibss.client.ts) and is consumed primarily through [bvn.service.ts](../../modules/auth/services/bvn.service.ts) and [tin.service.ts](../../modules/auth/services/tin.service.ts).
 
-## Available Services
+NIBSS exposes several distinct products behind this one client, each with its own credentials, base URL, and token flow:
 
-### 1. BIVS (BVN & Identity Verification Service)
-- **Client ID**: `5680171a-b9f9-4786-ae00-75bb5e9caad2`
-- **App Name**: BIVS (SOHCAHTOA_FINANCE)
-- **Base URL**: `https://apitest.nibss-plc.com.ng:1443`
-- **Environment**: CERTIFICATION
+| Service | Purpose | Token flow |
+|---|---|---|
+| **BIVS** | TIN verification, bank account verification, bank list, TIN Identity v2 | `client_credentials` |
+| **Consent Hub** | Initiate/poll consent for BVN or NIN data access; returns a `retrievalToken` | `client_credentials` |
+| **FAS** (Financial Authentication Service) | BVN/NIN data extraction using a Consent Hub `retrievalToken` | `client_credentials` (falls back to Consent Hub credentials if FAS-specific ones aren't set) |
+| **iGree** (BVN Consent v1) | OIDC-based BVN consent + retrieval — **two separate NIBSS app registrations**, see below | `authorization_code` (consent) + `client_credentials` (retrieval) |
 
-**Features**:
-- BVN (Bank Verification Number) verification
-- TIN (Tax Identification Number) verification
-- Bank account verification
-- Identity validation
+## iGree: two credential sets, not one
 
-### 2. ConsentMgmt (Consent Management)
-- **Client ID**: `57b06b79-2825-4aa6-ae08-bd098ba8bfa7`
-- **App Name**: ConsentMgmt (SOHCAHTOA_FINANCE)
-- **Base URL**: `https://apitest.nibss-plc.com.ng:1443`
-- **Environment**: CERTIFICATION
+iGree is the odd one out and is the most common source of confusion, so it's called out on its own. It has **two phases, each backed by a different NIBSS app registration**:
 
-**Features**:
-- Customer consent management
-- Consent tracking and expiry
-- Compliance with data protection regulations
+1. **Consent phase** (`iGreeGetAuthUrl` → `iGreeExchangeCode`) — the user is redirected to NIBSS's IdP to authenticate and consent. The authorization code returned on callback is exchanged for an access/id token using `NIBSS_IGREE_CLIENT_ID` / `NIBSS_IGREE_CLIENT_SECRET`. The `id_token` JWT is verified against NIBSS's published JWKS and its `bvn` claim is extracted — this is the BVN the retrieval phase will fetch.
+2. **Retrieval phase** (`iGreeGetBvnDetails`) — a completely separate `client_credentials` grant using `NIBSS_IGREE_RETRIEVAL_CLIENT_ID` / `NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET` is used to call `POST /getPartialDetailsWithBvn`. This token is **not** derived from or related to the consent-phase token — it authenticates the retrieval app itself, independent of any particular user's consent.
+
+Do not assume a single iGree "client ID/secret" pair covers both phases — NIBSS issues these as two separate app registrations, and mixing them up produces confusing 401s where the consent redirect works fine but retrieval fails (or vice versa).
 
 ## Environment Configuration
 
-Add the following to your `.env` file:
-
 ```bash
-# NIBSS BIVS Configuration
-NIBSS_BIVS_CLIENT_ID=5680171a-b9f9-4786-ae00-75bb5e9caad2
-NIBSS_BIVS_CLIENT_SECRET=YOUR_NIBSS_BIVS_CLIENT_SECRET
+# ─── BIVS (TIN verification, account verification, bank list) ───
+NIBSS_BIVS_CLIENT_ID=
+NIBSS_BIVS_CLIENT_SECRET=
 NIBSS_BIVS_BASE_URL=https://apitest.nibss-plc.com.ng:1443
 NIBSS_BIVS_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_BIVS_CLIENT_USERNAME=            # Base64'd into the Signature field for TIN Identity v2
+NIBSS_TIN_BASE_URL=https://apitest.nibss-plc.com.ng/identity/v2
 
-# NIBSS ConsentMgmt Configuration
-NIBSS_CONSENT_CLIENT_ID=57b06b79-2825-4aa6-ae08-bd098ba8bfa7
-NIBSS_CONSENT_CLIENT_SECRET=YOUR_NIBSS_CONSENT_CLIENT_SECRET
-NIBSS_CONSENT_HUB_BASE_URL=https://apitest.nibss-plc.com.ng/api
+# ─── Consent Hub / FAS (share credentials unless FAS-specific ones are set) ───
+NIBSS_CONSENT_CLIENT_ID=
+NIBSS_CONSENT_CLIENT_SECRET=
 NIBSS_CONSENT_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
-NIBSS_CALLBACK_URL=https://your-app.example.com/api/auth/nibss/callback
+NIBSS_CONSENT_HUB_BASE_URL=https://apitest.nibss-plc.com.ng/api
+NIBSS_CONSENT_STATUS_BASE_URL=          # optional override; status endpoint can live on a different host
+NIBSS_DATA_CONTROLLER_ID=d6378b2e-092f-485a-a1f9-f97b3ca8c3f3
+NIBSS_CALLBACK_URL=                     # where NIBSS redirects after RedirectLink consent
 
-# Environment
-NIBSS_ENVIRONMENT=CERTIFICATION
+# FAS-specific credentials — optional. If unset, FAS falls back to the Consent Hub
+# credentials above. Set these if NIBSS issues FAS its own app registration.
+NIBSS_FAS_CLIENT_ID=
+NIBSS_FAS_CLIENT_SECRET=
+NIBSS_FAS_RESET_URL=
+NIBSS_FAS_BASE_URL=https://apitest.nibss-plc.com.ng/cvs/v2
+NIBSS_FAS_SUBCLASS=1
+NIBSS_FAS_RETRY=1
+NIBSS_INSTITUTION_CODE=
+
+# ─── iGree (BVN Consent v1) — consent phase ───
+NIBSS_IGREE_BASE_URL=https://apitest.nibss-plc.com.ng/bvnconsent/v1
+NIBSS_IDP_BASE_URL=https://idsandbox.nibss-plc.com.ng
+NIBSS_IGREE_CLIENT_ID=
+NIBSS_IGREE_CLIENT_SECRET=
+NIBSS_IGREE_REDIRECT_URI=
+NIBSS_IGREE_JWKS_URI=                   # optional override; otherwise resolved via OIDC discovery
+
+# ─── iGree — retrieval phase (separate app registration, see above) ───
+NIBSS_IGREE_RETRIEVAL_CLIENT_ID=
+NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET=
+NIBSS_IGREE_RETRIEVAL_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_IGREE_CONSUMER_CUSTOM_ID=         # defaults to NIBSS_IGREE_RETRIEVAL_CLIENT_ID if unset
+NIBSS_IGREE_CHANNEL_CODE=02
 ```
 
 ## Usage Examples
 
-### BVN Verification
+### BVN via Consent Hub + FAS
 
 ```typescript
-import { nibssClient } from '@/integrations/nibss/nibss.client';
+import bvnService from '@/modules/auth/services/bvn.service';
 
-// Basic BVN verification
-const result = await nibssClient.verifyBvn({
-  BVN: '12345678901',
-  PhoneNumber: '+2348012345678', // Optional
-  DoB: '1990-01-15', // Optional, format: YYYY-MM-DD
-  FirstName: 'John', // Optional
-  LastName: 'Doe', // Optional
+// 1. Kick off a Consent Hub session — returns a consentUrl to redirect the user to
+const { sessionId, consentUrl } = await bvnService.initiateConsentForBvn('12345678901');
+
+// 2. After the user completes consent (via redirect callback or by polling), you have
+//    a retrievalToken. Complete the FAS lookup with it:
+const result = await bvnService.verifyBvnWithRetrievalToken('12345678901', retrievalToken);
+if (result.success) {
+  console.log(result.data?.firstName, result.data?.lastName);
+}
+
+// If the redirect callback never arrives, poll instead:
+const status = await bvnService.checkConsentStatus(sessionId!);
+if (status.granted) {
+  await bvnService.verifyBvnWithRetrievalToken('12345678901', status.retrievalToken!);
+}
+```
+
+### BVN via iGree (OIDC consent + separate retrieval token)
+
+```typescript
+import bvnService from '@/modules/auth/services/bvn.service';
+
+// 1. Build the IdP authorization URL and redirect the user
+const { authUrl } = bvnService.initiateIGreeConsent(state);
+
+// 2. NIBSS redirects back to NIBSS_IGREE_REDIRECT_URI with ?code=...&state=...
+//    Exchange the code (consent-phase credentials) and fetch details (retrieval-phase credentials):
+const result = await bvnService.verifyBvnWithIGreeCode(code);
+if (result.success) {
+  console.log(result.data?.firstName, result.data?.lastName);
+}
+```
+
+### Boolean BVN match (no consent flow required)
+
+```typescript
+import bvnService from '@/modules/auth/services/bvn.service';
+
+const result = await bvnService.verifyBvnBoolean('12345678901', {
+  firstname: 'John',
+  lastname: 'Doe',
+  middlename: '',
+  phone_no: '+2348012345678',
+  dob: '1990-01-15',
+  gender: 'M',
 });
 
-if (result.verified) {
-  console.log('BVN verified:', result.data);
-  console.log('First Name:', result.data.firstName);
-  console.log('Last Name:', result.data.lastName);
-  console.log('Watch Listed:', result.data.watchListed);
-} else {
-  console.error('Verification failed:', result.message);
-}
+console.log(result.matches); // { firstnameMatch, lastnameMatch, dobMatch, ... }
 ```
 
 ### TIN Verification
@@ -82,119 +130,36 @@ if (result.verified) {
 ```typescript
 import { nibssClient } from '@/integrations/nibss/nibss.client';
 
-// Verify Tax Identification Number
-const result = await nibssClient.verifyTin({
-  TIN: '12345678',
-  FullName: 'Acme Corporation Ltd', // Optional
-});
+// Legacy BIVS TIN verification
+const result = await nibssClient.verifyTin({ TIN: '12345678', FullName: 'Acme Corporation Ltd' });
 
-if (result.verified) {
-  console.log('TIN verified:', result.data);
-  console.log('Tax Payer Name:', result.data.taxPayerName);
-  console.log('Tax Office:', result.data.taxOffice);
-  console.log('Status:', result.data.status);
-}
+// TIN Identity v2
+const individual = await nibssClient.verifyIndividualTin('12345678');
+const corporate  = await nibssClient.verifyCorporateTin('12345678');
 ```
 
-### Account Verification
+### Account Verification / Bank List
 
 ```typescript
 import { nibssClient } from '@/integrations/nibss/nibss.client';
 
-// Verify bank account
-const result = await nibssClient.verifyAccount(
-  '0123456789', // Account number
-  '058' // Bank code
-);
-
-if (result.verified) {
-  console.log('Account verified');
-  console.log('Account Name:', result.accountName);
-}
-```
-
-### Consent Management
-
-```typescript
-import { nibssClient } from '@/integrations/nibss/nibss.client';
-
-// Request customer consent
-const result = await nibssClient.requestConsent({
-  customerId: 'user-123',
-  serviceType: 'BVN_VERIFICATION',
-  duration: 30, // days
-  purpose: 'KYC verification for account opening',
-});
-
-if (result.success) {
-  console.log('Consent obtained');
-  console.log('Consent ID:', result.consentId);
-  console.log('Expires on:', result.expiryDate);
-}
-```
-
-### Using Service Wrappers
-
-The application provides convenient service wrappers:
-
-#### BVN Service
-
-```typescript
-import bvnService from '@/modules/auth/services/bvn.service';
-
-// Simple BVN verification
-const result = await bvnService.verifyBvn('12345678901');
-
-// With additional parameters
-const result2 = await bvnService.verifyBvn(
-  '12345678901',
-  '+2348012345678', // phone
-  '1990-01-15', // DOB
-  'John', // firstName
-  'Doe' // lastName
-);
-
-// With consent management
-const result3 = await bvnService.verifyBvnWithConsent(
-  '12345678901',
-  'user-123', // userId
-  'KYC Verification' // purpose
-);
-```
-
-#### TIN Service
-
-```typescript
-import tinService from '@/modules/auth/services/tin.service';
-
-// Simple TIN verification
-const result = await tinService.verifyTin('12345678');
-
-// With full name
-const result2 = await tinService.verifyTin(
-  '12345678',
-  'Acme Corporation Ltd'
-);
-
-// With consent management
-const result3 = await tinService.verifyTinWithConsent(
-  '12345678',
-  'user-123', // userId
-  'Tax Compliance Check', // purpose
-  'Acme Corporation Ltd' // fullName
-);
+const account = await nibssClient.verifyAccount('0123456789', '058');
+const banks   = await nibssClient.getBankList();
 ```
 
 ## Authentication
 
-The NIBSS client automatically handles OAuth2 authentication using the client credentials flow:
+Every service manages its own token, cached in-memory and refreshed 5 minutes before expiry:
 
-1. Tokens are requested automatically on first API call
-2. Tokens are cached and reused until expiry
-3. Tokens are refreshed automatically 5 minutes before expiration
-4. Separate tokens are managed for BIVS and ConsentMgmt services
+| Method | Grant | Credentials |
+|---|---|---|
+| `getBivsToken()` | `client_credentials` | `NIBSS_BIVS_CLIENT_ID`/`SECRET` |
+| `getConsentToken()` | `client_credentials` | `NIBSS_CONSENT_CLIENT_ID`/`SECRET` |
+| `getFasToken()` | `client_credentials` | `NIBSS_FAS_CLIENT_ID`/`SECRET`, falling back to Consent Hub credentials |
+| iGree consent exchange | `authorization_code` | `NIBSS_IGREE_CLIENT_ID`/`SECRET` (tries HTTP Basic Auth first, falls back to `client_secret_post` if the IdP rejects it) |
+| `getIGreeRetrievalToken()` | `client_credentials` | `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` |
 
-To manually reset tokens (e.g., for testing):
+To force a refresh (e.g. after rotating secrets):
 
 ```typescript
 import { nibssClient } from '@/integrations/nibss/nibss.client';
@@ -204,183 +169,40 @@ nibssClient.resetTokens();
 
 ## Response Codes
 
-NIBSS uses standard response codes:
-
 | Code | Meaning |
 |------|---------|
 | `00` | Success |
 | `01` | Invalid request |
 | `02` | Record not found |
 | `03` | Unauthorized |
+| `25` | No contact info on record (Consent Hub — non-fatal for `OfflineConsent`, the session is still created) |
 | `99` | System error |
-
-## Error Handling
-
-All methods return structured responses with success indicators:
-
-```typescript
-interface NIBSSResponse {
-  verified: boolean; // or success: boolean
-  data?: any;
-  message: string;
-}
-```
-
-Always check the `verified` or `success` field before accessing data:
-
-```typescript
-const result = await nibssClient.verifyBvn({ BVN: '12345678901' });
-
-if (result.verified) {
-  // Safe to access result.data
-  console.log(result.data.firstName);
-} else {
-  // Handle error
-  console.error(result.message);
-}
-```
-
-## Fallback Behavior
-
-For development and testing, the service automatically falls back to mock data when:
-
-1. NIBSS credentials are not configured in environment variables
-2. NIBSS API is unavailable (in development/test environments only)
-
-Mock data generates consistent, realistic test data based on input values.
 
 ## Logging
 
-All NIBSS operations are logged with sensitive data redacted:
+- BVN/TIN/NIN values are masked in logs (e.g. `***8901`).
+- Tokens and secrets are never logged.
+- Request/response interceptors log at INFO; failures log at ERROR with response body and, for 401s, response headers (useful for diagnosing which credential set NIBSS rejected).
 
-- BVN/TIN numbers are masked (e.g., `***8901`)
-- Tokens and secrets are never logged
-- All API requests and responses are logged at INFO level
-- Errors are logged at ERROR level with full stack traces
+## Troubleshooting
 
-## Security Considerations
+**401 on FAS but Consent Hub works fine** — FAS may require its own app registration distinct from Consent Hub. Set `NIBSS_FAS_CLIENT_ID`/`NIBSS_FAS_CLIENT_SECRET`; the client logs an explicit warning pointing at this when it detects the fallback credentials were used and got rejected.
 
-1. **Never commit credentials**: Keep `.env` file out of version control
-2. **Use HTTPS only**: All NIBSS endpoints must use HTTPS
-3. **Rotate secrets regularly**: Update client secrets periodically
-4. **Monitor API usage**: Track API calls for anomalies
-5. **Implement rate limiting**: Prevent abuse of verification endpoints
-6. **Validate inputs**: Always validate BVN/TIN formats before API calls
-7. **Obtain consent**: Use ConsentMgmt for compliance with data protection laws
+**iGree consent redirect works but `iGreeGetBvnDetails` 401s** — the retrieval phase uses a separate app registration from the consent phase. Confirm `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` are set to the retrieval app's credentials, not the consent app's (see "iGree: two credential sets, not one" above).
 
-## Testing
+**iGree token exchange fails with 400/401 on Basic Auth** — the client automatically retries with `client_secret_post` (credentials in the request body instead of the `Authorization` header); some NIBSS environments expect this. If both fail, the credentials or redirect URI are likely wrong.
 
-### Unit Tests
-
-```bash
-npm test src/integrations/nibss
-```
-
-### Integration Tests
-
-Set test credentials in `.env.test`:
-
-```bash
-NIBSS_BIVS_CLIENT_ID=test-client-id
-NIBSS_BIVS_CLIENT_SECRET=test-client-secret
-```
-
-## Migration from Old to New API
-
-If migrating from a previous NIBSS integration:
-
-### Old Code
-```typescript
-// Old implementation
-const response = await oldNibssApi.verifyBVN(bvn);
-```
-
-### New Code
-```typescript
-// New implementation
-import { nibssClient } from '@/integrations/nibss/nibss.client';
-
-const result = await nibssClient.verifyBvn({ BVN: bvn });
-if (result.verified) {
-  // Handle success
-}
-```
-
-## Support & Troubleshooting
-
-### Common Issues
-
-**1. Authentication Failed**
-- Verify client ID and secret in `.env`
-- Check if credentials are for correct environment (CERTIFICATION vs PRODUCTION)
-- Ensure base URL includes port `:1443`
-
-**2. Request Timeout**
-- Check network connectivity
-- Verify NIBSS services are operational
-- Increase timeout in client configuration if needed
-
-**3. Invalid Response Format**
-- Check NIBSS API version compatibility
-- Review request payload format
-- Verify all required fields are provided
-
-### Debug Mode
-
-Enable detailed logging:
-
-```typescript
-// Set log level to debug in your logger configuration
-process.env.LOG_LEVEL = 'debug';
-```
-
-## Production Deployment
-
-When moving to production:
-
-1. Update environment variables with production credentials
-2. Change `NIBSS_ENVIRONMENT` to `PRODUCTION`
-3. Update base URLs to production endpoints
-4. Enable rate limiting on verification endpoints
-5. Set up monitoring and alerting for API failures
-6. Implement audit logging for all verifications
-
-## API Rate Limits
-
-Contact NIBSS for specific rate limits. Recommended approach:
-
-- Implement exponential backoff for retries
-- Cache verification results when appropriate
-- Batch requests where possible
-- Monitor API usage and set internal limits
+**`id_token` claims not trusted / `bvn` missing** — the id_token's signature is verified against NIBSS's published JWKS before its claims are used. If JWKS resolution fails (`NIBSS_IGREE_JWKS_URI` unset and OIDC discovery unreachable), verification is skipped and `bvn` will be `undefined` rather than falling back to unverified decoding — check logs for `iGree: no jwks_uri available`.
 
 ## Compliance
 
-This integration helps meet Nigerian regulatory requirements:
-
-- **CBN KYC Requirements**: BVN verification for customer onboarding
-- **FIRS Tax Compliance**: TIN verification for tax reporting
-- **Data Protection**: Consent management for NDPR compliance
-- **AML/CFT**: Identity verification and watch list checking
+- **CBN KYC Requirements**: BVN verification for customer onboarding.
+- **FIRS Tax Compliance**: TIN verification for tax reporting.
+- **Data Protection**: Consent Hub / iGree consent flows for NDPR compliance.
+- **AML/CFT**: Watchlist flag returned alongside BVN/NIN data.
 
 ## Additional Resources
 
 - [NIBSS Official Documentation](https://nibss-plc.com.ng)
 - [CBN Guidelines on KYC](https://www.cbn.gov.ng)
 - [FIRS Tax Identification](https://www.firs.gov.ng)
-
-## License
-
-This integration is part of the SOHCAHTOA Finance platform.
-
-## Changelog
-
-### v1.0.0 (Current)
-- Initial NIBSS integration with BIVS and ConsentMgmt
-- BVN verification with OAuth2 authentication
-- TIN verification support
-- Account verification
-- Consent management
-- Automatic token refresh
-- Mock data fallback for development
-- Comprehensive logging and error handling

@@ -4,7 +4,6 @@ import passportService from '../services/passport.service';
 import tinService from '../services/tin.service';
 import { successResponse, uploadToCloudinary, ValidationError } from '../../../shared/utils';
 import {
-  SignupRequest,
   LoginRequest,
   OtpRequest,
   OtpValidationRequest,
@@ -18,28 +17,6 @@ import {
 import { AuthRequest } from '../../../shared/middleware';
 
 export class AuthController {
-  async signup(req: Request, res: Response, next: NextFunction) {
-    try {
-      const data: SignupRequest = req.body;
-      const result = await authService.signup(data);
-      res.status(201).json(successResponse(result));
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Nigerian Flow - Step 1: Initiate BVN consent
-  async verifyBvn(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { bvn, phoneNumber, email } = req.body;
-      if (!bvn) throw new ValidationError('BVN is required');
-      const result = await authService.verifyBvnForSignup(bvn, phoneNumber, email);
-      res.json(successResponse(result));
-    } catch (error) {
-      next(error);
-    }
-  }
-
   // Nigerian Flow - Step 1b: Poll BVN consent status (returns verificationToken when done)
   async checkBvnConsentStatus(req: Request, res: Response, next: NextFunction) {
     try {

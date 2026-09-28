@@ -254,17 +254,25 @@ export class NIBSSClient {
   private dataControllerId: string;
   private callbackUrl: string;
 
-  // ── iGree (BVN Consent v1) ──
+  // ── iGree (BVN Consent v1) — consent phase (Step 1 authorize + callback token exchange) ──
   private iGreeBaseUrl: string = '';
   private iGreeClient!: AxiosInstance;
   private iGreeClientId: string = '';
   private iGreeClientSecret: string = '';
   private iGreeRedirectUri: string = '';
-  private iGreeConsumerCustomId: string = '';
-  private iGreeChannelCode: string = '02';
   private idpBaseUrl: string = '';
   private iGreeJwksClient: jwksRsa.JwksClient | null = null;
   private iGreeJwksUriPromise: Promise<string | null> | null = null;
+
+  // ── iGree — retrieval phase (Step 4 data fetch): a SEPARATE NIBSS app registration,
+  //    with its own client_credentials token, distinct from the consent-phase token above.
+  private iGreeConsumerCustomId: string = '';
+  private iGreeChannelCode: string = '02';
+  private iGreeRetrievalClientId: string = '';
+  private iGreeRetrievalClientSecret: string = '';
+  private iGreeRetrievalResetUrl: string = '';
+  private iGreeRetrievalToken: string | null = null;
+  private iGreeRetrievalTokenExpiry: number = 0;
 
   // ── Token cache ──
   private bivsToken: string | null = null;
@@ -304,14 +312,19 @@ export class NIBSSClient {
     this.dataControllerId  = process.env.NIBSS_DATA_CONTROLLER_ID   || 'd6378b2e-092f-485a-a1f9-f97b3ca8c3f3';
     this.callbackUrl       = process.env.NIBSS_CALLBACK_URL         || '';
 
-    // iGree
+    // iGree — consent phase (Step 1 authorize + callback token exchange)
     this.iGreeBaseUrl           = process.env.NIBSS_IGREE_BASE_URL          || 'https://apitest.nibss-plc.com.ng/bvnconsent/v1';
     this.idpBaseUrl             = process.env.NIBSS_IDP_BASE_URL            || 'https://idsandbox.nibss-plc.com.ng';
     this.iGreeClientId          = process.env.NIBSS_IGREE_CLIENT_ID         || process.env.NIBSS_CONSENT_CLIENT_ID || '';
     this.iGreeClientSecret      = process.env.NIBSS_IGREE_CLIENT_SECRET     || process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
     this.iGreeRedirectUri       = process.env.NIBSS_IGREE_REDIRECT_URI      || '';
-    this.iGreeConsumerCustomId  = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || process.env.NIBSS_CONSENT_CLIENT_ID || '';
-    this.iGreeChannelCode       = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
+
+    // iGree — retrieval phase (Step 4 data fetch): separate NIBSS app registration + own token
+    this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || '';
+    this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || '';
+    this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || 'https://apitest.nibss-plc.com.ng:1443/reset';
+    this.iGreeConsumerCustomId      = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || this.iGreeRetrievalClientId;
+    this.iGreeChannelCode           = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
 
     // ── Axios instances ──
     this.bivsClient = axios.create({
@@ -1144,6 +1157,35 @@ export class NIBSSClient {
   // ─── iGree: BVN Consent v1 ─────────────────────────────────────────────────
 
   /**
+   * Obtain a token for the iGree RETRIEVAL phase (Step 4 data fetch) — a separate
+   * NIBSS app registration from the consent phase, with its own client_credentials grant.
+   */
+  private async getIGreeRetrievalToken(): Promise<string> {
+    if (this.iGreeRetrievalToken && Date.now() < this.iGreeRetrievalTokenExpiry) return this.iGreeRetrievalToken;
+
+    logger.info('Requesting iGree retrieval access token');
+    const params = new URLSearchParams();
+    params.append('client_id',     this.iGreeRetrievalClientId);
+    params.append('client_secret', this.iGreeRetrievalClientSecret);
+    params.append('scope',         `${this.iGreeRetrievalClientId}/.default`);
+    params.append('grant_type',    'client_credentials');
+
+    try {
+      const res = await axios.post<NIBSSTokenResponse>(this.iGreeRetrievalResetUrl, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 10000,
+      });
+      this.iGreeRetrievalToken       = res.data.access_token;
+      this.iGreeRetrievalTokenExpiry = Date.now() + (res.data.expires_in - 300) * 1000;
+      logger.info('iGree retrieval token obtained', { expiresIn: res.data.expires_in });
+      return this.iGreeRetrievalToken;
+    } catch (error: any) {
+      logger.error('Failed to obtain iGree retrieval token', { error: error.message, data: error.response?.data });
+      throw new Error(`iGree retrieval authentication failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Build the IdP authorization URL to redirect the user to for BVN consent.
    * After the user authenticates, NIBSS redirects to iGreeRedirectUri with ?code=...&state=...
    *
@@ -1282,10 +1324,11 @@ export class NIBSSClient {
   }
 
   /**
-   * Retrieve BVN partial details using an iGree access token.
-   * Calls POST /getPartialDetailsWithBvn at the iGree base URL.
+   * Retrieve BVN partial details for the iGree retrieval phase.
+   * Calls POST /getPartialDetailsWithBvn at the iGree base URL, authenticated with
+   * the retrieval phase's own client_credentials token (NOT the consent-phase token).
    */
-  async iGreeGetBvnDetails(accessToken: string, bvn?: string): Promise<{
+  async iGreeGetBvnDetails(bvn?: string): Promise<{
     verified: boolean;
     data?: {
       firstName: string;
@@ -1304,6 +1347,7 @@ export class NIBSSClient {
   }> {
     try {
       const consumerUniqueId = `${this.iGreeChannelCode}${this.iGreeConsumerCustomId}`;
+      const retrievalToken = await this.getIGreeRetrievalToken();
 
       logger.info('iGree: fetching BVN partial details');
 
@@ -1312,7 +1356,7 @@ export class NIBSSClient {
         bvn ? { bvn } : {},
         {
           headers: {
-            'Authorization':       `Bearer ${accessToken}`,
+            'Authorization':       `Bearer ${retrievalToken}`,
             'x-consumer-unique-id': consumerUniqueId,
             'x-consumer-custom-id': this.iGreeConsumerCustomId,
             'Content-Type':         'application/json',
