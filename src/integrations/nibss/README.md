@@ -28,15 +28,15 @@ Do not assume a single iGree "client ID/secret" pair covers both phases — NIBS
 # ─── BIVS (TIN verification, account verification, bank list) ───
 NIBSS_BIVS_CLIENT_ID=
 NIBSS_BIVS_CLIENT_SECRET=
-NIBSS_BIVS_BASE_URL=https://apitest.nibss-plc.com.ng:1443
-NIBSS_BIVS_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_BIVS_BASE_URL=https://apitest.nibss-plc.com.ng
+NIBSS_BIVS_RESET_URL=https://apitest.nibss-plc.com.ng/reset
 NIBSS_BIVS_CLIENT_USERNAME=            # Base64'd into the Signature field for TIN Identity v2
 NIBSS_TIN_BASE_URL=https://apitest.nibss-plc.com.ng/identity/v2
 
 # ─── Consent Hub / FAS (share credentials unless FAS-specific ones are set) ───
 NIBSS_CONSENT_CLIENT_ID=
 NIBSS_CONSENT_CLIENT_SECRET=
-NIBSS_CONSENT_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_CONSENT_RESET_URL=https://apitest.nibss-plc.com.ng/reset
 NIBSS_CONSENT_HUB_BASE_URL=https://apitest.nibss-plc.com.ng/api
 NIBSS_CONSENT_STATUS_BASE_URL=          # optional override; status endpoint can live on a different host
 NIBSS_DATA_CONTROLLER_ID=d6378b2e-092f-485a-a1f9-f97b3ca8c3f3
@@ -63,7 +63,7 @@ NIBSS_IGREE_JWKS_URI=                   # optional override; otherwise resolved 
 # ─── iGree — retrieval phase (separate app registration, see above) ───
 NIBSS_IGREE_RETRIEVAL_CLIENT_ID=
 NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET=
-NIBSS_IGREE_RETRIEVAL_RESET_URL=https://apitest.nibss-plc.com.ng:1443/reset
+NIBSS_IGREE_RETRIEVAL_RESET_URL=https://apitest.nibss-plc.com.ng/reset
 NIBSS_IGREE_CONSUMER_CUSTOM_ID=         # defaults to NIBSS_IGREE_RETRIEVAL_CLIENT_ID if unset
 NIBSS_IGREE_CHANNEL_CODE=02
 ```
