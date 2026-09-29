@@ -17,18 +17,6 @@ import {
 import { AuthRequest } from '../../../shared/middleware';
 
 export class AuthController {
-  // Nigerian Flow - Step 1b: Poll BVN consent status (returns verificationToken when done)
-  async checkBvnConsentStatus(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { sessionId } = req.body;
-      if (!sessionId) throw new ValidationError('sessionId is required');
-      const result = await authService.checkBvnConsentStatus(sessionId);
-      res.json(successResponse(result));
-    } catch (error) {
-      next(error);
-    }
-  }
-
   // iGree Flow - Step 1: Initiate consent with self-reported identity fields
   // (cross-checked against NIBSS's verified BVN record once the callback lands)
   async iGreeInitiate(req: Request, res: Response, next: NextFunction) {
@@ -66,6 +54,18 @@ export class AuthController {
       await authService.handleIGreeCallback(code, state).catch((err) => {
         console.error('iGree callback processing error', err);
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // iGree Flow - Step 3: frontend-triggered — fetch full BVN details using the token saved in Step 2
+  async retrieveIGreeBvnDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) throw new ValidationError('sessionId is required');
+      const result = await authService.retrieveIGreeBvnDetails(sessionId);
+      res.json(successResponse(result));
     } catch (error) {
       next(error);
     }

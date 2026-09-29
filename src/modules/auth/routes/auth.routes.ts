@@ -16,77 +16,6 @@ const router: Router = Router();
 
 /**
  * @swagger
- * /api/auth/signup/nigerian/bvn-consent-status:
- *   post:
- *     summary: "Nigerian signup — Step 1b: Poll BVN consent status"
- *     description: |
- *       Polls the status of the iGree consent initiated in Step 1 (`/signup/nigerian/igree/initiate`).
- *       The frontend must call this endpoint repeatedly (e.g. every 2–3 seconds) until `status`
- *       is `"COMPLETED"` or `"FAILED"`.
- *
- *       - **PENDING** — user has not yet authenticated on the NIBSS portal. Keep polling.
- *       - **COMPLETED** — NIBSS callback received and BVN data verified. The response includes
- *         a `verificationToken` — **save this token**. It is required for all subsequent steps
- *         (send-otp, validate-otp, create-account). Valid for 30 minutes.
- *       - **FAILED** — verification failed. Either NIBSS-side (user denied consent, NIBSS
- *         error) or because the submitted firstName/lastName/dateOfBirth/bvn didn't match
- *         NIBSS's verified BVN record (`errorMessage` names which field(s) mismatched).
- *         Restart from Step 1.
- *
- *       **Do NOT call send-otp before this endpoint returns `status: "COMPLETED"`.**
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - sessionId
- *             properties:
- *               sessionId:
- *                 type: string
- *                 description: The state returned from Step 1 (igree/initiate)
- *                 example: "202615269624757096223712376916"
- *     responses:
- *       200:
- *         description: Consent status response
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     status:
- *                       type: string
- *                       enum: [PENDING, COMPLETED, FAILED]
- *                       description: |
- *                         PENDING = still waiting for user to authenticate on NIBSS portal.
- *                         COMPLETED = BVN verified, verificationToken is available.
- *                         FAILED = verification failed, must restart from Step 1.
- *                       example: "COMPLETED"
- *                     verificationToken:
- *                       type: string
- *                       description: |
- *                         Only present when status is COMPLETED. Use this token in all
- *                         subsequent steps (send-otp, validate-otp, create-account).
- *                         Valid for 30 minutes.
- *                       example: "abc123xyz789"
- *                     message:
- *                       type: string
- *                       example: "BVN verified successfully. Use the verification token to proceed."
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         description: Too many requests
- */
-/**
- * @swagger
  * /api/auth/signup/nigerian/igree/initiate:
  *   post:
  *     summary: "Nigerian signup — Step 1: Initiate BVN consent (iGree)"
@@ -94,15 +23,19 @@ const router: Router = Router();
  *       Collects the customer's bvn, firstName, lastName, dateOfBirth, phoneNumber
  *       (and optionally email) up front, then redirects to NIBSS iGree for OTP consent.
  *       This is the only supported BVN verification method for Nigerian signup. Once NIBSS
- *       redirects back to the iGree callback, bvn/firstName/lastName/dateOfBirth are cross-checked
- *       against NIBSS's verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
+ *       redirects back to the iGree callback (Step 1a), consent is verified server-side; the
+ *       frontend then polls igree/retrieve (Step 1b) directly, which fetches BVN details and
+ *       cross-checks bvn/firstName/lastName/dateOfBirth against NIBSS's verified record — any
+ *       mismatch fails the session. There is no separate consent-status polling step.
  *
  *       phoneNumber is required here — NIBSS iGree does not return a phone number, so this is
  *       the only source for it, and it's required (unique) on the account created in Step 4.
  *
- *       **Recommended flow after this step:** poll bvn-consent-status until COMPLETED, then call
- *       send-otp with `verificationType: "email"` once and validate-otp — no phone OTP, and the
- *       separate send-email-otp/validate-email-otp endpoints are not needed for this flow.
+ *       **Recommended flow after this step:** poll igree/retrieve (Step 1b) with the returned
+ *       `state` until it reports `COMPLETED` (it reports `PENDING` while waiting on Step 2, and
+ *       is safe to call again on transient failure), then call send-otp with
+ *       `verificationType: "email"` once and validate-otp — no phone OTP, and the separate
+ *       send-email-otp/validate-email-otp endpoints are not needed for this flow.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -120,7 +53,7 @@ const router: Router = Router();
  *               email: { type: string, example: "john@example.com" }
  *     responses:
  *       200:
- *         description: Consent initiated — redirect the user to authUrl, then poll bvn-consent-status with the returned state
+ *         description: Consent initiated — redirect the user to authUrl, then poll igree/retrieve with the returned state
  *         content:
  *           application/json:
  *             schema:
@@ -134,7 +67,7 @@ const router: Router = Router();
  *                   properties:
  *                     state:
  *                       type: string
- *                       description: Use this in bvn-consent-status (as sessionId) to poll for completion
+ *                       description: Use this in igree/retrieve (as sessionId) to poll for completion
  *                       example: "a1b2c3d4e5f6"
  *                     authUrl:
  *                       type: string
@@ -154,7 +87,7 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
  * @swagger
  * /api/auth/nibss/igree/callback:
  *   get:
- *     summary: "Nigerian signup — Step 1a: iGree consent callback"
+ *     summary: "Nigerian signup — Step 1a: iGree consent callback (verifies consent only)"
  *     description: |
  *       NIBSS redirects the user's browser here (or calls it server-to-server) after the user
  *       authenticates and consents on the iGree IdP, with `code` and `state` as query params
@@ -162,13 +95,13 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
  *
  *       Responds immediately with 200 so the redirect doesn't hang, then asynchronously:
  *       exchanges `code` for a token using the iGree consent-phase credentials, verifies the
- *       returned id_token's signature against NIBSS's published JWKS, extracts the `bvn` claim,
- *       then obtains a retrieval-phase `client_credentials` token from NIBSS's oxAuth IdP and
- *       persists it against this session immediately (independent of whether the subsequent
- *       BVN-details fetch succeeds, so a retry doesn't need to re-authenticate), before using it
- *       to fetch BVN details. Poll `/signup/nigerian/bvn-consent-status` with the same `state`
- *       (as `sessionId`) to observe the result — this endpoint's own response body carries no
- *       verification result, and the raw retrieval token is never returned to the client.
+ *       returned id_token's signature against NIBSS's published JWKS, extracts the verified `bvn`
+ *       claim, then obtains a retrieval-phase `client_credentials` token from NIBSS's oxAuth IdP
+ *       and persists both against this session. It deliberately stops there — it does NOT fetch
+ *       full BVN details itself. The frontend does not need to poll anything at this point; once
+ *       this has run, `/signup/nigerian/igree/retrieve` (Step 1b, with the same `state` as
+ *       `sessionId`) will fetch the BVN details. The raw retrieval token is never returned to the
+ *       client at any point.
  *     tags: [Authentication]
  *     parameters:
  *       - in: query
@@ -183,7 +116,7 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
  *         description: The state value returned from igree/initiate, used to correlate this callback to the pending session
  *     responses:
  *       200:
- *         description: Callback acknowledged. BVN verification continues asynchronously — poll bvn-consent-status.
+ *         description: Callback acknowledged. BVN verification continues asynchronously — poll igree/retrieve.
  *         content:
  *           application/json:
  *             schema:
@@ -210,7 +143,7 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
  *               state: { type: string }
  *     responses:
  *       200:
- *         description: Callback acknowledged. BVN verification continues asynchronously — poll bvn-consent-status.
+ *         description: Callback acknowledged. BVN verification continues asynchronously — poll igree/retrieve.
  *         content:
  *           application/json:
  *             schema:
@@ -225,10 +158,73 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
 router.get('/nibss/igree/callback', authController.iGreeCallback);
 router.post('/nibss/igree/callback', authController.iGreeCallback);
 
-// NIBSS Consent Hub callback is mounted at /callback (top-level) in app.ts
+/**
+ * @swagger
+ * /api/auth/signup/nigerian/igree/retrieve:
+ *   post:
+ *     summary: "Nigerian signup — Step 1b: poll/retrieve BVN details"
+ *     description: |
+ *       Frontend-triggered. This is the only status/retrieval endpoint the frontend needs after
+ *       calling igree/initiate (Step 1) — there is no separate consent-status polling step. Poll
+ *       this endpoint (e.g. every 2–3 seconds) with the `sessionId` (the `state` from Step 1)
+ *       until `status` is `"COMPLETED"` or `"FAILED"`:
+ *
+ *       - **PENDING** — Step 1a's callback hasn't verified consent yet (user still on the NIBSS
+ *         portal, or the callback hasn't landed). Keep polling.
+ *       - **CONSENT_VERIFIED** — consent is verified and a retrieval attempt was made but failed
+ *         transiently (NIBSS's data endpoint can be flaky) — the saved token is still valid, so
+ *         just call this endpoint again; no need to restart from Step 1.
+ *       - **COMPLETED** — BVN verified. The response includes a `verificationToken` — **save
+ *         this token**. It is required for all subsequent steps (send-otp, validate-otp,
+ *         create-account). Valid for 30 minutes.
+ *       - **FAILED** — verification failed. Either NIBSS-side (user denied consent, NIBSS error)
+ *         or because the submitted firstName/lastName/dateOfBirth/bvn didn't match NIBSS's
+ *         verified BVN record (`message` names which field(s) mismatched). Restart from Step 1.
+ *
+ *       **Do NOT call send-otp before this endpoint returns `status: "COMPLETED"`.**
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [sessionId]
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 description: The state returned from Step 1 (igree/initiate)
+ *     responses:
+ *       200:
+ *         description: Retrieval outcome
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [PENDING, CONSENT_VERIFIED, COMPLETED, FAILED]
+ *                       description: |
+ *                         PENDING = Step 1a hasn't verified consent yet — keep polling this endpoint.
+ *                         CONSENT_VERIFIED = retrieval attempted but failed transiently; retry this call.
+ *                         COMPLETED = BVN verified, verificationToken is available.
+ *                         FAILED = identity cross-check failed or session expired; restart from Step 1.
+ *                       example: "COMPLETED"
+ *                     verificationToken:
+ *                       type: string
+ *                       description: Only present when status is COMPLETED. Valid for 30 minutes.
+ *                     message: { type: string }
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+router.post('/signup/nigerian/igree/retrieve', authController.retrieveIGreeBvnDetails); // Step 1b: poll/fetch BVN details using the token saved in Step 1a
 
-// Nigerian signup flow (iGree only — see /signup/nigerian/igree/initiate above for Step 1)
-router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsentStatus); // Step 1b: poll until COMPLETED, returns verificationToken
+// NIBSS Consent Hub callback is mounted at /callback (top-level) in app.ts
 /**
  * @swagger
  * /api/auth/signup/nigerian/send-otp:
@@ -238,7 +234,7 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *       Sends an OTP to the user's phone or email address retrieved from the verified BVN data.
  *
  *       **Prerequisite:** The `verificationToken` must come from Step 1b
- *       (`POST /api/auth/signup/nigerian/bvn-consent-status`) **after** it returns
+ *       (`POST /api/auth/signup/nigerian/igree/retrieve`) **after** it returns
  *       `status: "COMPLETED"`. Calling this endpoint with a token from a previous session,
  *       or before Step 1b completes, will result in a 400 "BVN verification session expired" error.
  *
@@ -258,7 +254,7 @@ router.post('/signup/nigerian/bvn-consent-status', authController.checkBvnConsen
  *               verificationToken:
  *                 type: string
  *                 description: |
- *                   Token from Step 1b (bvn-consent-status) once status is COMPLETED.
+ *                   Token from Step 1b (igree/retrieve) once status is COMPLETED.
  *                   Valid for 30 minutes.
  *                 example: "abc123xyz789"
  *               verificationType:

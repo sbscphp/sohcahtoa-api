@@ -23,12 +23,15 @@ AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
  *       Agent submits the customer's bvn, firstName, lastName, dateOfBirth, phoneNumber
  *       (and optionally email) up front, then the customer (or agent, on their behalf)
  *       authenticates on NIBSS's iGree portal via the returned authUrl. Once NIBSS redirects
- *       back to the iGree callback, these submitted fields are cross-checked against NIBSS's
- *       verified BVN record — any mismatch fails the session (poll via bvn-consent-status).
- *       The customer is linked to this agent later, at account-creation time.
+ *       back to the iGree callback (Step 1a, verifies consent only), the frontend polls
+ *       igree/retrieve (Step 1b) directly, which cross-checks these submitted fields against
+ *       NIBSS's verified BVN record — any mismatch fails the session. There is no separate
+ *       consent-status polling step. The customer is linked to this agent later, at
+ *       account-creation time.
  *
- *       **Recommended flow after this step:** poll bvn-consent-status until COMPLETED, then call
- *       send-otp with `verificationType: "email"` once and validate-otp — no phone OTP needed.
+ *       **Recommended flow after this step:** poll igree/retrieve (Step 1b) until COMPLETED,
+ *       then call send-otp with `verificationType: "email"` once and validate-otp — no phone
+ *       OTP needed.
  *     tags: [Agent Customer Authentication]
  *     security:
  *       - bearerAuth: []
@@ -48,7 +51,7 @@ AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
  *               email: { type: string, example: "john@example.com" }
  *     responses:
  *       200:
- *         description: Consent initiated — redirect to authUrl, then poll bvn-consent-status with the returned state
+ *         description: Consent initiated — redirect to authUrl, then poll igree/retrieve with the returned state
  *         content:
  *           application/json:
  *             schema:
@@ -62,7 +65,7 @@ AgentCustomerAuthRouter.use(authenticate, authorize(UserRole.AGENT));
  *                   properties:
  *                     state:
  *                       type: string
- *                       description: Use this in bvn-consent-status (as sessionId) to poll for completion
+ *                       description: Use this in igree/retrieve (as sessionId) to poll for completion
  *                       example: "a1b2c3d4e5f6"
  *                     authUrl:
  *                       type: string
@@ -78,14 +81,20 @@ AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
 
 /**
  * @swagger
- * /api/agent/customer-auth/bvn-consent-status:
+ * /api/agent/customer-auth/igree/retrieve:
  *   post:
- *     summary: Step 1b - Poll BVN consent status for agent-created customer
+ *     summary: Step 1b - Poll/retrieve BVN details for agent-created customer
  *     description: |
- *       Polls the status of the iGree consent initiated in Step 1. Call repeatedly (e.g. every
- *       2–3 seconds) until status is COMPLETED (returns verificationToken — save it, required
- *       for send-otp/validate-otp/create-account) or FAILED (identity mismatch or NIBSS error;
- *       restart from Step 1).
+ *       The only status/retrieval endpoint needed after Step 1 — there is no separate
+ *       consent-status polling step. Call repeatedly (e.g. every 2–3 seconds) with the
+ *       `sessionId` (the `state` from Step 1) until `status` is `COMPLETED` or `FAILED`:
+ *
+ *       - **PENDING** — the iGree callback hasn't verified consent yet. Keep polling.
+ *       - **CONSENT_VERIFIED** — consent verified but the BVN-details fetch failed transiently
+ *         (NIBSS's data endpoint can be flaky); just call this endpoint again.
+ *       - **COMPLETED** — returns `verificationToken` — save it, required for
+ *         send-otp/validate-otp/create-account.
+ *       - **FAILED** — identity mismatch or NIBSS error; restart from Step 1.
  *     tags: [Agent Customer Authentication]
  *     security:
  *       - bearerAuth: []
@@ -103,11 +112,11 @@ AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
  *                 description: The state returned from Step 1 (igree/initiate)
  *     responses:
  *       200:
- *         description: Consent status response
+ *         description: Retrieval outcome
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-AgentCustomerAuthRouter.post('/bvn-consent-status', authController.checkBvnConsentStatus);
+AgentCustomerAuthRouter.post('/igree/retrieve', authController.retrieveIGreeBvnDetails);
 
 /**
  * @swagger

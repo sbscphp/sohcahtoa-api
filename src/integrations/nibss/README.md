@@ -95,7 +95,12 @@ if (status.granted) {
 }
 ```
 
-### BVN via iGree (OIDC consent + separate retrieval token)
+### BVN via iGree (OIDC consent, then a separate frontend-triggered retrieval step)
+
+iGree is split into three steps precisely because NIBSS's data-fetch endpoint has been observed
+to be flaky (intermittent 503s) even when auth succeeds — separating "consent verified" from
+"details fetched" means a failed fetch can be retried without re-running the OAuth dance or
+sending the customer back through NIBSS's consent portal.
 
 ```typescript
 import bvnService from '@/modules/auth/services/bvn.service';
@@ -104,12 +109,21 @@ import bvnService from '@/modules/auth/services/bvn.service';
 const { authUrl } = bvnService.initiateIGreeConsent(state);
 
 // 2. NIBSS redirects back to NIBSS_IGREE_REDIRECT_URI with ?code=...&state=...
-//    Exchange the code (consent-phase credentials) and fetch details (retrieval-phase credentials):
-const result = await bvnService.verifyBvnWithIGreeCode(code);
+//    Exchange the code (consent-phase credentials), extract the verified bvn from the id_token,
+//    and obtain (but don't yet use) the retrieval-phase token. Persist both against the session.
+const { bvn, retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
+
+// 3. Frontend-triggered, once the session is known to be consent-verified: fetch full BVN
+//    details using the (already-obtained, cached-in-client) retrieval token.
+const result = await bvnService.getIGreeBvnDetails(bvn);
 if (result.success) {
   console.log(result.data?.firstName, result.data?.lastName);
 }
 ```
+
+See `auth.service.ts`'s `handleIGreeCallback` (Step 2) and `retrieveIGreeBvnDetails` (Step 3) for
+how this is wired into the actual signup flow, including session persistence and identity
+cross-validation.
 
 ### Boolean BVN match (no consent flow required)
 

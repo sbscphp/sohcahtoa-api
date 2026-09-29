@@ -603,7 +603,10 @@ export class AuthService {
     };
   }
 
-  // iGree Callback: NIBSS redirects here with ?code=...&state=... after user authenticates
+  // iGree Step 2: NIBSS redirects here with ?code=...&state=... after user authenticates.
+  // Verifies consent and saves the retrieval-phase token against the session — it deliberately
+  // stops there. Fetching the actual BVN details is Step 3 (retrieveIGreeBvnDetails below),
+  // a separate call the frontend triggers explicitly once this step reports CONSENT_VERIFIED.
   async handleIGreeCallback(code: string, state: string): Promise<void> {
     const consentKey = `bvn:consent:${state}`;
     const cached = await redis.get(consentKey);
@@ -615,32 +618,78 @@ export class AuthService {
 
     const session = JSON.parse(cached);
 
-    if (session.status === 'COMPLETED') {
+    if (session.status === 'CONSENT_VERIFIED' || session.status === 'COMPLETED') {
       logger.info('iGree callback already processed', { state });
       return;
     }
 
     logger.info('Processing iGree consent callback', { state });
 
-    const bvnResult = await bvnService.verifyBvnWithIGreeCode(code);
+    try {
+      const { bvn, retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
 
-    // Persist the retrieval-phase token against this session as soon as it's obtained —
-    // independent of whether the BVN details fetch itself succeeded, so a retry of the
-    // fetch doesn't need to re-authenticate against NIBSS's oxAuth IdP.
-    if (bvnResult.retrievalToken) {
-      session.igreeRetrievalToken = bvnResult.retrievalToken;
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({
+        ...session,
+        verifiedBvn: bvn,
+        igreeRetrievalToken: retrievalToken,
+        status: 'CONSENT_VERIFIED',
+      }));
+
+      logger.info('iGree consent verified, retrieval token saved', { state });
+    } catch (error: any) {
+      logger.error('iGree consent verification failed', { state, error: error.message });
+      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: error.message }));
+    }
+  }
+
+  // iGree Step 3: frontend-triggered — fetch full BVN details for the bvn verified in Step 2,
+  // cross-check identity fields, and (on success) issue the verificationToken used from here on.
+  async retrieveIGreeBvnDetails(sessionId: string): Promise<{
+    status: 'PENDING' | 'CONSENT_VERIFIED' | 'COMPLETED' | 'FAILED';
+    verificationToken?: string;
+    message: string;
+  }> {
+    const consentKey = `bvn:consent:${sessionId}`;
+    const cached = await redis.get(consentKey);
+
+    if (!cached) {
+      return { status: 'FAILED', message: 'Session expired or not found. Please restart BVN verification.' };
     }
 
+    const session = JSON.parse(cached);
+
+    if (session.status === 'COMPLETED') {
+      return {
+        status: 'COMPLETED',
+        verificationToken: session.verificationToken,
+        message: 'BVN verified successfully. Use the verification token to proceed.',
+      };
+    }
+
+    if (session.status === 'FAILED') {
+      return { status: 'FAILED', message: session.errorMessage || 'BVN verification failed.' };
+    }
+
+    if (session.status !== 'CONSENT_VERIFIED' || !session.verifiedBvn) {
+      return { status: 'PENDING', message: 'Consent not yet verified. Complete the NIBSS consent step first.' };
+    }
+
+    logger.info('Retrieving iGree BVN details', { sessionId });
+
+    const bvnResult = await bvnService.getIGreeBvnDetails(session.verifiedBvn);
+
     if (!bvnResult.success || !bvnResult.data) {
-      logger.error('iGree BVN verification failed', { state, message: bvnResult.message });
-      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
-      return;
+      logger.error('iGree BVN details retrieval failed', { sessionId, message: bvnResult.message });
+      // Deliberately left as CONSENT_VERIFIED, not FAILED — NIBSS's data endpoint can be
+      // flaky (observed 503s) even when auth is fine, so the frontend can just call this
+      // endpoint again without forcing the customer back through the NIBSS consent portal.
+      return { status: 'CONSENT_VERIFIED', message: bvnResult.message || 'BVN retrieval failed. Please try again.' };
     }
 
     // Cross-check the customer's self-reported identity fields against NIBSS's
     // verified BVN record. Any mismatch is a hard reject — the two identities don't line up.
     const mismatches: string[] = [];
-    if (session.bvn && bvnResult.data.bvn && !fieldsMatch(session.bvn, bvnResult.data.bvn)) {
+    if (session.bvn && !fieldsMatch(session.bvn, session.verifiedBvn)) {
       mismatches.push('bvn');
     }
     if (session.firstName && !fieldsMatch(session.firstName, bvnResult.data.firstName)) {
@@ -655,21 +704,21 @@ export class AuthService {
 
     if (mismatches.length > 0) {
       const errorMessage = `Submitted details do not match your BVN record: ${mismatches.join(', ')}`;
-      logger.warn('iGree BVN cross-validation failed', { state, mismatches });
+      logger.warn('iGree BVN cross-validation failed', { sessionId, mismatches });
       await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage }));
-      return;
+      return { status: 'FAILED', message: errorMessage };
     }
 
     const verificationToken = generateId();
     await redis.setex(`bvn:verification:${verificationToken}`, 30 * 60, JSON.stringify({
-      bvn:         session.bvn,
+      bvn:         session.verifiedBvn,
       firstName:   bvnResult.data.firstName,
       lastName:    bvnResult.data.lastName,
       middleName:  bvnResult.data.middleName ?? null,
       dateOfBirth: bvnResult.data.dateOfBirth ?? null,
       gender:      bvnResult.data.gender ?? null,
-      email:       bvnResult.data.email ?? session.email ?? null,
-      phoneNumber: bvnResult.data.phoneNumber ?? session.phoneNumber ?? null,
+      email:       session.email ?? null,
+      phoneNumber: session.phoneNumber ?? null,
       address:     bvnResult.data.residentialAddress ?? null,
     }));
 
@@ -679,7 +728,13 @@ export class AuthService {
       verificationToken,
     }));
 
-    logger.info('iGree callback processed successfully', { state, verificationToken });
+    logger.info('iGree BVN retrieval completed', { sessionId, verificationToken });
+
+    return {
+      status: 'COMPLETED',
+      verificationToken,
+      message: 'BVN verified successfully. Use the verification token to proceed.',
+    };
   }
 
   // NIBSS Callback (legacy Consent Hub): called when NIBSS POSTs the retrievalToken after user authenticates
@@ -753,64 +808,6 @@ export class AuthService {
     }));
 
     logger.info('NIBSS consent callback processed successfully', { sessionId, verificationToken });
-  }
-
-  // Poll endpoint: frontend uses sessionId to know when consent is done
-  async checkBvnConsentStatus(sessionId: string): Promise<{
-    status: 'PENDING' | 'COMPLETED' | 'FAILED';
-    verificationToken?: string;
-    message: string;
-  }> {
-    const consentKey = `bvn:consent:${sessionId}`;
-    const cached = await redis.get(consentKey);
-
-    if (!cached) {
-      return { status: 'FAILED', message: 'Session expired or not found. Please restart BVN verification.' };
-    }
-
-    const session = JSON.parse(cached);
-
-    if (session.status === 'COMPLETED') {
-      return {
-        status: 'COMPLETED',
-        verificationToken: session.verificationToken,
-        message: 'BVN verified successfully. Use the verification token to proceed.',
-      };
-    }
-
-    if (session.status === 'FAILED') {
-      return { status: 'FAILED', message: session.errorMessage || 'BVN verification failed.' };
-    }
-
-    // Callback never arrived — poll NIBSS directly to check if consent was granted
-    try {
-      const nibssStatus = await bvnService.checkConsentStatus(sessionId);
-
-      if (nibssStatus.granted && nibssStatus.retrievalToken) {
-        logger.info('NIBSS consent confirmed via polling — processing immediately', { sessionId });
-        await this.handleNibssConsentCallback(sessionId, nibssStatus.retrievalToken);
-
-        // Re-read Redis after processing
-        const updated = await redis.get(consentKey);
-        if (updated) {
-          const updatedSession = JSON.parse(updated);
-          if (updatedSession.status === 'COMPLETED') {
-            return {
-              status: 'COMPLETED',
-              verificationToken: updatedSession.verificationToken,
-              message: 'BVN verified successfully. Use the verification token to proceed.',
-            };
-          }
-          if (updatedSession.status === 'FAILED') {
-            return { status: 'FAILED', message: updatedSession.errorMessage || 'BVN verification failed.' };
-          }
-        }
-      }
-    } catch (err) {
-      logger.warn('NIBSS consent status poll failed, staying PENDING', { sessionId, err });
-    }
-
-    return { status: 'PENDING', message: 'Awaiting user consent on NIBSS portal.' };
   }
 
   // STEP 2: Send OTP using verification token, return details from Redis
