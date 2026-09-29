@@ -1287,6 +1287,10 @@ export class NIBSSClient {
       tokenData = retryRes.data;
     }
 
+    // Log what scope NIBSS actually granted vs what we requested — if "bvn" is silently
+    // dropped here, that's a client/app-registration issue on NIBSS's side, not ours.
+    logger.info('iGree: token exchange granted scope', { requestedScope: 'openid bvn profile address', grantedScope: tokenData.scope ?? '(not returned)' });
+
     // The id_token (JWT) carries identity claims for the requested scopes (openid bvn profile address).
     // Verify its signature against NIBSS's published JWKS before trusting the bvn claim —
     // this token determines which BVN the resource call fetches, so it must not be trusted unverified.
@@ -1294,6 +1298,9 @@ export class NIBSSClient {
     if (tokenData.id_token) {
       const claims = await this.verifyIGreeIdToken(tokenData.id_token);
       bvn = claims?.bvn || claims?.BVN;
+      if (!bvn) {
+        logger.warn('iGree: id_token verified but had no bvn/BVN claim', { claimKeys: claims ? Object.keys(claims) : null });
+      }
     }
 
     // NIBSS's oxAuth (Gluu) server doesn't embed the custom "bvn" scope's claim into the
