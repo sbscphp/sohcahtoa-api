@@ -176,7 +176,8 @@ router.post('/nibss/igree/callback', authController.iGreeCallback);
  *         just call this endpoint again; no need to restart from Step 1.
  *       - **COMPLETED** — BVN verified. The response includes a `verificationToken` — **save
  *         this token**. It is required for all subsequent steps (send-otp, validate-otp,
- *         create-account). Valid for 30 minutes.
+ *         create-account). Valid for 30 minutes. Also includes a `customer` object with the
+ *         verified name/DOB/gender for display, and contact details/bvn partially redacted.
  *       - **FAILED** — verification failed. Either NIBSS-side (user denied consent, NIBSS error)
  *         or because the submitted firstName/lastName/dateOfBirth/bvn didn't match NIBSS's
  *         verified BVN record (`message` names which field(s) mismatched). Restart from Step 1.
@@ -218,6 +219,17 @@ router.post('/nibss/igree/callback', authController.iGreeCallback);
  *                     verificationToken:
  *                       type: string
  *                       description: Only present when status is COMPLETED. Valid for 30 minutes.
+ *                     customer:
+ *                       type: object
+ *                       description: Only present when status is COMPLETED. Contact details and bvn are partially redacted.
+ *                       properties:
+ *                         firstName: { type: string, example: "Chinedu" }
+ *                         lastName: { type: string, example: "Okafor" }
+ *                         dateOfBirth: { type: string, format: date, nullable: true, example: "1990-05-15" }
+ *                         gender: { type: string, nullable: true, example: "Male" }
+ *                         email: { type: string, description: Partially redacted, example: "ch***@example.com" }
+ *                         phoneNumber: { type: string, description: Partially redacted, example: "*******5678" }
+ *                         bvn: { type: string, description: Partially redacted, example: "*******8901" }
  *                     message: { type: string }
  *       400:
  *         $ref: '#/components/responses/ValidationError'

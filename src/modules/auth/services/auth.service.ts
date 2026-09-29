@@ -81,6 +81,36 @@ function datesMatch(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+// Builds the customer info returned alongside a completed BVN verification —
+// names/DOB/gender visible, contact details and bvn partially redacted.
+function redactCustomer(data: {
+  bvn: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
+}): {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string | null;
+  gender: string | null;
+  email: string;
+  phoneNumber: string;
+  bvn: string;
+} {
+  return {
+    firstName:   data.firstName,
+    lastName:    data.lastName,
+    dateOfBirth: data.dateOfBirth ?? null,
+    gender:      data.gender ?? null,
+    email:       data.email ? partiallyRedactField(data.email, 'email') : '',
+    phoneNumber: data.phoneNumber ? partiallyRedactField(data.phoneNumber, 'phone') : '',
+    bvn:         partiallyRedactField(data.bvn, 'bvn'),
+  };
+}
+
 export class AuthService {
   async login(data: LoginRequest, userAgent?: string, ipAddress?: string): Promise<LoginResponse> {
     const user = await prisma.user.findUnique({
@@ -647,6 +677,15 @@ export class AuthService {
   async retrieveIGreeBvnDetails(sessionId: string): Promise<{
     status: 'PENDING' | 'CONSENT_VERIFIED' | 'COMPLETED' | 'FAILED';
     verificationToken?: string;
+    customer?: {
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string | null;
+      gender: string | null;
+      email: string;
+      phoneNumber: string;
+      bvn: string;
+    };
     message: string;
   }> {
     const consentKey = `bvn:consent:${sessionId}`;
@@ -659,9 +698,11 @@ export class AuthService {
     const session = JSON.parse(cached);
 
     if (session.status === 'COMPLETED') {
+      const verificationData = await redis.get(`bvn:verification:${session.verificationToken}`);
       return {
         status: 'COMPLETED',
         verificationToken: session.verificationToken,
+        customer: verificationData ? redactCustomer(JSON.parse(verificationData)) : undefined,
         message: 'BVN verified successfully. Use the verification token to proceed.',
       };
     }
@@ -710,7 +751,7 @@ export class AuthService {
     }
 
     const verificationToken = generateId();
-    await redis.setex(`bvn:verification:${verificationToken}`, 30 * 60, JSON.stringify({
+    const verificationData = {
       bvn:         session.verifiedBvn,
       firstName:   bvnResult.data.firstName,
       lastName:    bvnResult.data.lastName,
@@ -720,7 +761,8 @@ export class AuthService {
       email:       session.email ?? null,
       phoneNumber: session.phoneNumber ?? null,
       address:     bvnResult.data.residentialAddress ?? null,
-    }));
+    };
+    await redis.setex(`bvn:verification:${verificationToken}`, 30 * 60, JSON.stringify(verificationData));
 
     await redis.setex(consentKey, 30 * 60, JSON.stringify({
       ...session,
@@ -733,6 +775,7 @@ export class AuthService {
     return {
       status: 'COMPLETED',
       verificationToken,
+      customer: redactCustomer(verificationData),
       message: 'BVN verified successfully. Use the verification token to proceed.',
     };
   }

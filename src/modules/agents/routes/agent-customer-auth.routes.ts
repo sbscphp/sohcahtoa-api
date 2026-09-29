@@ -93,7 +93,8 @@ AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
  *       - **CONSENT_VERIFIED** — consent verified but the BVN-details fetch failed transiently
  *         (NIBSS's data endpoint can be flaky); just call this endpoint again.
  *       - **COMPLETED** — returns `verificationToken` — save it, required for
- *         send-otp/validate-otp/create-account.
+ *         send-otp/validate-otp/create-account — plus a `customer` object with the verified
+ *         name/DOB/gender for display, and contact details/bvn partially redacted.
  *       - **FAILED** — identity mismatch or NIBSS error; restart from Step 1.
  *     tags: [Agent Customer Authentication]
  *     security:
@@ -113,6 +114,33 @@ AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
  *     responses:
  *       200:
  *         description: Retrieval outcome
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [PENDING, CONSENT_VERIFIED, COMPLETED, FAILED]
+ *                     verificationToken:
+ *                       type: string
+ *                       description: Only present when status is COMPLETED. Valid for 30 minutes.
+ *                     customer:
+ *                       type: object
+ *                       description: Only present when status is COMPLETED. Contact details and bvn are partially redacted.
+ *                       properties:
+ *                         firstName: { type: string, example: "Chinedu" }
+ *                         lastName: { type: string, example: "Okafor" }
+ *                         dateOfBirth: { type: string, format: date, nullable: true, example: "1990-05-15" }
+ *                         gender: { type: string, nullable: true, example: "Male" }
+ *                         email: { type: string, description: Partially redacted, example: "ch***@example.com" }
+ *                         phoneNumber: { type: string, description: Partially redacted, example: "*******5678" }
+ *                         bvn: { type: string, description: Partially redacted, example: "*******8901" }
+ *                     message: { type: string }
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
