@@ -103,18 +103,26 @@ export class BvnService {
 
   /**
    * iGree flow: exchange authorization code for access token, then fetch BVN details.
+   *
+   * The retrieval-phase token is obtained and returned as soon as the code exchange
+   * succeeds, independent of whether the subsequent partial-details fetch succeeds —
+   * NIBSS's data endpoint can 503 even when auth is fine, so callers can persist the
+   * token against the session and retry the fetch later without re-authenticating.
    */
-  async verifyBvnWithIGreeCode(code: string): Promise<BvnVerificationResult> {
+  async verifyBvnWithIGreeCode(code: string): Promise<BvnVerificationResult & { retrievalToken?: string }> {
+    let retrievalToken: string | undefined;
     try {
       logger.info('iGree: exchanging authorization code for access token');
       // accessToken from the consent-phase exchange is not used for retrieval — that phase
       // authenticates with its own separate client_credentials token (see nibss.client.ts).
       const { bvn } = await nibssClient.iGreeExchangeCode(code);
 
+      retrievalToken = await nibssClient.getIGreeRetrievalToken();
+
       const result = await nibssClient.iGreeGetBvnDetails(bvn);
 
       if (!result.verified || !result.data) {
-        return { success: false, message: result.message };
+        return { success: false, message: result.message, retrievalToken };
       }
 
       return {
@@ -134,10 +142,11 @@ export class BvnService {
           faceImage:          result.data.faceImage,
         },
         message: 'BVN verified via iGree successfully',
+        retrievalToken,
       };
     } catch (error: any) {
       logger.error('iGree BVN verification error', { error: error.message });
-      return { success: false, message: 'iGree BVN verification failed', error: error.message };
+      return { success: false, message: 'iGree BVN verification failed', error: error.message, retrievalToken };
     }
   }
 

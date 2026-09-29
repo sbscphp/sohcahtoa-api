@@ -163,9 +163,12 @@ router.post('/signup/nigerian/igree/initiate', authController.iGreeInitiate);
  *       Responds immediately with 200 so the redirect doesn't hang, then asynchronously:
  *       exchanges `code` for a token using the iGree consent-phase credentials, verifies the
  *       returned id_token's signature against NIBSS's published JWKS, extracts the `bvn` claim,
- *       and fetches BVN details using a separate iGree retrieval-phase `client_credentials`
- *       token. Poll `/signup/nigerian/bvn-consent-status` with the same `state` (as `sessionId`)
- *       to observe the result — this endpoint's own response body carries no verification result.
+ *       then obtains a retrieval-phase `client_credentials` token from NIBSS's oxAuth IdP and
+ *       persists it against this session immediately (independent of whether the subsequent
+ *       BVN-details fetch succeeds, so a retry doesn't need to re-authenticate), before using it
+ *       to fetch BVN details. Poll `/signup/nigerian/bvn-consent-status` with the same `state`
+ *       (as `sessionId`) to observe the result — this endpoint's own response body carries no
+ *       verification result, and the raw retrieval token is never returned to the client.
  *     tags: [Authentication]
  *     parameters:
  *       - in: query

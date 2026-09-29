@@ -319,11 +319,15 @@ export class NIBSSClient {
     this.iGreeClientSecret      = process.env.NIBSS_IGREE_CLIENT_SECRET     || process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
     this.iGreeRedirectUri       = process.env.NIBSS_IGREE_REDIRECT_URI      || '';
 
-    // iGree — retrieval phase (Step 4 data fetch): separate NIBSS app registration + own token
-    this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || '';
-    this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || '';
-    this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || 'https://apitest.nibss-plc.com.ng/reset';
-    this.iGreeConsumerCustomId      = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID || this.iGreeRetrievalClientId;
+    // iGree — retrieval phase (Step 4 data fetch): NIBSS_IGREE_RETRIEVAL_CLIENT_ID/SECRET are for
+    // a distinct app registration IF NIBSS has issued one; falls back to the consent-phase
+    // credentials otherwise, since in practice the sandbox tenant only provisions one iGree app
+    // (confirmed: the consent client_id/secret authenticate fine against the retrieval endpoints,
+    // while a separately-issued "retrieval" id/secret pair was rejected with invalid_client).
+    this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || this.iGreeClientId;
+    this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || this.iGreeClientSecret;
+    this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || `${this.idpBaseUrl}/oxauth/restv1/token`;
+    this.iGreeConsumerCustomId      = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID      || this.iGreeRetrievalClientId;
     this.iGreeChannelCode           = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
 
     // ── Axios instances ──
@@ -1159,30 +1163,62 @@ export class NIBSSClient {
   /**
    * Obtain a token for the iGree RETRIEVAL phase (Step 4 data fetch) — a separate
    * NIBSS app registration from the consent phase, with its own client_credentials grant.
+   * Goes through the same oxAuth IdP (idpBaseUrl) as the consent-phase code exchange —
+   * NOT the Azure AD-backed /reset endpoint used by BIVS/Consent Hub/FAS.
+   * Falls back to client_secret_post if the IdP rejects HTTP Basic Auth.
    */
-  private async getIGreeRetrievalToken(): Promise<string> {
+  async getIGreeRetrievalToken(): Promise<string> {
     if (this.iGreeRetrievalToken && Date.now() < this.iGreeRetrievalTokenExpiry) return this.iGreeRetrievalToken;
 
     logger.info('Requesting iGree retrieval access token');
-    const params = new URLSearchParams();
-    params.append('client_id',     this.iGreeRetrievalClientId);
-    params.append('client_secret', this.iGreeRetrievalClientSecret);
-    params.append('scope',         `${this.iGreeRetrievalClientId}/.default`);
-    params.append('grant_type',    'client_credentials');
+    const scope = process.env.NIBSS_IGREE_RETRIEVAL_SCOPE;
+    const baseParams: Record<string, string> = { grant_type: 'client_credentials' };
+    if (scope) baseParams.scope = scope;
 
+    let tokenData: NIBSSTokenResponse;
     try {
+      const params = new URLSearchParams(baseParams);
+      const credentials = Buffer.from(`${this.iGreeRetrievalClientId}:${this.iGreeRetrievalClientSecret}`).toString('base64');
+
       const res = await axios.post<NIBSSTokenResponse>(this.iGreeRetrievalResetUrl, params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type':  'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${credentials}`,
+        },
         timeout: 10000,
       });
-      this.iGreeRetrievalToken       = res.data.access_token;
-      this.iGreeRetrievalTokenExpiry = Date.now() + (res.data.expires_in - 300) * 1000;
-      logger.info('iGree retrieval token obtained', { expiresIn: res.data.expires_in });
-      return this.iGreeRetrievalToken;
+      tokenData = res.data;
     } catch (error: any) {
-      logger.error('Failed to obtain iGree retrieval token', { error: error.message, data: error.response?.data });
-      throw new Error(`iGree retrieval authentication failed: ${error.message}`);
+      const status = error.response?.status;
+      if (status !== 400 && status !== 401) {
+        logger.error('Failed to obtain iGree retrieval token', { error: error.message, data: error.response?.data });
+        throw new Error(`iGree retrieval authentication failed: ${error.message}`);
+      }
+
+      logger.warn('iGree retrieval: Basic Auth token request rejected, retrying with client_secret_post', { status });
+
+      try {
+        const params = new URLSearchParams({
+          ...baseParams,
+          client_id:     this.iGreeRetrievalClientId,
+          client_secret: this.iGreeRetrievalClientSecret,
+        });
+
+        const retryRes = await axios.post<NIBSSTokenResponse>(this.iGreeRetrievalResetUrl, params, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: 10000,
+        });
+        tokenData = retryRes.data;
+      } catch (retryError: any) {
+        logger.error('Failed to obtain iGree retrieval token', { error: retryError.message, data: retryError.response?.data });
+        throw new Error(`iGree retrieval authentication failed: ${retryError.message}`);
+      }
     }
+
+    this.iGreeRetrievalToken       = tokenData.access_token;
+    this.iGreeRetrievalTokenExpiry = Date.now() + (tokenData.expires_in - 300) * 1000;
+    logger.info('iGree retrieval token obtained', { expiresIn: tokenData.expires_in });
+    return this.iGreeRetrievalToken;
   }
 
   /**

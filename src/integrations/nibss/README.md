@@ -13,14 +13,16 @@ NIBSS exposes several distinct products behind this one client, each with its ow
 | **FAS** (Financial Authentication Service) | BVN/NIN data extraction using a Consent Hub `retrievalToken` | `client_credentials` (falls back to Consent Hub credentials if FAS-specific ones aren't set) |
 | **iGree** (BVN Consent v1) | OIDC-based BVN consent + retrieval — **two separate NIBSS app registrations**, see below | `authorization_code` (consent) + `client_credentials` (retrieval) |
 
-## iGree: two credential sets, not one
+## iGree: two phases, possibly one credential set
 
-iGree is the odd one out and is the most common source of confusion, so it's called out on its own. It has **two phases, each backed by a different NIBSS app registration**:
+iGree is the odd one out and is the most common source of confusion, so it's called out on its own. It has **two phases, using two different grant types**:
 
-1. **Consent phase** (`iGreeGetAuthUrl` → `iGreeExchangeCode`) — the user is redirected to NIBSS's IdP to authenticate and consent. The authorization code returned on callback is exchanged for an access/id token using `NIBSS_IGREE_CLIENT_ID` / `NIBSS_IGREE_CLIENT_SECRET`. The `id_token` JWT is verified against NIBSS's published JWKS and its `bvn` claim is extracted — this is the BVN the retrieval phase will fetch.
-2. **Retrieval phase** (`iGreeGetBvnDetails`) — a completely separate `client_credentials` grant using `NIBSS_IGREE_RETRIEVAL_CLIENT_ID` / `NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET` is used to call `POST /getPartialDetailsWithBvn`. This token is **not** derived from or related to the consent-phase token — it authenticates the retrieval app itself, independent of any particular user's consent.
+1. **Consent phase** (`iGreeGetAuthUrl` → `iGreeExchangeCode`) — the user is redirected to NIBSS's IdP to authenticate and consent. The authorization code returned on callback is exchanged for an access/id token using `NIBSS_IGREE_CLIENT_ID` / `NIBSS_IGREE_CLIENT_SECRET` (`authorization_code` grant). The `id_token` JWT is verified against NIBSS's published JWKS and its `bvn` claim is extracted — this is the BVN the retrieval phase will fetch.
+2. **Retrieval phase** (`iGreeGetBvnDetails`) — a `client_credentials` grant is used to call `POST /getPartialDetailsWithBvn`. This token is **not** derived from or related to the consent-phase user's session — it authenticates the calling app itself, independent of any particular user's consent.
 
-Do not assume a single iGree "client ID/secret" pair covers both phases — NIBSS issues these as two separate app registrations, and mixing them up produces confusing 401s where the consent redirect works fine but retrieval fails (or vice versa).
+Both phases' tokens come from the **same oxAuth IdP** at `NIBSS_IDP_BASE_URL` (`{idpBaseUrl}/oxauth/restv1/token`) — a different server from the Azure AD-backed `/reset` endpoint used by BIVS/Consent Hub/FAS; don't point `NIBSS_IGREE_RETRIEVAL_RESET_URL` at `/reset` — it will 401 with no error body since the request never reaches Azure AD at all.
+
+NIBSS's docs describe the retrieval phase as its own app registration (`NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET`), and the client supports that if NIBSS has issued one for you. **In the sandbox tenant this repo talks to, no such registration exists** — a `NIBSS_IGREE_RETRIEVAL_CLIENT_ID` value was configured but oxAuth rejects it with `invalid_client`, while the consent-phase client_id/secret authenticate fine there for `client_credentials` too. So `iGreeRetrievalClientId`/`Secret`/`ConsumerCustomId` all fall back to the consent-phase credentials when the retrieval-specific env vars are unset — leave them unset unless NIBSS confirms they've issued a real separate retrieval registration for your account.
 
 ## Environment Configuration
 
@@ -60,11 +62,12 @@ NIBSS_IGREE_CLIENT_SECRET=
 NIBSS_IGREE_REDIRECT_URI=
 NIBSS_IGREE_JWKS_URI=                   # optional override; otherwise resolved via OIDC discovery
 
-# ─── iGree — retrieval phase (separate app registration, see above) ───
-NIBSS_IGREE_RETRIEVAL_CLIENT_ID=
-NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET=
-NIBSS_IGREE_RETRIEVAL_RESET_URL=https://apitest.nibss-plc.com.ng/reset
-NIBSS_IGREE_CONSUMER_CUSTOM_ID=         # defaults to NIBSS_IGREE_RETRIEVAL_CLIENT_ID if unset
+# ─── iGree — retrieval phase (leave unset unless NIBSS issued a separate app for you, see above) ───
+NIBSS_IGREE_RETRIEVAL_CLIENT_ID=        # falls back to NIBSS_IGREE_CLIENT_ID if unset
+NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET=    # falls back to NIBSS_IGREE_CLIENT_SECRET if unset
+NIBSS_IGREE_RETRIEVAL_RESET_URL=https://idsandbox.nibss-plc.com.ng/oxauth/restv1/token   # defaults to {NIBSS_IDP_BASE_URL}/oxauth/restv1/token
+NIBSS_IGREE_RETRIEVAL_SCOPE=            # optional; omitted from the token request if unset
+NIBSS_IGREE_CONSUMER_CUSTOM_ID=         # falls back to iGreeRetrievalClientId (which itself falls back to NIBSS_IGREE_CLIENT_ID) if unset
 NIBSS_IGREE_CHANNEL_CODE=02
 ```
 
@@ -188,9 +191,9 @@ nibssClient.resetTokens();
 
 **401 on FAS but Consent Hub works fine** — FAS may require its own app registration distinct from Consent Hub. Set `NIBSS_FAS_CLIENT_ID`/`NIBSS_FAS_CLIENT_SECRET`; the client logs an explicit warning pointing at this when it detects the fallback credentials were used and got rejected.
 
-**iGree consent redirect works but `iGreeGetBvnDetails` 401s** — the retrieval phase uses a separate app registration from the consent phase. Confirm `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` are set to the retrieval app's credentials, not the consent app's (see "iGree: two credential sets, not one" above).
+**iGree consent redirect works but `iGreeGetBvnDetails` 401s** — the retrieval phase uses a separate app registration from the consent phase. Confirm `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` are set to the retrieval app's credentials, not the consent app's (see "iGree: two credential sets, not one" above). Also confirm `NIBSS_IGREE_RETRIEVAL_RESET_URL` points at the oxAuth IdP (`{NIBSS_IDP_BASE_URL}/oxauth/restv1/token`), not the Azure AD-backed `/reset` used by BIVS/Consent Hub/FAS — pointing it at `/reset` produces a bare 401 with no response body (the request never reaches Azure AD), as opposed to a proper `AADSTS...` error.
 
-**iGree token exchange fails with 400/401 on Basic Auth** — the client automatically retries with `client_secret_post` (credentials in the request body instead of the `Authorization` header); some NIBSS environments expect this. If both fail, the credentials or redirect URI are likely wrong.
+**iGree token exchange (consent or retrieval) fails with 400/401 on Basic Auth** — the client automatically retries with `client_secret_post` (credentials in the request body instead of the `Authorization` header); some NIBSS environments expect this. If both fail, the credentials or redirect URI are likely wrong.
 
 **`id_token` claims not trusted / `bvn` missing** — the id_token's signature is verified against NIBSS's published JWKS before its claims are used. If JWKS resolution fails (`NIBSS_IGREE_JWKS_URI` unset and OIDC discovery unreachable), verification is skipped and `bvn` will be `undefined` rather than falling back to unverified decoding — check logs for `iGree: no jwks_uri available`.
 

@@ -624,6 +624,13 @@ export class AuthService {
 
     const bvnResult = await bvnService.verifyBvnWithIGreeCode(code);
 
+    // Persist the retrieval-phase token against this session as soon as it's obtained —
+    // independent of whether the BVN details fetch itself succeeded, so a retry of the
+    // fetch doesn't need to re-authenticate against NIBSS's oxAuth IdP.
+    if (bvnResult.retrievalToken) {
+      session.igreeRetrievalToken = bvnResult.retrievalToken;
+    }
+
     if (!bvnResult.success || !bvnResult.data) {
       logger.error('iGree BVN verification failed', { state, message: bvnResult.message });
       await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
