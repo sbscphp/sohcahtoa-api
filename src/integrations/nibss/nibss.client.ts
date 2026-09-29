@@ -1244,6 +1244,8 @@ export class NIBSSClient {
    * Exchange the authorization code for an access token via the iGree IdP.
    * Falls back to client_secret_post (credentials in the body) if the IdP
    * rejects HTTP Basic Auth — some NIBSS environments expect this instead.
+   * If the id_token doesn't carry a bvn claim (Gluu's default for custom scopes —
+   * see getIGreeUserInfo), falls back to the UserInfo endpoint for it.
    */
   async iGreeExchangeCode(code: string): Promise<{ accessToken: string; idToken?: string; expiresIn: number; bvn?: string }> {
     const tokenUrl = `${this.idpBaseUrl}/oxauth/restv1/token`;
@@ -1294,12 +1296,41 @@ export class NIBSSClient {
       bvn = claims?.bvn || claims?.BVN;
     }
 
+    // NIBSS's oxAuth (Gluu) server doesn't embed the custom "bvn" scope's claim into the
+    // id_token itself — it's only exposed via the UserInfo endpoint. Fall back to that,
+    // authenticated with the access_token we already have.
+    if (!bvn && tokenData.access_token) {
+      const claims = await this.getIGreeUserInfo(tokenData.access_token);
+      bvn = claims?.bvn || claims?.BVN;
+      if (!bvn) {
+        logger.warn('iGree: UserInfo response did not include a bvn claim either', { claimKeys: claims ? Object.keys(claims) : null });
+      }
+    }
+
     return {
       accessToken: tokenData.access_token,
       idToken:     tokenData.id_token,
       expiresIn:   tokenData.expires_in,
       bvn,
     };
+  }
+
+  /**
+   * Fetch claims from NIBSS's oxAuth UserInfo endpoint using the access_token from the
+   * consent-phase exchange. Used as a fallback when the requested "bvn" scope's claim isn't
+   * embedded in the id_token (Gluu's default for custom scopes).
+   */
+  private async getIGreeUserInfo(accessToken: string): Promise<Record<string, any> | null> {
+    try {
+      const res = await axios.get(`${this.idpBaseUrl}/oxauth/restv1/userinfo`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000,
+      });
+      return res.data;
+    } catch (error: any) {
+      logger.error('iGree: failed to fetch UserInfo claims', { error: error.message, data: error.response?.data });
+      return null;
+    }
   }
 
   /**

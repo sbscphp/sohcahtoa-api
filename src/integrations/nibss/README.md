@@ -211,6 +211,8 @@ nibssClient.resetTokens();
 
 **`id_token` claims not trusted / `bvn` missing** — the id_token's signature is verified against NIBSS's published JWKS before its claims are used. If JWKS resolution fails (`NIBSS_IGREE_JWKS_URI` unset and OIDC discovery unreachable), verification is skipped and `bvn` will be `undefined` rather than falling back to unverified decoding — check logs for `iGree: no jwks_uri available`.
 
+**`bvn` still missing from the id_token even though verification succeeded** — this is expected. NIBSS's oxAuth (Gluu) server doesn't embed custom-scope claims like `bvn` directly into the id_token by default; they're only released via the UserInfo endpoint (`{idpBaseUrl}/oxauth/restv1/userinfo`). `iGreeExchangeCode` automatically falls back to calling UserInfo with the access_token when the id_token has no `bvn`/`BVN` claim. If `bvn` is still missing after that (logged as `iGree: UserInfo response did not include a bvn claim either`, with the actual claim keys NIBSS returned), the `bvn` scope likely isn't configured to release that claim for this client registration — that needs to be fixed on NIBSS's side (Devportal/app registration), not in this code.
+
 ## Compliance
 
 - **CBN KYC Requirements**: BVN verification for customer onboarding.
