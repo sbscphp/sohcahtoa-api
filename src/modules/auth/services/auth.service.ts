@@ -82,32 +82,56 @@ function datesMatch(a: string, b: string): boolean {
 }
 
 // Builds the customer info returned alongside a completed BVN verification —
-// names/DOB/gender visible, contact details and bvn partially redacted.
+// names/DOB/gender/other bio-data visible, contact details/bvn/nin partially redacted.
 function redactCustomer(data: {
   bvn: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
+  maritalStatus?: string | null;
+  nationality?: string | null;
+  stateOfOrigin?: string | null;
+  lgaOfOrigin?: string | null;
+  nin?: string | null;
+  watchlisted?: boolean | null;
+  faceImage?: string | null;
   email?: string | null;
   phoneNumber?: string | null;
 }): {
   firstName: string;
   lastName: string;
+  middleName: string | null;
   dateOfBirth: string | null;
   gender: string | null;
+  maritalStatus: string | null;
+  nationality: string | null;
+  stateOfOrigin: string | null;
+  lgaOfOrigin: string | null;
+  nin: string | null;
+  watchlisted: boolean | null;
+  faceImage: string | null;
   email: string;
   phoneNumber: string;
   bvn: string;
 } {
   return {
-    firstName:   data.firstName,
-    lastName:    data.lastName,
-    dateOfBirth: data.dateOfBirth ?? null,
-    gender:      data.gender ?? null,
-    email:       data.email ? partiallyRedactField(data.email, 'email') : '',
-    phoneNumber: data.phoneNumber ? partiallyRedactField(data.phoneNumber, 'phone') : '',
-    bvn:         partiallyRedactField(data.bvn, 'bvn'),
+    firstName:     data.firstName,
+    lastName:      data.lastName,
+    middleName:    data.middleName ?? null,
+    dateOfBirth:   data.dateOfBirth ?? null,
+    gender:        data.gender ?? null,
+    maritalStatus: data.maritalStatus ?? null,
+    nationality:   data.nationality ?? null,
+    stateOfOrigin: data.stateOfOrigin ?? null,
+    lgaOfOrigin:   data.lgaOfOrigin ?? null,
+    nin:           data.nin ? partiallyRedactField(data.nin, 'nin') : null,
+    watchlisted:   data.watchlisted ?? null,
+    faceImage:     data.faceImage ?? null,
+    email:         data.email ? partiallyRedactField(data.email, 'email') : '',
+    phoneNumber:   data.phoneNumber ? partiallyRedactField(data.phoneNumber, 'phone') : '',
+    bvn:           partiallyRedactField(data.bvn, 'bvn'),
   };
 }
 
@@ -626,6 +650,8 @@ export class AuthService {
       status: 'PENDING',
     }));
 
+    logger.info('iGree Step 1: consent initiated, session cached', { state, bvn: `***${bvn.slice(-4)}` });
+
     return {
       state,
       authUrl,
@@ -642,32 +668,44 @@ export class AuthService {
     const cached = await redis.get(consentKey);
 
     if (!cached) {
-      logger.warn('iGree callback received for unknown/expired session', { state });
+      logger.warn('iGree Step 1a: callback received for unknown/expired session', { state });
       return;
     }
 
     const session = JSON.parse(cached);
 
     if (session.status === 'CONSENT_VERIFIED' || session.status === 'COMPLETED') {
-      logger.info('iGree callback already processed', { state });
+      logger.info('iGree Step 1a: callback already processed, skipping', { state, status: session.status });
       return;
     }
 
-    logger.info('Processing iGree consent callback', { state });
+    logger.info('iGree Step 1a: callback received, processing consent', { state });
 
     try {
-      const { bvn, retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
+      const { retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
+
+      // The bvn to look up in Step 1b is the customer's self-reported value from Step 1 —
+      // NIBSS doesn't release a bvn claim for this client registration (see nibss.client.ts),
+      // so Step 1b's cross-check of self-reported name/DOB against NIBSS's record for this bvn
+      // is what actually verifies the customer, not this exchange.
+      const verifiedBvn = session.bvn;
+      if (!verifiedBvn) {
+        throw new Error('No self-reported bvn found on this session');
+      }
 
       await redis.setex(consentKey, 30 * 60, JSON.stringify({
         ...session,
-        verifiedBvn: bvn,
+        verifiedBvn,
         igreeRetrievalToken: retrievalToken,
         status: 'CONSENT_VERIFIED',
       }));
 
-      logger.info('iGree consent verified, retrieval token saved', { state });
+      logger.info('iGree Step 1a: consent verified, retrieval token saved — awaiting Step 1b', {
+        state,
+        verifiedBvn: `***${verifiedBvn.slice(-4)}`,
+      });
     } catch (error: any) {
-      logger.error('iGree consent verification failed', { state, error: error.message });
+      logger.error('iGree Step 1a: consent verification failed', { state, error: error.message });
       await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: error.message }));
     }
   }
@@ -677,28 +715,23 @@ export class AuthService {
   async retrieveIGreeBvnDetails(sessionId: string): Promise<{
     status: 'PENDING' | 'CONSENT_VERIFIED' | 'COMPLETED' | 'FAILED';
     verificationToken?: string;
-    customer?: {
-      firstName: string;
-      lastName: string;
-      dateOfBirth: string | null;
-      gender: string | null;
-      email: string;
-      phoneNumber: string;
-      bvn: string;
-    };
+    customer?: ReturnType<typeof redactCustomer>;
     message: string;
   }> {
     const consentKey = `bvn:consent:${sessionId}`;
     const cached = await redis.get(consentKey);
 
     if (!cached) {
+      logger.warn('iGree Step 1b: poll received for unknown/expired session', { sessionId });
       return { status: 'FAILED', message: 'Session expired or not found. Please restart BVN verification.' };
     }
 
     const session = JSON.parse(cached);
+    logger.info('iGree Step 1b: poll received', { sessionId, currentStatus: session.status });
 
     if (session.status === 'COMPLETED') {
       const verificationData = await redis.get(`bvn:verification:${session.verificationToken}`);
+      logger.info('iGree Step 1b: already COMPLETED, returning cached result', { sessionId });
       return {
         status: 'COMPLETED',
         verificationToken: session.verificationToken,
@@ -708,24 +741,28 @@ export class AuthService {
     }
 
     if (session.status === 'FAILED') {
+      logger.info('iGree Step 1b: session already FAILED, returning cached error', { sessionId, errorMessage: session.errorMessage });
       return { status: 'FAILED', message: session.errorMessage || 'BVN verification failed.' };
     }
 
     if (session.status !== 'CONSENT_VERIFIED' || !session.verifiedBvn) {
+      logger.info('iGree Step 1b: consent not yet verified (Step 1a hasn\'t completed) — reporting PENDING', { sessionId });
       return { status: 'PENDING', message: 'Consent not yet verified. Complete the NIBSS consent step first.' };
     }
 
-    logger.info('Retrieving iGree BVN details', { sessionId });
+    logger.info('iGree Step 1b: consent verified, fetching BVN details from NIBSS', { sessionId });
 
-    const bvnResult = await bvnService.getIGreeBvnDetails(session.verifiedBvn);
+    const bvnResult = await bvnService.getIGreeBvnDetails(session.verifiedBvn, sessionId);
 
     if (!bvnResult.success || !bvnResult.data) {
-      logger.error('iGree BVN details retrieval failed', { sessionId, message: bvnResult.message });
+      logger.error('iGree Step 1b: BVN details retrieval failed', { sessionId, message: bvnResult.message });
       // Deliberately left as CONSENT_VERIFIED, not FAILED — NIBSS's data endpoint can be
       // flaky (observed 503s) even when auth is fine, so the frontend can just call this
       // endpoint again without forcing the customer back through the NIBSS consent portal.
       return { status: 'CONSENT_VERIFIED', message: bvnResult.message || 'BVN retrieval failed. Please try again.' };
     }
+
+    logger.info('iGree Step 1b: BVN details retrieved, cross-checking against self-reported identity', { sessionId });
 
     // Cross-check the customer's self-reported identity fields against NIBSS's
     // verified BVN record. Any mismatch is a hard reject — the two identities don't line up.
@@ -745,22 +782,31 @@ export class AuthService {
 
     if (mismatches.length > 0) {
       const errorMessage = `Submitted details do not match your BVN record: ${mismatches.join(', ')}`;
-      logger.warn('iGree BVN cross-validation failed', { sessionId, mismatches });
+      logger.warn('iGree Step 1b: cross-validation failed', { sessionId, mismatches });
       await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage }));
       return { status: 'FAILED', message: errorMessage };
     }
 
+    logger.info('iGree Step 1b: cross-validation passed, issuing verificationToken', { sessionId });
+
     const verificationToken = generateId();
     const verificationData = {
-      bvn:         session.verifiedBvn,
-      firstName:   bvnResult.data.firstName,
-      lastName:    bvnResult.data.lastName,
-      middleName:  bvnResult.data.middleName ?? null,
-      dateOfBirth: bvnResult.data.dateOfBirth ?? null,
-      gender:      bvnResult.data.gender ?? null,
-      email:       session.email ?? null,
-      phoneNumber: session.phoneNumber ?? null,
-      address:     bvnResult.data.residentialAddress ?? null,
+      bvn:           session.verifiedBvn,
+      firstName:     bvnResult.data.firstName,
+      lastName:      bvnResult.data.lastName,
+      middleName:    bvnResult.data.middleName ?? null,
+      dateOfBirth:   bvnResult.data.dateOfBirth ?? null,
+      gender:        bvnResult.data.gender ?? null,
+      maritalStatus: bvnResult.data.maritalStatus ?? null,
+      nationality:   bvnResult.data.nationality ?? null,
+      stateOfOrigin: bvnResult.data.stateOfOrigin ?? null,
+      lgaOfOrigin:   bvnResult.data.lgaOfOrigin ?? null,
+      nin:           bvnResult.data.nin ?? null,
+      watchlisted:   bvnResult.data.watchlisted ?? null,
+      faceImage:     bvnResult.data.faceImage ?? null,
+      email:         session.email ?? null,
+      phoneNumber:   session.phoneNumber ?? null,
+      address:       bvnResult.data.residentialAddress ?? null,
     };
     await redis.setex(`bvn:verification:${verificationToken}`, 30 * 60, JSON.stringify(verificationData));
 
@@ -770,7 +816,7 @@ export class AuthService {
       verificationToken,
     }));
 
-    logger.info('iGree BVN retrieval completed', { sessionId, verificationToken });
+    logger.info('iGree Step 1b: retrieval completed — flow finished', { sessionId, verificationToken });
 
     return {
       status: 'COMPLETED',
@@ -778,79 +824,6 @@ export class AuthService {
       customer: redactCustomer(verificationData),
       message: 'BVN verified successfully. Use the verification token to proceed.',
     };
-  }
-
-  // NIBSS Callback (legacy Consent Hub): called when NIBSS POSTs the retrievalToken after user authenticates
-  async handleNibssConsentCallback(
-    sessionId: string,
-    retrievalToken: string,
-    meta?: {
-      dataOwnerId?: string;
-      consentExpiryTime?: string;
-      tokenIssuedDate?: string;
-      requestCategory?: string;
-    },
-  ): Promise<void> {
-    const consentKey = `bvn:consent:${sessionId}`;
-    const cached = await redis.get(consentKey);
-
-    if (!cached) {
-      logger.warn('NIBSS callback received for unknown/expired session', { sessionId });
-      return;
-    }
-
-    const session = JSON.parse(cached);
-
-    if (session.status === 'COMPLETED') {
-      logger.info('NIBSS callback already processed', { sessionId });
-      return;
-    }
-
-    logger.info('Processing NIBSS consent callback', {
-      sessionId,
-      dataOwnerId:      meta?.dataOwnerId,
-      requestCategory:  meta?.requestCategory,
-      consentExpiryTime: meta?.consentExpiryTime,
-      tokenIssuedDate:  meta?.tokenIssuedDate,
-    });
-
-    const bvnResult = await bvnService.verifyBvnWithRetrievalToken(session.bvn, retrievalToken);
-
-    if (!bvnResult.success || !bvnResult.data) {
-      logger.error('FAS BVN verification failed in callback', { sessionId, message: bvnResult.message });
-      await redis.setex(consentKey, 30 * 60, JSON.stringify({ ...session, status: 'FAILED', errorMessage: bvnResult.message }));
-      return;
-    }
-
-    // Store verified BVN data under a new verificationToken for the OTP step
-    const verificationToken = generateId();
-    const verificationKey = `bvn:verification:${verificationToken}`;
-    await redis.setex(verificationKey, 30 * 60, JSON.stringify({
-      bvn: session.bvn,
-      firstName: bvnResult.data.firstName,
-      lastName: bvnResult.data.lastName,
-      middleName: bvnResult.data.middleName,
-      dateOfBirth: bvnResult.data.dateOfBirth,
-      gender: bvnResult.data.gender,
-      email: bvnResult.data.email || session.email,
-      phoneNumber: bvnResult.data.phoneNumber || session.phoneNumber,
-      address: bvnResult.data.residentialAddress || null,
-    }));
-
-    // Update consent session to COMPLETED with the verificationToken and consent metadata
-    await redis.setex(consentKey, 30 * 60, JSON.stringify({
-      ...session,
-      status: 'COMPLETED',
-      verificationToken,
-      consentMeta: {
-        dataOwnerId:      meta?.dataOwnerId      ?? null,
-        consentExpiryTime: meta?.consentExpiryTime ?? null,
-        tokenIssuedDate:  meta?.tokenIssuedDate  ?? null,
-        requestCategory:  meta?.requestCategory  ?? null,
-      },
-    }));
-
-    logger.info('NIBSS consent callback processed successfully', { sessionId, verificationToken });
   }
 
   // STEP 2: Send OTP using verification token, return details from Redis

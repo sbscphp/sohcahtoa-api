@@ -60,7 +60,6 @@ NIBSS_IDP_BASE_URL=https://idsandbox.nibss-plc.com.ng
 NIBSS_IGREE_CLIENT_ID=
 NIBSS_IGREE_CLIENT_SECRET=
 NIBSS_IGREE_REDIRECT_URI=
-NIBSS_IGREE_JWKS_URI=                   # optional override; otherwise resolved via OIDC discovery
 
 # ─── iGree — retrieval phase (leave unset unless NIBSS issued a separate app for you, see above) ───
 NIBSS_IGREE_RETRIEVAL_CLIENT_ID=        # falls back to NIBSS_IGREE_CLIENT_ID if unset
@@ -73,34 +72,26 @@ NIBSS_IGREE_CHANNEL_CODE=02
 
 ## Usage Examples
 
-### BVN via Consent Hub + FAS
-
-```typescript
-import bvnService from '@/modules/auth/services/bvn.service';
-
-// 1. Kick off a Consent Hub session — returns a consentUrl to redirect the user to
-const { sessionId, consentUrl } = await bvnService.initiateConsentForBvn('12345678901');
-
-// 2. After the user completes consent (via redirect callback or by polling), you have
-//    a retrievalToken. Complete the FAS lookup with it:
-const result = await bvnService.verifyBvnWithRetrievalToken('12345678901', retrievalToken);
-if (result.success) {
-  console.log(result.data?.firstName, result.data?.lastName);
-}
-
-// If the redirect callback never arrives, poll instead:
-const status = await bvnService.checkConsentStatus(sessionId!);
-if (status.granted) {
-  await bvnService.verifyBvnWithRetrievalToken('12345678901', status.retrievalToken!);
-}
-```
-
 ### BVN via iGree (OIDC consent, then a separate frontend-triggered retrieval step)
+
+**This is the only supported BVN verification flow.** An earlier Consent Hub + FAS-based BVN flow
+(`initiateConsentForBvn`/`verifyBvnWithRetrievalToken`/`checkConsentStatus` on `bvn.service.ts`,
+the `/callback` webhook route) has been removed — it had no reachable entry point in any real
+signup flow (only ever called from a since-deleted examples file) once iGree replaced it. The
+underlying Consent Hub session mechanism (`nibssClient.initiateConsent`) is still used elsewhere
+(TIN verification, see `tin.service.ts`), and FAS's boolean BVN match (below) is unrelated and
+still supported — only the BVN *core-data* retrieval via Consent Hub was removed.
 
 iGree is split into three steps precisely because NIBSS's data-fetch endpoint has been observed
 to be flaky (intermittent 503s) even when auth succeeds — separating "consent verified" from
 "details fetched" means a failed fetch can be retried without re-running the OAuth dance or
 sending the customer back through NIBSS's consent portal.
+
+The bvn looked up in Step 3 is the customer's **self-reported** value from Step 1, not something
+extracted from NIBSS's token exchange — NIBSS doesn't release a `bvn` claim for our client
+registration (neither via id_token nor UserInfo; confirmed `insufficient_scope`). Step 3's
+cross-check of self-reported name/DOB against NIBSS's record for that bvn is what actually
+verifies the customer.
 
 ```typescript
 import bvnService from '@/modules/auth/services/bvn.service';
@@ -109,20 +100,19 @@ import bvnService from '@/modules/auth/services/bvn.service';
 const { authUrl } = bvnService.initiateIGreeConsent(state);
 
 // 2. NIBSS redirects back to NIBSS_IGREE_REDIRECT_URI with ?code=...&state=...
-//    Exchange the code (consent-phase credentials), extract the verified bvn from the id_token,
-//    and obtain (but don't yet use) the retrieval-phase token. Persist both against the session.
-const { bvn, retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
+//    Exchange the code (proves OTP consent completed) and obtain the retrieval-phase token.
+const { retrievalToken } = await bvnService.exchangeIGreeConsentCode(code);
 
-// 3. Frontend-triggered, once the session is known to be consent-verified: fetch full BVN
-//    details using the (already-obtained, cached-in-client) retrieval token.
-const result = await bvnService.getIGreeBvnDetails(bvn);
+// 3. Frontend-triggered: fetch full BVN details for the customer's self-reported bvn, using
+//    the (already-obtained, cached-in-client) retrieval token.
+const result = await bvnService.getIGreeBvnDetails(selfReportedBvn);
 if (result.success) {
   console.log(result.data?.firstName, result.data?.lastName);
 }
 ```
 
-See `auth.service.ts`'s `handleIGreeCallback` (Step 2) and `retrieveIGreeBvnDetails` (Step 3) for
-how this is wired into the actual signup flow, including session persistence and identity
+See `auth.service.ts`'s `handleIGreeCallback` (Step 1a) and `retrieveIGreeBvnDetails` (Step 1b)
+for how this is wired into the actual signup flow, including session persistence and identity
 cross-validation.
 
 ### Boolean BVN match (no consent flow required)
@@ -205,15 +195,13 @@ nibssClient.resetTokens();
 
 **401 on FAS but Consent Hub works fine** — FAS may require its own app registration distinct from Consent Hub. Set `NIBSS_FAS_CLIENT_ID`/`NIBSS_FAS_CLIENT_SECRET`; the client logs an explicit warning pointing at this when it detects the fallback credentials were used and got rejected.
 
-**iGree consent redirect works but `iGreeGetBvnDetails` 401s** — the retrieval phase uses a separate app registration from the consent phase. Confirm `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` are set to the retrieval app's credentials, not the consent app's (see "iGree: two credential sets, not one" above). Also confirm `NIBSS_IGREE_RETRIEVAL_RESET_URL` points at the oxAuth IdP (`{NIBSS_IDP_BASE_URL}/oxauth/restv1/token`), not the Azure AD-backed `/reset` used by BIVS/Consent Hub/FAS — pointing it at `/reset` produces a bare 401 with no response body (the request never reaches Azure AD), as opposed to a proper `AADSTS...` error.
+**iGree consent redirect works but `iGreeGetBvnDetails` 401s** — first confirm `NIBSS_IGREE_RETRIEVAL_RESET_URL` points at the oxAuth IdP (`{NIBSS_IDP_BASE_URL}/oxauth/restv1/token`), not the Azure AD-backed `/reset` used by BIVS/Consent Hub/FAS — pointing it at `/reset` produces a bare 401 with no response body (the request never reaches Azure AD), as opposed to a proper `AADSTS...` error. If NIBSS has issued a genuinely separate retrieval app registration for your account, set `NIBSS_IGREE_RETRIEVAL_CLIENT_ID`/`SECRET` to those credentials (see "iGree: two phases, possibly one credential set" above) — otherwise leave them unset so the client falls back to the consent-phase credentials, which is what works in the sandbox tenant this repo was built against.
 
 **iGree token exchange (consent or retrieval) fails with 400/401 on Basic Auth** — the client automatically retries with `client_secret_post` (credentials in the request body instead of the `Authorization` header); some NIBSS environments expect this. If both fail, the credentials or redirect URI are likely wrong.
 
-**`id_token` claims not trusted / `bvn` missing** — the id_token's signature is verified against NIBSS's published JWKS before its claims are used. If JWKS resolution fails (`NIBSS_IGREE_JWKS_URI` unset and OIDC discovery unreachable), verification is skipped and `bvn` will be `undefined` rather than falling back to unverified decoding — check logs for `iGree: no jwks_uri available`.
+**Why `exchangeIGreeConsentCode` doesn't return a `bvn`** (as of 2026-09-30) — NIBSS's oxAuth server doesn't release the `bvn` scope's claim to our iGree consent client (`NIBSS_IGREE_CLIENT_ID`) at all: confirmed absent from the id_token, and the UserInfo endpoint rejects it outright with `403 insufficient_scope` (check the `iGree: token exchange granted scope` log line — `grantedScope` never includes `bvn`, confirming NIBSS drops it server-side even though it's correctly requested at `/authorize`). This is a client/app-registration gap on NIBSS's side; raise it with their support (client_id, requested scope, and the `insufficient_scope` error) if you want it fixed there.
 
-**`bvn` still missing from the id_token even though verification succeeded** — expected. NIBSS's oxAuth (Gluu) server doesn't embed custom-scope claims like `bvn` directly into the id_token by default; they're only released via the UserInfo endpoint (`{idpBaseUrl}/oxauth/restv1/userinfo`). `iGreeExchangeCode` automatically falls back to calling UserInfo with the access_token when the id_token has no `bvn`/`BVN` claim (logged either way as `iGree: id_token verified but had no bvn/BVN claim`, with the id_token's actual claim keys).
-
-**UserInfo fallback also fails with `403 insufficient_scope`** — confirmed happening in the sandbox tenant (2026-09-29): the access_token from the consent-phase exchange (requested scope `openid bvn profile address`) isn't accepted by NIBSS's own UserInfo endpoint, and (per the `iGree: token exchange granted scope` log line added to compare requested vs granted scope) the `bvn` scope isn't making it into either the id_token or UserInfo. This means NIBSS hasn't actually authorized the iGree consent client (`NIBSS_IGREE_CLIENT_ID`) for the `bvn` scope on their oxAuth server — this is a client/app-registration gap on NIBSS's side, not something fixable by changing this code. Raise it with NIBSS support with the exact client_id, requested scope, and the `insufficient_scope` error — they need to grant the `bvn` scope (and its claim release, whether via id_token or UserInfo) to that client registration.
+Rather than block the whole flow on that, `exchangeIGreeConsentCode` doesn't attempt to extract `bvn` from the exchange at all — it only proves the customer completed OTP consent on NIBSS's portal. Step 1a (`handleIGreeCallback` in `auth.service.ts`) uses the customer's self-reported `bvn` from Step 1 directly to drive Step 1b's `getPartialDetailsWithBvn` lookup, and Step 1b's cross-check of self-reported name/DOB against NIBSS's record for that bvn is the actual integrity guarantee. This mirrors a sibling service in the same system that never depended on NIBSS naming the bvn in the first place. If NIBSS ever does grant the `bvn` scope, wiring it back in would mean re-adding claim extraction to `iGreeExchangeCode` — nothing currently reads NIBSS's copy of it.
 
 ## Compliance
 

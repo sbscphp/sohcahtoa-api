@@ -131,12 +131,20 @@ AgentCustomerAuthRouter.post('/igree/initiate', authController.iGreeInitiate);
  *                       description: Only present when status is COMPLETED. Valid for 30 minutes.
  *                     customer:
  *                       type: object
- *                       description: Only present when status is COMPLETED. Contact details and bvn are partially redacted.
+ *                       description: Only present when status is COMPLETED. Contact details, bvn and nin are partially redacted.
  *                       properties:
  *                         firstName: { type: string, example: "Chinedu" }
  *                         lastName: { type: string, example: "Okafor" }
+ *                         middleName: { type: string, nullable: true, example: "Y" }
  *                         dateOfBirth: { type: string, format: date, nullable: true, example: "1990-05-15" }
  *                         gender: { type: string, nullable: true, example: "Male" }
+ *                         maritalStatus: { type: string, nullable: true, example: "Single" }
+ *                         nationality: { type: string, nullable: true, example: "Nigeria" }
+ *                         stateOfOrigin: { type: string, nullable: true, example: "Jigawa" }
+ *                         lgaOfOrigin: { type: string, nullable: true, example: "Garki" }
+ *                         nin: { type: string, nullable: true, description: Partially redacted, example: "*******2758" }
+ *                         watchlisted: { type: boolean, nullable: true, description: "AML/CFT watchlist flag from NIBSS" }
+ *                         faceImage: { type: string, nullable: true, description: Base64-encoded photo from NIBSS's BVN record }
  *                         email: { type: string, description: Partially redacted, example: "ch***@example.com" }
  *                         phoneNumber: { type: string, description: Partially redacted, example: "*******5678" }
  *                         bvn: { type: string, description: Partially redacted, example: "*******8901" }

@@ -36,7 +36,6 @@ import adminWalletRoutes from './modules/wallet/routes/admin-wallet.routes';
 import customerBankAccountRoutes from './modules/customer/routes/customer-bank-account.routes';
 import customerDashboardRoutes from './modules/customer/routes/customer-dashboard.routes';
 import agentBankAccountRoutes from './modules/agents/routes/agent-bank-account.routes';
-import nibssCallbackRoutes from './modules/auth/routes/nibss-callback.routes';
 
 const logger = createLogger('app');
 
@@ -182,10 +181,6 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/agent', agentBankAccountRoutes);
   logger.info('Agent bank account routes registered');
-
-  // NIBSS Consent Hub callback — registered at root so the URL is exactly {base_url}/callback
-  app.use('/callback', nibssCallbackRoutes);
-  logger.info('NIBSS callback route registered');
 
   // Simulation endpoints — only active when PROVIDUS_SIMULATION_MODE=true
   app.use('/api/simulate/payments', simulationPaymentRoutes);

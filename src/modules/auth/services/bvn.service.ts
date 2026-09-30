@@ -22,6 +22,7 @@ export interface BvnVerificationResult {
     email?: string;
     phoneNumber?: string;
     enrollBankCode?: string;
+    nin?: string;
     watchlisted?: boolean;
     faceImage?: string;
   };
@@ -45,54 +46,6 @@ export interface BvnBooleanResult {
 
 export class BvnService {
   /**
-   * Initiate NIBSS Consent Hub session for BVN verification.
-   * Returns a consentUrl the user must visit to authorise data access.
-   * After the user authenticates, NIBSS will POST a retrievalToken to the configured callback URL.
-   */
-  async initiateConsentForBvn(bvn: string): Promise<{
-    success: boolean;
-    sessionId?: string;
-    consentUrl?: string;
-    message: string;
-    error?: string;
-  }> {
-    if (!validateBvn(bvn)) {
-      throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
-    }
-
-    if (!process.env.NIBSS_CONSENT_CLIENT_ID || !process.env.NIBSS_CONSENT_CLIENT_SECRET) {
-      logger.error('NIBSS Consent credentials not configured');
-      throw new ValidationError('BVN verification service is not configured. Please contact support.');
-    }
-
-    try {
-      logger.info('Initiating NIBSS consent for BVN', { bvn: `***${bvn.slice(-4)}` });
-
-      const result = await nibssClient.initiateConsent(bvn, 'YYYY', true);
-
-      if (!result.success) {
-        logger.warn('NIBSS consent initiation failed', { message: result.message });
-        return { success: false, message: result.message };
-      }
-
-      logger.info('NIBSS consent session created', { sessionId: result.sessionId });
-
-      return {
-        success: true,
-        sessionId: result.sessionId,
-        consentUrl: result.consentUrl,
-        message: result.message,
-      };
-    } catch (error: any) {
-      logger.error('BVN consent initiation error', {
-        bvn: `***${bvn.slice(-4)}`,
-        error: error.message,
-      });
-      return { success: false, message: 'BVN consent initiation failed', error: error.message };
-    }
-  }
-
-  /**
    * iGree flow: build the IdP authorization URL for the user to consent.
    * Returns the URL to redirect to plus a state token used to correlate the callback.
    */
@@ -103,31 +56,32 @@ export class BvnService {
 
   /**
    * iGree Step 2 (consent callback): exchange the authorization code for the consent-phase
-   * token, extracting the NIBSS-verified bvn from the id_token, then immediately obtain the
-   * retrieval-phase client_credentials token. Deliberately does NOT fetch full BVN details —
-   * that's `getIGreeBvnDetails`, a separate frontend-triggered step — so a flaky NIBSS data
-   * endpoint can't undo a consent that already succeeded.
+   * token — proving the customer completed OTP consent on NIBSS's portal — then immediately
+   * obtain the retrieval-phase client_credentials token. Deliberately does NOT fetch full BVN
+   * details — that's `getIGreeBvnDetails`, a separate frontend-triggered step — so a flaky
+   * NIBSS data endpoint can't undo a consent that already succeeded.
+   *
+   * The bvn to look up in Step 3 comes from the customer's self-reported value at Step 1, NOT
+   * from this exchange — NIBSS's oxAuth server doesn't release a bvn claim for this client
+   * registration either way (see nibss.client.ts's iGreeExchangeCode). Step 1b's cross-check of
+   * self-reported name/DOB against NIBSS's record for that bvn is the real integrity guarantee.
    */
-  async exchangeIGreeConsentCode(code: string): Promise<{ bvn: string; retrievalToken: string }> {
+  async exchangeIGreeConsentCode(code: string): Promise<{ retrievalToken: string }> {
     logger.info('iGree: exchanging authorization code for access token');
     // accessToken from the consent-phase exchange is not used for retrieval — that phase
     // authenticates with its own client_credentials token (see nibss.client.ts).
-    const { bvn } = await nibssClient.iGreeExchangeCode(code);
-    if (!bvn) {
-      throw new Error('iGree did not return a verified BVN in the id_token');
-    }
-
+    await nibssClient.iGreeExchangeCode(code);
     const retrievalToken = await nibssClient.getIGreeRetrievalToken();
-    return { bvn, retrievalToken };
+    return { retrievalToken };
   }
 
   /**
    * iGree Step 3 (frontend-triggered retrieval): fetch full BVN details for a bvn already
    * verified in Step 2. The retrieval token itself is managed/cached inside nibssClient.
    */
-  async getIGreeBvnDetails(bvn: string): Promise<BvnVerificationResult> {
+  async getIGreeBvnDetails(bvn: string, sessionId?: string): Promise<BvnVerificationResult> {
     try {
-      const result = await nibssClient.iGreeGetBvnDetails(bvn);
+      const result = await nibssClient.iGreeGetBvnDetails(bvn, sessionId);
 
       if (!result.verified || !result.data) {
         return { success: false, message: result.message };
@@ -146,6 +100,7 @@ export class BvnService {
           nationality:        result.data.nationality,
           stateOfOrigin:      result.data.stateOfOrigin,
           lgaOfOrigin:        result.data.lgaOfOrigin,
+          nin:                result.data.nin,
           watchlisted:        result.data.watchlisted,
           faceImage:          result.data.faceImage,
         },
@@ -154,44 +109,6 @@ export class BvnService {
     } catch (error: any) {
       logger.error('iGree BVN details retrieval error', { error: error.message });
       return { success: false, message: 'iGree BVN retrieval failed', error: error.message };
-    }
-  }
-
-  /**
-   * Complete BVN verification using a retrievalToken obtained from the Consent Hub callback.
-   * Calls FAS to extract full KYC data.
-   */
-  async verifyBvnWithRetrievalToken(bvn: string, retrievalToken: string): Promise<BvnVerificationResult> {
-    if (!validateBvn(bvn)) {
-      throw new ValidationError('Invalid BVN format. BVN must be 11 digits');
-    }
-
-    try {
-      logger.info('Verifying BVN via FAS', { bvn: `***${bvn.slice(-4)}` });
-
-      const result = await nibssClient.fasValidateBvnCore(bvn, retrievalToken);
-
-      if (!result.verified || !result.data) {
-        logger.warn('FAS BVN verification failed', { message: result.message });
-        return { success: false, message: result.message || 'BVN verification failed' };
-      }
-
-      logger.info('BVN verified via FAS', {
-        firstName: result.data.firstName,
-        lastName: result.data.lastName,
-      });
-
-      return {
-        success: true,
-        data: result.data,
-        message: 'BVN verified successfully',
-      };
-    } catch (error: any) {
-      logger.error('BVN FAS verification error', {
-        bvn: `***${bvn.slice(-4)}`,
-        error: error.message,
-      });
-      return { success: false, message: 'BVN verification failed', error: error.message };
     }
   }
 
@@ -232,9 +149,6 @@ export class BvnService {
       logger.error('BVN boolean verification error', { bvn: `***${bvn.slice(-4)}`, error: error.message });
       return { success: false, message: 'BVN boolean verification failed', error: error.message };
     }
-  }
-  async checkConsentStatus(sessionId: string): Promise<{ granted: boolean; retrievalToken?: string; message: string }> {
-    return nibssClient.getConsentStatus(sessionId);
   }
 }
 

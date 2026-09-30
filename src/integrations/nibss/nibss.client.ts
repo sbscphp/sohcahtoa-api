@@ -1,6 +1,4 @@
 import axios, { AxiosInstance } from 'axios';
-import jwt from 'jsonwebtoken';
-import jwksRsa from 'jwks-rsa';
 import { createLogger } from '../../shared/utils/logger';
 
 const logger = createLogger('NIBSSClient');
@@ -16,12 +14,6 @@ interface NIBSSTokenResponse {
 }
 
 // ─── FAS (Financial Authentication Service) ──────────────────────────────────
-
-interface FASBvnCoreRequest {
-  number: string;
-  type: 'bvn';
-  retrievalToken: string;
-}
 
 interface FASBvnBooleanRequest {
   number: string;
@@ -55,29 +47,6 @@ interface FASCoreOptionalRequest {
   requestReason: string;
 }
 
-interface FASBvnCoreData {
-  first_name?: string;
-  middle_name?: string;
-  surname?: string;
-  date_of_birth?: string;
-  DateOfBirth?: string;
-  gender?: string;
-  marital_status?: string;
-  nationality?: string;
-  state_of_origin?: string;
-  lga_of_origin?: string;
-  state_of_residence?: string;
-  lga_of_residence?: string;
-  residential_address?: string;
-  email?: string;
-  Phone_number1?: string;
-  phone_number2?: string;
-  enroll_bank_code?: string;
-  watchlisted?: number;
-  face_image?: string;
-  match?: string;
-}
-
 interface FASNinCoreData {
   biographicData?: {
     firstName?: string;
@@ -89,14 +58,6 @@ interface FASNinCoreData {
   };
   biometricData?: Array<{ image?: string; biometricSubType?: string }>;
   contactData?: { phone1?: string };
-}
-
-interface FASCoreResponse {
-  data?: FASBvnCoreData | { data?: FASNinCoreData; [key: string]: any };
-  targeturl?: string;
-  targetUrl?: string;
-  valRequestId?: number;
-  match?: string;
 }
 
 interface FASBooleanData {
@@ -261,8 +222,6 @@ export class NIBSSClient {
   private iGreeClientSecret: string = '';
   private iGreeRedirectUri: string = '';
   private idpBaseUrl: string = '';
-  private iGreeJwksClient: jwksRsa.JwksClient | null = null;
-  private iGreeJwksUriPromise: Promise<string | null> | null = null;
 
   // ── iGree — retrieval phase (Step 4 data fetch): a SEPARATE NIBSS app registration,
   //    with its own client_credentials token, distinct from the consent-phase token above.
@@ -587,146 +546,10 @@ export class NIBSSClient {
     }
   }
 
-  // ─── Consent Hub: Poll Consent Status ─────────────────────────────────────
-  /**
-   * Polls NIBSS Consent Hub for the current status of a consent session.
-   * Use this when the redirect callback never arrives — NIBSS may complete
-   * consent without redirecting (e.g. consentRedirectURL is empty).
-   */
-  async getConsentStatus(consentSessionId: string): Promise<{
-    granted: boolean;
-    retrievalToken?: string;
-    message: string;
-  }> {
-    try {
-      const token = await this.getConsentToken();
-      // Status endpoint lives on test-consenthub host (different from the initiation host).
-      // Base URL already contains /api so we use /Consent/Status (not /api/Consent/Status).
-      const statusBaseUrl = process.env.NIBSS_CONSENT_STATUS_BASE_URL || this.consentHubBaseUrl;
-      const res = await axios.get(`${statusBaseUrl}/Consent/Status`, {
-        params: { consentSessionId },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = res.data?.data;
-      const granted = data?.authorizationStatus === 'Consent Granted';
-      // NIBSS spells it "consentRetrivalToken" (typo in their API)
-      const retrievalToken = data?.consentRetrivalToken || data?.consentRetrievalToken;
-
-      return {
-        granted,
-        retrievalToken: granted ? retrievalToken : undefined,
-        message: res.data?.responseMessage || data?.authorizationStatus || 'Unknown',
-      };
-    } catch (error: any) {
-      logger.error('Consent Hub status check error', { error: error.message, consentSessionId });
-      return { granted: false, message: `Status check failed: ${error.message}` };
-    }
-  }
-
   // ─── FAS helpers ───────────────────────────────────────────────────────────
 
   private get fasPath(): string {
     return `/switch10/${this.fasSubclass}/${this.fasRetry}/${this.institutionCode}`;
-  }
-
-  // ─── FAS: BVN Core Validation ──────────────────────────────────────────────
-
-  /**
-   * Extract full KYC data for a BVN using a retrievalToken from Consent Hub.
-   */
-  async fasValidateBvnCore(bvn: string, retrievalToken: string): Promise<{
-    verified: boolean;
-    data?: {
-      firstName: string;
-      middleName?: string;
-      lastName: string;
-      dateOfBirth?: string;
-      gender?: string;
-      maritalStatus?: string;
-      nationality?: string;
-      stateOfOrigin?: string;
-      lgaOfOrigin?: string;
-      stateOfResidence?: string;
-      residentialAddress?: string;
-      email?: string;
-      phoneNumber?: string;
-      enrollBankCode?: string;
-      watchlisted?: boolean;
-      faceImage?: string;
-    };
-    message: string;
-  }> {
-    try {
-      const token = await this.getFasToken();
-      const body: FASBvnCoreRequest = { number: bvn, type: 'bvn', retrievalToken };
-
-      logger.info('FAS BVN Core validation', {
-        bvn: `***${bvn.slice(-4)}`,
-        tokenPrefix: token.substring(0, 20) + '...',
-        fasUrl: this.fasBaseUrl + this.fasPath,
-      });
-
-      const res = await this.fasClient.post<FASCoreResponse[]>(
-        this.fasPath,
-        body,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const responses = Array.isArray(res.data) ? res.data : [res.data];
-      const dataEntry = responses.find((r) => r.data) as FASCoreResponse | undefined;
-      const msgEntry  = responses.find((r: any) => r.message) as any;
-
-      if (!dataEntry?.data) {
-        return { verified: false, message: msgEntry?.message || 'No data returned from FAS' };
-      }
-
-      const d = dataEntry.data as FASBvnCoreData;
-
-      logger.info('FAS BVN Core validation succeeded', {
-        firstName: d.first_name,
-        lastName: d.surname,
-      });
-
-      return {
-        verified: true,
-        data: {
-          firstName:          d.first_name        || '',
-          middleName:         d.middle_name,
-          lastName:           d.surname           || '',
-          dateOfBirth:        d.DateOfBirth       || d.date_of_birth,
-          gender:             d.gender,
-          maritalStatus:      d.marital_status,
-          nationality:        d.nationality,
-          stateOfOrigin:      d.state_of_origin,
-          lgaOfOrigin:        d.lga_of_origin,
-          stateOfResidence:   d.state_of_residence,
-          residentialAddress: d.residential_address,
-          email:              d.email,
-          phoneNumber:        d.Phone_number1     || d.phone_number2,
-          enrollBankCode:     d.enroll_bank_code,
-          watchlisted:        !!d.watchlisted,
-          faceImage:          d.face_image,
-        },
-        message: msgEntry?.message || 'BVN validation successful',
-      };
-    } catch (error: any) {
-      logger.error('FAS BVN Core validation error', { error: error.message, data: error.response?.data });
-
-      if (error.response?.status === 401 && !process.env.NIBSS_FAS_CLIENT_ID) {
-        logger.error(
-          'FAS BVN Core validation got 401 using Consent Hub credentials (NIBSS_FAS_CLIENT_ID not set) — ' +
-          'the FAS/CVS product likely requires its own client_id/secret from NIBSS, distinct from Consent Hub.'
-        );
-        return {
-          verified: false,
-          message: 'BVN validation failed: NIBSS rejected the request as unauthorized. The FAS/CVS product ' +
-            'requires its own credentials — set NIBSS_FAS_CLIENT_ID and NIBSS_FAS_CLIENT_SECRET.',
-        };
-      }
-
-      return { verified: false, message: `BVN validation failed: ${error.message}` };
-    }
   }
 
   // ─── FAS: BVN Boolean Validation ───────────────────────────────────────────
@@ -1241,13 +1064,16 @@ export class NIBSSClient {
   }
 
   /**
-   * Exchange the authorization code for an access token via the iGree IdP.
+   * Exchange the authorization code for an access token via the iGree IdP. This only proves
+   * the customer completed OTP consent on NIBSS's portal — it does NOT resolve which bvn they
+   * consented for. NIBSS's oxAuth server doesn't release the "bvn" scope's claim to this client
+   * registration (confirmed: absent from the id_token, and UserInfo rejects it with
+   * insufficient_scope), so callers must get the bvn from elsewhere (the customer's own
+   * self-reported input) rather than from this exchange.
    * Falls back to client_secret_post (credentials in the body) if the IdP
    * rejects HTTP Basic Auth — some NIBSS environments expect this instead.
-   * If the id_token doesn't carry a bvn claim (Gluu's default for custom scopes —
-   * see getIGreeUserInfo), falls back to the UserInfo endpoint for it.
    */
-  async iGreeExchangeCode(code: string): Promise<{ accessToken: string; idToken?: string; expiresIn: number; bvn?: string }> {
+  async iGreeExchangeCode(code: string): Promise<{ accessToken: string; idToken?: string; expiresIn: number }> {
     const tokenUrl = `${this.idpBaseUrl}/oxauth/restv1/token`;
     const baseParams = {
       code,
@@ -1287,122 +1113,23 @@ export class NIBSSClient {
       tokenData = retryRes.data;
     }
 
-    // Log what scope NIBSS actually granted vs what we requested — if "bvn" is silently
-    // dropped here, that's a client/app-registration issue on NIBSS's side, not ours.
-    logger.info('iGree: token exchange granted scope', { requestedScope: 'openid bvn profile address', grantedScope: tokenData.scope ?? '(not returned)' });
-
-    // The id_token (JWT) carries identity claims for the requested scopes (openid bvn profile address).
-    // Verify its signature against NIBSS's published JWKS before trusting the bvn claim —
-    // this token determines which BVN the resource call fetches, so it must not be trusted unverified.
-    let bvn: string | undefined;
-    if (tokenData.id_token) {
-      const claims = await this.verifyIGreeIdToken(tokenData.id_token);
-      bvn = claims?.bvn || claims?.BVN;
-      if (!bvn) {
-        logger.warn('iGree: id_token verified but had no bvn/BVN claim', { claimKeys: claims ? Object.keys(claims) : null });
-      }
-    }
-
-    // NIBSS's oxAuth (Gluu) server doesn't embed the custom "bvn" scope's claim into the
-    // id_token itself — it's only exposed via the UserInfo endpoint. Fall back to that,
-    // authenticated with the access_token we already have.
-    if (!bvn && tokenData.access_token) {
-      const claims = await this.getIGreeUserInfo(tokenData.access_token);
-      bvn = claims?.bvn || claims?.BVN;
-      if (!bvn) {
-        logger.warn('iGree: UserInfo response did not include a bvn claim either', { claimKeys: claims ? Object.keys(claims) : null });
-      }
-    }
-
     return {
       accessToken: tokenData.access_token,
       idToken:     tokenData.id_token,
       expiresIn:   tokenData.expires_in,
-      bvn,
     };
-  }
-
-  /**
-   * Fetch claims from NIBSS's oxAuth UserInfo endpoint using the access_token from the
-   * consent-phase exchange. Used as a fallback when the requested "bvn" scope's claim isn't
-   * embedded in the id_token (Gluu's default for custom scopes).
-   */
-  private async getIGreeUserInfo(accessToken: string): Promise<Record<string, any> | null> {
-    try {
-      const res = await axios.get(`${this.idpBaseUrl}/oxauth/restv1/userinfo`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        timeout: 10000,
-      });
-      return res.data;
-    } catch (error: any) {
-      logger.error('iGree: failed to fetch UserInfo claims', { error: error.message, data: error.response?.data });
-      return null;
-    }
-  }
-
-  /**
-   * Resolve and cache the iGree IdP's JWKS URI, either from NIBSS_IGREE_JWKS_URI
-   * or via OIDC discovery at {idpBaseUrl}/.well-known/openid-configuration.
-   */
-  private async resolveIGreeJwksUri(): Promise<string | null> {
-    const override = process.env.NIBSS_IGREE_JWKS_URI;
-    if (override) return override;
-
-    if (!this.iGreeJwksUriPromise) {
-      this.iGreeJwksUriPromise = axios
-        .get(`${this.idpBaseUrl}/.well-known/openid-configuration`, { timeout: 10000 })
-        .then((res) => res.data?.jwks_uri || null)
-        .catch((err: any) => {
-          logger.error('iGree: failed to fetch OIDC discovery document for jwks_uri', { error: err.message });
-          return null;
-        });
-    }
-    return this.iGreeJwksUriPromise;
-  }
-
-  /**
-   * Verify an iGree id_token's signature against NIBSS's published JWKS and return its claims.
-   * Returns null (and logs) if the JWKS can't be resolved or verification fails —
-   * callers must treat that as "claims not trusted", not fall back to unverified decoding.
-   */
-  private async verifyIGreeIdToken(idToken: string): Promise<Record<string, any> | null> {
-    try {
-      const decodedHeader = jwt.decode(idToken, { complete: true });
-      const kid = decodedHeader?.header?.kid;
-
-      if (!this.iGreeJwksClient) {
-        const jwksUri = await this.resolveIGreeJwksUri();
-        if (!jwksUri) {
-          logger.error('iGree: no jwks_uri available — cannot verify id_token signature');
-          return null;
-        }
-        this.iGreeJwksClient = jwksRsa({
-          jwksUri,
-          cache: true,
-          cacheMaxAge: 12 * 60 * 60 * 1000,
-          rateLimit: true,
-        });
-      }
-
-      const signingKey = await this.iGreeJwksClient.getSigningKey(kid);
-      const publicKey = signingKey.getPublicKey();
-
-      return jwt.verify(idToken, publicKey, {
-        algorithms: ['RS256'],
-        audience: this.iGreeClientId,
-      }) as Record<string, any>;
-    } catch (err: any) {
-      logger.error('iGree: id_token signature verification failed', { error: err.message });
-      return null;
-    }
   }
 
   /**
    * Retrieve BVN partial details for the iGree retrieval phase.
    * Calls POST /getPartialDetailsWithBvn at the iGree base URL, authenticated with
    * the retrieval phase's own client_credentials token (NOT the consent-phase token).
+   *
+   * @param originatorId  The "originator-user-id" component of x-consumer-unique-id — per
+   *   NIBSS's docs this identifies the specific end-user/request, NOT the API client. Pass the
+   *   caller's own session/request identifier here; falls back to the client id if omitted.
    */
-  async iGreeGetBvnDetails(bvn?: string): Promise<{
+  async iGreeGetBvnDetails(bvn?: string, originatorId?: string): Promise<{
     verified: boolean;
     data?: {
       firstName: string;
@@ -1414,13 +1141,14 @@ export class NIBSSClient {
       nationality?: string;
       stateOfOrigin?: string;
       lgaOfOrigin?: string;
+      nin?: string;
       watchlisted?: boolean;
       faceImage?: string;
     };
     message: string;
   }> {
     try {
-      const consumerUniqueId = `${this.iGreeChannelCode}${this.iGreeConsumerCustomId}`;
+      const consumerUniqueId = `${this.iGreeChannelCode}${originatorId || this.iGreeConsumerCustomId}`;
       const retrievalToken = await this.getIGreeRetrievalToken();
 
       logger.info('iGree: fetching BVN partial details');
@@ -1433,6 +1161,7 @@ export class NIBSSClient {
             'Authorization':       `Bearer ${retrievalToken}`,
             'x-consumer-unique-id': consumerUniqueId,
             'x-consumer-custom-id': this.iGreeConsumerCustomId,
+            ...(this.institutionCode ? { 'OrganisationCode': this.institutionCode } : {}),
             'Content-Type':         'application/json',
             'Accept':               'application/json',
           },
@@ -1462,6 +1191,7 @@ export class NIBSSClient {
           nationality:  record.nationality,
           stateOfOrigin: record.state_of_origin,
           lgaOfOrigin:  record.lga_of_origin,
+          nin:          record.nin,
           watchlisted:  !!record.watchlisted && record.watchlisted !== '0',
           faceImage:    record.face_image,
         },

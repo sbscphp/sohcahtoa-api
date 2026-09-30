@@ -71,61 +71,6 @@ export class AuthController {
     }
   }
 
-  // NIBSS Consent Hub Callback — server-to-server POST (OfflineConsent) or browser GET redirect (RedirectLink)
-  async nibssConsentCallback(req: Request, res: Response, next: NextFunction) {
-    try {
-      // All fields may arrive in body (POST) or query params (GET browser redirect)
-      const body = req.body;
-      const q    = req.query;
-
-      const retrievalToken: string =
-        (q.retrievalToken as string) || (q.retrieval_token as string) || (q.token as string) ||
-        body.retrievalToken || body.retrieval_token || body.token;
-
-      const sessionId: string =
-        (q.sessionId as string) || (q.session_id as string) ||
-        body.sessionId || body.session_id;
-
-      const dataOwnerId: string     = (q.dataOwnerId as string)     || body.dataOwnerId;
-      const consentExpiryTime: string = (q.consentExpiryTime as string) || body.consentExpiryTime;
-      const tokenIssuedDate: string = (q.tokenIssuedDate as string) || body.tokenIssuedDate;
-      const requestCategory: string = (q.requestCategory as string) || body.requestCategory;
-
-      // retrievalToken and sessionId are the minimum needed to proceed
-      if (!sessionId || !retrievalToken) {
-        res.status(400).json({ success: false, message: 'sessionId and retrievalToken are required' });
-        return;
-      }
-
-      // requestCategory NNNN means no data was requested — reject per NIBSS spec
-      if (requestCategory && requestCategory === 'NNNN') {
-        res.status(400).json({ success: false, message: 'Invalid requestCategory: NNNN is not permitted' });
-        return;
-      }
-
-      // Respond immediately so NIBSS doesn't retry the callback.
-      // GET = browser redirect, serve a close-tab page; POST = server-to-server, return JSON.
-      if (req.method === 'GET') {
-        res.status(200).send(
-          '<!DOCTYPE html><html><body><p>BVN consent received. You may close this tab and return to the app.</p></body></html>'
-        );
-      } else {
-        res.status(200).json({ success: true, message: 'Callback received' });
-      }
-
-      await authService.handleNibssConsentCallback(sessionId, retrievalToken, {
-        dataOwnerId,
-        consentExpiryTime,
-        tokenIssuedDate,
-        requestCategory,
-      }).catch((err) => {
-        console.error('NIBSS callback processing error', err);
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
   // Nigerian Flow - Step 2: Send OTP
   async sendBvnOtp(req: Request, res: Response, next: NextFunction) {
     try {
