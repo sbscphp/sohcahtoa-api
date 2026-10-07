@@ -232,6 +232,8 @@ export class NIBSSClient {
   private iGreeRetrievalResetUrl: string = '';
   private iGreeRetrievalToken: string | null = null;
   private iGreeRetrievalTokenExpiry: number = 0;
+  private lastExchangedToken: string | null = null;
+  private lastIdToken: string | null = null;
 
   // ── Token cache ──
   private bivsToken: string | null = null;
@@ -242,52 +244,55 @@ export class NIBSSClient {
   private fasTokenExpiry: number = 0;
 
   constructor() {
+    // Helper to sanitize base URLs (strip trailing slashes and port :1443 if present)
+    const cleanUrl = (url: string) => url.replace(/\/+$/, '').replace(':1443', '');
+
     // BIVS
-    this.bivsClientId        = process.env.NIBSS_BIVS_CLIENT_ID       || '';
-    this.bivsClientSecret    = process.env.NIBSS_BIVS_CLIENT_SECRET   || '';
-    this.bivsBaseUrl         = process.env.NIBSS_BIVS_BASE_URL        || 'https://apitest.nibss-plc.com.ng';
-    this.bivsResetUrl        = process.env.NIBSS_BIVS_RESET_URL       || 'https://apitest.nibss-plc.com.ng/reset';
+    this.bivsClientId        = process.env.NIBSS_BIVS_CLIENT_ID       || process.env.NIBSS_CLIENT_ID || '';
+    this.bivsClientSecret    = process.env.NIBSS_BIVS_CLIENT_SECRET   || process.env.NIBSS_CLIENT_SECRET || '';
+    this.bivsBaseUrl         = cleanUrl(process.env.NIBSS_BIVS_BASE_URL || process.env.NIBSS_BIVS_BASEURL || 'https://apitest.nibss-plc.com.ng');
+    this.bivsResetUrl        = process.env.NIBSS_BIVS_RESET_URL       || process.env.NIBSS_BIVS_RESETURL || `${this.bivsBaseUrl}/reset`;
     this.bivsClientUsername  = process.env.NIBSS_BIVS_CLIENT_USERNAME || '';
-    this.tinIdentityBaseUrl  = process.env.NIBSS_TIN_BASE_URL         || 'https://apitest.nibss-plc.com.ng/identity/v2';
+    this.tinIdentityBaseUrl  = cleanUrl(process.env.NIBSS_TIN_BASE_URL || process.env.NIBSS_TIN_BASEURL || 'https://apitest.nibss-plc.com.ng/identity/v2');
 
     // Consent Hub / FAS (same credentials)
-    this.consentClientId     = process.env.NIBSS_CONSENT_CLIENT_ID     || '';
-    this.consentClientSecret = process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
-    this.consentResetUrl     = process.env.NIBSS_CONSENT_RESET_URL     || 'https://apitest.nibss-plc.com.ng/reset';
+    this.consentClientId     = process.env.NIBSS_CONSENT_CLIENT_ID     || process.env.NIBSS_CLIENT_ID || '';
+    this.consentClientSecret = process.env.NIBSS_CONSENT_CLIENT_SECRET || process.env.NIBSS_CLIENT_SECRET || '';
+    this.consentResetUrl     = process.env.NIBSS_CONSENT_RESET_URL     || process.env.NIBSS_CONSENT_RESETURL || 'https://apitest.nibss-plc.com.ng/reset';
 
     // FAS-specific credentials — fall back to consent credentials if not set
     this.fasClientId     = process.env.NIBSS_FAS_CLIENT_ID     || this.consentClientId;
     this.fasClientSecret = process.env.NIBSS_FAS_CLIENT_SECRET || this.consentClientSecret;
-    this.fasResetUrl     = process.env.NIBSS_FAS_RESET_URL     || this.consentResetUrl;
+    this.fasResetUrl     = process.env.NIBSS_FAS_RESET_URL     || process.env.NIBSS_FAS_RESETURL || this.consentResetUrl;
 
     // FAS
-    this.fasBaseUrl      = process.env.NIBSS_FAS_BASE_URL  || 'https://apitest.nibss-plc.com.ng/cvs/v2';
+    this.fasBaseUrl      = cleanUrl(process.env.NIBSS_FAS_BASE_URL || process.env.NIBSS_FAS_BASEURL || 'https://apitest.nibss-plc.com.ng/cvs/v2');
     this.fasSubclass     = process.env.NIBSS_FAS_SUBCLASS  || '1';
     this.fasRetry        = process.env.NIBSS_FAS_RETRY     || '1';
-    this.institutionCode = process.env.NIBSS_INSTITUTION_CODE || '';
+    this.institutionCode = process.env.NIBSS_INSTITUTION_CODE || '123456';
 
     // Consent Hub (legacy)
-    this.consentHubBaseUrl = process.env.NIBSS_CONSENT_HUB_BASE_URL || 'https://apitest.nibss-plc.com.ng/api';
+    this.consentHubBaseUrl = cleanUrl(process.env.NIBSS_CONSENT_HUB_BASE_URL || process.env.NIBSS_CONSENT_HUB_BASEURL || 'https://apitest.nibss-plc.com.ng/api');
     this.dataControllerId  = process.env.NIBSS_DATA_CONTROLLER_ID   || 'd6378b2e-092f-485a-a1f9-f97b3ca8c3f3';
-    this.callbackUrl       = process.env.NIBSS_CALLBACK_URL         || '';
+    this.callbackUrl       = process.env.NIBSS_CALLBACK_URL         || process.env.NIBSS_REDIRECT_URI || '';
 
     // iGree — consent phase (Step 1 authorize + callback token exchange)
-    this.iGreeBaseUrl           = process.env.NIBSS_IGREE_BASE_URL          || 'https://apitest.nibss-plc.com.ng/bvnconsent/v1';
-    this.idpBaseUrl             = process.env.NIBSS_IDP_BASE_URL            || 'https://idsandbox.nibss-plc.com.ng';
-    this.iGreeClientId          = process.env.NIBSS_IGREE_CLIENT_ID         || process.env.NIBSS_CONSENT_CLIENT_ID || '';
-    this.iGreeClientSecret      = process.env.NIBSS_IGREE_CLIENT_SECRET     || process.env.NIBSS_CONSENT_CLIENT_SECRET || '';
-    this.iGreeRedirectUri       = process.env.NIBSS_IGREE_REDIRECT_URI      || '';
+    this.iGreeBaseUrl           = cleanUrl(process.env.NIBSS_IGREE_BASE_URL || process.env.NIBSS_API_BASE_URL || process.env.NIBSS_API_BASEURL || 'https://apitest.nibss-plc.com.ng/bvnconsent/v1');
+    this.idpBaseUrl             = cleanUrl(process.env.NIBSS_IDP_BASE_URL || process.env.NIBSS_IDP_BASEURL || 'https://idsandbox.nibss-plc.com.ng');
+    this.iGreeClientId          = process.env.NIBSS_IGREE_CLIENT_ID || process.env.NIBSS_IDP_CLIENT_ID || process.env.NIBSS_API_CLIENT_ID || process.env.NIBSS_CLIENT_ID || '';
+    this.iGreeClientSecret      = process.env.NIBSS_IGREE_CLIENT_SECRET || process.env.NIBSS_IDP_CLIENT_SECRET || process.env.NIBSS_API_CLIENT_SECRET || process.env.NIBSS_CLIENT_SECRET || '';
+    this.iGreeRedirectUri       = process.env.NIBSS_IGREE_REDIRECT_URI || process.env.NIBSS_REDIRECT_URI || '';
 
     // iGree — retrieval phase (Step 4 data fetch): NIBSS_IGREE_RETRIEVAL_CLIENT_ID/SECRET are for
     // a distinct app registration IF NIBSS has issued one; falls back to the consent-phase
     // credentials otherwise, since in practice the sandbox tenant only provisions one iGree app
     // (confirmed: the consent client_id/secret authenticate fine against the retrieval endpoints,
     // while a separately-issued "retrieval" id/secret pair was rejected with invalid_client).
-    this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || this.iGreeClientId;
-    this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || this.iGreeClientSecret;
+    this.iGreeRetrievalClientId     = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_ID     || process.env.NIBSS_API_CLIENT_ID || this.iGreeClientId;
+    this.iGreeRetrievalClientSecret = process.env.NIBSS_IGREE_RETRIEVAL_CLIENT_SECRET || process.env.NIBSS_API_CLIENT_SECRET || this.iGreeClientSecret;
     this.iGreeRetrievalResetUrl     = process.env.NIBSS_IGREE_RETRIEVAL_RESET_URL     || `${this.idpBaseUrl}/oxauth/restv1/token`;
     this.iGreeConsumerCustomId      = process.env.NIBSS_IGREE_CONSUMER_CUSTOM_ID      || this.iGreeRetrievalClientId;
-    this.iGreeChannelCode           = process.env.NIBSS_IGREE_CHANNEL_CODE      || '02';
+    this.iGreeChannelCode           = process.env.NIBSS_IGREE_CHANNEL_CODE || process.env.NIBSS_CHANNEL_CODE || '02';
 
     // ── Axios instances ──
     this.bivsClient = axios.create({
@@ -549,7 +554,8 @@ export class NIBSSClient {
   // ─── FAS helpers ───────────────────────────────────────────────────────────
 
   private get fasPath(): string {
-    return `/switch10/${this.fasSubclass}/${this.fasRetry}/${this.institutionCode}`;
+    const instCode = this.institutionCode || '123456';
+    return `/switch10/${this.fasSubclass}/${this.fasRetry}/${instCode}`;
   }
 
   // ─── FAS: BVN Boolean Validation ───────────────────────────────────────────
@@ -732,7 +738,13 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const token = await this.getBivsToken();
+      let token: string;
+      try {
+        token = await this.getFasToken();
+      } catch {
+        token = await this.getBivsToken();
+      }
+
       const body: FASCoreOptionalRequest = {
         number: bvn,
         type: 'bvn',
@@ -1113,6 +1125,10 @@ export class NIBSSClient {
       tokenData = retryRes.data;
     }
 
+    // Cache the exchanged user consent token for subsequent BVN details retrieval calls
+    this.lastExchangedToken = tokenData.access_token;
+    this.lastIdToken        = tokenData.id_token || null;
+
     return {
       accessToken: tokenData.access_token,
       idToken:     tokenData.id_token,
@@ -1122,14 +1138,19 @@ export class NIBSSClient {
 
   /**
    * Retrieve BVN partial details for the iGree retrieval phase.
-   * Calls POST /getPartialDetailsWithBvn at the iGree base URL, authenticated with
-   * the retrieval phase's own client_credentials token (NOT the consent-phase token).
+   * Calls POST /getPartialDetailsWithBvn (or fallback endpoint candidates) at the iGree base URL.
+   * Supports passing the user's consent token (from iGreeExchangeCode), or falls back to
+   * cached exchange tokens and retrieval credentials.
    *
-   * @param originatorId  The "originator-user-id" component of x-consumer-unique-id — per
-   *   NIBSS's docs this identifies the specific end-user/request, NOT the API client. Pass the
-   *   caller's own session/request identifier here; falls back to the client id if omitted.
+   * @param bvn  The 11-digit BVN to look up
+   * @param originatorId  Unique originator/session ID (or userConsentToken if passed here)
+   * @param userConsentToken  Optional user consent access token or id_token from iGreeExchangeCode
    */
-  async iGreeGetBvnDetails(bvn?: string, originatorId?: string): Promise<{
+  async iGreeGetBvnDetails(
+    bvn?: string,
+    originatorId?: string,
+    userConsentToken?: string
+  ): Promise<{
     verified: boolean;
     data?: {
       firstName: string;
@@ -1148,52 +1169,146 @@ export class NIBSSClient {
     message: string;
   }> {
     try {
-      const consumerUniqueId = `${this.iGreeChannelCode}${originatorId || this.iGreeConsumerCustomId}`;
-      const retrievalToken = await this.getIGreeRetrievalToken();
+      // Detect if originatorId was passed as a JWT token directly
+      let explicitToken = userConsentToken;
+      let effectiveOriginatorId = originatorId;
 
-      logger.info('iGree: fetching BVN partial details');
-
-      const res = await this.iGreeClient.post<any[]>(
-        '/getPartialDetailsWithBvn',
-        bvn ? { bvn } : {},
-        {
-          headers: {
-            'Authorization':       `Bearer ${retrievalToken}`,
-            'x-consumer-unique-id': consumerUniqueId,
-            'x-consumer-custom-id': this.iGreeConsumerCustomId,
-            ...(this.institutionCode ? { 'OrganisationCode': this.institutionCode } : {}),
-            'Content-Type':         'application/json',
-            'Accept':               'application/json',
-          },
-        }
-      );
-
-      const record = Array.isArray(res.data) ? res.data[0] : res.data;
-
-      if (!record) {
-        return { verified: false, message: 'No BVN data returned from iGree' };
+      if (!explicitToken && originatorId && (originatorId.startsWith('eyJ') || originatorId.length > 50)) {
+        explicitToken = originatorId;
+        effectiveOriginatorId = undefined;
       }
 
-      logger.info('iGree: BVN details retrieved', {
-        firstName: record.first_name,
-        lastName:  record.surname,
+      // Collect token candidates: User Consent Token (highest priority) -> Cached Tokens -> Machine Token
+      const tokenCandidates: string[] = [];
+      if (explicitToken) tokenCandidates.push(explicitToken);
+      if (this.lastIdToken && !tokenCandidates.includes(this.lastIdToken)) {
+        tokenCandidates.push(this.lastIdToken);
+      }
+      if (this.lastExchangedToken && !tokenCandidates.includes(this.lastExchangedToken)) {
+        tokenCandidates.push(this.lastExchangedToken);
+      }
+
+      try {
+        const retToken = await this.getIGreeRetrievalToken();
+        if (retToken && !tokenCandidates.includes(retToken)) {
+          tokenCandidates.push(retToken);
+        }
+      } catch (tokenErr: any) {
+        logger.warn('Could not fetch iGree retrieval client token; relying on consent tokens', {
+          error: tokenErr.message,
+        });
+      }
+
+      if (tokenCandidates.length === 0) {
+        return {
+          verified: false,
+          message: 'No active NIBSS token found. Please complete iGree consent code exchange first.',
+        };
+      }
+
+      const consumerUniqueId = `${this.iGreeChannelCode}${effectiveOriginatorId || this.iGreeConsumerCustomId || '01'}`;
+
+      // Candidate endpoint paths on NIBSS iGree API Gateway
+      const candidatePaths = [
+        '/getPartialDetailsWithBvn',
+        '/getSingleDetailsWithBvn',
+        '/getDetailsWithBvn',
+      ];
+
+      // Candidate client identification configurations
+      const candidateCreds = [
+        { clientId: this.iGreeConsumerCustomId, secret: '' },
+        { clientId: this.iGreeClientId, secret: '' },
+        { clientId: this.iGreeRetrievalClientId, secret: this.iGreeRetrievalClientSecret },
+        ...(this.bivsClientId ? [{ clientId: this.bivsClientId, secret: this.bivsClientSecret }] : []),
+        { clientId: this.institutionCode || '123456', secret: '' },
+      ].filter((c, idx, arr) => c.clientId && arr.findIndex(x => x.clientId === c.clientId && x.secret === c.secret) === idx);
+
+      logger.info('iGree: fetching BVN details across candidates');
+
+      let record: any = null;
+      let lastError: any = null;
+
+      outerLoop: for (const token of tokenCandidates) {
+        for (const cred of candidateCreds) {
+          for (const targetPath of candidatePaths) {
+            try {
+              const headers: Record<string, string> = {
+                Authorization: `Bearer ${token}`,
+                'x-consumer-unique-id': consumerUniqueId,
+                'x-consumer-custom-id': cred.clientId,
+                client_id: cred.clientId,
+                OrganisationCode: this.institutionCode || '123456',
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              };
+
+              if (cred.secret) {
+                headers['Ocp-Apim-Subscription-Key'] = cred.secret;
+                headers['apiKey'] = cred.secret;
+              }
+
+              const res = await this.iGreeClient.post<any>(
+                targetPath,
+                bvn ? { bvn } : {},
+                { headers, timeout: 10000 }
+              );
+
+              const respData = res.data;
+              if (Array.isArray(respData) && respData.length > 0) {
+                record = respData[0];
+                break outerLoop;
+              } else if (
+                respData &&
+                typeof respData === 'object' &&
+                (respData.first_name || respData.FirstName || respData.surname || respData.Surname || respData.bvn || respData.nin || Object.keys(respData).length > 0)
+              ) {
+                record = respData;
+                break outerLoop;
+              }
+            } catch (err: any) {
+              lastError = err;
+              const status = err.response?.status;
+              const errDetail = err.response?.data?.message || err.response?.data || err.message;
+              logger.warn(`iGree fetch at ${targetPath} (client: ${cred.clientId}) failed (status ${status}):`, errDetail);
+            }
+          }
+        }
+      }
+
+      if (!record) {
+        const errorDetail =
+          lastError?.response?.data?.error_description ||
+          lastError?.response?.data?.message ||
+          lastError?.response?.data ||
+          lastError?.message ||
+          'No BVN data returned from iGree';
+        return {
+          verified: false,
+          message: `iGree BVN fetch failed: ${typeof errorDetail === 'object' ? JSON.stringify(errorDetail) : errorDetail}`,
+        };
+      }
+
+      logger.info('iGree: BVN details retrieved successfully', {
+        firstName: record.first_name || record.FirstName,
+        lastName:  record.surname || record.Surname,
       });
 
       return {
         verified: true,
         data: {
-          firstName:    record.first_name    || '',
-          lastName:     record.surname       || '',
-          middleName:   record.middle_name,
-          dateOfBirth:  record.date_of_birth,
-          gender:       record.gender,
-          maritalStatus: record.marital_status,
-          nationality:  record.nationality,
-          stateOfOrigin: record.state_of_origin,
-          lgaOfOrigin:  record.lga_of_origin,
-          nin:          record.nin,
-          watchlisted:  !!record.watchlisted && record.watchlisted !== '0',
-          faceImage:    record.face_image,
+          firstName:     record.first_name     || record.FirstName     || '',
+          lastName:      record.surname        || record.Surname       || record.lastName || record.LastName || '',
+          middleName:    record.middle_name    || record.MiddleName    || record.middleName,
+          dateOfBirth:   record.date_of_birth  || record.DateOfBirth   || record.dateOfBirth,
+          gender:        record.gender         || record.Gender,
+          maritalStatus: record.marital_status || record.MaritalStatus || record.maritalStatus,
+          nationality:   record.nationality    || record.Nationality,
+          stateOfOrigin: record.state_of_origin|| record.StateOfOrigin || record.stateOfOrigin,
+          lgaOfOrigin:   record.lga_of_origin  || record.LgaOfOrigin   || record.lgaOfOrigin,
+          nin:           record.nin            || record.NIN           || record.Nin,
+          watchlisted:   !!(record.watchlisted || record.Watchlisted) && record.watchlisted !== '0' && record.Watchlisted !== '0',
+          faceImage:     record.face_image     || record.FaceImage     || record.image || record.Image,
         },
         message: 'BVN details retrieved successfully',
       };
@@ -1207,10 +1322,16 @@ export class NIBSSClient {
 
   resetTokens() {
     logger.info('Resetting NIBSS tokens');
-    this.bivsToken         = null;
-    this.bivsTokenExpiry   = 0;
-    this.consentToken      = null;
+    this.bivsToken          = null;
+    this.bivsTokenExpiry    = 0;
+    this.consentToken       = null;
     this.consentTokenExpiry = 0;
+    this.fasToken           = null;
+    this.fasTokenExpiry     = 0;
+    this.iGreeRetrievalToken = null;
+    this.iGreeRetrievalTokenExpiry = 0;
+    this.lastExchangedToken = null;
+    this.lastIdToken        = null;
   }
 }
 
