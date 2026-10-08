@@ -518,7 +518,9 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *     description: |
  *       Verifies the tourist's passport via the QoreID API and starts a 30-minute verification session.
  *
- *       **Identity source:** QoreID passport verification (requires `passportNumber`).
+ *       **Identity source:** QoreID passport verification (requires `passportNumber`,
+ *       plus `firstName`/`lastName` — QoreID's passport lookup matches against a supplied
+ *       name rather than returning one from OCR).
  *       When QoreID credentials are not configured, the server falls back to a dev mock.
  *
  *       **Contact info:** QoreID does not return email or phone number. The frontend **must**
@@ -526,7 +528,8 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *       to send the OTP in Step 2.
  *
  *       **At least one of** `passportNumber` or `passportDocumentUrl` is required.
- *       Providing `passportNumber` enables live QoreID verification. `passportDocumentUrl`
+ *       Providing `passportNumber` enables live QoreID verification, and requires
+ *       `firstName`/`lastName` to be supplied alongside it. `passportDocumentUrl`
  *       is only used as a fallback identifier when a passport number is not available.
  *
  *       On success a `verificationToken` is returned. All sensitive data is stored server-side
@@ -545,6 +548,16 @@ router.post('/signup/nigerian/create-account', authController.createNigerianAcco
  *                   Passport document number. Required for QoreID verification.
  *                   At least one of passportNumber or passportDocumentUrl must be provided.
  *                 example: "A12345678"
+ *               firstName:
+ *                 type: string
+ *                 description: |
+ *                   Required when passportNumber is provided — QoreID's passport lookup
+ *                   matches the record against this name rather than returning one via OCR.
+ *                 example: "John"
+ *               lastName:
+ *                 type: string
+ *                 description: Required when passportNumber is provided (see firstName).
+ *                 example: "Doe"
  *               passportDocumentUrl:
  *                 type: string
  *                 format: uri
@@ -860,7 +873,9 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *       Verifies the expatriate's passport via the QoreID API and starts a 30-minute verification session.
  *       Identical to the tourist flow but sets `customerType` to `EXPATRIATE` on account creation.
  *
- *       **Identity source:** QoreID passport verification (requires `passportNumber`).
+ *       **Identity source:** QoreID passport verification (requires `passportNumber`,
+ *       plus `firstName`/`lastName` — QoreID's passport lookup matches against a supplied
+ *       name rather than returning one from OCR).
  *       When QoreID credentials are not configured, the server falls back to a dev mock.
  *
  *       **Contact info:** QoreID does not return email or phone number. The frontend **must**
@@ -868,7 +883,8 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *       to send the OTP in Step 2.
  *
  *       **At least one of** `passportNumber` or `passportDocumentUrl` is required.
- *       Providing `passportNumber` enables live QoreID verification. `passportDocumentUrl`
+ *       Providing `passportNumber` enables live QoreID verification, and requires
+ *       `firstName`/`lastName` to be supplied alongside it. `passportDocumentUrl`
  *       is only used as a fallback identifier when a passport number is not available.
  *
  *       On success a `verificationToken` is returned. All sensitive data is stored server-side
@@ -887,6 +903,16 @@ router.post('/signup/tourist/create-account', authController.createTouristAccoun
  *                   Passport document number. Required for QoreID verification.
  *                   At least one of passportNumber or passportDocumentUrl must be provided.
  *                 example: "ES987654321"
+ *               firstName:
+ *                 type: string
+ *                 description: |
+ *                   Required when passportNumber is provided — QoreID's passport lookup
+ *                   matches the record against this name rather than returning one via OCR.
+ *                 example: "Maria"
+ *               lastName:
+ *                 type: string
+ *                 description: Required when passportNumber is provided (see firstName).
+ *                 example: "Garcia"
  *               passportDocumentUrl:
  *                 type: string
  *                 format: uri

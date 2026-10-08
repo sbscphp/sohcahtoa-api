@@ -1145,7 +1145,9 @@ export class AuthService {
     passportNumber?: string,
     customerType: 'TOURIST' | 'EXPATRIATE' = 'TOURIST',
     callerEmail?: string,
-    callerPhoneNumber?: string
+    callerPhoneNumber?: string,
+    callerFirstName?: string,
+    callerLastName?: string
   ): Promise<{
     verificationToken: string;
     message: string;
@@ -1219,7 +1221,7 @@ export class AuthService {
     }
 
     // New passport (or number not provided) — run OCR/verification to extract data
-    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl, passportNumber);
+    const passportResult = await passportVerificationService.verifyPassport(passportDocumentUrl, passportNumber, callerFirstName, callerLastName);
 
     if (!passportResult.success || !passportResult.data) {
       throw new ValidationError(passportResult.message || 'Passport verification failed');

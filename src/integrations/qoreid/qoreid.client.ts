@@ -72,23 +72,24 @@ class QoreIDClient {
   }
 
   /**
-   * Verify a passport by number via the QoreID API.
-   * Optionally pass firstname/lastname for a stricter match check.
+   * Verify a Nigerian passport by number via the QoreID API.
+   * firstname/lastname are required by QoreID's contract (used for identity match).
    */
   async verifyPassport(
     passportNumber: string,
-    firstname?: string,
-    lastname?: string
+    firstname: string,
+    lastname: string
   ): Promise<QoreIDPassportResponse> {
     const token = await this.getAccessToken();
 
-    const endpoint = process.env.QOREID_PASSPORT_ENDPOINT || '/v1/ng/passport';
+    const basePath = process.env.QOREID_PASSPORT_ENDPOINT || '/v1/ng/identities/passport';
+    const endpoint = `${basePath}/${encodeURIComponent(passportNumber)}`;
 
     logger.info('Calling QoreID passport verification', { passportNumber, endpoint });
 
     const response = await this.http.post<QoreIDPassportResponse>(
       endpoint,
-      { id: passportNumber, firstname, lastname },
+      { firstname, lastname },
       { headers: { Authorization: `Bearer ${token}` } }
     );
 

@@ -23,28 +23,35 @@ export class PassportVerificationService {
   /**
    * Verify a passport document.
    * When QoreID is configured (QOREID_CLIENT_ID + QOREID_SECRET set) and a
-   * passportNumber is provided, the live QoreID API is called.
+   * passportNumber is provided, the live QoreID API is called — this requires
+   * firstName/lastName as supplied by the caller (QoreID's contract needs them
+   * for the identity match; it does not OCR a document for us).
    * Otherwise falls back to a dev mock that generates plausible data.
    */
   async verifyPassport(
     passportDocumentUrl: string,
-    passportNumber?: string
+    passportNumber?: string,
+    firstName?: string,
+    lastName?: string
   ): Promise<PassportVerificationResult> {
     if (!passportDocumentUrl && !passportNumber) {
       throw new ValidationError('Passport document URL or passport number is required');
     }
 
     if (passportNumber && qoreIDClient.isConfigured) {
-      return this.verifyWithQoreID(passportNumber);
+      if (!firstName || !lastName) {
+        throw new ValidationError('firstName and lastName are required for passport verification');
+      }
+      return this.verifyWithQoreID(passportNumber, firstName, lastName);
     }
 
     logger.warn('QoreID not configured or passport number not provided — using mock passport verification');
     return this.mockPassportVerification(passportDocumentUrl);
   }
 
-  private async verifyWithQoreID(passportNumber: string): Promise<PassportVerificationResult> {
+  private async verifyWithQoreID(passportNumber: string, firstName: string, lastName: string): Promise<PassportVerificationResult> {
     try {
-      const result = await qoreIDClient.verifyPassport(passportNumber);
+      const result = await qoreIDClient.verifyPassport(passportNumber, firstName, lastName);
 
       const state = result.status?.state?.toUpperCase();
       if (state !== 'VERIFIED' && state !== 'ID_VERIFIED') {

@@ -129,11 +129,14 @@ export class AuthController {
   // Tourist Flow - Step 1: Verify passport
   async verifyPassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl, passportNumber, email, phoneNumber } = req.body;
+      const { passportDocumentUrl, passportNumber, email, phoneNumber, firstName, lastName } = req.body;
       if (!passportDocumentUrl && !passportNumber) {
         throw new ValidationError('passportDocumentUrl or passportNumber is required');
       }
-      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST', email, phoneNumber);
+      if (passportNumber && (!firstName || !lastName)) {
+        throw new ValidationError('firstName and lastName are required when passportNumber is provided');
+      }
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'TOURIST', email, phoneNumber, firstName, lastName);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
@@ -176,11 +179,14 @@ export class AuthController {
   // Expatriate Flow - Step 1: Verify passport (same as tourist but different customer type)
   async verifyExpatriatePassport(req: Request, res: Response, next: NextFunction) {
     try {
-      const { passportDocumentUrl, passportNumber, email, phoneNumber } = req.body;
+      const { passportDocumentUrl, passportNumber, email, phoneNumber, firstName, lastName } = req.body;
       if (!passportDocumentUrl && !passportNumber) {
         throw new ValidationError('passportDocumentUrl or passportNumber is required');
       }
-      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE', email, phoneNumber);
+      if (passportNumber && (!firstName || !lastName)) {
+        throw new ValidationError('firstName and lastName are required when passportNumber is provided');
+      }
+      const result = await authService.verifyPassportForSignup(passportDocumentUrl, passportNumber, 'EXPATRIATE', email, phoneNumber, firstName, lastName);
       res.json(successResponse(result));
     } catch (error) {
       next(error);
