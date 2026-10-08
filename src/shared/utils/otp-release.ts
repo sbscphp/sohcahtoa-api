@@ -9,3 +9,11 @@
 export function exposeOtp(otp: string | undefined): string | undefined {
   return process.env.OTP_RELEASE === 'production' ? undefined : otp;
 }
+
+/**
+ * The app is in test mode if either NODE_ENV or OTP_RELEASE is not 'production' —
+ * NODE_ENV=production can be set while OTP_RELEASE is still 'development' for QA.
+ */
+export function isTestMode(): boolean {
+  return process.env.NODE_ENV !== 'production' || process.env.OTP_RELEASE !== 'production';
+}

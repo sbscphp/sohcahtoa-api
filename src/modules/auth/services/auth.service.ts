@@ -1,5 +1,5 @@
 import { getDatabase } from '../../../config/database';
-import { exposeOtp } from '../../../shared/utils/otp-release';
+import { exposeOtp, isTestMode } from '../../../shared/utils/otp-release';
 import redis from '../config/redis';
 import { eventBus, EventTypes } from '../../../events/event-bus';
 import {
@@ -766,8 +766,11 @@ export class AuthService {
 
     // Cross-check the customer's self-reported identity fields against NIBSS's
     // verified BVN record. Any mismatch is a hard reject — the two identities don't line up.
+    // In test mode (NIBSS sandbox), bvn/dateOfBirth on the test BVN record are unreliable,
+    // so only firstName/lastName are cross-checked there.
+    const testMode = isTestMode();
     const mismatches: string[] = [];
-    if (session.bvn && !fieldsMatch(session.bvn, session.verifiedBvn)) {
+    if (!testMode && session.bvn && !fieldsMatch(session.bvn, session.verifiedBvn)) {
       mismatches.push('bvn');
     }
     if (session.firstName && !fieldsMatch(session.firstName, bvnResult.data.firstName)) {
@@ -776,7 +779,7 @@ export class AuthService {
     if (session.lastName && !fieldsMatch(session.lastName, bvnResult.data.lastName)) {
       mismatches.push('lastName');
     }
-    if (session.dateOfBirth && bvnResult.data.dateOfBirth && !datesMatch(session.dateOfBirth, bvnResult.data.dateOfBirth)) {
+    if (!testMode && session.dateOfBirth && bvnResult.data.dateOfBirth && !datesMatch(session.dateOfBirth, bvnResult.data.dateOfBirth)) {
       mismatches.push('dateOfBirth');
     }
 

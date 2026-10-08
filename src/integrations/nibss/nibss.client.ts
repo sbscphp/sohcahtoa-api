@@ -1290,8 +1290,15 @@ export class NIBSSClient {
       }
 
       logger.info('iGree: BVN details retrieved successfully', {
-        firstName: record.first_name || record.FirstName,
-        lastName:  record.surname || record.Surname,
+        firstName:     record.first_name || record.FirstName,
+        lastName:      record.surname || record.Surname || record.lastName || record.LastName,
+        middleName:    record.middle_name || record.MiddleName || record.middleName,
+        gender:        record.gender || record.Gender,
+        maritalStatus: record.marital_status || record.MaritalStatus || record.maritalStatus,
+        nationality:   record.nationality || record.Nationality,
+        stateOfOrigin: record.state_of_origin || record.StateOfOrigin || record.stateOfOrigin,
+        lgaOfOrigin:   record.lga_of_origin || record.LgaOfOrigin || record.lgaOfOrigin,
+        nin:           (() => { const n = record.nin || record.NIN || record.Nin; return n ? `***${String(n).slice(-4)}` : undefined; })(),
       });
 
       return {
