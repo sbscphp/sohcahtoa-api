@@ -59,16 +59,27 @@ class QoreIDClient {
       return this.accessToken;
     }
 
-    logger.debug('Fetching new QoreID access token');
-    const response = await this.http.post<{ accessToken: string; expiresIn: number }>(
-      '/token',
-      { clientId: this.clientId, secret: this.secret }
-    );
+    try {
+      logger.debug('Fetching new QoreID access token');
+      const response = await this.http.post<{ accessToken: string; expiresIn: number }>(
+        '/token',
+        { clientId: this.clientId, secret: this.secret }
+      );
 
-    this.accessToken = response.data.accessToken;
-    // Cache for (expiresIn - 60) seconds to avoid using an about-to-expire token
-    this.tokenExpiry = Date.now() + (response.data.expiresIn - 60) * 1_000;
-    return this.accessToken;
+      this.accessToken = response.data.accessToken;
+      // Cache for (expiresIn - 60) seconds to avoid using an about-to-expire token
+      this.tokenExpiry = Date.now() + (response.data.expiresIn - 60) * 1_000;
+      logger.debug('QoreID access token obtained successfully', { expiresIn: response.data.expiresIn });
+      return this.accessToken;
+    } catch (error: any) {
+      logger.error('QoreID token fetch failed', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData: error.response?.data,
+        message: error.message,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -80,21 +91,32 @@ class QoreIDClient {
     firstname: string,
     lastname: string
   ): Promise<QoreIDPassportResponse> {
-    const token = await this.getAccessToken();
+    try {
+      const token = await this.getAccessToken();
 
-    const basePath = process.env.QOREID_PASSPORT_ENDPOINT || '/v1/ng/identities/passport';
-    const endpoint = `${basePath}/${encodeURIComponent(passportNumber)}`;
+      const basePath = process.env.QOREID_PASSPORT_ENDPOINT || '/v1/ng/identities/passport';
+      const endpoint = `${basePath}/${encodeURIComponent(passportNumber)}`;
 
-    logger.info('Calling QoreID passport verification', { passportNumber, endpoint });
+      logger.info('Calling QoreID passport verification', { passportNumber, endpoint });
 
-    const response = await this.http.post<QoreIDPassportResponse>(
-      endpoint,
-      { firstname, lastname },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+      const response = await this.http.post<QoreIDPassportResponse>(
+        endpoint,
+        { firstname, lastname },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    logger.debug('QoreID passport response', { status: response.data.status });
-    return response.data;
+      logger.debug('QoreID passport response', { status: response.data.status });
+      return response.data;
+    } catch (error: any) {
+      logger.error('QoreID passport verification failed', {
+        passportNumber,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        errorData: error.response?.data,
+        message: error.message,
+      });
+      throw error;
+    }
   }
 }
 
