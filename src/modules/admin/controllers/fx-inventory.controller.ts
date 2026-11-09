@@ -12,6 +12,14 @@ class FxInventoryController {
     res.json(successResponse(data));
   });
 
+  getStats = asyncHandler(async (req: Request, res: Response) => {
+    const data = await fxInventoryService.getStats({
+      branchId: req.query.branchId as string | undefined,
+      agentId: req.query.agentId as string | undefined,
+    });
+    res.json(successResponse(data));
+  });
+
   getHistory = asyncHandler(async (req: Request, res: Response) => {
     const data = await fxInventoryService.getInventoryHistory({
       branchId: req.query.branchId as string | undefined,

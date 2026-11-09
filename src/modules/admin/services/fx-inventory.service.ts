@@ -38,6 +38,36 @@ class FxInventoryService {
     }));
   }
 
+  async getStats(filters: { branchId?: string; agentId?: string } = {}) {
+    const where: any = {};
+    if (filters.branchId) where.branchId = filters.branchId;
+    if (filters.agentId) where.agentId = filters.agentId;
+
+    const [disbursementGroups, lodgmentGroups] = await Promise.all([
+      prisma.cashDisbursement.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      prisma.cashLodgment.groupBy({ by: ["status"], where, _count: { _all: true } }),
+    ]);
+
+    const toMap = (groups: any[]) =>
+      groups.reduce((acc: Record<string, number>, g: any) => {
+        acc[g.status] = g._count._all;
+        return acc;
+      }, {});
+    const sum = (m: Record<string, number>) => Object.values(m).reduce((a, b) => a + b, 0);
+
+    const disbursementsByStatus = toMap(disbursementGroups);
+    const lodgmentsByStatus = toMap(lodgmentGroups);
+
+    return {
+      totalDisbursements: sum(disbursementsByStatus),
+      totalLodgments: sum(lodgmentsByStatus),
+      pendingApprovals: disbursementsByStatus.PENDING_APPROVAL ?? 0,
+      approvedDisbursements: disbursementsByStatus.APPROVED ?? 0,
+      disbursementsByStatus,
+      lodgmentsByStatus,
+    };
+  }
+
   async getInventoryHistory(filters: { branchId?: string; currency?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, filters.page || 1);
     const limit = Math.max(1, Math.min(100, filters.limit || 20));

@@ -6,6 +6,48 @@ const FxInventoryRouter: Router = Router();
 
 /**
  * @swagger
+ * /api/admin/fx-inventory/stats:
+ *   get:
+ *     summary: FX Inventory dashboard counts (disbursements and lodgments, grouped by status)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: branchId
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: agentId
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Stats retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalDisbursements: { type: integer }
+ *                     totalLodgments: { type: integer }
+ *                     pendingApprovals: { type: integer, description: Disbursements in PENDING_APPROVAL }
+ *                     approvedDisbursements: { type: integer, description: Disbursements in APPROVED }
+ *                     disbursementsByStatus: { type: object, additionalProperties: { type: integer } }
+ *                     lodgmentsByStatus: { type: object, additionalProperties: { type: integer } }
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/stats",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "view" }),
+  fxInventoryController.getStats
+);
+
+/**
+ * @swagger
  * /api/admin/fx-inventory/balances:
  *   get:
  *     summary: List FX Inventory balances (per branch + currency)
