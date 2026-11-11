@@ -324,13 +324,20 @@ class FxInventoryService {
     return { ...disbursement, amount: Number(disbursement.amount) };
   }
 
-  async listDisbursements(filters: { status?: string; branchId?: string; agentId?: string; page?: number; limit?: number } = {}) {
+  async listDisbursements(filters: { status?: string; branchId?: string; agentId?: string; currency?: string; search?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, filters.page || 1);
     const limit = Math.max(1, Math.min(100, filters.limit || 20));
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.branchId) where.branchId = filters.branchId;
     if (filters.agentId) where.agentId = filters.agentId;
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+    if (filters.search?.trim()) where.referenceNumber = { contains: filters.search.trim(), mode: "insensitive" };
+    if (filters.dateFrom || filters.dateTo) {
+      where.initiatedAt = {};
+      if (filters.dateFrom) where.initiatedAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.initiatedAt.lte = new Date(filters.dateTo);
+    }
 
     const [rows, total] = await Promise.all([
       prisma.cashDisbursement.findMany({
@@ -367,16 +374,24 @@ class FxInventoryService {
     };
   }
 
-  async getDisbursementForApproval(id: string) {
+  async getDisbursementForApproval(id: string, adminId?: string) {
     const disbursement = await prisma.cashDisbursement.findUnique({
       where: { id },
-      include: { agent: { select: { id: true, name: true, email: true } } },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        history: { orderBy: { createdAt: "asc" } },
+      },
     });
     if (!disbursement) throw new NotFoundError("Cash disbursement not found");
 
     const initiator = await prisma.adminUser.findUnique({ where: { id: disbursement.initiatedBy }, select: { fullName: true, email: true } });
     const currentInventory = await this.getInventoryBalance(disbursement.branchId, disbursement.currency);
     const amount = Number(disbursement.amount);
+
+    const [approvalProcess, workflowLine] = await Promise.all([
+      this.buildApprovalProcess(disbursement, adminId),
+      this.buildWorkflowLine(disbursement),
+    ]);
 
     return {
       id: disbursement.id,
@@ -390,7 +405,133 @@ class FxInventoryService {
       initiator: initiator ? { name: initiator.fullName, email: initiator.email } : null,
       currentInventoryBalance: currentInventory.balance,
       balanceAfterDisbursement: currentInventory.balance - amount,
+      approvalProcess,
+      workflowLine,
     };
+  }
+
+  /** Approval progress for the details page (same shape as transactions' approvalProcess, plus per-stage status). */
+  private async buildApprovalProcess(disbursement: any, adminId?: string) {
+    const empty = {
+      name: null, approvalType: null, isApprovalOfficer: false, approvalState: null,
+      currentOrder: null, pendingAssignees: [] as any[], workflowStages: [] as any[],
+    };
+
+    if (!disbursement.workflowTemplateId) {
+      return { ...empty, approvalState: disbursement.status === "REJECTED" ? "Rejected" : "Approved (no approval workflow required)" };
+    }
+
+    const workflow = await prisma.workflowTemplate.findUnique({
+      where: { id: disbursement.workflowTemplateId },
+      include: {
+        stages: {
+          orderBy: { order: "asc" },
+          include: { assignees: { include: { admin: { select: { id: true, fullName: true, role: { select: { name: true } } } } } } },
+        },
+      },
+    });
+    if (!workflow) return empty;
+
+    const stages: any[] = workflow.stages || [];
+    const total = stages.length;
+    const history: any[] = disbursement.history || [];
+    const stagesApproved = history.filter((h) => h.action === "STAGE_APPROVED").length;
+
+    // Index of the stage the disbursement is at (or was rejected at); -1 once fully approved
+    let activeIndex = -1;
+    if (disbursement.status === "PENDING_APPROVAL") {
+      activeIndex = stages.findIndex((s) => s.id === disbursement.currentStageId);
+    } else if (disbursement.status === "REJECTED") {
+      activeIndex = Math.min(stagesApproved, total - 1);
+    }
+
+    const mapAssignees = (s: any) =>
+      (s.assignees || []).map((a: any) => ({
+        adminId: a.adminId,
+        adminName: a.admin?.fullName || "Unknown Admin",
+        roleName: a.admin?.role?.name || "No Role",
+      }));
+
+    const stageStatus = (idx: number) => {
+      if (activeIndex === -1) return "APPROVED";
+      if (idx < activeIndex) return "APPROVED";
+      if (idx === activeIndex) return disbursement.status === "REJECTED" ? "REJECTED" : "PENDING";
+      return "WAITING";
+    };
+
+    let approvalState: string;
+    if (disbursement.status === "PENDING_APPROVAL" && activeIndex !== -1) {
+      approvalState = `Step ${activeIndex + 1} of ${total} (${stages[activeIndex].name})`;
+    } else if (disbursement.status === "REJECTED") {
+      approvalState = `Rejected at Step ${activeIndex + 1} of ${total}`;
+    } else {
+      approvalState = "Approved (Workflow Completed)";
+    }
+
+    const isPending = disbursement.status === "PENDING_APPROVAL" && activeIndex !== -1;
+    return {
+      name: workflow.name || null,
+      approvalType: workflow.approvalType || null,
+      isApprovalOfficer: adminId
+        ? stages.some((s) => (s.assignees || []).some((a: any) => String(a.adminId).toLowerCase() === String(adminId).toLowerCase()))
+        : false,
+      approvalState,
+      currentOrder: isPending ? activeIndex + 1 : null,
+      pendingAssignees: isPending ? mapAssignees(stages[activeIndex]) : [],
+      workflowStages: stages.map((s, idx) => ({
+        stageId: s.id,
+        name: s.name,
+        order: idx + 1,
+        isCurrent: isPending && idx === activeIndex,
+        status: stageStatus(idx),
+        assignees: mapAssignees(s),
+      })),
+    };
+  }
+
+  /** Chronological approval/audit timeline (same shape as transactions' workflowLine). */
+  private async buildWorkflowLine(disbursement: any) {
+    const history: any[] = (disbursement.history || []).filter((h: any) => h.performedBy);
+    const ids: string[] = Array.from(new Set(history.map((h: any) => String(h.performedBy))));
+    if (ids.length === 0) return [];
+
+    const [admins, agents] = await Promise.all([
+      prisma.adminUser.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, fullName: true, position: true, role: { select: { name: true } } },
+      }),
+      prisma.agent.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    ]);
+    const adminMap = new Map<string, any>(admins.map((a: any) => [a.id, a]));
+    const agentMap = new Map<string, any>(agents.map((a: any) => [a.id, a]));
+
+    const titles: Record<string, [string, string]> = {
+      INITIATED: ["Disbursement Initiated", "Initiated"],
+      AUTO_APPROVED: ["Disbursement Auto-Approved", "Approved"],
+      STAGE_APPROVED: ["Stage Approved", "Approved"],
+      APPROVED: ["Disbursement Approved", "Approved"],
+      REJECTED: ["Disbursement Rejected", "Rejected"],
+      RECEIPT_CONFIRMED: ["Receipt Confirmed by Agent", "Completed"],
+      RECEIPT_REJECTED: ["Receipt Rejected by Agent", "Rejected"],
+    };
+
+    return history.map((h: any) => {
+      const performerId = String(h.performedBy);
+      const admin = adminMap.get(performerId);
+      const agent = agentMap.get(performerId);
+      const [title, outcome] = titles[h.action] || [h.action, "Action Taken"];
+      return {
+        id: h.id,
+        timestamp: h.createdAt,
+        adminId: performerId,
+        adminName: admin?.fullName || agent?.name || performerId,
+        adminRole: admin ? (admin.position || admin.role?.name || null) : agent ? "Agent" : null,
+        title,
+        outcome,
+        comment: h.reason || null,
+        action: h.action,
+      };
+    });
   }
 
   private async loadDisbursementWithWorkflow(id: string) {
@@ -497,13 +638,20 @@ class FxInventoryService {
 
   // ── Cash Lodgment: Agent -> Admin (admin-side confirm/reject) ─────────────
 
-  async listLodgments(filters: { status?: string; branchId?: string; agentId?: string; page?: number; limit?: number } = {}) {
+  async listLodgments(filters: { status?: string; branchId?: string; agentId?: string; currency?: string; search?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, filters.page || 1);
     const limit = Math.max(1, Math.min(100, filters.limit || 20));
     const where: any = {};
     if (filters.status) where.status = filters.status;
     if (filters.branchId) where.branchId = filters.branchId;
     if (filters.agentId) where.agentId = filters.agentId;
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+    if (filters.search?.trim()) where.referenceNumber = { contains: filters.search.trim(), mode: "insensitive" };
+    if (filters.dateFrom || filters.dateTo) {
+      where.submittedAt = {};
+      if (filters.dateFrom) where.submittedAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.submittedAt.lte = new Date(filters.dateTo);
+    }
 
     const [rows, total] = await Promise.all([
       prisma.cashLodgment.findMany({

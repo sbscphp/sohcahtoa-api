@@ -639,6 +639,7 @@ model Agent {
   cashBalances        AgentCashBalance[]
   cashDisbursements   CashDisbursement[]
   cashLodgments       CashLodgment[]
+  physicalCounts      AgentPhysicalCount[]
 
   @@index([branchId])
   @@index([name])
@@ -2165,6 +2166,22 @@ model FxInventoryEntry {
   @@index([balanceId])
   @@index([sourceType, sourceId])
   @@map("fx_inventory_entries")
+}
+
+// Physical cash count recorded by an admin for an agent (feeds "Physical Count"/"Variance" on the Inventory Position tab)
+model AgentPhysicalCount {
+  id            String   @id @default(uuid())
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id])
+  currency      String
+  countedAmount Decimal  @db.Decimal(18, 2)
+  countDate     DateTime @default(now())
+  countedBy     String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([agentId, currency, countDate])
+  @@map("agent_physical_counts")
 }
 
 model AgentCashBalance {

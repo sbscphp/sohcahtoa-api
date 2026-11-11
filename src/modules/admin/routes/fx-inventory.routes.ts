@@ -189,7 +189,7 @@ FxInventoryRouter.get(
  * /api/admin/fx-inventory/disbursements/{id}/approval:
  *   get:
  *     summary: Cash Disbursement (approval) - Get details for approval screen
- *     description: Returns disbursement details, current inventory balance, and balance-after-disbursement preview.
+ *     description: Returns disbursement details, current inventory balance, balance-after-disbursement preview, `approvalProcess` (workflow stages with per-stage status) and `workflowLine` (chronological approval history).
  *     tags: [admin-fx-inventory]
  *     security:
  *       - bearerAuth: []
@@ -397,6 +397,278 @@ FxInventoryRouter.post(
   authenticate,
   requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "edit" }),
   fxInventoryController.rejectLodgment
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents:
+ *   get:
+ *     summary: List agents with total disbursement/lodgment counts (search, pagination)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: branchId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: page
+ *         schema: { type: string }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/agents",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "view" }),
+  fxInventoryController.listAgents
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents/export:
+ *   get:
+ *     summary: Export agents list (CSV)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: branchId
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/agents/export",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "export" }),
+  fxInventoryController.exportAgents
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents/{agentId}/overview:
+ *   get:
+ *     summary: Agent FX inventory overview cards (available FX, NGN cash, pending settlements, cash lodgement)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/agents/:agentId/overview",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "view" }),
+  fxInventoryController.getAgentOverview
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents/{agentId}/inventory-position:
+ *   get:
+ *     summary: Agent inventory position per currency (opening to closing) + NGN total
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/agents/:agentId/inventory-position",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "view" }),
+  fxInventoryController.getAgentInventoryPosition
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents/{agentId}/inventory-position/export:
+ *   get:
+ *     summary: Export agent inventory position (CSV)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/agents/:agentId/inventory-position/export",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "export" }),
+  fxInventoryController.exportAgentInventoryPosition
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/agents/{agentId}/physical-count:
+ *   post:
+ *     summary: Record a physical cash count for an agent (feeds Physical Count / Variance)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currency, countedAmount]
+ *             properties:
+ *               currency: { type: string }
+ *               countedAmount: { type: number }
+ *               countDate: { type: string, format: date-time }
+ *               notes: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.post(
+  "/agents/:agentId/physical-count",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "edit" }),
+  fxInventoryController.recordPhysicalCount
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/lodgments/export:
+ *   get:
+ *     summary: Export cash lodgments (CSV); supports the same filters as the list
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: query
+ *         name: agentId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/lodgments/export",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "export" }),
+  fxInventoryController.exportLodgments
+);
+
+/**
+ * @swagger
+ * /api/admin/fx-inventory/lodgments/{id}:
+ *   get:
+ *     summary: Get a single cash lodgment
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Success
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+FxInventoryRouter.get(
+  "/lodgments/:id",
+  authenticate,
+  requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "view" }),
+  fxInventoryController.getLodgment
 );
 
 export default FxInventoryRouter;
