@@ -60,7 +60,18 @@ export class TransactionVirtualAccountFlowService {
     });
 
     const vaAllowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+    logger.debug('Virtual account gate: transaction status', {
+      transactionId,
+      customerUserId,
+      transactionStatus: transaction.status,
+      allowedStatuses: vaAllowedStatuses,
+    });
     if (!vaAllowedStatuses.includes(transaction.status)) {
+      logger.warn('Cannot create virtual account: transaction status not eligible', {
+        transactionId,
+        customerUserId,
+        transactionStatus: transaction.status,
+      });
       throw new AppError(
         ErrorCode.VALIDATION_ERROR,
         'Virtual account can only be created for approved or awaiting deposit transactions',
@@ -77,6 +88,10 @@ export class TransactionVirtualAccountFlowService {
       select: { id: true, documentType: true, verificationStatus: true },
     });
 
+    logger.debug('Virtual account gate: document verification', {
+      transactionId,
+      unverifiedCount: unapprovedDocuments.length,
+    });
     if (unapprovedDocuments.length > 0) {
       logger.warn('Cannot create virtual account: not all documents are verified', {
         transactionId,

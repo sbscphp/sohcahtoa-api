@@ -79,7 +79,18 @@ export class VirtualAccountService {
 
       // Ensure transaction is in an eligible status before creating virtual account
       const allowedStatuses = ['APPROVED', 'VERIFICATION_COMPLETED', 'AWAITING_DEPOSIT'];
+      logger.debug('Virtual account eligibility check', {
+        transactionId,
+        transactionStatus: transaction.status,
+        allowedStatuses,
+        eligible: allowedStatuses.includes(transaction.status),
+      });
       if (!allowedStatuses.includes(transaction.status)) {
+        logger.warn('Virtual account creation rejected: transaction status not eligible', {
+          transactionId,
+          transactionStatus: transaction.status,
+          allowedStatuses,
+        });
         throw new AppError(
           ErrorCode.VALIDATION_ERROR,
           'Virtual account can only be created for approved or awaiting deposit transactions',
@@ -88,12 +99,26 @@ export class VirtualAccountService {
       }
 
       // Create virtual account with Providus
+      const providusStartedAt = Date.now();
+      logger.debug('Requesting account from Providus', {
+        transactionId,
+        type,
+        simulationMode: providusService.isSimulationMode(),
+      });
       let providusResponse;
       if (type === VirtualAccountType.DYNAMIC) {
         providusResponse = await providusService.createDynamicAccount(accountName);
       } else {
         providusResponse = await providusService.createReservedAccount(accountName, bvn);
       }
+
+      logger.debug('Providus responded', {
+        transactionId,
+        durationMs: Date.now() - providusStartedAt,
+        accountNumber: providusResponse?.account_number,
+        accountName: providusResponse?.account_name,
+        looksSimulated: JSON.stringify(providusResponse ?? {}).toLowerCase().includes('simulat'),
+      });
 
       // Calculate expiry date for dynamic accounts
       // In simulation mode, cap expiry at 30 minutes for faster testing cycles
@@ -196,7 +221,15 @@ export class VirtualAccountService {
 
       return virtualAccount;
     } catch (error) {
-      logger.error('Error creating virtual account', error);
+      logger.error('Error creating virtual account', {
+        transactionId,
+        userId,
+        errorName: (error as any)?.name,
+        errorMessage: (error as any)?.message,
+        errorCode: (error as any)?.code,
+        statusCode: (error as any)?.statusCode,
+        stack: (error as any)?.stack,
+      });
       if (error instanceof AppError) throw error;
       throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to create virtual account', 500);
     }

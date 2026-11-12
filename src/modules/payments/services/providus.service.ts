@@ -107,6 +107,15 @@ export class ProvidusService {
       logger.warn('Providus configuration incomplete - some features may not work');
     }
 
+    // Debug: effective configuration (presence only — never log the secret)
+    logger.info('Providus service initialised', {
+      simulationMode: SIMULATION_MODE,
+      baseUrl: this.config.baseUrl || '(missing)',
+      hasBaseUrl: Boolean(this.config.baseUrl),
+      hasClientId: Boolean(this.config.clientId),
+      hasClientSecret: Boolean(this.config.clientSecret),
+    });
+
     this.client = axios.create({
       baseURL: this.config.baseUrl,
       timeout: 30000,
@@ -154,6 +163,24 @@ export class ProvidusService {
     return crypto.createHash('sha512').update(payload).digest('hex').toUpperCase();
   }
 
+
+  /**
+   * Debug helper: summarise an axios/other error without leaking secrets.
+   */
+  private describeError(error: any) {
+    return {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      httpStatus: error?.response?.status,
+      responseData: error?.response?.data,
+      url: error?.config?.url,
+      baseURL: error?.config?.baseURL,
+      timeoutMs: error?.config?.timeout,
+      isNetworkError: this.isNetworkError(error),
+    };
+  }
+
   /**
    * Check if an error is a network error that should trigger simulation fallback
    */
@@ -189,6 +216,11 @@ export class ProvidusService {
 
     try {
       logger.info('Creating dynamic account', { accountName });
+      logger.debug('Providus createDynamicAccount request', {
+        endpoint: '/PiPCreateDynamicAccountNumber',
+        baseUrl: this.config.baseUrl,
+        simulationMode: SIMULATION_MODE,
+      });
 
       const response = await this.client.post<CreateDynamicAccountResponse>(
         '/PiPCreateDynamicAccountNumber',
@@ -210,10 +242,13 @@ export class ProvidusService {
 
       return response.data;
     } catch (error) {
-      logger.error('Error creating dynamic account', error);
+      logger.error('Error creating dynamic account', this.describeError(error));
       // Fall back to simulation mode on network error
       if (this.isNetworkError(error)) {
-        logger.warn('Network error detected, falling back to simulation mode');
+        logger.warn(
+          'Network error detected, falling back to simulation mode — the returned account is SIMULATED, not a real Providus account',
+          { operation: 'createDynamicAccount', ...this.describeError(error) }
+        );
         return this.simulateCreateDynamicAccount(accountName);
       }
       if (error instanceof AppError) throw error;
@@ -240,7 +275,12 @@ export class ProvidusService {
     }
 
     try {
-      logger.info('Creating reserved account', { accountName, bvn });
+      logger.info('Creating reserved account', { accountName, hasBvn: Boolean(bvn) });
+      logger.debug('Providus createReservedAccount request', {
+        endpoint: '/PiPCreateReservedAccountNumber',
+        baseUrl: this.config.baseUrl,
+        simulationMode: SIMULATION_MODE,
+      });
 
       const response = await this.client.post<CreateReservedAccountResponse>(
         '/PiPCreateReservedAccountNumber',
@@ -265,10 +305,13 @@ export class ProvidusService {
 
       return response.data;
     } catch (error) {
-      logger.error('Error creating reserved account', error);
+      logger.error('Error creating reserved account', this.describeError(error));
       // Fall back to simulation mode on network error
       if (this.isNetworkError(error)) {
-        logger.warn('Network error detected, falling back to simulation mode');
+        logger.warn(
+          'Network error detected, falling back to simulation mode — the returned account is SIMULATED, not a real Providus account',
+          { operation: 'createReservedAccount', ...this.describeError(error) }
+        );
         return this.simulateCreateReservedAccount(accountName, bvn);
       }
       if (error instanceof AppError) throw error;
