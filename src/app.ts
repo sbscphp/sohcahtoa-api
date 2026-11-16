@@ -27,6 +27,7 @@ import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
 import { securityFilter } from './shared/middleware/security-filter';
 import notificationRoutes from './modules/notifications/routes/notification.routes';
 import providusWebhookRoutes from './modules/payments/routes/providus-webhook.routes';
+import adminCardsRoutes from './modules/admin/routes/cards.routes';
 import adminVirtualAccountRoutes from './modules/admin/routes/virtual-account.routes';
 import customerVirtualAccountRoutes from './modules/customer/routes/customer-virtual-account.routes';
 import settlementManagementRoutes from './modules/admin/routes/settlement-management.routes';
@@ -41,6 +42,15 @@ const logger = createLogger('app');
 
 export const createApp = async (): Promise<Application> => {
   const app = express();
+
+  // CORS first so every response (including rejected/preflight requests) carries CORS headers
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    maxAge: 86400,
+    optionsSuccessStatus: 204,
+  }));
 
   // Block scanners, exploit probes, and malicious paths before any other processing
   app.use(securityFilter);
@@ -62,12 +72,6 @@ export const createApp = async (): Promise<Application> => {
       },
     })
   );
-  app.use(cors({
-    origin: '*',
-    // origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-    // credentials: true,
-  }));
-
   // Body parsing middleware
   app.use(express.json({ limit: UPLOAD_LIMITS.JSON_BODY }));
   app.use(express.urlencoded({
@@ -154,6 +158,9 @@ export const createApp = async (): Promise<Application> => {
 
   app.use('/api/webhooks/providus', providusWebhookRoutes);
   logger.info('Providus webhook routes registered');
+
+  app.use('/api/admin/cards', adminCardsRoutes);
+  logger.info('Admin card routes registered');
 
   app.use('/api/admin/virtual-accounts', adminVirtualAccountRoutes);
   logger.info('Admin virtual account routes registered');
