@@ -171,6 +171,12 @@ class AgentFxInventoryService {
       prisma.cashDisbursement.count({ where }),
     ]);
 
+    const adminIds = [...new Set(rows.flatMap((r: any) => [r.initiatedBy, r.approvedBy]).filter(Boolean))] as string[];
+    const admins = adminIds.length
+      ? await prisma.adminUser.findMany({ where: { id: { in: adminIds } }, select: { id: true, fullName: true } })
+      : [];
+    const adminName = (id?: string | null) => admins.find((a: any) => a.id === id)?.fullName ?? null;
+
     return {
       data: rows.map((r: any) => ({
         id: r.id,
@@ -178,6 +184,10 @@ class AgentFxInventoryService {
         currency: r.currency,
         amount: Number(r.amount),
         purpose: r.purpose,
+        disbursedBy: r.initiatedBy,
+        disbursedByName: adminName(r.initiatedBy),
+        approvedByName: adminName(r.approvedBy),
+        autoApproved: r.autoApproved,
         status: r.status,
         initiatedAt: r.initiatedAt,
         approvedAt: r.approvedAt,

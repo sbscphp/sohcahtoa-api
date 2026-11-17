@@ -174,9 +174,10 @@ router.get('/transactions/card', asyncHandler(async (req, res) => ok(res, await 
 router.get('/transactions/funding', asyncHandler(async (req, res) => ok(res, await cardInfra.getFundingTransactions(txnQuery.parse(req.query)))));
 
 // Map zod validation failures to 400 instead of a generic 500
-router.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+router.use((err: any, _req: Request, res: Response, next: NextFunction): void => {
   if (err instanceof z.ZodError) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: err.issues } });
+    res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: err.issues } });
+    return;
   }
   next(err);
 });

@@ -87,6 +87,9 @@ FxInventoryRouter.get(
  *         name: branchId
  *         schema: { type: string, format: uuid }
  *       - in: query
+ *         name: agentId
+ *         schema: { type: string, format: uuid }
+ *       - in: query
  *         name: currency
  *         schema: { type: string }
  *       - in: query
@@ -177,6 +180,43 @@ FxInventoryRouter.post(
   requirePermission({ module: "FX_INVENTORY", feature: "MODULE", action: "create" }),
   fxInventoryController.initiateDisbursement
 );
+/**
+ * @swagger
+ * /api/admin/fx-inventory/disbursements:
+ *   get:
+ *     summary: List cash disbursements (filter by agent, currency, date range, status)
+ *     tags: [admin-fx-inventory]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: agentId
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: branchId
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string, example: USD }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, example: "2026-11-01" }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, example: "2026-11-30" }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Disbursements retrieved successfully
+ */
 FxInventoryRouter.get(
   "/disbursements",
   authenticate,
@@ -300,6 +340,15 @@ FxInventoryRouter.post(
  *       - in: query
  *         name: branchId
  *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string, example: USD }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, example: "2026-11-01" }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, example: "2026-11-30" }
  *       - in: query
  *         name: agentId
  *         schema: { type: string, format: uuid }
@@ -467,6 +516,7 @@ FxInventoryRouter.get(
  *     tags: [admin-fx-inventory]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
  *       - in: path
  *         name: agentId
  *         required: true
@@ -504,6 +554,7 @@ FxInventoryRouter.get(
  *     tags: [admin-fx-inventory]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
  *       - in: path
  *         name: agentId
  *         required: true
@@ -520,6 +571,9 @@ FxInventoryRouter.get(
  *       - in: query
  *         name: dateTo
  *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [reconciled, variance] }
  *     responses:
  *       200:
  *         description: Success

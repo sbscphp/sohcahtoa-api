@@ -21,6 +21,7 @@ class FxInventoryController {
       dateFrom: req.query.dateFrom as string | undefined,
       dateTo: req.query.dateTo as string | undefined,
       currency: req.query.currency as string | undefined,
+      status: req.query.status as string | undefined,
     };
   }
 
@@ -120,6 +121,7 @@ class FxInventoryController {
   getHistory = asyncHandler(async (req: Request, res: Response) => {
     const data = await fxInventoryService.getInventoryHistory({
       branchId: req.query.branchId as string | undefined,
+      agentId: req.query.agentId as string | undefined,
       currency: req.query.currency as string | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : undefined,
       limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,

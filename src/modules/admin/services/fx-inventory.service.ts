@@ -9,6 +9,14 @@ import { eventBus, EventTypes } from "../../../events/event-bus";
 const prisma: any = getDatabase();
 const logger = createLogger("FxInventoryService");
 
+/** Parses a date filter; a bare YYYY-MM-DD "to" value covers the whole day. */
+function parseDateFilter(value: string, isTo = false): Date {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) throw new ValidationError(`Invalid date: ${value}`);
+  if (isTo && /^\d{4}-\d{2}-\d{2}$/.test(value)) d.setUTCHours(23, 59, 59, 999);
+  return d;
+}
+
 class FxInventoryService {
   // ── Balances (read-only) ──────────────────────────────────────────────────
 
@@ -68,12 +76,21 @@ class FxInventoryService {
     };
   }
 
-  async getInventoryHistory(filters: { branchId?: string; currency?: string; page?: number; limit?: number } = {}) {
+  async getInventoryHistory(filters: { branchId?: string; agentId?: string; currency?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, filters.page || 1);
     const limit = Math.max(1, Math.min(100, filters.limit || 20));
     const where: any = {};
     if (filters.branchId) where.branchId = filters.branchId;
-    if (filters.currency) where.currency = filters.currency;
+    if (filters.currency) where.currency = filters.currency.toUpperCase();
+    if (filters.agentId) {
+      const agent = await prisma.agent.findUnique({ where: { id: filters.agentId }, select: { branchId: true } });
+      if (!agent) throw new NotFoundError("Agent not found");
+      const [disb, lodg] = await Promise.all([
+        prisma.cashDisbursement.findMany({ where: { agentId: filters.agentId }, select: { id: true } }),
+        prisma.cashLodgment.findMany({ where: { agentId: filters.agentId }, select: { id: true } }),
+      ]);
+      where.sourceId = { in: [...disb.map((d: any) => d.id), ...lodg.map((l: any) => l.id)] };
+    }
 
     const [rows, total] = await Promise.all([
       prisma.fxInventoryEntry.findMany({
@@ -335,8 +352,8 @@ class FxInventoryService {
     if (filters.search?.trim()) where.referenceNumber = { contains: filters.search.trim(), mode: "insensitive" };
     if (filters.dateFrom || filters.dateTo) {
       where.initiatedAt = {};
-      if (filters.dateFrom) where.initiatedAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.initiatedAt.lte = new Date(filters.dateTo);
+      if (filters.dateFrom) where.initiatedAt.gte = parseDateFilter(filters.dateFrom);
+      if (filters.dateTo) where.initiatedAt.lte = parseDateFilter(filters.dateTo, true);
     }
 
     const [rows, total] = await Promise.all([
@@ -649,8 +666,8 @@ class FxInventoryService {
     if (filters.search?.trim()) where.referenceNumber = { contains: filters.search.trim(), mode: "insensitive" };
     if (filters.dateFrom || filters.dateTo) {
       where.submittedAt = {};
-      if (filters.dateFrom) where.submittedAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.submittedAt.lte = new Date(filters.dateTo);
+      if (filters.dateFrom) where.submittedAt.gte = parseDateFilter(filters.dateFrom);
+      if (filters.dateTo) where.submittedAt.lte = parseDateFilter(filters.dateTo, true);
     }
 
     const [rows, total] = await Promise.all([

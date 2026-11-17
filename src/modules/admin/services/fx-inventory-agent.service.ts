@@ -166,7 +166,11 @@ class FxInventoryAgentService {
 
   // ── Inventory Position tab ────────────────────────────────────────────────
 
-  async getInventoryPosition(agentId: string, filters: { date?: string; dateFrom?: string; dateTo?: string; currency?: string } = {}) {
+  async getInventoryPosition(agentId: string, filters: { date?: string; dateFrom?: string; dateTo?: string; currency?: string; status?: string } = {}) {
+    const statusFilter = filters.status?.trim().toLowerCase();
+    if (statusFilter && statusFilter !== "reconciled" && statusFilter !== "variance") {
+      throw new ValidationError('status must be "reconciled" or "variance"');
+    }
     const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { id: true, name: true } });
     if (!agent) throw new NotFoundError("Agent not found");
 
@@ -209,6 +213,8 @@ class FxInventoryAgentService {
       const closingBalance = this.closing(openingBalance, f);
       const physicalCount = latestCount.get(currency) ?? null;
       const variance = physicalCount != null ? round2(physicalCount - closingBalance) : null;
+      const status = variance != null && variance !== 0 ? "variance" : "reconciled";
+      if (statusFilter && status !== statusFilter) continue;
 
       rows.push({
         currency,
@@ -220,6 +226,7 @@ class FxInventoryAgentService {
         closingBalance,
         physicalCount,
         variance,
+        status,
       });
 
       const rate = await this.rateFor(currency);
@@ -274,6 +281,23 @@ class FxInventoryAgentService {
     const ngnFlow = upTo.flows.get("NGN") ?? emptyFlow();
     const ngnCashAvailable = round2(ngnFlow.disbursed + ngnFlow.lodged * -1 + upTo.ngn.sold - upTo.ngn.purchased);
 
+    const periodTxWhere = { createdByAgentId: agentId, currency, status: "COMPLETED", completedAt: { gte: range.from, lte: range.to } };
+    const [periodTxs, totalTransactions] = await Promise.all([
+      prisma.transaction.groupBy({
+        by: ["type", "transactionMode"],
+        where: periodTxWhere,
+        _sum: { foreignAmount: true },
+      }),
+      prisma.transaction.count({ where: periodTxWhere }),
+    ]);
+    let totalFxPurchased = 0;
+    let totalFxSold = 0;
+    for (const g of periodTxs) {
+      const side = this.classify(g.type, g.transactionMode);
+      if (side === "purchased") totalFxPurchased += Number(g._sum.foreignAmount || 0);
+      else if (side === "sold") totalFxSold += Number(g._sum.foreignAmount || 0);
+    }
+
     const [pendingSettlements, lodgedInPeriod] = await Promise.all([
       prisma.transaction.count({
         where: {
@@ -305,6 +329,9 @@ class FxInventoryAgentService {
       ngnCashAvailable,
       pendingSettlements,
       cashLodgement: round2(cashLodgement),
+      totalFxPurchased: round2(totalFxPurchased),
+      totalFxSold: round2(totalFxSold),
+      totalTransactions,
     };
   }
 
