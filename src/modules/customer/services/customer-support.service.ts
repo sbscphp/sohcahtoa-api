@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 import { NotFoundError, ValidationError } from "../../../shared/utils";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadToStorage } from "../../../shared/utils/storage";
 import { createLogger } from "../../../shared/utils/logger";
 import { emailService } from "../../../shared/utils/email";
 
@@ -105,44 +105,35 @@ export class CustomerSupportService {
     let attachmentUrl = null;
     if (file) {
       try {
-        logger.debug(`[createSupportTicket] Uploading attachment to Cloudinary`, {
+        logger.debug(`[createSupportTicket] Uploading attachment to storage`, {
           ticketId: ticket.id,
           fileName: file.originalname,
           fileSize: file.size,
         });
 
-        const result = await new Promise<any>((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: `sochatoa/tickets/${ticket.id}`,
-              resource_type: "auto",
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          );
-          uploadStream.end(file.buffer);
+        const result = await uploadToStorage(file.buffer, {
+          folder: `sochatoa/tickets/${ticket.id}`,
+          allowedFormats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
         });
 
         logger.info(`[createSupportTicket] Attachment uploaded successfully`, {
           ticketId: ticket.id,
-          cloudinaryPublicId: result.public_id,
-          fileUrl: result.secure_url,
+          storageKey: result.publicId,
+          fileUrl: result.secureUrl,
         });
 
         // Save attachment record
         await prisma.ticketAttachment.create({
           data: {
             ticketId: ticket.id,
-            fileUrl: result.secure_url,
+            fileUrl: result.secureUrl,
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,
           },
         });
 
-        attachmentUrl = result.secure_url;
+        attachmentUrl = result.secureUrl;
 
         logger.debug(`[createSupportTicket] Attachment record saved`, {
           ticketId: ticket.id,

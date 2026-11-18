@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 import { NotFoundError, ValidationError, partiallyRedactField } from "../../../shared/utils";
-import { v2 as cloudinary } from "cloudinary";
+import { uploadToStorage } from "../../../shared/utils/storage";
 import { createLogger } from "../../../shared/utils/logger";
 import { UserRole } from "../../../shared/types";
 import { emailService } from "../../../shared/utils/email";
@@ -128,38 +128,28 @@ class AgentSupportService {
 
     if (file) {
       try {
-        logger.debug("[createSupportTicket] Uploading attachment to Cloudinary", {
+        logger.debug("[createSupportTicket] Uploading attachment to storage", {
           ticketId: ticket.id,
           fileName: file.originalname,
           fileSize: file.size,
         });
 
-        const result = await new Promise<any>((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: `sochatoa/tickets/${ticket.id}`,
-              resource_type: "auto",
-            },
-            (error, streamResult) => {
-              if (error) reject(error);
-              else resolve(streamResult);
-            }
-          );
-
-          uploadStream.end(file.buffer);
+        const result = await uploadToStorage(file.buffer, {
+          folder: `sochatoa/tickets/${ticket.id}`,
+          allowedFormats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
         });
 
         await prisma.ticketAttachment.create({
           data: {
             ticketId: ticket.id,
-            fileUrl: result.secure_url,
+            fileUrl: result.secureUrl,
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,
           },
         });
 
-        attachmentUrl = result.secure_url;
+        attachmentUrl = result.secureUrl;
       } catch (error) {
         logger.error("[createSupportTicket] Failed to upload attachment", {
           ticketId: ticket.id,

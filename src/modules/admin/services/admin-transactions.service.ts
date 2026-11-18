@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 const prisma = getDatabase();
-import { CloudinaryService, createLogger, deriveRequestStatus, deriveWorkflowStage } from "../../../shared/utils";
+import { StorageService, createLogger, deriveRequestStatus, deriveWorkflowStage } from "../../../shared/utils";
 import { ServiceName, TransactionStep, TransactionStatus, VerificationStatus, TransactionMode, DisbursementMethod, TransactionType } from "../../../shared/types";
 import { ActionType } from "../../../shared/types/action-type";
 import { auditTrailService } from "../services/audit-trail.service";
@@ -2706,7 +2706,7 @@ export class AdminTransactionsService {
             transaction.userId,
             'CUSTOMER'
         );
-        const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
+        const uploadResult = await StorageService.upload(pdf, { folder: 'receipts' });
         existingReceipt = await prisma.receipt.create({
               data: {
                 transactionId: transaction.id,

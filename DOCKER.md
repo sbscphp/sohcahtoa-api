@@ -58,7 +58,7 @@ Edit the `docker-compose.yml` file to configure environment variables:
 
 - `SMTP_*` - Email service configuration
 - `TERMII_API_KEY` - SMS service (Termii) configuration
-- `CLOUDINARY_*` - Cloud storage for document uploads
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET_NAME` - S3 storage for document uploads
 
 ### Production Deployment
 

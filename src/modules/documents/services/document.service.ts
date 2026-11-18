@@ -1,6 +1,6 @@
 import { getDatabase } from '../../../config/database';
 const prisma = getDatabase();
-import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/cloudinary';
+import { uploadToStorage, deleteFromStorage, keyFromUrl } from '../../../shared/utils/storage';
 import {
   generateId,
   NotFoundError,
@@ -50,8 +50,8 @@ export class DocumentService {
         fileName: file.originalname,
       });
 
-      // Upload to Cloudinary
-      const uploadResult = await uploadToCloudinary(file.buffer, {
+      // Upload to S3
+      const uploadResult = await uploadToStorage(file.buffer, {
         folder: `documents/${documentType.toLowerCase()}`,
         resourceType: 'auto',
         allowedFormats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
@@ -80,7 +80,7 @@ export class DocumentService {
           data: documentData,
         });
       } else {
-        // No transaction yet — return Cloudinary URL for the caller to attach later
+        // No transaction yet — return S3 URL for the caller to attach later
         logger.info('Document uploaded without transaction, returning URL only', {
           fileUrl: uploadResult.secureUrl,
         });
@@ -276,13 +276,11 @@ export class DocumentService {
     }
 
     try {
-      // Extract Cloudinary public ID from URL
-      const urlParts = document.fileUrl.split('/');
-      const fileWithExt = urlParts[urlParts.length - 1];
-      const publicId = `${urlParts[urlParts.length - 2]}/${fileWithExt.split('.')[0]}`;
-
-      // Delete from Cloudinary
-      await deleteFromCloudinary(publicId, 'auto');
+      // Delete from S3 (legacy URLs that aren't in our bucket are skipped)
+      const key = keyFromUrl(document.fileUrl);
+      if (key) {
+        await deleteFromStorage(key);
+      }
 
       // Delete from database
       await prisma.transactionDocument.delete({

@@ -52,7 +52,7 @@ This application follows a **modular monolith architecture** converted from micr
 - **Rate Limiting**: express-rate-limit
 
 ### File & Media Management
-- **Cloud Storage**: Cloudinary
+- **Cloud Storage**: AWS S3
 - **File Upload**: Multer
 - **Image Processing**: Sharp
 - **OCR**: Google Vision / AWS Textract / Azure Computer Vision
@@ -262,7 +262,7 @@ Automated checks include:
 - Dynamic risk scoring
 
 ### 5. Document Management
-- **Cloudinary Integration**: Cloud-based document storage
+- **S3 Integration**: Cloud-based document storage
 - **OCR Verification**: Automated document text extraction
 - **Supported Documents** (14+ types): Passport, Visa, BVN, NIN, TIN, Utility Bills, Medical Letters, School Admission, Invoices, etc.
 - **File Validation**: Size limits (10MB), format validation
@@ -332,7 +332,7 @@ Event-driven notifications for:
 - **Workflows**: `GET /api/admin/workflows`, `POST /api/admin/workflows`
 
 ### Documents (`/api/documents`)
-- `POST /api/documents/upload` - Upload document (Cloudinary)
+- `POST /api/documents/upload` - Upload document (S3)
 - `GET /api/documents/:id` - Retrieve document
 - `GET /api/documents/user/:userId` - List user documents
 - `PATCH /api/documents/:id/verify` - Verify document
@@ -562,10 +562,10 @@ TERMII_SENDER_ID=Sochatoa
 
 #### Cloud Storage (Required for document uploads)
 ```bash
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-CLOUDINARY_URL=cloudinary://key:secret@cloud-name
+AWS_REGION=eu-north-1
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+AWS_BUCKET_NAME=your-bucket-name
 ```
 
 #### External Integrations (Production)

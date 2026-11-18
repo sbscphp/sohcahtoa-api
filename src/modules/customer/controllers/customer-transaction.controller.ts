@@ -4,7 +4,7 @@ import { successResponse, paginatedResponse } from "../../../shared/utils";
 import { AuthRequest } from "../../../shared/middleware";
 import { UserRole } from "../../../shared/types";
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
-import { CloudinaryService } from "../../../shared/utils/cloudinary";
+import { StorageService } from "../../../shared/utils/storage";
 import { getDatabase } from "../../../config/database";
 
 const prisma = getDatabase();
@@ -481,8 +481,8 @@ class CustomerTransactionController {
       // Generate receipt PDF
       const { pdf, filename, referenceNumber } = await generateTransactionReceipt(transactionId, userId, 'CUSTOMER');
 
-      // Upload to Cloudinary
-      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts', });
+      // Upload to S3
+      const uploadResult = await StorageService.upload(pdf, { folder: 'receipts', });
 
       // Save or update receipt record
       await (prisma as any).receipt.upsert({

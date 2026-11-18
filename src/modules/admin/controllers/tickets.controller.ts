@@ -4,7 +4,7 @@ import { ServiceUnavailableError, successResponse, streamCsv, ValidationError, c
 import { ServiceName } from "../../../shared/types";
 import { CreateTicketPayload, UpdateTicketPayload, ticketsService } from "../services/tickets.service";
 import { auditTrailService } from "../services/audit-trail.service";
-import { CloudinaryService, uploadToCloudinary } from "../../../shared/utils/cloudinary";
+import { StorageService, uploadToStorage } from "../../../shared/utils/storage";
 import notificationService from "../../notifications/services/notification.service";
 import NotificationTemplates from "../../notifications/templates/notification-templates";
 import { NotificationType, NotificationChannel } from "@prisma/client";
@@ -45,12 +45,12 @@ class TicketsController {
 
   update = asyncHandler(async (req: Request, res: Response) => {
     const adminId = (req as any).user?.userId as string;
-    let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+    let uploadedFile: Awaited<ReturnType<typeof uploadToStorage>> | undefined;
 
     try {
       if (req.file) {
         try {
-          uploadedFile = await uploadToCloudinary(req.file.buffer, {
+          uploadedFile = await uploadToStorage(req.file.buffer, {
             folder: "tickets",
             resourceType: "auto",
             allowedFormats: ["jpg", "jpeg", "png", "pdf"],
@@ -116,19 +116,19 @@ class TicketsController {
       res.json(successResponse(result.updated));
     } catch (error) {
       if (uploadedFile?.publicId) {
-        await CloudinaryService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {});
+        await StorageService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {});
       }
       throw error;
     }
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
-    let uploadedFile: Awaited<ReturnType<typeof uploadToCloudinary>> | undefined;
+    let uploadedFile: Awaited<ReturnType<typeof uploadToStorage>> | undefined;
 
     try {
       if (req.file) {
         try {
-          uploadedFile = await uploadToCloudinary(req.file.buffer, {
+          uploadedFile = await uploadToStorage(req.file.buffer, {
             folder: "tickets",
             resourceType: "auto",
             allowedFormats: ["jpg", "jpeg", "png", "pdf"],
@@ -194,7 +194,7 @@ class TicketsController {
     } catch (error) {
       // Prevent orphaned uploads if DB fails
       if (uploadedFile?.publicId) {
-        await CloudinaryService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {
+        await StorageService.delete(uploadedFile.publicId, uploadedFile.resourceType as any).catch(() => {
           // Optional: log cleanup failure
         });
       }

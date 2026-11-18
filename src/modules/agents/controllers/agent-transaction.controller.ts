@@ -9,7 +9,7 @@ import {
   AgentPaymentMovementType,
   AgentTransactionExportFilters,
 } from "../services/agent-transaction.service";
-import { CloudinaryService } from "../../../shared/utils/cloudinary";
+import { StorageService } from "../../../shared/utils/storage";
 import { getDatabase } from "../../../config/database";
 
 const prisma = getDatabase();
@@ -582,8 +582,8 @@ class AgentTransactionController {
       // Generate receipt PDF
       const { pdf, filename, referenceNumber } = await generateTransactionReceipt(transactionId, authUser.userId, 'AGENT');
 
-      // Upload to Cloudinary
-      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts', });
+      // Upload to S3
+      const uploadResult = await StorageService.upload(pdf, { folder: 'receipts', });
 
       // Save or update receipt record
       await (prisma as any).receipt.upsert({

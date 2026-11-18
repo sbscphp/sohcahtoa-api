@@ -4,7 +4,7 @@ import {
   getActiveExchangeRates,
 } from '../../../shared/services/exchange-rate-reader.service';
 import { NotFoundError, ValidationError, expireExpiredRates } from '../../../shared/utils';
-import { v2 as cloudinary } from 'cloudinary';
+
 import auditService from '../../audit/services/audit.service';
 import { workflowService } from '../../admin/services/workflow.service';
 import { createLogger } from '../../../shared/utils/logger';
@@ -12,7 +12,7 @@ import { TransactionStatus } from '../../../shared/types/transaction';
 import { buildRateWhereClause, rateSelectFields } from '../../../shared/utils/rate-filters';
 import { eventBus, EventTypes } from '../../../events/event-bus';
 import { generateTransactionReceipt } from '../../../shared/services/receipt.service';
-import { CloudinaryService } from '../../../shared/utils/cloudinary';
+import { StorageService, uploadToStorage } from '../../../shared/utils/storage';
 const prisma = getDatabase();
 const logger = createLogger('customer-transaction-service');
 
@@ -945,9 +945,9 @@ export class CustomerTransactionService {
 
     const uploadedDocuments = [];
 
-    // Upload each file to Cloudinary
+    // Upload each file to storage
     for (const file of files) {
-      logger.debug(`[uploadDocuments] Uploading file to Cloudinary`, {
+      logger.debug(`[uploadDocuments] Uploading file to storage`, {
         transactionId,
         fileName: file.originalname,
         fileSize: file.size,
@@ -955,26 +955,17 @@ export class CustomerTransactionService {
       });
 
       try {
-        // Upload to cloudinary
-        const result = await new Promise<any>((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: `sochatoa/transactions/${transactionId}`,
-              resource_type: 'auto',
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          );
-          uploadStream.end(file.buffer);
+        // Upload to storage
+        const result = await uploadToStorage(file.buffer, {
+          folder: `sochatoa/transactions/${transactionId}`,
+          allowedFormats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
         });
 
-        logger.info(`[uploadDocuments] File uploaded to Cloudinary successfully`, {
+        logger.info(`[uploadDocuments] File uploaded to storage successfully`, {
           transactionId,
           fileName: file.originalname,
-          cloudinaryPublicId: result.public_id,
-          fileUrl: result.secure_url,
+          storageKey: result.publicId,
+          fileUrl: result.secureUrl,
         });
 
         // If a document of the same type already exists and requires review or has failed/been rejected,
@@ -996,7 +987,7 @@ export class CustomerTransactionService {
           document = await prisma.transactionDocument.update({
             where: { id: existingReviewDoc.id },
             data: {
-              fileUrl: result.secure_url,
+              fileUrl: result.secureUrl,
               fileName: file.originalname,
               fileSize: file.size,
               verificationStatus: 'PENDING',
@@ -1005,7 +996,7 @@ export class CustomerTransactionService {
               verifiedBy: null,
               uploadedAt: new Date(),
               metadata: {
-                cloudinaryPublicId: result.public_id,
+                storageKey: result.publicId,
                 format: result.format,
                 uploadedBy: userId,
               },
@@ -1023,12 +1014,12 @@ export class CustomerTransactionService {
             data: {
               transactionId,
               documentType: documentType as any,
-              fileUrl: result.secure_url,
+              fileUrl: result.secureUrl,
               fileName: file.originalname,
               fileSize: file.size,
               verificationStatus: 'PENDING',
               metadata: {
-                cloudinaryPublicId: result.public_id,
+                storageKey: result.publicId,
                 format: result.format,
                 uploadedBy: userId,
               },

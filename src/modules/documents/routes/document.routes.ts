@@ -53,7 +53,7 @@ export const DocumentRouter: Router = Router();
  *     description: |
  *       Upload a single document file (PDF, JPEG, PNG, WEBP, DOC, DOCX). Maximum file size is 10MB.
  *
- *       `transactionId` is optional. When omitted the file is uploaded to Cloudinary and the URL is
+ *       `transactionId` is optional. When omitted the file is uploaded to S3 and the URL is
  *       returned — no database record is created. Use the returned `fileUrl` in the `documents[]`
  *       array when creating a transaction.
  *     tags: [Documents]
@@ -122,7 +122,7 @@ DocumentRouter.post(
  *     description: |
  *       Upload up to 5 documents at once. Each file must be paired with a document type. Maximum file size is 10MB per file.
  *
- *       `transactionId` is optional. When omitted, all files are uploaded to Cloudinary and their
+ *       `transactionId` is optional. When omitted, all files are uploaded to S3 and their
  *       URLs are returned — no database records are created. Use the returned `fileUrl` values in
  *       the `documents[]` array when creating a transaction.
  *     tags: [Documents]

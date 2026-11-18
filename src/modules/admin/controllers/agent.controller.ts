@@ -4,7 +4,7 @@ import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
 import { agentService } from "../services/agent.service";
-import { uploadToCloudinary } from "../../../shared/utils/cloudinary";
+import { uploadToStorage } from "../../../shared/utils/storage";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
@@ -37,7 +37,7 @@ class AgentController {
         throw new ValidationError("Attachment exceeds 2MB limit");
       }
       try {
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToStorage(req.file.buffer, {
           folder: "agents",
           resourceType: "auto",
           allowedFormats: ["jpg", "jpeg", "png", "pdf"],
@@ -229,7 +229,7 @@ class AgentController {
         throw new ValidationError("Attachment exceeds 2MB limit");
       }
       try {
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToStorage(req.file.buffer, {
           folder: "agents",
           resourceType: "auto",
           allowedFormats: ["jpg", "jpeg", "png", "pdf"],

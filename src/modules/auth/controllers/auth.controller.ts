@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import authService from '../services/auth.service';
 import passportService from '../services/passport.service';
 import tinService from '../services/tin.service';
-import { successResponse, uploadToCloudinary, ValidationError } from '../../../shared/utils';
+import { successResponse, uploadToStorage, ValidationError } from '../../../shared/utils';
 import {
   LoginRequest,
   OtpRequest,
@@ -357,8 +357,8 @@ export class AuthController {
         throw new ValidationError('Invalid file type. Allowed types: JPEG, PNG, PDF');
       }
 
-      // Upload to Cloudinary
-      const uploadResult = await uploadToCloudinary(file.buffer, {
+      // Upload to S3
+      const uploadResult = await uploadToStorage(file.buffer, {
         folder: 'passports',
         resourceType: 'auto',
         allowedFormats: ['jpg', 'jpeg', 'png', 'pdf'],

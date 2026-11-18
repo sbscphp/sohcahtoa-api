@@ -1,7 +1,7 @@
-import { uploadToCloudinary } from './cloudinary';
+import { uploadToStorage } from './storage';
 
 export async function uploadFile(file: Express.Multer.File, options?: { folder?: string }) {
-  const result = await uploadToCloudinary(file.buffer, {
+  const result = await uploadToStorage(file.buffer, {
     folder: options?.folder || 'tickets',
     resourceType: 'auto',
   });

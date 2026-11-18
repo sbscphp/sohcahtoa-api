@@ -1,6 +1,6 @@
 import { getDatabase } from "../../../config/database";
 import { generateTransactionReceipt } from "../../../shared/services/receipt.service";
-import { CloudinaryService } from "../../../shared/utils/cloudinary";
+import { StorageService } from "../../../shared/utils/storage";
 import { ValidationError, NotFoundError, partiallyRedactField } from "../../../shared/utils";
 import { UserRole } from "../../../shared/types";
 import {
@@ -1284,8 +1284,8 @@ class AgentTransactionService {
         'AGENT'
       );
 
-      // Upload PDF to Cloudinary (store in 'receipts' folder)
-      const uploadResult = await CloudinaryService.upload(pdf, { folder: 'receipts' });
+      // Upload PDF to S3 (store in 'receipts' folder)
+      const uploadResult = await StorageService.upload(pdf, { folder: 'receipts' });
 
       // Persist receipt record linked to the transaction
       await tx.receipt.create({
