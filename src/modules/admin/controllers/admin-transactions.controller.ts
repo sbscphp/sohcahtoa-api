@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
+import { StorageService } from "../../../shared/utils/storage";
 import { adminTransactionsService } from "../services/admin-transactions.service";
 import { auditTrailService } from "../services/audit-trail.service";
 import { ActionType } from "../../../shared/types/action-type";
@@ -314,7 +315,7 @@ class AdminTransactionsController {
   });
 
   private async pipeRemoteFile(res: Response, url: string, filename: string) {
-    const upstream = await axios.get(url, { responseType: "stream" });
+    const upstream = await axios.get(await StorageService.signIfOurs(url), { responseType: "stream" });
     const contentType = upstream.headers?.["content-type"] || "application/octet-stream";
     const contentLength = upstream.headers?.["content-length"];
 

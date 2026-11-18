@@ -25,6 +25,7 @@ import { DocumentRouter } from './modules/documents/routes/document.routes';
 import { AuditRouter } from './modules/audit/routes/audit.routes';
 import { auditMiddleware } from './modules/audit/middleware/audit.middleware';
 import { securityFilter } from './shared/middleware/security-filter';
+import { signFileUrls } from './shared/middleware/sign-file-urls';
 import notificationRoutes from './modules/notifications/routes/notification.routes';
 import providusWebhookRoutes from './modules/payments/routes/providus-webhook.routes';
 import adminCardsRoutes from './modules/admin/routes/cards.routes';
@@ -79,6 +80,9 @@ export const createApp = async (): Promise<Application> => {
     limit: UPLOAD_LIMITS.URLENCODED_BODY,
     parameterLimit: UPLOAD_LIMITS.PARAMETER_LIMIT
   }));
+
+  // Swap private S3 object URLs in responses for short-lived presigned URLs
+  app.use(signFileUrls);
 
   // Request tracking and logging
   app.use(correlationIdMiddleware);

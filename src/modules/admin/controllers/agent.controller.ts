@@ -4,7 +4,7 @@ import { asyncHandler } from "../../../shared/middleware";
 import { successResponse, ValidationError } from "../../../shared/utils";
 import { streamCsv } from "../../../shared/utils";
 import { agentService } from "../services/agent.service";
-import { uploadToStorage } from "../../../shared/utils/storage";
+import { uploadToStorage, StorageService } from "../../../shared/utils/storage";
 import { auditTrailService } from "../services/audit-trail.service";
 import { AuthRequest } from "../../../shared/middleware/auth";
 import { ActionType } from "../../../shared/types/action-type";
@@ -19,7 +19,7 @@ class AgentController {
   }
 
   private async pipeRemoteFile(res: Response, url: string, filename: string) {
-    const upstream = await axios.get(url, { responseType: "stream" });
+    const upstream = await axios.get(await StorageService.signIfOurs(url), { responseType: "stream" });
     const contentType = upstream.headers?.["content-type"] || "application/octet-stream";
     const contentLength = upstream.headers?.["content-length"];
 

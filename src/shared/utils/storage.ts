@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createLogger } from './logger';
 
 const logger = createLogger('StorageService');
@@ -30,11 +31,59 @@ function getClient(): S3Client {
   return client;
 }
 
+/** Presigning is on by default (private bucket). Set AWS_S3_PRESIGN_URLS=false if the bucket/CDN is public. */
+export function presigningEnabled(): boolean {
+  return process.env.AWS_S3_PRESIGN_URLS?.trim().toLowerCase() !== 'false';
+}
+
 function publicBaseUrl(): string {
   const custom = process.env.AWS_S3_PUBLIC_BASE_URL?.trim();
-  if (custom) return custom.replace(/\/+$/, '');
+  if (custom && !presigningEnabled()) return custom.replace(/\/+$/, '');
   const { bucket, region } = getConfig();
   return `https://${bucket}.s3.${region}.amazonaws.com`;
+}
+
+/** Short-lived download URL for a private object. */
+export async function getSignedFileUrl(key: string, expiresInSeconds?: number): Promise<string> {
+  const { bucket } = getConfig();
+  const expiresIn = expiresInSeconds ?? (Number(process.env.AWS_S3_URL_EXPIRES_SECONDS) || 259200);
+  return getSignedUrl(getClient(), new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
+}
+
+/**
+ * If `url` points at our bucket, returns a presigned URL for it (works even if the stored
+ * URL already carries an old signature); otherwise returns it untouched.
+ */
+export async function signIfOurs(url: string): Promise<string> {
+  if (!presigningEnabled()) return url;
+  try {
+    const key = keyFromUrl(url);
+    return key ? await getSignedFileUrl(key) : url;
+  } catch (error) {
+    logger.error('Failed to presign URL', { message: errorMessage(error) });
+    return url;
+  }
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (v === null || typeof v !== 'object') return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+}
+
+/** Deep-walks a JSON-bound value, replacing our bucket URLs with presigned ones. */
+export async function signUrlsDeep<T>(value: T): Promise<T> {
+  if (typeof value === 'string') {
+    return (value.startsWith('https://') ? await signIfOurs(value) : value) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return (await Promise.all(value.map((v) => signUrlsDeep(v)))) as unknown as T;
+  }
+  if (isPlainObject(value)) {
+    const entries = await Promise.all(Object.entries(value).map(async ([k, v]) => [k, await signUrlsDeep(v)] as const));
+    return Object.fromEntries(entries) as T;
+  }
+  return value;
 }
 
 function urlForKey(key: string): string {
@@ -176,4 +225,6 @@ export const StorageService = {
   upload: uploadToStorage,
   delete: deleteFromStorage,
   keyFromUrl,
+  getSignedUrl: getSignedFileUrl,
+  signIfOurs,
 };

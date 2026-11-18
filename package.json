@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1171.0",
+    "@aws-sdk/s3-request-presigner": "^3.1171.0",
     "@prisma/client": "^5.7.0",
     "@types/node-schedule": "^2.1.8",
     "axios": "^1.6.2",
