@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import { emailClient } from '../../integrations/sms-gateway/email.client';
 
 export interface EmailOptions {
@@ -150,52 +149,42 @@ function sharedVars(email: string, firstName: string): Record<string, string> {
 // ─── EmailService ─────────────────────────────────────────────────────────
 
 class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
-  private config: EmailConfig | null = null;
-  private isConfigured = false;
-  private useTermii = process.env.EMAIL_PROVIDER === 'termii';
+  /**
+   * All email is delivered through Termii using the per-email template IDs in .env.
+   * SMTP (Gmail etc.) is intentionally NOT supported.
+   */
 
-  configure(config: EmailConfig) {
-    this.config = config;
-    this.transporter = nodemailer.createTransport({
-      host:              config.host,
-      port:              config.port,
-      secure:            config.secure,
-      auth:              config.auth,
-      tls:               config.tls,
-      connectionTimeout: config.connectionTimeout,
-      debug:             config.debug,
-      logger:            config.logger,
-    });
-    this.isConfigured = true;
+  /** Kept for backward compatibility with older init code. SMTP settings are ignored. */
+  configure(_config?: EmailConfig) {
+    // no-op: SMTP is disabled by design
   }
 
-  // ── Generic send (used for SMTP fallback path) ──────────────────────────
-
+  /**
+   * Free-form (non-template) email. Termii can only send template emails, and SMTP is disabled,
+   * so this never sends. Add a dedicated template method instead of calling this.
+   */
   async sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (this.useTermii) {
-      console.warn('Plain email called with Termii provider — use template methods. Email not sent.');
-      return { success: false, error: 'Use sendTemplate methods for Termii email delivery' };
-    }
+    console.warn(`Email NOT sent to ${options.to} ("${options.subject}"): no Termii template mapped and SMTP is disabled.`);
+    return { success: false, error: 'No Termii template mapped for this email' };
+  }
 
-    if (!this.isConfigured || !this.transporter || !this.config) {
-      console.warn('Email service not configured. Email not sent:', options);
-      return { success: false, error: 'Email service not configured' };
-    }
-
-    try {
-      const info = await this.transporter.sendMail({
-        from:    this.config.from,
-        to:      options.to,
-        subject: options.subject,
-        text:    options.text,
-        html:    options.html,
-      });
-      return { success: true, messageId: info.messageId };
-    } catch (error: any) {
-      console.error('Email sending failed:', error);
-      return { success: false, error: error.message };
-    }
+  /** Escalation reminder for an unfulfilled transaction (uses the FLAGGED_TRANSACTION_ESCALATED template). */
+  async sendTransactionEscalationEmail(
+    to: string,
+    data: { transactionRef: string; customerName?: string; amount?: string; level: string; minutes: number; recipientName?: string }
+  ): Promise<boolean> {
+    const reason = `Transaction unfulfilled ${data.minutes} minutes after payment confirmation (escalation ${data.level.replace('_', ' ')}).`;
+    return this.sendTemplate(to, 'flaggedTransactionEscalated', {
+      ...sharedVars(to, data.recipientName || 'Team'),
+      transaction_ref: data.transactionRef,
+      reason,
+      severity:        data.level,
+      amount:          data.amount || '',
+      customer_name:   data.customerName || '',
+    }, {
+      subject: `Escalation ${data.level.replace('_', ' ')}: Unfulfilled Transaction – ${data.transactionRef}`,
+      text: reason,
+    });
   }
 
   // ── Template send helper (Termii only) ──────────────────────────────────
@@ -206,7 +195,7 @@ class EmailService {
     data: Record<string, string | number>,
     fallback: { subject: string; text: string; html?: string }
   ): Promise<boolean> {
-    if (this.useTermii) {
+    {
       const templateId = TEMPLATES[templateKey];
       if (templateId) {
         try {
@@ -214,12 +203,12 @@ class EmailService {
           if (result.success) {
             return true;
           }
-          console.warn(`Termii template email returned non-success (${templateKey}) for ${to}, falling back to standard email`);
+          console.warn(`Termii template email returned non-success (${templateKey}) for ${to}, falling back to generic Termii email`);
         } catch (error: any) {
-          console.warn(`Termii template email failed (${templateKey}) for ${to}, falling back to standard email:`, error?.response?.data || error?.message || error);
+          console.warn(`Termii template email failed (${templateKey}) for ${to}, falling back to generic Termii email:`, error?.response?.data || error?.message || error);
         }
       } else {
-        console.info(`Termii template ID not configured for "${templateKey}", using standard email transport.`);
+        console.info(`Termii template ID not configured for "${templateKey}", using generic Termii email.`);
       }
     }
 
@@ -234,7 +223,7 @@ class EmailService {
     const digits = splitOtpDigits(otp);
     const shared = sharedVars(email, firstName);
 
-    if (this.useTermii) {
+    {
       try {
         const isPasswordReset  = purpose === 'PASSWORD_RESET';
         const isChangePassword = purpose === 'CHANGE_PASSWORD';
@@ -262,11 +251,6 @@ class EmailService {
         return false;
       }
     }
-
-    return this.sendTemplate(email, 'verifyEmailOtp', { ...shared, ...digits, expiry_minutes: 10 }, {
-      subject,
-      text: `Your verification code is: ${otp}. It will expire in 5 minutes.`,
-    });
   }
 
   // ── Welcome email (customer) ─────────────────────────────────────────────
@@ -995,7 +979,7 @@ class EmailService {
   }
 
   isReady(): boolean {
-    return this.isConfigured || this.useTermii || Boolean(process.env.SMTP_HOST || process.env.SMS_API_KEY);
+    return Boolean(process.env.SMS_API_KEY);
   }
 }
 

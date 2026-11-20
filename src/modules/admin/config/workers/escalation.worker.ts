@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatabase } from "../../../../config/database";
-import { sendEmail } from "../../../../config/email";
+import { emailService } from "../../../../shared/utils/email";
 import { createLogger } from "../../../../shared/utils/logger";
 import { ServiceName } from "../../../../shared/types";
 
@@ -83,10 +83,14 @@ export async function processTransientEscalations(prismaInstance: PrismaClient) 
 
       // Email sender helper
       const sendEscalation = async (level: string, subject: string, recipientEmail: string, htmlContent: string) => {
-        const mailSent = await sendEmail({
-          to: recipientEmail,
-          subject,
-          html: htmlContent
+        // Delivered via the Termii FLAGGED_TRANSACTION_ESCALATED template (subject/html kept for reference only)
+        void subject; void htmlContent;
+        const mailSent = await emailService.sendTransactionEscalationEmail(recipientEmail, {
+          transactionRef: referenceId,
+          customerName,
+          amount: `NGN ${amount}`,
+          level,
+          minutes: diffMins,
         });
 
         if (mailSent) {

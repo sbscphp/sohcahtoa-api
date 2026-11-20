@@ -206,15 +206,12 @@ function initializeEventHandlers() {
 function initializeLegacyNotificationHandlers() {
   const { EventTypes } = require('./events/event-bus');
   const { sendEmail } = require('./config/email');
+  const { emailService } = require('./shared/utils/email');
 
   // Send welcome email on user registration
   eventBus.subscribe(EventTypes.USER_REGISTERED, async (payload) => {
     try {
-      await sendEmail({
-        to: payload.email,
-        subject: 'Welcome to Sochatoa API',
-        html: `<h1>Welcome ${payload.firstName || 'User'}!</h1><p>Your account has been created successfully.</p>`,
-      });
+      await emailService.sendWelcomeEmail(payload.email, payload.firstName || 'User');
       logger.info('Welcome email sent to:', payload.email);
     } catch (error) {
       logger.error('Failed to send welcome email:', error);
