@@ -156,6 +156,16 @@ class FxInventoryAgentService {
     return round2(opening + f.disbursed + f.purchased - f.sold - f.lodged);
   }
 
+  /**
+   * Flow used for a position row. For NGN, "purchased" = naira received from customers (agent sold FX)
+   * and "sold" = naira paid to customers (agent purchased FX), so closing = opening + inflows - outflows.
+   */
+  private positionFlow(r: { flows: Map<string, Flow>; ngn: { purchased: number; sold: number } }, currency: string): Flow {
+    const base = r.flows.get(currency) ?? emptyFlow();
+    if (currency !== "NGN") return base;
+    return { disbursed: base.disbursed, lodged: base.lodged, purchased: r.ngn.sold, sold: r.ngn.purchased };
+  }
+
   private async rateFor(currency: string): Promise<number | null> {
     try {
       return await fxInventoryService.convertToNgn(currency, 1);
@@ -190,7 +200,7 @@ class FxInventoryAgentService {
       ...during.flows.keys(),
       ...balances.map((b: any) => String(b.currency).toUpperCase()),
     ]);
-    currencies.delete("NGN");
+    currencies.add("NGN"); // naira cash is tracked as its own row
     if (filters.currency) {
       const only = filters.currency.toUpperCase();
       for (const c of [...currencies]) if (c !== only) currencies.delete(c);
@@ -207,8 +217,8 @@ class FxInventoryAgentService {
 
     const rows = [];
     for (const currency of [...currencies].sort()) {
-      const b = before.flows.get(currency) ?? emptyFlow();
-      const f = during.flows.get(currency) ?? emptyFlow();
+      const b = this.positionFlow(before, currency);
+      const f = this.positionFlow(during, currency);
       const openingBalance = this.closing(0, b);
       const closingBalance = this.closing(openingBalance, f);
       const physicalCount = latestCount.get(currency) ?? null;
@@ -229,7 +239,7 @@ class FxInventoryAgentService {
         status,
       });
 
-      const rate = await this.rateFor(currency);
+      const rate = currency === "NGN" ? 1 : await this.rateFor(currency);
       if (rate != null) {
         total.openingBalance += openingBalance * rate;
         total.disbursed += f.disbursed * rate;
