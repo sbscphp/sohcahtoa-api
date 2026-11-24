@@ -1,4 +1,7 @@
 import { emailClient } from '../../integrations/sms-gateway/email.client';
+import { createLogger } from './logger';
+
+const otpLogger = createLogger('EmailService');
 
 export interface EmailOptions {
   to: string;
@@ -232,6 +235,14 @@ class EmailService {
           isChangePassword ? 'verifyEmailOtp'   :   // change-password-otp shares verifyEmailOtp key
                              'verifyEmailOtp';
         const templateId = TEMPLATES[templateKey];
+
+        otpLogger.info('Sending OTP email', {
+          to: email,
+          purpose,
+          templateKey,
+          templateId: templateId || null,
+          route: templateId ? 'termii-template' : 'termii-raw-otp-endpoint (template ID not configured)',
+        });
 
         if (templateId) {
           const result = await emailClient.sendTemplateEmail(
